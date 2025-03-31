@@ -1,86 +1,239 @@
+# CMakeLists.txt for OmniFFT project
 cmake_minimum_required(VERSION 3.15)
-project(OmniFFT LANGUAGES CXX)
 
+# Set project name and version (used for installation and config files)
+project(OmniFFT VERSION 1.0.0 LANGUAGES CXX)
+
+# Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-# --- Option to prefer a backend ---
-option(FFT_PREFER_ACCELERATE "Prefer Apple Accelerate if available" OFF)
+# Add math defines globally for MSVC compiler
+if(MSVC)
+  add_compile_definitions(_USE_MATH_DEFINES)
+  message(STATUS "MSVC detected, adding _USE_MATH_DEFINES compile definition.")
+endif()
+
+# --- Include Standard CMake Modules ---
+include(GNUInstallDirs)             # For standard installation paths (CMAKE_INSTALL_*)
+include(CMakePackageConfigHelpers)  # For generating *Config.cmake files
+include(FetchContent)               # For downloading dependencies like GoogleTest
+
+# --- Unit Testing Setup (GoogleTest) ---
+enable_testing() # Enable CTest support
+
+# Declare GoogleTest dependency using FetchContent (Live at Head)
+FetchContent_Declare(
+  googletest
+  GIT_REPOSITORY https://github.com/google/googletest.git
+  GIT_TAG        main # Fetch the latest commit from the main branch
+)
+
+# Configure GoogleTest: Disable installation of gtest itself when building OmniFFT
+set(INSTALL_GTEST OFF CACHE BOOL "Disable installation of googletest itself")
+set(BUILD_GMOCK OFF CACHE BOOL "Disable building gmock") # Only need gtest
+
+# Make GoogleTest available (downloads and prepares its build targets)
+FetchContent_MakeAvailable(googletest)
+
+
+# --- Option to control backend preference ---
+# Default ON for Accelerate on Apple, OFF otherwise
+option(FFT_PREFER_ACCELERATE "Prefer Apple Accelerate if available" ${APPLE})
 option(FFT_PREFER_ONEMKL "Prefer Intel oneMKL if available" OFF)
 
 # --- Backend Detection and Source File Selection ---
 set(FFT_BACKEND "NONE")
-set(FFT_IMPL_SOURCE "") # Variable to hold the implementation file path
+set(FFT_IMPL_SOURCE "") # Variable to hold the platform-specific implementation file
 
-if(CMAKE_SYSTEM_NAME STREQUAL "Darwin" AND NOT FFT_PREFER_ONEMKL)
-    find_library(ACCELERATE_LIBRARY Accelerate)
-    if(ACCELERATE_LIBRARY)
-        message(STATUS "Found Apple Accelerate framework.")
+# Prefer Accelerate on Apple unless MKL is explicitly preferred
+if(APPLE AND FFT_PREFER_ACCELERATE AND NOT FFT_PREFER_ONEMKL)
+    # Use find_package for Accelerate for better target handling if available
+    find_package(Accelerate QUIET)
+    if(Accelerate_FOUND)
+        message(STATUS "Found Apple Accelerate framework (via find_package).")
         set(FFT_BACKEND "ACCELERATE")
-        set(FFT_IMPL_SOURCE src/fft_impl_accelerate.cpp) # Select Accelerate impl
+        set(FFT_IMPL_SOURCE src/fft_impl_accelerate.cpp)
     else()
-         message(WARNING "Apple Accelerate framework not found on Darwin system.")
+        # Fallback to find_library if find_package doesn't work
+        find_library(ACCELERATE_FRAMEWORK Accelerate)
+        if(ACCELERATE_FRAMEWORK)
+             message(STATUS "Found Apple Accelerate framework (via find_library).")
+             set(FFT_BACKEND "ACCELERATE")
+             set(FFT_IMPL_SOURCE src/fft_impl_accelerate.cpp)
+        else()
+              message(WARNING "Apple Accelerate framework requested but not found on Apple system.")
+        endif()
+        unset(ACCELERATE_FRAMEWORK CACHE) # Clean up variable
     endif()
-    unset(ACCELERATE_LIBRARY CACHE)
 endif()
 
+# Check for oneMKL if not using Accelerate or if MKL is preferred
 if(NOT FFT_BACKEND STREQUAL "ACCELERATE" OR FFT_PREFER_ONEMKL)
-    find_package(MKL)
+    # Use find_package(MKL) - Requires environment setup (e.g., MKLROOT or setvars script)
+    find_package(MKL QUIET) # Use QUIET initially
+
     if(MKL_FOUND)
         message(STATUS "Found Intel oneMKL.")
-        set(FFT_BACKEND "ONEMKL")
-        set(FFT_IMPL_SOURCE src/fft_impl_onemkl.cpp) # Select oneMKL impl
+        # If Accelerate wasn't chosen, or MKL is preferred, use MKL
+        if(NOT FFT_BACKEND STREQUAL "ACCELERATE" OR FFT_PREFER_ONEMKL)
+             message(STATUS "Selecting Intel oneMKL backend.")
+             set(FFT_BACKEND "ONEMKL")
+             set(FFT_IMPL_SOURCE src/fft_impl_onemkl.cpp)
+        else()
+             message(STATUS "Intel oneMKL found, but Accelerate backend was already selected.")
+        endif()
     else()
-        message(STATUS "Intel oneMKL not found.")
+        # If MKL wasn't found AND Accelerate wasn't chosen, report status
+        if(NOT FFT_BACKEND STREQUAL "ACCELERATE")
+            message(STATUS "Intel oneMKL not found.")
+        endif()
         if(FFT_PREFER_ONEMKL)
              message(WARNING "Preferred oneMKL backend not found.")
         endif()
     endif()
 endif()
 
-# --- Select Stub Implementation if no backend found ---
+# --- Select Stub Implementation if no backend was successfully selected ---
 if(FFT_BACKEND STREQUAL "NONE")
-     message(WARNING "No suitable FFT backend (Accelerate or oneMKL) found or selected. Using stub implementation.")
-     set(FFT_IMPL_SOURCE src/fft_impl_stub.cpp) # Select Stub impl
+     message(WARNING "No suitable FFT backend (Accelerate or oneMKL) found or configured. Using stub implementation (will throw errors at runtime).")
+     set(FFT_IMPL_SOURCE src/fft_impl_stub.cpp)
 endif()
 
-# --- Define the library target using the selected implementation ---
-# Check if the selected implementation source file exists
+# Check that the selected implementation source file actually exists
 if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${FFT_IMPL_SOURCE}")
-    message(FATAL_ERROR "Selected FFT implementation source file not found: ${FFT_IMPL_SOURCE}")
+    message(FATAL_ERROR "Selected FFT implementation source file not found: ${CMAKE_CURRENT_SOURCE_DIR}/${FFT_IMPL_SOURCE}")
 endif()
 
+
+# --- Library Target Definition ---
 add_library(omnifft
-    src/omnifft.cpp      # Platform-independent wrapper
+    src/omnifft.cpp      # Platform-independent wrapper/convenience functions
     ${FFT_IMPL_SOURCE}   # The selected platform-specific implementation
 )
-target_include_directories(omnifft PUBLIC include) # Make public header available
+# Set C++ standard for the target explicitly (good practice)
+target_compile_features(omnifft PRIVATE cxx_std_17)
+
+# Define include directories needed to build and use the library
+target_include_directories(omnifft PUBLIC
+    # Needed when building the library itself from the source tree
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    # Exported for users consuming the installed library via $<INSTALL_INTERFACE:...>
+    $<INSTALL_INTERFACE:include> # Corresponds to <prefix>/include
+)
 
 # --- Apply backend-specific settings to the library target ---
 if(FFT_BACKEND STREQUAL "ACCELERATE")
+    if(NOT Accelerate_FOUND)
+        # Ensure Accelerate was actually found if we selected it via find_library fallback
+        find_package(Accelerate REQUIRED)
+    endif()
+    # Link publicly so consuming targets inherit the dependency if OmniFFT is static
     target_link_libraries(omnifft PUBLIC Accelerate::Accelerate)
+    # This define controls conditional compilation within the source code
     target_compile_definitions(omnifft PRIVATE USE_ACCELERATE)
+
 elseif(FFT_BACKEND STREQUAL "ONEMKL")
+    if(NOT MKL_FOUND)
+        find_package(MKL REQUIRED) # Should have been found earlier, but double-check
+    endif()
+    # Add MKL include directory needed *only* for compiling omnifft implementation
     target_include_directories(omnifft PRIVATE ${MKL_INCLUDE_DIRS})
+    # Link publicly so consuming targets inherit the MKL dependency
     if(TARGET MKL::MKL)
          target_link_libraries(omnifft PUBLIC MKL::MKL)
     elseif(MKL_LIBRARIES)
+         # Fallback if imported target isn't defined by FindMKL
          target_link_libraries(omnifft PUBLIC ${MKL_LIBRARIES})
     else()
-         message(WARNING "FindMKL found MKL but did not define MKL::MKL target or MKL_LIBRARIES. Manual linking might be required.")
+         message(FATAL_ERROR "FindMKL found MKL but did not define MKL::MKL target or MKL_LIBRARIES. Cannot link OmniFFT.")
     endif()
+    # This define controls conditional compilation within the source code
     target_compile_definitions(omnifft PRIVATE USE_ONEMKL)
+
 # elseif(FFT_BACKEND STREQUAL "NONE")
-    # No specific settings needed for the stub backend
+    # No specific link libraries or compile definitions needed for the stub backend
 endif()
 
 
-# --- Example Executable (Optional) ---
+# --- Example Executable Target ---
+# This is typically not installed, just used for testing/demonstration within this build
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/main.cpp")
     add_executable(omnifft_example examples/main.cpp)
+    # Link the example privately against our library target
+    # No need to link example against MKL/Accelerate directly, happens via omnifft target
     target_link_libraries(omnifft_example PRIVATE omnifft)
+    # If example needs includes directly (it shouldn't if omnifft includes are PUBLIC)
+    # target_include_directories(omnifft_example PRIVATE include)
 endif()
 
-# --- Installation (Optional) ---
-# install(TARGETS omnifft DESTINATION lib)
-# install(FILES include/omnifft.h DESTINATION include)
+
+# --- Tests Subdirectory ---
+# Add the 'tests' subdirectory which contains its own CMakeLists.txt
+# defining the 'omnifft_tests' executable and linking it against 'omnifft' and 'gtest_main'
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt")
+    add_subdirectory(tests)
+else()
+     message(STATUS "Tests subdirectory not found, skipping test configuration.")
+endif()
+
+
+# =============================================================================
+# Installation Rules
+# =============================================================================
+
+# Use a variable for the CMake config destination for consistency
+set(OMNIFFT_CMAKE_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}")
+
+# 1. Install the public header file(s)
+# Destination: <prefix>/include/OmniFFT/omnifft.h
+install(FILES include/OmniFFT/omnifft.h
+        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME}"
+        COMPONENT Devel # Component grouping (optional)
+)
+
+# 2. Prepare package configuration files for find_package(OmniFFT)
+# Create OmniFFTConfigVersion.cmake based on project VERSION
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/OmniFFTConfigVersion.cmake"
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY AnyNewerVersion # Or SameMajorVersion, ExactVersion, etc.
+)
+
+# Create OmniFFTConfig.cmake from the template file Config.cmake.in
+# Assumes Config.cmake.in is in the same directory as this CMakeLists.txt
+configure_package_config_file(
+    Config.cmake.in
+    "${CMAKE_CURRENT_BINARY_DIR}/OmniFFTConfig.cmake"
+    INSTALL_DESTINATION "${OMNIFFT_CMAKE_INSTALL_DIR}"
+    # PATH_VARS CMAKE_INSTALL_PREFIX CMAKE_INSTALL_INCLUDEDIR CMAKE_INSTALL_LIBDIR # Usually not needed if using relative paths
+)
+
+# 3. Install the library target and associate it with an export set
+install(TARGETS omnifft
+        EXPORT OmniFFTTargets # Associate with export set named OmniFFTTargets
+        # Destinations use variables from GNUInstallDirs
+        ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Lib # Static libs (.a, .lib)
+        LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Lib # Shared libs (.so) / Import libs (.lib)
+        RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT Runtime # DLLs (Windows) / Executables
+        # This exports the include directories associated with the target's INSTALL_INTERFACE
+        INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" COMPONENT Devel
+)
+
+# 4. Install the export set definitions file (OmniFFTTargets.cmake)
+# This file allows CMake to create the imported target OmniFFT::omnifft
+install(EXPORT OmniFFTTargets
+        FILE OmniFFTTargets.cmake
+        NAMESPACE OmniFFT:: # Defines the namespace for imported targets
+        DESTINATION "${OMNIFFT_CMAKE_INSTALL_DIR}"
+        COMPONENT Devel
+)
+
+# 5. Install the generated configuration files (OmniFFTConfig.cmake, OmniFFTConfigVersion.cmake)
+install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/OmniFFTConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/OmniFFTConfigVersion.cmake"
+    DESTINATION "${OMNIFFT_CMAKE_INSTALL_DIR}"
+    COMPONENT Devel
+)

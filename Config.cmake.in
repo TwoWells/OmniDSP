@@ -1,0 +1,11 @@
+# Config.cmake.in - Template for OmniFFTConfig.cmake
+
+# Use helper macro to set up basic variables like PACKAGE_PREFIX_DIR
+@PACKAGE_INIT@
+
+# Include the file which defines the imported library targets (OmniFFT::omnifft)
+# The path is relative to the location where this OmniFFTConfig.cmake file is installed.
+include("${CMAKE_CURRENT_LIST_DIR}/OmniFFTTargets.cmake")
+
+# Optionally check for components if your library had them (OmniFFT currently doesn't)
+# check_required_components(OmniFFT)

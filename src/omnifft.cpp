@@ -1,69 +1,127 @@
-// src/fft_lib.cpp
+/**
+ * @file omnifft.cpp
+ * @brief Implementation of convenience functions for the OmniFFT library.
+ *
+ * This file provides std::vector-based wrapper functions for common FFT operations.
+ * These functions simplify common use cases by managing the creation and execution
+ * of an underlying FFTPlan object. They currently use the default NormMode::BACKWARD
+ * normalization.
+ *
+ * @version 1.0.0
+ * @date 2025-03-31
+ */
 
-#include "omnifft.h" // Includes FFTPlan declaration + convenience func declarations
-#include <vector>
-#include <complex>
-#include <stdexcept> // For convenience functions if they throw indirectly via FFTPlan
-#include <cmath>     // For std::ceil, std::floor if needed (though size is N/2+1)
+#include <OmniFFT/omnifft.h> // Main public header
+#include <vector>            // For std::vector parameters
+#include <complex>           // For std::complex type
+#include <stdexcept>         // For potential exceptions from FFTPlan
+#include <type_traits>       // For std::is_same_v
+#include <cmath>             // For irfft size calculation if needed (currently just arithmetic)
 
-// NOTE: FFTPlan<T> methods (constructor, destructor, execute, getters, etc.)
+// NOTE: FFTPlan<T> class methods (constructor, destructor, execute*, getters)
 //       are defined and instantiated in the conditionally compiled
 //       fft_impl_onemkl.cpp, fft_impl_accelerate.cpp, or fft_impl_stub.cpp files.
-//       This file only contains the platform-independent convenience functions.
+//       This file only defines and instantiates the convenience functions below.
 
 namespace OmniFFT {
 
 // --- Implementation of Convenience Functions ---
 
-// C2C Forward (Out-of-place)
+/**
+ * @brief Performs a Complex-to-Complex forward FFT (out-of-place) using NormMode::BACKWARD.
+ * Creates, executes, and destroys an FFTPlan internally.
+ * @tparam T float or double.
+ * @param input Input complex vector.
+ * @param output Output complex vector (will be resized to match input size).
+ * @throws std::runtime_error If backend FFTPlan creation or execution fails.
+ */
 template <typename T>
 void fft(const std::vector<std::complex<T>>& input, std::vector<std::complex<T>>& output) {
-    if (input.empty()) { output.clear(); return; }
-    output.resize(input.size());
-    FFTPlan<T> plan(input.size(),
-                    std::is_same_v<T, float> ? Precision::SINGLE : Precision::DOUBLE,
-                    Direction::FORWARD,
-                    Domain::COMPLEX);
+    if (input.empty()) {
+        output.clear();
+        return;
+    }
+    const size_t N = input.size();
+    output.resize(N);
+    // Determine precision from template type T
+    const Precision prec = std::is_same_v<T, float> ? Precision::SINGLE : Precision::DOUBLE;
+
+    // Create and execute plan using default NormMode::BACKWARD
+    FFTPlan<T> plan(N, prec, Direction::FORWARD, Domain::COMPLEX, NormMode::BACKWARD);
     plan.execute(input.data(), output.data());
 }
 
-// C2C Inverse (Out-of-place)
+/**
+ * @brief Performs a Complex-to-Complex inverse FFT (out-of-place) using NormMode::BACKWARD.
+ * Creates, executes, and destroys an FFTPlan internally. Result is scaled by 1/N if using oneMKL,
+ * check backend notes for Accelerate scaling.
+ * @tparam T float or double.
+ * @param input Input complex vector.
+ * @param output Output complex vector (will be resized to match input size).
+ * @throws std::runtime_error If backend FFTPlan creation or execution fails.
+ */
 template <typename T>
 void ifft(const std::vector<std::complex<T>>& input, std::vector<std::complex<T>>& output) {
-     if (input.empty()) { output.clear(); return; }
-    output.resize(input.size());
-    FFTPlan<T> plan(input.size(),
-                    std::is_same_v<T, float> ? Precision::SINGLE : Precision::DOUBLE,
-                    Direction::INVERSE,
-                    Domain::COMPLEX);
+     if (input.empty()) {
+        output.clear();
+        return;
+    }
+    const size_t N = input.size();
+    output.resize(N);
+    const Precision prec = std::is_same_v<T, float> ? Precision::SINGLE : Precision::DOUBLE;
+
+    // Create and execute plan using default NormMode::BACKWARD
+    FFTPlan<T> plan(N, prec, Direction::INVERSE, Domain::COMPLEX, NormMode::BACKWARD);
     plan.execute(input.data(), output.data());
 }
 
-// C2C Forward (In-place)
+/**
+ * @brief Performs a Complex-to-Complex forward FFT (in-place) using NormMode::BACKWARD.
+ * Creates, executes, and destroys an FFTPlan internally. Input vector `data` is modified.
+ * @tparam T float or double.
+ * @param data Input/Output complex vector (modified in place).
+ * @throws std::runtime_error If backend FFTPlan creation or execution fails.
+ */
 template <typename T>
 void fft_inplace(std::vector<std::complex<T>>& data) {
      if (data.empty()) return;
-     FFTPlan<T> plan(data.size(),
-                    std::is_same_v<T, float> ? Precision::SINGLE : Precision::DOUBLE,
-                    Direction::FORWARD,
-                    Domain::COMPLEX);
+     const size_t N = data.size();
+     const Precision prec = std::is_same_v<T, float> ? Precision::SINGLE : Precision::DOUBLE;
+
+     // Create and execute plan using default NormMode::BACKWARD
+     FFTPlan<T> plan(N, prec, Direction::FORWARD, Domain::COMPLEX, NormMode::BACKWARD);
      plan.execute(data.data());
 }
 
-// C2C Inverse (In-place)
+/**
+ * @brief Performs a Complex-to-Complex inverse FFT (in-place) using NormMode::BACKWARD.
+ * Creates, executes, and destroys an FFTPlan internally. Input vector `data` is modified.
+ * Result is scaled by 1/N if using oneMKL, check backend notes for Accelerate scaling.
+ * @tparam T float or double.
+ * @param data Input/Output complex vector (modified in place).
+ * @throws std::runtime_error If backend FFTPlan creation or execution fails.
+ */
 template <typename T>
 void ifft_inplace(std::vector<std::complex<T>>& data) {
      if (data.empty()) return;
-     FFTPlan<T> plan(data.size(),
-                    std::is_same_v<T, float> ? Precision::SINGLE : Precision::DOUBLE,
-                    Direction::INVERSE,
-                    Domain::COMPLEX);
+     const size_t N = data.size();
+     const Precision prec = std::is_same_v<T, float> ? Precision::SINGLE : Precision::DOUBLE;
+
+     // Create and execute plan using default NormMode::BACKWARD
+     FFTPlan<T> plan(N, prec, Direction::INVERSE, Domain::COMPLEX, NormMode::BACKWARD);
      plan.execute(data.data());
 }
 
-// R2C Forward (Out-of-place)
+/**
+ * @brief Performs a Real-to-Complex forward FFT (out-of-place) using NormMode::BACKWARD.
+ * Creates, executes, and destroys an FFTPlan internally.
+ * @tparam T float or double.
+ * @param real_input Input real vector of size N.
+ * @param complex_output Output complex vector (will be resized to N/2 + 1).
+ * @throws std::runtime_error If backend FFTPlan creation or execution fails (e.g., N not power-of-2 for Accelerate REAL).
+ */
 template <typename T>
-void fft_r2c(const std::vector<T>& real_input, std::vector<std::complex<T>>& complex_output) {
+void rfft(const std::vector<T>& real_input, std::vector<std::complex<T>>& complex_output) {
     if (real_input.empty()) {
         complex_output.clear();
         return;
@@ -71,44 +129,60 @@ void fft_r2c(const std::vector<T>& real_input, std::vector<std::complex<T>>& com
     const size_t N = real_input.size();
     const size_t Nc = N / 2 + 1; // Complex output size
     complex_output.resize(Nc);
+    const Precision prec = std::is_same_v<T, float> ? Precision::SINGLE : Precision::DOUBLE;
 
-    FFTPlan<T> plan(N, // Length is real size N
-                    std::is_same_v<T, float> ? Precision::SINGLE : Precision::DOUBLE,
-                    Direction::FORWARD,
-                    Domain::REAL);
-    plan.execute_r2c(real_input.data(), complex_output.data());
+    // Create and execute plan using default NormMode::BACKWARD
+    FFTPlan<T> plan(N, prec, Direction::FORWARD, Domain::REAL, NormMode::BACKWARD);
+    plan.execute_rfft(real_input.data(), complex_output.data());
 }
 
-// C2R Inverse (Out-of-place)
+/**
+ * @brief Performs a Complex-to-Real inverse FFT (out-of-place) using NormMode::BACKWARD.
+ * Creates, executes, and destroys an FFTPlan internally. Input complex vector must have
+ * Hermitian symmetry for output to be purely real. Result is scaled by 1/N if using oneMKL,
+ * check backend notes for Accelerate scaling.
+ * @tparam T float or double.
+ * @param complex_input Input complex vector of size Nc = N/2 + 1 (Hermitian symmetry assumed).
+ * @param real_output Output real vector (will be resized to N = 2*(Nc-1) or 1 if Nc=1).
+ * @throws std::runtime_error If backend FFTPlan creation or execution fails.
+ */
 template <typename T>
-void ifft_c2r(const std::vector<std::complex<T>>& complex_input, std::vector<T>& real_output) {
+void irfft(const std::vector<std::complex<T>>& complex_input, std::vector<T>& real_output) {
     if (complex_input.empty()) {
         real_output.clear();
         return;
     }
-    // Infer N from complex size Nc = N/2 + 1 => N = 2*(Nc-1)
     const size_t Nc = complex_input.size();
-    if (Nc == 0) { // Or Nc == 1 ? A single DC value could imply N=0 or N=1? Let's assume Nc>=1
-         real_output.clear(); // Or throw? Or handle N=0/1? Let's clear for Nc=0,1
-         if (Nc == 1) real_output.resize(1, complex_input[0].real()); // DC only -> N=1 real?
-         return;
+    if (Nc < 1) { // Should not happen if complex_input wasn't empty, but defensive check
+        real_output.clear();
+        return;
     }
-    const size_t N = 2 * (Nc - 1);
+
+    // Infer original real length N from complex length Nc = N/2 + 1
+    // If Nc = 1 (DC only), N could be 0 or 1. Assume N=1.
+    const size_t N = (Nc == 1) ? 1 : 2 * (Nc - 1);
     real_output.resize(N);
 
-    FFTPlan<T> plan(N, // Length is real size N
-                    std::is_same_v<T, float> ? Precision::SINGLE : Precision::DOUBLE,
-                    Direction::INVERSE,
-                    Domain::REAL);
-    plan.execute_c2r(complex_input.data(), real_output.data());
-    // Reminder: Scaling might need to be applied by caller depending on backend.
+    // Handle N=1 case directly (plan creation might fail otherwise or be overkill)
+    // Requires NormMode::BACKWARD which has scale=1/N=1.0 for N=1
+    if (Nc == 1 && N == 1) {
+         real_output[0] = complex_input[0].real(); // Assumes scale is 1.0
+         return;
+    }
+
+    const Precision prec = std::is_same_v<T, float> ? Precision::SINGLE : Precision::DOUBLE;
+
+    // Create and execute plan using default NormMode::BACKWARD
+    FFTPlan<T> plan(N, prec, Direction::INVERSE, Domain::REAL, NormMode::BACKWARD);
+    plan.execute_irfft(complex_input.data(), real_output.data());
 }
 
 
 // --- Explicit Template Instantiations (Definition) ---
-// Only instantiate the convenience functions in this file.
+// Instantiates the convenience functions for float and double.
+// The FFTPlan<T> class itself is instantiated in the fft_impl_*.cpp files.
 
-// Existing C2C instantiations
+// C2C Functions
 template void fft<float>(const std::vector<std::complex<float>>&, std::vector<std::complex<float>>&);
 template void fft<double>(const std::vector<std::complex<double>>&, std::vector<std::complex<double>>&);
 template void ifft<float>(const std::vector<std::complex<float>>&, std::vector<std::complex<float>>&);
@@ -118,11 +192,10 @@ template void fft_inplace<double>(std::vector<std::complex<double>>&);
 template void ifft_inplace<float>(std::vector<std::complex<float>>&);
 template void ifft_inplace<double>(std::vector<std::complex<double>>&);
 
-// New R2C/C2R instantiations
-template void fft_r2c<float>(const std::vector<float>&, std::vector<std::complex<float>>&);
-template void fft_r2c<double>(const std::vector<double>&, std::vector<std::complex<double>>&);
-template void ifft_c2r<float>(const std::vector<std::complex<float>>&, std::vector<float>&);
-template void ifft_c2r<double>(const std::vector<std::complex<double>>&, std::vector<double>&);
-
+// R2C / C2R Functions
+template void rfft<float>(const std::vector<float>&, std::vector<std::complex<float>>&);
+template void rfft<double>(const std::vector<double>&, std::vector<std::complex<double>>&);
+template void irfft<float>(const std::vector<std::complex<float>>&, std::vector<float>&);
+template void irfft<double>(const std::vector<std::complex<double>>&, std::vector<double>&);
 
 } // namespace OmniFFT

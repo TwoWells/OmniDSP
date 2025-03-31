@@ -1,319 +1,385 @@
-// src/fft_impl_accelerate.cpp
+/**
+ * @file fft_impl_accelerate.cpp
+ * @brief Apple Accelerate backend implementation for OmniFFT.
+ *
+ * This file contains the concrete implementation of the FFTPlanImpl class
+ * using Apple's Accelerate framework (specifically vDSP functions). It is
+ * compiled only when USE_ACCELERATE is defined by the CMake build system.
+ *
+ * Note: The current implementation for Domain::REAL transforms using Accelerate
+ * requires the FFT length 'N' to be a power of 2 due to the underlying
+ * vDSP_create_fftsetup function. Manual scaling is applied based on NormMode.
+ *
+ * @version 1.0.0
+ * @date 2025-03-31
+ */
 
-#include "omnifft.h" // Contains FFTPlanImpl forward decl, FFTPlan decl, enums
+#include <OmniFFT/omnifft.h> // Public API header
 
-#if defined(USE_ACCELERATE) // Guard ensures this compiles only when Accelerate is selected
+#if defined(USE_ACCELERATE) // Only compile contents if Accelerate backend is selected
 
-#include <Accelerate/Accelerate.h>
-#include <stdexcept>
-#include <complex>
-#include <memory>      // For std::unique_ptr, std::make_unique
-#include <vector>
-#include <algorithm>   // For std::copy
-#include <type_traits> // For std::is_same_v
-#include <cmath>       // For std::log2, std::ceil
+#include <Accelerate/Accelerate.h> // Main Accelerate header (includes vDSP)
+#include <stdexcept>  // For std::runtime_error, std::invalid_argument
+#include <complex>    // For std::complex
+#include <memory>     // For std::unique_ptr, std::make_unique
+#include <vector>     // For internal buffers
+#include <algorithm>  // For std::copy (used in simulated in-place C2C)
+#include <type_traits>// For std::is_same_v
+#include <cmath>      // For std::sqrt, std::log2, std::ceil
 
 namespace OmniFFT {
 
-// --- Accelerate FFTPlanImpl Definition ---
+/**
+ * @internal
+ * @brief Accelerate backend implementation details for FFTPlan.
+ *
+ * This struct holds the Accelerate-specific setup handles and buffers,
+ * and implements the FFT execution using vDSP functions. It handles the
+ * differences between complex (using vDSP_DFT) and real (using vDSP_fft) APIs,
+ * including necessary data packing/unpacking and manual scaling for real transforms
+ * and normalization modes.
+ *
+ * @tparam T float or double
+ */
 template <typename T>
 struct FFTPlanImpl {
-    size_t length = 0;        // N: Real domain length
-    size_t complex_length = 0;// Nc = N/2 + 1
-    Direction direction = Direction::FORWARD;
-    Precision precision = Precision::SINGLE;
-    Domain domain = Domain::COMPLEX;
+    // --- Configuration Members ---
+    size_t length = 0;        ///< N: Number of points in the real domain.
+    size_t complex_length = 0;///< Nc = N/2 + 1: Number of complex points for REAL domain.
+    Direction direction = Direction::FORWARD; ///< Transform direction.
+    Precision precision = Precision::SINGLE; ///< Data precision.
+    Domain domain = Domain::COMPLEX;       ///< Transform domain (COMPLEX or REAL).
+    NormMode norm_mode = NormMode::BACKWARD; ///< Normalization mode.
 
-    // Handles for different domains (DFT for C2C, FFT for R2C/C2R)
-    void* setup_handle_c2c = nullptr; // vDSP_DFT_Setup or vDSP_DFT_SetupD
-    FFTSetup setup_handle_real = nullptr; // FFTSetup or FFTSetupD (older API for real FFT)
+    // --- Calculated Scaling Factors ---
+    // These are applied manually after vDSP calls
+    T forward_scale = 1.0;
+    T backward_scale = 1.0;
 
-    // Buffers needed for Accelerate real FFT packing/unpacking
-    std::vector<T> real_buffer; // Holds split complex real part
-    std::vector<T> imag_buffer; // Holds split complex imag part
-    vDSP_Stride stride = 1;     // Usually 1 for packed data
+    // --- Accelerate Handles ---
+    // Use void* for C2C handle to easily store float/double versions
+    void* setup_handle_c2c = nullptr;     ///< vDSP_DFT_Setup or vDSP_DFT_SetupD for C2C
+    // Use specific type for REAL handle (older API)
+    typename std::conditional<std::is_same_v<T, float>, FFTSetup, FFTSetupD>::type
+        setup_handle_real = nullptr;      ///< FFTSetup or FFTSetupD for R2C/C2R
 
-    // Helper to get log2(N) needed for vDSP_create_fftsetup
+    // --- Buffers for R2C/C2R (Split Complex Format) ---
+    std::vector<T> real_buffer; ///< Temporary buffer for real parts of split complex data. Size N/2.
+    std::vector<T> imag_buffer; ///< Temporary buffer for imag parts of split complex data. Size N/2.
+    vDSP_Stride stride = 1;     ///< Stride for accessing split complex buffers (usually 1).
+
+    /**
+     * @internal @brief Helper to calculate log2(N) required by vDSP_create_fftsetup.
+     * @param n The length N.
+     * @return vDSP_Length Base-2 logarithm of n.
+     * @throws std::runtime_error if n is not a power of 2 (and n != 1).
+     * @throws std::invalid_argument if n is zero.
+     */
     vDSP_Length get_log2n(size_t n) {
         if (n == 0) throw std::invalid_argument("FFT length cannot be zero.");
-        // Check if n is a power of 2 (required by vDSP_create_fftsetup)
-        if ((n & (n - 1)) != 0 && n != 1) { // Allow N=1
-             // If not power of 2, vDSP_create_fftsetup will return NULL.
-             // We could pad here, but let's throw for now.
-             throw std::runtime_error("Accelerate FFTSetup currently requires power-of-2 lengths for REAL domain.");
+        // vDSP_create_fftsetup requires N to be a power of 2. Allow N=1.
+        bool is_power_of_two = (n > 0) && ((n & (n - 1)) == 0);
+        if (!is_power_of_two && n != 1) {
+             throw std::runtime_error("Accelerate FFTSetup (for REAL domain) currently requires length N to be a power of 2.");
         }
-        // Calculate log2(n). Use std::log2 and handle n=1 case.
+        // Use std::log2, handle N=1 edge case (log2(1)=0)
         return (n == 1) ? 0 : static_cast<vDSP_Length>(std::log2(static_cast<double>(n)));
     }
 
-    // Constructor
-    FFTPlanImpl(size_t len, Precision prec, Direction dir, Domain dom) :
-        length(len), direction(dir), precision(prec), domain(dom)
+    /**
+     * @brief Constructs and configures the Accelerate setup handles.
+     * @param len Length 'N' of the transform.
+     * @param prec Precision (SINGLE or DOUBLE).
+     * @param dir Direction (FORWARD or INVERSE).
+     * @param dom Domain (COMPLEX or REAL).
+     * @param norm Normalization mode (BACKWARD, ORTHO, FORWARD).
+     */
+    FFTPlanImpl(size_t len, Precision prec, Direction dir, Domain dom, NormMode norm) :
+        length(len), direction(dir), precision(prec), domain(dom), norm_mode(norm)
     {
-         if (length == 0) {
-            throw std::invalid_argument("FFT length cannot be zero.");
-        }
+         if (length == 0) { throw std::invalid_argument("FFT length N cannot be zero."); }
+
+        // Calculate required manual scaling factors based on NormMode and Domain
+        T scaleN = static_cast<T>(length);
+        T scaleSqrtN = std::sqrt(scaleN);
+        if (scaleN == static_cast<T>(0.0)) { throw std::runtime_error("Cannot calculate scaling factors for N=0"); }
+        if (scaleSqrtN == static_cast<T>(0.0) && norm_mode == NormMode::ORTHO) { throw std::runtime_error("Cannot use ORTHO norm mode for N=0"); }
+
 
         if (domain == Domain::COMPLEX) {
-            complex_length = 0; // Not applicable
-            vDSP_DFT_Direction vdsp_dir = (direction == Direction::FORWARD) ?
-                                           vDSP_DFT_FORWARD : vDSP_DFT_INVERSE;
-            if constexpr (std::is_same_v<T, float>) {
-                setup_handle_c2c = vDSP_DFT_zop_CreateSetup(nullptr, length, vdsp_dir);
-            } else {
-                setup_handle_c2c = vDSP_DFT_zrop_CreateSetupD(nullptr, length, vdsp_dir);
+            complex_length = length; // N complex points for C2C
+            // C2C with vDSP_DFT: Assume raw IFFT(FFT(x)) = x (no inherent scaling).
+            // Therefore, apply the desired normalization scales directly.
+            switch (norm_mode) {
+                case NormMode::BACKWARD: forward_scale = 1.0; backward_scale = 1.0 / scaleN; break;
+                case NormMode::ORTHO:    forward_scale = 1.0 / scaleSqrtN; backward_scale = 1.0 / scaleSqrtN; break;
+                case NormMode::FORWARD:  forward_scale = 1.0 / scaleN; backward_scale = 1.0; break;
             }
-            if (!setup_handle_c2c) {
-                throw std::runtime_error("Failed to create Accelerate vDSP_DFT (C2C) setup.");
-            }
+            // Create C2C setup using vDSP_DFT (newer API)
+            vDSP_DFT_Direction vdsp_dir = (direction == Direction::FORWARD) ? vDSP_DFT_FORWARD : vDSP_DFT_INVERSE;
+            if constexpr (std::is_same_v<T, float>) setup_handle_c2c = vDSP_DFT_zop_CreateSetup(nullptr, length, vdsp_dir);
+            else setup_handle_c2c = vDSP_DFT_zrop_CreateSetupD(nullptr, length, vdsp_dir);
+            if (!setup_handle_c2c) throw std::runtime_error("Failed to create Accelerate vDSP_DFT (C2C) setup.");
+
         } else { // Domain::REAL
             complex_length = length / 2 + 1;
-            vDSP_Length log2n = get_log2n(length); // Throws if not power of 2
+            // R2C/C2R with vDSP_fft_zrip: Assume raw IFFT(FFT(x)) = x * (N/2).
+            // We derived the needed scaling relationship: scale_f * scale_b = 2.0 / N
+            T factor = (scaleN == 0) ? static_cast<T>(1.0) : static_cast<T>(2.0) / scaleN; // Handle N=0? Length check prevents this.
+            T factorSqrt = std::sqrt(factor);
+            if (factorSqrt == static_cast<T>(0.0) && norm_mode == NormMode::ORTHO) { throw std::runtime_error("Cannot use ORTHO norm mode for N=0"); }
 
-            if constexpr (std::is_same_v<T, float>) {
-                setup_handle_real = vDSP_create_fftsetup(log2n, kFFTRadix2); // Using older FFT API
-            } else {
-                setup_handle_real = vDSP_create_fftsetupD(log2n, kFFTRadix2);
+
+            switch (norm_mode) {
+                case NormMode::BACKWARD: forward_scale = 1.0; backward_scale = factor; break; // scale_f=1 -> scale_b=2/N
+                case NormMode::ORTHO:    forward_scale = factorSqrt; backward_scale = factorSqrt; break; // scale_f=sqrt(2/N) -> scale_b=sqrt(2/N)
+                case NormMode::FORWARD:  forward_scale = factor; backward_scale = 1.0; break; // scale_b=1 -> scale_f=2/N
             }
-            if (!setup_handle_real) {
-                 throw std::runtime_error("Failed to create Accelerate FFTSetup (REAL) setup. Is length a power of 2?");
-            }
-            // Allocate split complex buffers
+            // Create R2C/C2R setup using vDSP_fft (older API, requires power-of-2 N)
+            vDSP_Length log2n = get_log2n(length); // Throws if N not power-of-2 (or 1)
+            if constexpr (std::is_same_v<T, float>) setup_handle_real = vDSP_create_fftsetup(log2n, kFFTRadix2);
+            else setup_handle_real = vDSP_create_fftsetupD(log2n, kFFTRadix2);
+            if (!setup_handle_real) throw std::runtime_error("Failed to create Accelerate FFTSetup (REAL) setup. Is length a power of 2?");
+            // Allocate buffers for split complex format used by vDSP_fft_zrip
             real_buffer.resize(length / 2); // Size N/2
             imag_buffer.resize(length / 2); // Size N/2
         }
     }
 
-    // Destructor
+    /**
+     * @brief Destroys the Accelerate setup handles.
+     */
     ~FFTPlanImpl() {
+        // Destroy C2C handle if created
         if (setup_handle_c2c) {
              if constexpr (std::is_same_v<T, float>) vDSP_DFT_DestroySetup(reinterpret_cast<vDSP_DFT_Setup>(setup_handle_c2c));
              else vDSP_DFT_DestroySetupD(reinterpret_cast<vDSP_DFT_SetupD>(setup_handle_c2c));
         }
+        // Destroy REAL handle if created
         if (setup_handle_real) {
-             if constexpr (std::is_same_v<T, float>) vDSP_destroy_fftsetup(reinterpret_cast<FFTSetup>(setup_handle_real));
-             else vDSP_destroy_fftsetupD(reinterpret_cast<FFTSetupD>(setup_handle_real));
+             if constexpr (std::is_same_v<T, float>) vDSP_destroy_fftsetup(setup_handle_real);
+             else vDSP_destroy_fftsetupD(setup_handle_real);
         }
     }
 
-    // --- Packing/Unpacking Helpers for Accelerate Real FFT ---
+    // --- Packing/Unpacking Helpers for Accelerate Real FFT (Split Complex) ---
 
-    // Pack std::complex[Nc] CCE format into Accelerate DSPSplitComplex[N/2] format
-    void pack_complex_to_split(const std::complex<T>* cce_input, DSPSplitComplex* split_output) const {
+    /**
+     * @internal @brief Packs std::complex[Nc] (CCE) into Accelerate DSPSplitComplex[N/2].
+     * @param cce_input Input array [size Nc = N/2 + 1] with Hermitian symmetry.
+     * @param split_output Output split complex structure with pointers to buffers of size N/2.
+     */
+    void pack_complex_to_split(const std::complex<T>* cce_input, void* split_output_void) const {
         const size_t N = length;
         const size_t Nc = complex_length; // N/2 + 1
-        if (Nc == 0) return; // Should not happen if domain is REAL
+        if (Nc == 0 || N == 0) return;
 
         if constexpr (std::is_same_v<T, float>) {
-            DSPSplitComplex* split = reinterpret_cast<DSPSplitComplex*>(split_output);
-            split->realp[0] = cce_input[0].real(); // DC component
-            split->imagp[0] = (N % 2 == 0) ? cce_input[Nc - 1].real() : 0.0f; // Nyquist component (if N is even)
-
-            for (size_t k = 1; k < Nc - (N % 2 == 0 ? 1 : 0); ++k) { // Up to N/2 (exclusive if N even)
+            DSPSplitComplex* split = reinterpret_cast<DSPSplitComplex*>(split_output_void);
+            split->realp[0] = cce_input[0].real();                          // DC component
+            split->imagp[0] = (N % 2 == 0 && Nc > 1) ? cce_input[Nc - 1].real() : 0.0f; // Nyquist component (if N is even and exists)
+            // Components from 1 up to N/2 - 1
+            for (size_t k = 1; k < N / 2; ++k) {
                 split->realp[k] = cce_input[k].real();
                 split->imagp[k] = cce_input[k].imag();
             }
         } else { // double
-            DSPDoubleSplitComplex* split = reinterpret_cast<DSPDoubleSplitComplex*>(split_output);
-            split->realp[0] = cce_input[0].real(); // DC component
-            split->imagp[0] = (N % 2 == 0) ? cce_input[Nc - 1].real() : 0.0; // Nyquist component (if N is even)
-
-             for (size_t k = 1; k < Nc - (N % 2 == 0 ? 1 : 0); ++k) {
+            DSPDoubleSplitComplex* split = reinterpret_cast<DSPDoubleSplitComplex*>(split_output_void);
+            split->realp[0] = cce_input[0].real();
+            split->imagp[0] = (N % 2 == 0 && Nc > 1) ? cce_input[Nc - 1].real() : 0.0;
+            for (size_t k = 1; k < N / 2; ++k) {
                 split->realp[k] = cce_input[k].real();
                 split->imagp[k] = cce_input[k].imag();
             }
         }
     }
 
-    // Unpack Accelerate DSPSplitComplex[N/2] format into std::complex[Nc] CCE format
-    void unpack_split_to_complex(const DSPSplitComplex* split_input, std::complex<T>* cce_output) const {
+    /**
+     * @internal @brief Unpacks Accelerate DSPSplitComplex[N/2] into std::complex[Nc] (CCE).
+     * @param split_input_void Input split complex structure with pointers to buffers of size N/2.
+     * @param cce_output Output array [size Nc = N/2 + 1].
+     */
+    void unpack_split_to_complex(const void* split_input_void, std::complex<T>* cce_output) const {
         const size_t N = length;
         const size_t Nc = complex_length; // N/2 + 1
-        if (Nc == 0) return;
+        if (Nc == 0 || N == 0) return;
 
         if constexpr (std::is_same_v<T, float>) {
-            const DSPSplitComplex* split = reinterpret_cast<const DSPSplitComplex*>(split_input);
+            const DSPSplitComplex* split = reinterpret_cast<const DSPSplitComplex*>(split_input_void);
             cce_output[0] = std::complex<T>(split->realp[0], 0.0f); // DC component
-
-             for (size_t k = 1; k < N / 2; ++k) { // Components 1 to N/2-1
-                cce_output[k] = std::complex<T>(split->realp[k], split->imagp[k]);
-            }
-            if (N % 2 == 0) { // Nyquist component for even N
-                 cce_output[N / 2] = std::complex<T>(split->imagp[0], 0.0f);
-            }
-        } else { // double
-            const DSPDoubleSplitComplex* split = reinterpret_cast<const DSPDoubleSplitComplex*>(split_input);
-            cce_output[0] = std::complex<T>(split->realp[0], 0.0); // DC component
-
+            // Components from 1 up to N/2 - 1
              for (size_t k = 1; k < N / 2; ++k) {
                 cce_output[k] = std::complex<T>(split->realp[k], split->imagp[k]);
             }
-             if (N % 2 == 0) { // Nyquist component for even N
+            // Nyquist component for even N (stored in imagp[0])
+            if (N % 2 == 0 && Nc > 1) {
+                 cce_output[N / 2] = std::complex<T>(split->imagp[0], 0.0f);
+            }
+        } else { // double
+            const DSPDoubleSplitComplex* split = reinterpret_cast<const DSPDoubleSplitComplex*>(split_input_void);
+            cce_output[0] = std::complex<T>(split->realp[0], 0.0);
+             for (size_t k = 1; k < N / 2; ++k) {
+                cce_output[k] = std::complex<T>(split->realp[k], split->imagp[k]);
+            }
+             if (N % 2 == 0 && Nc > 1) {
                  cce_output[N / 2] = std::complex<T>(split->imagp[0], 0.0);
             }
         }
-         // Note: This assumes standard CCE format where complex_output[0] is DC,
-         // complex_output[N/2] is Nyquist (if N even), and others are complex pairs.
     }
 
 
     // --- Execute Methods ---
 
-    // Execute C2C Out-of-Place
+    /** @brief Implements C2C out-of-place execution with manual scaling. */
     void execute_c2c_oop(const std::complex<T>* input, std::complex<T>* output) const {
-       if (!setup_handle_c2c) throw std::runtime_error("Invalid FFTPlan state for C2C.");
+       if (!setup_handle_c2c) throw std::runtime_error("Invalid FFTPlan state for C2C (Accelerate).");
+        // Determine scale factor based on direction and norm mode
+        T scale = (direction == Direction::FORWARD) ? forward_scale : backward_scale;
+
+        // Perform raw FFT/IFFT using vDSP_DFT
         if constexpr (std::is_same_v<T, float>) {
-            const float* realp = reinterpret_cast<const float*>(input);
-            const float* imagp = realp + 1;
-            float* out_realp = reinterpret_cast<float*>(output);
-            float* out_imagp = out_realp + 1;
+            // vDSP_DFT needs separate real/imag pointers for zop
             vDSP_DFT_Execute(reinterpret_cast<vDSP_DFT_Setup>(setup_handle_c2c),
-                             realp, imagp, out_realp, out_imagp);
+                             reinterpret_cast<const float*>(input),       // Input real start
+                             reinterpret_cast<const float*>(input) + 1,   // Input imag start
+                             reinterpret_cast<float*>(output),      // Output real start
+                             reinterpret_cast<float*>(output) + 1); // Output imag start
+            // Apply manual scaling if not 1.0
+            if (scale != 1.0f) {
+                // Scale interleaved complex output (real and imag parts)
+                vDSP_vsmul(reinterpret_cast<const float*>(output), 1, &scale, reinterpret_cast<float*>(output), 1, length * 2);
+            }
         } else { // double
-            const double* realp = reinterpret_cast<const double*>(input);
-            const double* imagp = realp + 1;
-            double* out_realp = reinterpret_cast<double*>(output);
-            double* out_imagp = out_realp + 1;
             vDSP_DFT_ExecuteD(reinterpret_cast<vDSP_DFT_SetupD>(setup_handle_c2c),
-                              realp, imagp, out_realp, out_imagp);
+                              reinterpret_cast<const double*>(input),
+                              reinterpret_cast<const double*>(input) + 1,
+                              reinterpret_cast<double*>(output),
+                              reinterpret_cast<double*>(output) + 1);
+            if (scale != 1.0) {
+                vDSP_vsmulD(reinterpret_cast<const double*>(output), 1, &scale, reinterpret_cast<double*>(output), 1, length * 2);
+            }
         }
     }
 
-    // Execute C2C In-Place (Simulated)
+    /** @brief Implements C2C in-place execution (simulated). */
     void execute_c2c_ip(std::complex<T>* data) const {
-        if (!setup_handle_c2c) throw std::runtime_error("Invalid FFTPlan state for C2C.");
+        if (!setup_handle_c2c) throw std::runtime_error("Invalid FFTPlan state for C2C (Accelerate).");
+        // vDSP_DFT_zop requires separate output, so simulate in-place
         std::vector<std::complex<T>> temp_output(length);
-        execute_c2c_oop(data, temp_output.data());
-        std::copy(temp_output.begin(), temp_output.end(), data);
+        execute_c2c_oop(data, temp_output.data()); // Execute OOP, applies scaling
+        std::copy(temp_output.begin(), temp_output.end(), data); // Copy scaled result back
     }
 
-    // Execute R2C Forward Out-of-Place
-    void execute_r2c_oop(const T* real_input, std::complex<T>* complex_output) const {
-         if (!setup_handle_real) throw std::runtime_error("Invalid FFTPlan state for REAL domain.");
+    /** @brief Implements R2C forward out-of-place execution with manual scaling. */
+    void execute_rfft_oop(const T* real_input, std::complex<T>* complex_output) const {
+         if (!setup_handle_real) throw std::runtime_error("Invalid FFTPlan state for REAL domain (Accelerate).");
          const size_t N = length;
          if (N == 0) return;
-         vDSP_Length log2n = get_log2n(N);
+         vDSP_Length log2n = get_log2n(N); // Already checked for power-of-2
+         T scale = forward_scale;          // Scaling factor for this transform direction/norm
 
-         // Need mutable buffers for split complex data
-         DSPSplitComplex split_data;
+         // Use internal buffers for split complex format (mutable)
+         typename std::conditional<std::is_same_v<T, float>, DSPSplitComplex, DSPDoubleSplitComplex>::type split_data;
          split_data.realp = real_buffer.data();
          split_data.imagp = imag_buffer.data();
 
-         // 1. Convert real input to split complex format (packed)
-         if constexpr (std::is_same_v<T, float>) {
-              vDSP_ctoz(reinterpret_cast<const DSPComplex*>(real_input), 2, &split_data, 1, N / 2);
-         } else { // double
-              vDSP_ctozD(reinterpret_cast<const DSPDoubleComplex*>(real_input), 2, reinterpret_cast<DSPDoubleSplitComplex*>(&split_data), 1, N / 2);
-         }
+         // 1. Convert real input to split complex format (vDSP_ctoz packs real input)
+         if constexpr (std::is_same_v<T, float>) vDSP_ctoz(reinterpret_cast<const DSPComplex*>(real_input), 2, &split_data, 1, N / 2);
+         else vDSP_ctozD(reinterpret_cast<const DSPDoubleComplex*>(real_input), 2, &split_data, 1, N / 2);
 
-         // 2. Perform in-place FFT on the split complex data
-         if constexpr (std::is_same_v<T, float>) {
-              vDSP_fft_zrip(reinterpret_cast<FFTSetup>(setup_handle_real), &split_data, stride, log2n, kFFTDirection_Forward);
-         } else { // double
-              vDSP_fft_zripD(reinterpret_cast<FFTSetupD>(setup_handle_real), reinterpret_cast<DSPDoubleSplitComplex*>(&split_data), stride, log2n, kFFTDirection_Forward);
-         }
+         // 2. Perform in-place FFT on the packed split complex data using vDSP_fft_zrip
+         if constexpr (std::is_same_v<T, float>) vDSP_fft_zrip(setup_handle_real, &split_data, stride, log2n, kFFTDirection_Forward);
+         else vDSP_fft_zripD(setup_handle_real, &split_data, stride, log2n, kFFTDirection_Forward);
 
-         // 3. Unpack the split complex result into standard complex output format
+         // 3. Unpack the resulting split complex data into standard CCE complex output format
          unpack_split_to_complex(&split_data, complex_output);
 
-         // Apply scaling: vDSP_fft_zrip forward results need scaling by 1/2 ? Check docs.
-         // vDSP documentation often implies results are scaled by 1/2 for forward.
-         // Let's apply 0.5 scaling factor
-         if constexpr (std::is_same_v<T, float>) {
-             float scale = 0.5f;
-             vDSP_vsmul(reinterpret_cast<float*>(complex_output), 1, &scale, reinterpret_cast<float*>(complex_output), 1, complex_length * 2); // Multiply real and imag parts
-         } else {
-             double scale = 0.5;
-             vDSP_vsmulD(reinterpret_cast<double*>(complex_output), 1, &scale, reinterpret_cast<double*>(complex_output), 1, complex_length * 2);
+         // 4. Apply the calculated manual scaling factor to the complex output
+         if (scale != static_cast<T>(1.0)) {
+             size_t complex_elements_to_scale = complex_length * 2; // real+imag parts
+             if constexpr (std::is_same_v<T, float>) vDSP_vsmul(reinterpret_cast<float*>(complex_output), 1, &scale, reinterpret_cast<float*>(complex_output), 1, complex_elements_to_scale);
+             else vDSP_vsmulD(reinterpret_cast<double*>(complex_output), 1, &scale, reinterpret_cast<double*>(complex_output), 1, complex_elements_to_scale);
          }
-
     }
 
-    // Execute C2R Inverse Out-of-Place
-    void execute_c2r_oop(const std::complex<T>* complex_input, T* real_output) const {
-        if (!setup_handle_real) throw std::runtime_error("Invalid FFTPlan state for REAL domain.");
+    /** @brief Implements C2R inverse out-of-place execution with manual scaling. */
+    void execute_irfft_oop(const std::complex<T>* complex_input, T* real_output) const {
+        if (!setup_handle_real) throw std::runtime_error("Invalid FFTPlan state for REAL domain (Accelerate).");
         const size_t N = length;
         if (N == 0) return;
         vDSP_Length log2n = get_log2n(N);
+        T scale = backward_scale; // Scaling factor for this transform direction/norm
 
-        // Need mutable buffers for split complex data
-        DSPSplitComplex split_data;
+        // Use internal buffers for split complex format (mutable)
+        typename std::conditional<std::is_same_v<T, float>, DSPSplitComplex, DSPDoubleSplitComplex>::type split_data;
         split_data.realp = real_buffer.data();
         split_data.imagp = imag_buffer.data();
 
-        // 1. Pack standard complex input format into split complex format
+        // 1. Pack standard CCE complex input (Hermitian assumed) into split complex format
         pack_complex_to_split(complex_input, &split_data);
 
-        // Apply scaling BEFORE inverse FFT: vDSP_fft_zrip inverse expects input scaled by 1/2 ? Check docs.
-        // Yes, docs suggest scaling input by 0.5 for inverse.
-        if constexpr (std::is_same_v<T, float>) {
-             float scale = 0.5f;
-             vDSP_vsmul(split_data.realp, 1, &scale, split_data.realp, 1, N / 2);
-             vDSP_vsmul(split_data.imagp, 1, &scale, split_data.imagp, 1, N / 2);
-        } else {
-             double scale = 0.5;
-             vDSP_vsmulD(split_data.realp, 1, &scale, split_data.realp, 1, N / 2);
-             vDSP_vsmulD(split_data.imagp, 1, &scale, split_data.imagp, 1, N / 2);
-        }
+        // 2. Perform in-place Inverse FFT on the packed split complex data using vDSP_fft_zrip
+         if constexpr (std::is_same_v<T, float>) vDSP_fft_zrip(setup_handle_real, &split_data, stride, log2n, kFFTDirection_Inverse);
+         else vDSP_fft_zripD(setup_handle_real, &split_data, stride, log2n, kFFTDirection_Inverse);
 
-        // 2. Perform in-place Inverse FFT on the split complex data
-         if constexpr (std::is_same_v<T, float>) {
-              vDSP_fft_zrip(reinterpret_cast<FFTSetup>(setup_handle_real), &split_data, stride, log2n, kFFTDirection_Inverse);
-         } else { // double
-              vDSP_fft_zripD(reinterpret_cast<FFTSetupD>(setup_handle_real), reinterpret_cast<DSPDoubleSplitComplex*>(&split_data), stride, log2n, kFFTDirection_Inverse);
-         }
+         // 3. Convert the resulting split complex data back to real output using vDSP_ztoc
+         if constexpr (std::is_same_v<T, float>) vDSP_ztoc(&split_data, 1, reinterpret_cast<DSPComplex*>(real_output), 2, N / 2);
+         else vDSP_ztocD(&split_data, 1, reinterpret_cast<DSPDoubleComplex*>(real_output), 2, N / 2);
 
-         // 3. Convert the resulting split complex data back to real output
-         if constexpr (std::is_same_v<T, float>) {
-              vDSP_ztoc(&split_data, 1, reinterpret_cast<DSPComplex*>(real_output), 2, N / 2);
-         } else { // double
-              vDSP_ztocD(reinterpret_cast<DSPDoubleSplitComplex*>(&split_data), 1, reinterpret_cast<DSPDoubleComplex*>(real_output), 2, N / 2);
+         // 4. Apply the calculated manual scaling factor to the final real output
+         if (scale != static_cast<T>(1.0)) {
+              if constexpr (std::is_same_v<T, float>) vDSP_vsmul(real_output, 1, &scale, real_output, 1, N);
+              else vDSP_vsmulD(real_output, 1, &scale, real_output, 1, N);
          }
-         // Note: The combined scaling of 0.5 before inverse results in an overall 1/N scaling
-         // because the FFT pair inherently involves a factor of N. Check vDSP docs carefully.
-         // Unlike MKL, Accelerate often requires manual scaling management.
     }
 
-     // --- Move Semantics ---
+     // --- Rule of 5/3: Move Semantics ---
+     /** @brief Move constructor. */
      FFTPlanImpl(FFTPlanImpl&& other) noexcept :
          length(other.length),
          complex_length(other.complex_length),
          direction(other.direction),
          precision(other.precision),
          domain(other.domain),
+         norm_mode(other.norm_mode),
+         forward_scale(other.forward_scale),
+         backward_scale(other.backward_scale),
          setup_handle_c2c(other.setup_handle_c2c),
          setup_handle_real(other.setup_handle_real),
-         real_buffer(std::move(other.real_buffer)),
+         real_buffer(std::move(other.real_buffer)), // Move buffers
          imag_buffer(std::move(other.imag_buffer)),
          stride(other.stride)
      {
+        // Ensure moved-from object doesn't own handles
         other.setup_handle_c2c = nullptr;
         other.setup_handle_real = nullptr;
      }
 
+     /** @brief Move assignment operator. */
      FFTPlanImpl& operator=(FFTPlanImpl&& other) noexcept {
-          if (this != &other) {
+         if (this != &other) {
             // Release existing resources
-            if (setup_handle_c2c) {
-                 if constexpr (std::is_same_v<T, float>) vDSP_DFT_DestroySetup(reinterpret_cast<vDSP_DFT_Setup>(setup_handle_c2c));
-                 else vDSP_DFT_DestroySetupD(reinterpret_cast<vDSP_DFT_SetupD>(setup_handle_c2c));
-            }
-             if (setup_handle_real) {
-                 if constexpr (std::is_same_v<T, float>) vDSP_destroy_fftsetup(reinterpret_cast<FFTSetup>(setup_handle_real));
-                 else vDSP_destroy_fftsetupD(reinterpret_cast<FFTSetupD>(setup_handle_real));
-            }
-            // Transfer ownership
+            // (Call destructors for handles)
+             this->~FFTPlanImpl(); // Call own destructor carefully, or manually destroy handles
+            // if (setup_handle_c2c) { /* destroy c2c */ }
+            // if (setup_handle_real) { /* destroy real */ }
+
+            // Transfer ownership from other
             length = other.length;
             complex_length = other.complex_length;
             direction = other.direction;
             precision = other.precision;
             domain = other.domain;
+            norm_mode = other.norm_mode;
+            forward_scale = other.forward_scale;
+            backward_scale = other.backward_scale;
             setup_handle_c2c = other.setup_handle_c2c;
             setup_handle_real = other.setup_handle_real;
-            real_buffer = std::move(other.real_buffer);
+            real_buffer = std::move(other.real_buffer); // Move buffers
             imag_buffer = std::move(other.imag_buffer);
             stride = other.stride;
-            // Nullify source
+
+            // Nullify source handles
             other.setup_handle_c2c = nullptr;
             other.setup_handle_real = nullptr;
          }
@@ -321,80 +387,81 @@ struct FFTPlanImpl {
      }
 
      // --- Delete Copy Semantics ---
+     /** @brief Deleted copy constructor. */
      FFTPlanImpl(const FFTPlanImpl&) = delete;
+     /** @brief Deleted copy assignment operator. */
      FFTPlanImpl& operator=(const FFTPlanImpl&) = delete;
 };
 
 
 // --- FFTPlan Method Definitions ---
+// Defined here where FFTPlanImpl is complete.
 
+/** @brief FFTPlan constructor definition (forwards to Impl). */
 template <typename T>
-FFTPlan<T>::FFTPlan(size_t length, Precision precision, Direction direction, Domain domain)
-    : pimpl_(std::make_unique<FFTPlanImpl<T>>(length, precision, direction, domain)) {}
+FFTPlan<T>::FFTPlan(size_t length, Precision precision, Direction direction, Domain domain, NormMode norm)
+    : pimpl_(std::make_unique<FFTPlanImpl<T>>(length, precision, direction, domain, norm)) {}
 
+/** @brief FFTPlan destructor definition. */
 template <typename T> FFTPlan<T>::~FFTPlan() = default;
+/** @brief FFTPlan move constructor definition. */
 template <typename T> FFTPlan<T>::FFTPlan(FFTPlan&& other) noexcept = default;
+/** @brief FFTPlan move assignment definition. */
 template <typename T> FFTPlan<T>& FFTPlan<T>::operator=(FFTPlan<T>&& other) noexcept = default;
 
-// C2C Execute Methods
+/** @brief FFTPlan C2C execute OOP definition. */
 template <typename T>
 void FFTPlan<T>::execute(const std::complex<T>* input, std::complex<T>* output) const {
-    if (!pimpl_) throw std::runtime_error("FFTPlan is not valid.");
-    if (pimpl_->domain != Domain::COMPLEX) {
-        throw std::runtime_error("Execute (C2C) called on FFTPlan created for REAL domain.");
-    }
+    if (!pimpl_) throw std::runtime_error("FFTPlan is not valid (moved from or init failed).");
+    if (pimpl_->domain != Domain::COMPLEX) throw std::runtime_error("Execute (C2C) called on FFTPlan for REAL domain.");
     pimpl_->execute_c2c_oop(input, output);
 }
 
+/** @brief FFTPlan C2C execute IP definition. */
 template <typename T>
 void FFTPlan<T>::execute(std::complex<T>* data) const {
-    if (!pimpl_) throw std::runtime_error("FFTPlan is not valid.");
-    if (pimpl_->domain != Domain::COMPLEX) {
-        throw std::runtime_error("Execute (C2C in-place) called on FFTPlan created for REAL domain.");
-    }
+    if (!pimpl_) throw std::runtime_error("FFTPlan is not valid (moved from or init failed).");
+    if (pimpl_->domain != Domain::COMPLEX) throw std::runtime_error("Execute (C2C in-place) called on FFTPlan for REAL domain.");
     pimpl_->execute_c2c_ip(data);
 }
 
-// R2C / C2R Execute Methods
+/** @brief FFTPlan RFFT execute definition. */
 template <typename T>
-void FFTPlan<T>::execute_r2c(const T* real_input, std::complex<T>* complex_output) const {
-     if (!pimpl_) throw std::runtime_error("FFTPlan is not valid.");
-     if (pimpl_->domain != Domain::REAL || pimpl_->direction != Direction::FORWARD) {
-        throw std::runtime_error("execute_r2c called on FFTPlan with incorrect domain or direction.");
-     }
-     pimpl_->execute_r2c_oop(real_input, complex_output);
+void FFTPlan<T>::execute_rfft(const T* real_input, std::complex<T>* complex_output) const {
+     if (!pimpl_) throw std::runtime_error("FFTPlan is not valid (moved from or init failed).");
+     if (pimpl_->domain != Domain::REAL || pimpl_->direction != Direction::FORWARD) throw std::runtime_error("execute_rfft requires Domain::REAL and Direction::FORWARD.");
+     pimpl_->execute_rfft_oop(real_input, complex_output);
 }
 
+/** @brief FFTPlan IRFFT execute definition. */
 template <typename T>
-void FFTPlan<T>::execute_c2r(const std::complex<T>* complex_input, T* real_output) const {
-     if (!pimpl_) throw std::runtime_error("FFTPlan is not valid.");
-     if (pimpl_->domain != Domain::REAL || pimpl_->direction != Direction::INVERSE) {
-        throw std::runtime_error("execute_c2r called on FFTPlan with incorrect domain or direction.");
-     }
-     pimpl_->execute_c2r_oop(complex_input, real_output);
+void FFTPlan<T>::execute_irfft(const std::complex<T>* complex_input, T* real_output) const {
+     if (!pimpl_) throw std::runtime_error("FFTPlan is not valid (moved from or init failed).");
+     if (pimpl_->domain != Domain::REAL || pimpl_->direction != Direction::INVERSE) throw std::runtime_error("execute_irfft requires Domain::REAL and Direction::INVERSE.");
+     pimpl_->execute_irfft_oop(complex_input, real_output);
 }
 
-// Getters
-template <typename T> size_t FFTPlan<T>::getLength() const {
-    if (!pimpl_) throw std::runtime_error("FFTPlan is not valid."); return pimpl_->length;
-}
-template <typename T> size_t FFTPlan<T>::getComplexLength() const {
-    if (!pimpl_) throw std::runtime_error("FFTPlan is not valid."); return pimpl_->complex_length;
-}
-template <typename T> Direction FFTPlan<T>::getDirection() const {
-     if (!pimpl_) throw std::runtime_error("FFTPlan is not valid."); return pimpl_->direction;
-}
-template <typename T> Precision FFTPlan<T>::getPrecision() const {
-     if (!pimpl_) throw std::runtime_error("FFTPlan is not valid."); return pimpl_->precision;
-}
-template <typename T> Domain FFTPlan<T>::getDomain() const {
-     if (!pimpl_) throw std::runtime_error("FFTPlan is not valid."); return pimpl_->domain;
-}
+// Getters: Check Pimpl and return value from Impl
+/** @brief FFTPlan getLength definition. */
+template <typename T> size_t FFTPlan<T>::getLength() const { if (!pimpl_) throw std::runtime_error("FFTPlan is not valid."); return pimpl_->length; }
+/** @brief FFTPlan getComplexLength definition. */
+template <typename T> size_t FFTPlan<T>::getComplexLength() const { if (!pimpl_) throw std::runtime_error("FFTPlan is not valid."); return pimpl_->complex_length; }
+/** @brief FFTPlan getDirection definition. */
+template <typename T> Direction FFTPlan<T>::getDirection() const { if (!pimpl_) throw std::runtime_error("FFTPlan is not valid."); return pimpl_->direction; }
+/** @brief FFTPlan getPrecision definition. */
+template <typename T> Precision FFTPlan<T>::getPrecision() const { if (!pimpl_) throw std::runtime_error("FFTPlan is not valid."); return pimpl_->precision; }
+/** @brief FFTPlan getDomain definition. */
+template <typename T> Domain FFTPlan<T>::getDomain() const { if (!pimpl_) throw std::runtime_error("FFTPlan is not valid."); return pimpl_->domain; }
+/** @brief FFTPlan getNormMode definition. */
+template <typename T> NormMode FFTPlan<T>::getNormMode() const { if (!pimpl_) throw std::runtime_error("FFTPlan is not valid."); return pimpl_->norm_mode; }
 
 
 // --- Explicit Instantiations ---
+// Instantiate the implementation class template for float and double.
 template struct FFTPlanImpl<float>;
 template struct FFTPlanImpl<double>;
+
+// Instantiate the public wrapper class template for float and double.
 template class FFTPlan<float>;
 template class FFTPlan<double>;
 
