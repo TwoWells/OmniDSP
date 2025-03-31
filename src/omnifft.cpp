@@ -1,6 +1,6 @@
 // src/fft_lib.cpp
 
-#include "fft_lib.h" // Includes FFTPlan declaration + convenience func declarations
+#include "omnifft.h" // Includes FFTPlan declaration + convenience func declarations
 #include <vector>
 #include <complex>
 #include <stdexcept> // For convenience functions if they throw indirectly via FFTPlan
@@ -11,7 +11,7 @@
 //       fft_impl_onemkl.cpp, fft_impl_accelerate.cpp, or fft_impl_stub.cpp files.
 //       This file only contains the platform-independent convenience functions.
 
-namespace CrossPlatformFFT {
+namespace OmniFFT {
 
 // --- Implementation of Convenience Functions ---
 
@@ -125,4 +125,4 @@ template void ifft_c2r<float>(const std::vector<std::complex<float>>&, std::vect
 template void ifft_c2r<double>(const std::vector<std::complex<double>>&, std::vector<double>&);
 
 
-} // namespace CrossPlatformFFT
+} // namespace OmniFFT

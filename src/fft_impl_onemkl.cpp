@@ -1,6 +1,6 @@
 // src/fft_impl_onemkl.cpp
 
-#include "fft_lib.h" // Contains FFTPlanImpl forward decl, FFTPlan decl, enums
+#include "omnifft.h" // Contains FFTPlanImpl forward decl, FFTPlan decl, enums
 
 #if defined(USE_ONEMKL) // Guard ensures this compiles only when MKL is selected
 
@@ -14,7 +14,7 @@
 #include <string>      // For std::string in error messages
 #include <cmath>       // For std::floor
 
-namespace CrossPlatformFFT {
+namespace OmniFFT {
 
 // Helper to check MKL status
 inline void check_mkl_status(MKL_LONG status, const char* error_msg) {
@@ -240,6 +240,6 @@ template struct FFTPlanImpl<double>;
 template class FFTPlan<float>;
 template class FFTPlan<double>;
 
-} // namespace CrossPlatformFFT
+} // namespace OmniFFT
 
 #endif // USE_ONEMKL

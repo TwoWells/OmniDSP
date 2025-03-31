@@ -1,6 +1,6 @@
 // src/fft_impl_accelerate.cpp
 
-#include "fft_lib.h" // Contains FFTPlanImpl forward decl, FFTPlan decl, enums
+#include "omnifft.h" // Contains FFTPlanImpl forward decl, FFTPlan decl, enums
 
 #if defined(USE_ACCELERATE) // Guard ensures this compiles only when Accelerate is selected
 
@@ -13,7 +13,7 @@
 #include <type_traits> // For std::is_same_v
 #include <cmath>       // For std::log2, std::ceil
 
-namespace CrossPlatformFFT {
+namespace OmniFFT {
 
 // --- Accelerate FFTPlanImpl Definition ---
 template <typename T>
@@ -398,6 +398,6 @@ template struct FFTPlanImpl<double>;
 template class FFTPlan<float>;
 template class FFTPlan<double>;
 
-} // namespace CrossPlatformFFT
+} // namespace OmniFFT
 
 #endif // USE_ACCELERATE

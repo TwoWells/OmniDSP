@@ -1,6 +1,6 @@
 // src/fft_impl_stub.cpp
 
-#include "fft_lib.h" // Contains FFTPlanImpl forward decl, FFTPlan decl, enums
+#include "omnifft.h" // Contains FFTPlanImpl forward decl, FFTPlan decl, enums
 
 // Compile this only if NEITHER Accelerate nor MKL is used by CMake defines
 #if !defined(USE_ACCELERATE) && !defined(USE_ONEMKL)
@@ -12,7 +12,7 @@
 #include <type_traits> // For std::is_same_v
 #include <cmath>       // For std::floor
 
-namespace CrossPlatformFFT {
+namespace OmniFFT {
 
 // --- Stub FFTPlanImpl Definition (Error Implementation) ---
 template <typename T>
@@ -132,6 +132,6 @@ template struct FFTPlanImpl<double>;
 template class FFTPlan<float>;
 template class FFTPlan<double>;
 
-} // namespace CrossPlatformFFT
+} // namespace OmniFFT
 
 #endif // !USE_ACCELERATE && !USE_ONEMKL

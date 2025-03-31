@@ -1,5 +1,5 @@
-#ifndef FFT_LIB_H
-#define FFT_LIB_H
+#ifndef OMNIFFT_H
+#define OMNIFFT_H
 
 #include <complex>
 #include <vector>
@@ -7,7 +7,7 @@
 #include <stdexcept> // For exceptions
 #include <cstddef> // For size_t
 
-namespace CrossPlatformFFT {
+namespace OmniFFT {
 
 // Enum for transform direction
 enum class Direction {
@@ -190,6 +190,6 @@ extern template void ifft_c2r<float>(const std::vector<std::complex<float>>&, st
 extern template void ifft_c2r<double>(const std::vector<std::complex<double>>&, std::vector<double>&);
 
 
-} // namespace CrossPlatformFFT
+} // namespace OmniFFT
 
-#endif // FFT_LIB_H
+#endif // OMNIFFOMNIFFT

@@ -1,4 +1,4 @@
-# Cross-Platform C++ FFT Library
+# OmniFFT: A Cross-Platform High Performance C++ FFT Library
 
 ## Overview
 
@@ -104,7 +104,7 @@ This project uses a standard CMake out-of-source build process.
 
 ## Usage
 
-Include the library header and use the `CrossPlatformFFT` namespace.
+Include the library header and use the `OmniFFT` namespace.
 
 ### Complex-to-Complex Example:
 
@@ -123,13 +123,13 @@ int main() {
 
     try {
         // Use convenience function
-        CrossPlatformFFT::fft(signal_c2c, spectrum_c2c);
+        OmniFFT::fft(signal_c2c, spectrum_c2c);
 
         // Or use FFTPlan
-        CrossPlatformFFT::FFTPlan<double> plan(N,
-                                               CrossPlatformFFT::Precision::DOUBLE,
-                                               CrossPlatformFFT::Direction::FORWARD,
-                                               CrossPlatformFFT::Domain::COMPLEX);
+        OmniFFT::FFTPlan<double> plan(N,
+                                               OmniFFT::Precision::DOUBLE,
+                                               OmniFFT::Direction::FORWARD,
+                                               OmniFFT::Domain::COMPLEX);
         std::vector<Complex> spectrum_plan(N);
         plan.execute(signal_c2c.data(), spectrum_plan.data());
 
@@ -151,7 +151,7 @@ int main() {
 #include <vector>
 #include <complex>
 #include <iostream>
-#include "fft_lib.h"
+#include "omnifft.h"
 
 int main() {
     const size_t N = 16; // Real signal length (must be power of 2 for Accelerate backend)
@@ -168,12 +168,12 @@ int main() {
 
     try {
         // R2C Transform (using convenience function)
-        CrossPlatformFFT::fft_r2c(real_signal, complex_spectrum);
+        OmniFFT::fft_r2c(real_signal, complex_spectrum);
         std::cout << "R2C Spectrum (Size " << complex_spectrum.size() << "):" << std::endl;
         // ... print spectrum ...
 
         // C2R Transform (using convenience function)
-        CrossPlatformFFT::ifft_c2r(complex_spectrum, reconstructed_signal);
+        OmniFFT::ifft_c2r(complex_spectrum, reconstructed_signal);
         std::cout << "\nC2R Reconstructed (Size " << reconstructed_signal.size() << "):" << std::endl;
         // ... print reconstructed signal ...
 

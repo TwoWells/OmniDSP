@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(CrossPlatformFFTLib LANGUAGES CXX)
+project(OmniFFT LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -50,26 +50,26 @@ if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${FFT_IMPL_SOURCE}")
     message(FATAL_ERROR "Selected FFT implementation source file not found: ${FFT_IMPL_SOURCE}")
 endif()
 
-add_library(fft_lib
-    src/fft_lib.cpp      # Platform-independent wrapper
+add_library(omnifft
+    src/omnifft.cpp      # Platform-independent wrapper
     ${FFT_IMPL_SOURCE}   # The selected platform-specific implementation
 )
-target_include_directories(fft_lib PUBLIC include) # Make public header available
+target_include_directories(omnifft PUBLIC include) # Make public header available
 
 # --- Apply backend-specific settings to the library target ---
 if(FFT_BACKEND STREQUAL "ACCELERATE")
-    target_link_libraries(fft_lib PUBLIC Accelerate::Accelerate)
-    target_compile_definitions(fft_lib PRIVATE USE_ACCELERATE)
+    target_link_libraries(omnifft PUBLIC Accelerate::Accelerate)
+    target_compile_definitions(omnifft PRIVATE USE_ACCELERATE)
 elseif(FFT_BACKEND STREQUAL "ONEMKL")
-    target_include_directories(fft_lib PRIVATE ${MKL_INCLUDE_DIRS})
+    target_include_directories(omnifft PRIVATE ${MKL_INCLUDE_DIRS})
     if(TARGET MKL::MKL)
-         target_link_libraries(fft_lib PUBLIC MKL::MKL)
+         target_link_libraries(omnifft PUBLIC MKL::MKL)
     elseif(MKL_LIBRARIES)
-         target_link_libraries(fft_lib PUBLIC ${MKL_LIBRARIES})
+         target_link_libraries(omnifft PUBLIC ${MKL_LIBRARIES})
     else()
          message(WARNING "FindMKL found MKL but did not define MKL::MKL target or MKL_LIBRARIES. Manual linking might be required.")
     endif()
-    target_compile_definitions(fft_lib PRIVATE USE_ONEMKL)
+    target_compile_definitions(omnifft PRIVATE USE_ONEMKL)
 # elseif(FFT_BACKEND STREQUAL "NONE")
     # No specific settings needed for the stub backend
 endif()
@@ -77,10 +77,10 @@ endif()
 
 # --- Example Executable (Optional) ---
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/main.cpp")
-    add_executable(fft_example examples/main.cpp)
-    target_link_libraries(fft_example PRIVATE fft_lib)
+    add_executable(omnifft_example examples/main.cpp)
+    target_link_libraries(omnifft_example PRIVATE omnifft)
 endif()
 
 # --- Installation (Optional) ---
-# install(TARGETS fft_lib DESTINATION lib)
-# install(FILES include/fft_lib.h DESTINATION include)
+# install(TARGETS omnifft DESTINATION lib)
+# install(FILES include/omnifft.h DESTINATION include)
