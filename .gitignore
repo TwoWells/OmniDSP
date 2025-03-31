@@ -1,0 +1,47 @@
+# CMake generated files and directories
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+
+# Build directory (Most important!)
+# Ignore the build directory regardless of its name case
+[Bb]uild/
+build/
+
+# Visual Studio specific files & directories
+.vs/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.VC.db
+*.[Ss]u[o]
+# Ignore common VS build output directories if not using a separate 'build' folder
+[Dd]ebug/
+[Rr]elease/
+x64/
+Win32/
+[Dd]ebug*/
+[Rr]elease*/
+*.sdf
+*.opensdf
+
+# VS Code specific
+.vscode/
+
+# CLion specific
+.idea/
+
+# macOS specific
+.DS_Store
+
+# Windows specific
+Thumbs.db
+
+# Other temporary files
+*.log
+*.tmp
+*.temp
