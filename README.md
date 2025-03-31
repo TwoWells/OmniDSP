@@ -173,9 +173,9 @@ After installation, the following structure should exist under your chosen `<pre
 
 Once OmniFFT is installed, other CMake projects can find and use it.
 
-### 1\. CMakeLists.txt for Consuming Project:
+### 1. CMakeLists.txt for Consuming Project:
 
-In the \`CMakeLists.txt\` of your application:
+In the `CMakeLists.txt` of your application:
 
 ```cmake
 cmake_minimum_required(VERSION 3.15)
@@ -203,7 +203,7 @@ target_link_libraries(my_app PRIVATE OmniFFT::omnifft)
 cmake -DCMAKE_PREFIX_PATH=~/libs/omnifft /path/to/your/MyCoolApp/source
 ```
 
-### 2\. C++ Code in Consuming Project:
+### 2. C++ Code in Consuming Project:
 
 In your application's source code, include the header using the path relative to the install prefix's `include` directory:
 
@@ -258,6 +258,17 @@ int main() {
 *   You can force CMake to prefer oneMKL when building OmniFFT by setting the CMake option `FFT_PREFER_ONEMKL` to `ON`.
 *   If neither Accelerate nor oneMKL is found when building OmniFFT, the library compiles using a **stub implementation**. Attempting to use the installed library will result in a `std::runtime_error`.
 *   The choice of backend is fixed when OmniFFT is compiled; consuming applications use the backend that the installed library was built with.
+
+## A Note on SYCL and GPU Acceleration
+
+Users familiar with Intel oneAPI might wonder why the oneMKL backend uses the classic C-style DFTI API instead of the newer SYCL API, which can target Intel GPUs. While the SYCL API offers potential performance benefits for very large FFTs on compatible GPU hardware, the current OmniFFT implementation uses the classic DFTI API for the following reasons:
+
+*   **Cross-Platform CPU Performance Focus:** The primary goal of OmniFFT is to provide a unified way to achieve high FFT performance across multiple platforms, primarily leveraging their CPU capabilities. The classic oneMKL DFTI provides excellent, highly optimized CPU performance that aligns well with the capabilities targeted by the Apple Accelerate backend, ensuring a more consistent performance profile across supported systems.
+*   **Reduced Complexity:** Integrating SYCL requires the DPC++ compiler toolchain, adds asynchronous programming concepts (queues, events), and necessitates careful data management (SYCL buffers or USM) which significantly increases the build and implementation complexity compared to the direct DFTI approach.
+*   **API Consistency & Overhead:** To maintain the current simple host-pointer API (e.g., `execute(const double*...)`), a SYCL backend would need to internally handle data transfers between the host CPU and the device (CPU or GPU). This transfer overhead can negate the GPU's computational advantage except for **very large FFT sizes (e.g., potentially hundreds of thousands or millions of points, depending heavily on the specific hardware)**. For smaller to medium sizes frequently encountered in CPU-bound applications, the data transfer time and kernel launch overhead often make the highly optimized classic CPU API faster and more efficient. The exact crossover point depends heavily on the specific CPU, GPU, memory bandwidth, data precision, and whether batching is used.
+*   **Target Use Case:** The classic DFTI API is often sufficient or even faster for the small-to-medium FFT sizes common in many CPU-bound applications.
+
+Therefore, the current approach prioritizes broad cross-platform CPU performance, implementation simplicity, and API accessibility. Support for SYCL could be considered in the future if targeting Intel GPU acceleration for very large problem sizes becomes a primary requirement for the library.
 
 ## Notes / Limitations
 
