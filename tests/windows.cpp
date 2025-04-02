@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 #include <OmniDSP/omnidsp.h> // Include OmniDSP header
-#include <OmniDSP/window.h>  // Include Window header
+#include <OmniDSP/windows.h> // Include Window header
 #include <vector>
 #include <numeric>  // std::iota
 #include <cmath>    // cos, M_PI
