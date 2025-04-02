@@ -5,36 +5,37 @@
  * Demonstrates Complex-to-Complex (C2C) transforms using both the
  * FFTPlan class and convenience functions, as well as Real-to-Complex (R2C)
  * and Complex-to-Real (C2R) transforms using convenience functions.
- * Also demonstrates the use of window functions.
+ * Also demonstrates the use of window functions and the CQT.
  */
 
-#include <OmniDSP/omnidsp.h> // Library header
-#include <iostream>  // For console output
-#include <vector>    // For data storage
-#include <complex>   // For std::complex
-#include <stdexcept> // For exception handling
-#include <cmath>     // For std::cos, M_PI
-#include <numeric>   // std::iota
+#include <OmniDSP/omnidsp.h>
+#include <OmniDSP/window.h>
+#include <OmniDSP/cqt.h>
+#include <iostream>
+#include <vector>
+#include <complex>
+#include <stdexcept>
+#include <cmath>
+#include <numeric>
 
 int main() {
     // --- Configuration ---
-    const size_t N = 16; // FFT size (Real signal length)
-                         // Note: Must be power of 2 for Accelerate REAL domain backend!
-    using Real = double; // Define precision via type alias
+    const size_t N = 16;
+    using Real = double;
     using Complex = std::complex<Real>;
-    const auto CURRENT_PRECISION = OmniDSP::Precision::DOUBLE; // Match Precision enum to Real type
+    const auto CURRENT_PRECISION = OmniDSP::Precision::DOUBLE;
 
     std::cout << "OmniDSP Example (N=" << N << ")" << std::endl;
     std::cout << "-----------------------------" << std::endl;
 
     // --- Prepare Input Data ---
-    std::vector<Complex> input_signal_c2c(N); // For C2C examples
-    std::vector<Real> input_signal_real(N);   // For R2C example
+    std::vector<Complex> input_signal_c2c(N);
+    std::vector<Real> input_signal_real(N);
 
-    double frequency = 3.0; // Example frequency for test signal
+    double frequency = 3.0;
     for (size_t i = 0; i < N; ++i) {
         Real real_val = std::cos(2.0 * M_PI * frequency * static_cast<Real>(i) / N);
-        Real imag_val = std::sin(1.5 * M_PI * frequency * static_cast<Real>(i) / N); // Add some imag part for C2C
+        Real imag_val = std::sin(1.5 * M_PI * frequency * static_cast<Real>(i) / N);
         input_signal_c2c[i] = Complex(real_val, imag_val);
         input_signal_real[i] = real_val;
     }
@@ -42,8 +43,7 @@ int main() {
     std::cout << "Input Real Signal (for RFFT):" << std::endl;
     for (size_t i = 0; i < N; ++i)
         std::cout << input_signal_real[i] << (i == N - 1 ? "" : ", ");
-    std::cout << std::endl
-              << std::endl;
+    std::cout << std::endl << std::endl;
 
     // --- Execute DSP functions within a try-catch block ---
     try {
@@ -52,7 +52,6 @@ int main() {
         // Recommended for repeated transforms of the same configuration.
         // ==========================================================
         std::cout << "--- Method 1: Using FFTPlan (C2C OOP) ---" << std::endl;
-        // Use the 5-argument constructor: length, precision, direction, domain, norm
         OmniDSP::FFTPlan<Real> forward_plan_c2c(N, CURRENT_PRECISION,
                                                 OmniDSP::Direction::FORWARD,
                                                 OmniDSP::Domain::COMPLEX,
@@ -70,7 +69,6 @@ int main() {
                                  spectrum_c2c_plan.data());
 
         std::cout << "C2C Spectrum (Plan OOP):" << std::endl;
-        // Print first few elements for brevity
         for (size_t i = 0; i < std::min((size_t)5, N); ++i)
             std::cout << spectrum_c2c_plan[i] << " ";
         if (N > 5)
@@ -283,6 +281,47 @@ int main() {
         for (Real val : flattop_windowed_signal)
             std::cout << val << " ";
         std::cout << std::endl;
+
+        // ==========================================================
+        // Example: Using CQT
+        // ==========================================================
+        std::cout << "--- Example: Using CQT ---" << std::endl;
+
+        // CQT parameters
+        double cqt_sample_rate = 44100.0;
+        double cqt_lowest_freq = 20.0;
+        double cqt_highest_freq = 20000.0;
+        int cqt_bins_per_octave = 12;
+
+        // Create CQTPlan
+        auto hann_window = [](const std::vector<Real>& input) {
+            return OmniDSP::Window::hann(input);
+        };
+        OmniDSP::CQTPlan<Real> cqt_plan(cqt_sample_rate, cqt_lowest_freq,
+                                        cqt_highest_freq, cqt_bins_per_octave, hann_window);
+
+        // Generate a test signal (e.g., a simple chord)
+        std::vector<Real> cqt_input_signal(4096);
+        for (size_t i = 0; i < cqt_input_signal.size(); ++i) {
+            double time = static_cast<double>(i) / cqt_sample_rate;
+            cqt_input_signal[i] =
+                std::cos(2.0 * M_PI * 220.0 * time) + // A3
+                std::cos(2.0 * M_PI * 440.0 * time);  // A4
+        }
+
+        // Execute CQT
+        std::vector<std::vector<Complex>> cqt_output;
+        cqt_plan.execute(cqt_input_signal, cqt_output);
+
+        // Print some CQT output (first 5 bins)
+        std::cout << "CQT Output (first 5 bins):" << std::endl;
+        for (size_t i = 0; i < std::min(cqt_output.size(), (size_t)5); ++i) {
+            std::cout << "Bin " << i << ": ";
+            for (const auto& val : cqt_output[i]) {
+                std::cout << val << " ";
+            }
+            std::cout << std::endl;
+        }
 
     } catch (const std::exception& e) {
         std::cerr << "FATAL ERROR: " << e.what() << std::endl;

@@ -33,13 +33,16 @@ OmniDSP/
 │
 ├── include/                # Public header files
 │   └── OmniDSP/
-│       └── omnidsp.h       # Main header (include )
+│       ├── omnidsp.h           # Main header (include )
+│       ├── cqt.h               # CQT specific header
+│       └── window.h            # Windowing functions header
 │
 ├── src/                    # Implementation source files
-│   ├── omnidsp.cpp           # Platform-independent convenience functions
-│   ├── fft_impl_onemkl.cpp   # oneMKL specific implementation
+│   ├── omnidsp.cpp             # Platform-independent convenience functions
+│   ├── fft_impl_onemkl.cpp     # oneMKL specific implementation
 │   ├── fft_impl_accelerate.cpp # Apple Accelerate specific implementation
-│   └── fft_impl_stub.cpp     # Fallback/error implementation
+│   ├── fft_impl_stub.cpp       # Fallback/error implementation
+│   └── cqt.cpp                 # CQTPlan implementation using FFTPlan
 │
 ├── examples/               # Usage examples within this repo
 │   └── main.cpp
@@ -50,7 +53,8 @@ OmniDSP/
 │   ├── ifft.cpp
 │   ├── rfft.cpp
 │   ├── irfft.cpp
-│   └── window.cpp
+│   ├── window.cpp
+│   └── cqt.cpp
 │
 ├── build/                  # (Generated Directory) Build artifacts
 │

@@ -7,6 +7,7 @@ add_executable(omnidsp_tests
     rfft.cpp
     irfft.cpp
     window.cpp
+    cqt.cpp
 )
 
 # Link the test executable against GoogleTest and the OmniDSP library

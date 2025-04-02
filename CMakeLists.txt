@@ -110,6 +110,7 @@ endif()
 add_library(omnidsp
     src/omnidsp.cpp # Platform-independent wrapper/convenience functions
     ${FFT_IMPL_SOURCE} # The selected platform-specific implementation
+    src/cqt.cpp       # Include the CQT implementation!
 )
 # Set C++ standard for the target explicitly (good practice)
 target_compile_features(omnidsp PRIVATE cxx_std_17)
@@ -188,6 +189,14 @@ set(OMNIDSP_CMAKE_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}")
 # 1. Install the public header file(s)
 # Destination: <prefix>/include/OmniDSP/omnidsp.h
 install(FILES include/OmniDSP/omnidsp.h
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME}"
+    COMPONENT Devel # Component grouping (optional)
+)
+install(FILES include/OmniDSP/window.h
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME}"
+    COMPONENT Devel # Component grouping (optional)
+)
+install(FILES include/OmniDSP/cqt.h
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME}"
     COMPONENT Devel # Component grouping (optional)
 )
