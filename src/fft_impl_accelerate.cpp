@@ -1,6 +1,6 @@
 /**
  * @file fft_impl_accelerate.cpp
- * @brief Apple Accelerate backend implementation for OmniFFT.
+ * @brief Apple Accelerate backend implementation for OmniDSP.
  *
  * This file contains the concrete implementation of the FFTPlanImpl class
  * using Apple's Accelerate framework (specifically vDSP functions). It is
@@ -14,7 +14,7 @@
  * @date 2025-03-31
  */
 
-#include <OmniFFT/omnifft.h> // Public API header
+#include <OmniDSP/omnidsp.h> // Public API header
 
 #if defined(USE_ACCELERATE) // Only compile contents if Accelerate backend is selected
 
@@ -27,7 +27,7 @@
 #include <type_traits>// For std::is_same_v
 #include <cmath>      // For std::sqrt, std::log2, std::ceil
 
-namespace OmniFFT {
+namespace OmniDSP {
 
 /**
  * @internal
@@ -465,6 +465,6 @@ template struct FFTPlanImpl<double>;
 template class FFTPlan<float>;
 template class FFTPlan<double>;
 
-} // namespace OmniFFT
+} // namespace OmniDSP
 
 #endif // USE_ACCELERATE

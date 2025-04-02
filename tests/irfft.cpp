@@ -2,7 +2,7 @@
 // Tests for inverse Complex-to-Real FFT functions (irfft, FFTPlan::execute_irfft)
 
 #include <gtest/gtest.h>
-#include <OmniFFT/omnifft.h> // Use correct include path
+#include <OmniDSP/omnidsp.h> // Use correct include path
 #include <vector>
 #include <complex>
 #include <limits>
@@ -54,8 +54,8 @@ TEST_F(FFT_C2R_Inverse_Test, Identity_BackwardNorm_Double) {
     try {
         // Use BACKWARD norm for both forward (rfft) and inverse (irfft)
         // Convenience functions use BACKWARD by default.
-        OmniFFT::rfft(original, spectrum);
-        OmniFFT::irfft(spectrum, reconstructed);
+        OmniDSP::rfft(original, spectrum);
+        OmniDSP::irfft(spectrum, reconstructed);
         // With BACKWARD norm, irfft(rfft(x)) should equal x
         // (assuming MKL backend, or correct internal scaling in Accelerate impl)
         ExpectRealVectorNear(original, reconstructed, double_tolerance, "rfft/irfft BACKWARD");
@@ -75,8 +75,8 @@ TEST_F(FFT_C2R_Inverse_Test, Identity_OrthoNorm_Float) {
 
     try {
         // Use ORTHO norm via FFTPlan for both forward and inverse
-        OmniFFT::FFTPlan<Real> plan_fwd(N, OmniFFT::Precision::SINGLE, OmniFFT::Direction::FORWARD, OmniFFT::Domain::REAL, OmniFFT::NormMode::ORTHO);
-        OmniFFT::FFTPlan<Real> plan_inv(N, OmniFFT::Precision::SINGLE, OmniFFT::Direction::INVERSE, OmniFFT::Domain::REAL, OmniFFT::NormMode::ORTHO);
+        OmniDSP::FFTPlan<Real> plan_fwd(N, OmniDSP::Precision::SINGLE, OmniDSP::Direction::FORWARD, OmniDSP::Domain::REAL, OmniDSP::NormMode::ORTHO);
+        OmniDSP::FFTPlan<Real> plan_inv(N, OmniDSP::Precision::SINGLE, OmniDSP::Direction::INVERSE, OmniDSP::Domain::REAL, OmniDSP::NormMode::ORTHO);
 
         ASSERT_EQ(plan_fwd.getComplexLength(), Nc);
         ASSERT_EQ(plan_inv.getLength(), N);
@@ -101,8 +101,8 @@ TEST_F(FFT_C2R_Inverse_Test, Identity_ForwardNorm_Double) {
 
     try {
         // Use FORWARD norm via FFTPlan for both forward and inverse
-        OmniFFT::FFTPlan<Real> plan_fwd(N, OmniFFT::Precision::DOUBLE, OmniFFT::Direction::FORWARD, OmniFFT::Domain::REAL, OmniFFT::NormMode::FORWARD);
-        OmniFFT::FFTPlan<Real> plan_inv(N, OmniFFT::Precision::DOUBLE, OmniFFT::Direction::INVERSE, OmniFFT::Domain::REAL, OmniFFT::NormMode::FORWARD);
+        OmniDSP::FFTPlan<Real> plan_fwd(N, OmniDSP::Precision::DOUBLE, OmniDSP::Direction::FORWARD, OmniDSP::Domain::REAL, OmniDSP::NormMode::FORWARD);
+        OmniDSP::FFTPlan<Real> plan_inv(N, OmniDSP::Precision::DOUBLE, OmniDSP::Direction::INVERSE, OmniDSP::Domain::REAL, OmniDSP::NormMode::FORWARD);
 
         ASSERT_EQ(plan_fwd.getComplexLength(), Nc);
         ASSERT_EQ(plan_inv.getLength(), N);
@@ -128,7 +128,7 @@ TEST_F(FFT_C2R_Inverse_Test, KnownTransform_RealDC_Double) {
     std::vector<Real> expected(N, 1.0); // Expected DC signal
 
     try {
-        OmniFFT::irfft(spectrum, output);
+        OmniDSP::irfft(spectrum, output);
         ASSERT_EQ(output.size(), N);
         ExpectRealVectorNear(expected, output, double_tolerance, "irfft(DC Spectrum)");
     } catch (const std::exception& e) {

@@ -1,29 +1,30 @@
 /**
- * @file omnifft.h
- * @brief Public API header for the OmniFFT library.
+ * @file omnidsp.h
+ * @brief Public API header for the OmniDSP library.
  *
  * This header defines the primary interface for performing Fast Fourier Transforms
- * using the OmniFFT library, which abstracts over different high-performance
+ * using the OmniDSP library, which abstracts over different high-performance
  * backends like Intel oneMKL and Apple Accelerate.
  *
  * @version 1.0.0
  * @date 2025-03-31
  */
 
-#ifndef OMNIFFT_H
-#define OMNIFFT_H
+#ifndef OMNIDSP_H
+#define OMNIDSP_H
 
-#include <complex>   // For std::complex
-#include <vector>    // For convenience functions using std::vector
-#include <memory>    // For std::unique_ptr (Pimpl idiom)
-#include <stdexcept> // For std::runtime_error, std::invalid_argument
-#include <cstddef>   // For size_t
-#include <type_traits> // For static_assert, std::is_same_v
+#include <complex>      // For std::complex
+#include <vector>       // For convenience functions using std::vector
+#include <memory>       // For std::unique_ptr (Pimpl idiom)
+#include <stdexcept>    // For std::runtime_error, std::invalid_argument
+#include <cstddef>      // For size_t
+#include <type_traits>  // For static_assert, std::is_same_v
+#include <cmath>        // For std::cyl_bessel_i
 
 /**
- * @brief Main namespace for the OmniFFT library.
+ * @brief Main namespace for the OmniDSP library.
  */
-namespace OmniFFT {
+namespace OmniDSP {
 
 /**
  * @brief Specifies the direction of the Fourier Transform.
@@ -81,6 +82,133 @@ enum class NormMode {
      * Less common, but available. IFFT(FFT(x)) = x.
      */
     FORWARD
+};
+
+
+/**
+ * @brief Provides a suite of window functions commonly used in signal processing.
+ *
+ * Windowing functions are applied to input data before performing a Fourier Transform
+ * to reduce spectral leakage and improve the accuracy of the analysis.
+ */
+class Window {
+public:
+    /**
+     * @brief Applies the Hann window to the input data.
+     *
+     * The Hann window is defined as:
+     * w[n] = 0.5 - 0.5 * cos(2*pi*n / (N-1)) for 0 <= n <= N-1
+     *
+     * @tparam T The floating-point type of the data (float or double).
+     * @param input A vector of input data.
+     * @return A vector of windowed data.
+     * @throws std::invalid_argument If the input vector is empty.
+     */
+    template <typename T>
+    static std::vector<T> hann(const std::vector<T>& input) {
+        if (input.empty()) {
+            throw std::invalid_argument("Input vector cannot be empty.");
+        }
+        size_t N = input.size();
+        std::vector<T> output(N);
+        for (size_t n = 0; n < N; ++n) {
+            output[n] = input[n] * static_cast<T>(0.5 - 0.5 * cos(2.0 * M_PI * n / (N - 1)));
+        }
+        return output;
+    }
+
+    /**
+     * @brief Applies the Hamming window to the input data.
+     *
+     * The Hamming window is defined as:
+     * w[n] = 0.54 - 0.46 * cos(2*pi*n / (N-1)) for 0 <= n <= N-1
+     *
+     * @tparam T The floating-point type of the data (float or double).
+     * @param input A vector of input data.
+     * @return A vector of windowed data.
+     * @throws std::invalid_argument If the input vector is empty.
+     */
+    template <typename T>
+    static std::vector<T> hamming(const std::vector<T>& input) {
+        if (input.empty()) {
+            throw std::invalid_argument("Input vector cannot be empty.");
+        }
+        size_t N = input.size();
+        std::vector<T> output(N);
+        for (size_t n = 0; n < N; ++n) {
+            output[n] = input[n] * static_cast<T>(0.54 - 0.46 * cos(2.0 * M_PI * n / (N - 1)));
+        }
+        return output;
+    }
+
+    /**
+     * @brief Applies the Kaiser window to the input data.
+     *
+     * The Kaiser window is defined as:
+     * w[n] = I0(beta * sqrt(1 - (2n/(N-1) - 1)^2)) / I0(beta) for 0 <= n <= N-1
+     * where I0 is the zeroth-order modified Bessel function of the first kind,
+     * and beta is a shape parameter that controls the trade-off
+     * between main lobe width and sidelobe level.
+     *
+     * @tparam T The floating-point type of the data (float or double).
+     * @param input A vector of input data.
+     * @param beta  The shape parameter of the Kaiser window.
+     * A typical value is 8.6
+     * @return A vector of windowed data.
+     * @throws std::invalid_argument If the input vector is empty.
+     */
+    template <typename T>
+    static std::vector<T> kaiser(const std::vector<T>& input, T beta) {
+        if (input.empty()) {
+            throw std::invalid_argument("Input vector cannot be empty.");
+        }
+        size_t N = input.size();
+        std::vector<T> output(N);
+
+        for (size_t n = 0; n < N; ++n) {
+            T factor = (n * 2.0) / (N - 1) - 1.0;
+            T sqrt_term = sqrt(1.0 - factor * factor);
+            output[n] = input[n] * std::cyl_bessel_i(0, beta * sqrt_term) / std::cyl_bessel_i(0, beta);
+        }
+        return output;
+    }
+
+    /**
+     * @brief Applies the Flat-top window to the input data.
+     *
+     * The Flat-top window is designed to have a very flat passband
+     * and is often used for accurate amplitude measurements.
+     * It is defined as:
+     * w[n] = a0 - a1*cos(2*pi*n/(N-1)) + a2*cos(4*pi*n/(N-1)) - a3*cos(6*pi*n/(N-1)) + a4*cos(8*pi*n/(N-1))
+     * for 0 <= n <= N-1
+     * where a0 = 0.21557895, a1 = 0.41663158, a2 = 0.277263158, a3 = 0.083578947, and a4 = 0.006947368
+     *
+     * @tparam T The floating-point type of the data (float or double).
+     * @param input A vector of input data.
+     * @return A vector of windowed data.
+     * @throws std::invalid_argument If the input vector is empty.
+     */
+    template <typename T>
+    static std::vector<T> flattop(const std::vector<T>& input) {
+        if (input.empty()) {
+            throw std::invalid_argument("Input vector cannot be empty.");
+        }
+        size_t N = input.size();
+        std::vector<T> output(N);
+        constexpr T a0 = static_cast<T>(0.21557895);
+        constexpr T a1 = static_cast<T>(0.41663158);
+        constexpr T a2 = static_cast<T>(0.277263158);
+        constexpr T a3 = static_cast<T>(0.083578947);
+        constexpr T a4 = static_cast<T>(0.006947368);
+
+        for (size_t n = 0; n < N; ++n) {
+            output[n] = input[n] * static_cast<T>(a0 - a1 * cos(2.0 * M_PI * n / (N - 1)) +
+                                       a2 * cos(4.0 * M_PI * n / (N - 1)) -
+                                       a3 * cos(6.0 * M_PI * n / (N - 1)) +
+                                       a4 * cos(8.0 * M_PI * n / (N - 1)));
+        }
+        return output;
+    }
 };
 
 
@@ -274,7 +402,7 @@ template <typename T> void irfft(const std::vector<std::complex<T>>& complex_inp
 // will be provided in exactly one implementation file (linked later), preventing
 // duplicate symbols and potentially speeding up compilation in user code.
 
-/** @cond OMNIFFT_INTERNAL */ // Hide implementation detail from Doxygen index
+/** @cond OMNIDSP_INTERNAL */ // Hide implementation detail from Doxygen index
 extern template class FFTPlan<float>;
 extern template class FFTPlan<double>;
 
@@ -292,6 +420,6 @@ extern template void irfft<float>(const std::vector<std::complex<float>>&, std::
 extern template void irfft<double>(const std::vector<std::complex<double>>&, std::vector<double>&);
 /** @endcond */
 
-} // namespace OmniFFT
+} // namespace OmniDSP
 
-#endif // OMNIFFT_H
+#endif // OMNIDSP_H

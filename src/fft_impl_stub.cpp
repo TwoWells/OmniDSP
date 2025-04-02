@@ -1,6 +1,6 @@
 /**
  * @file fft_impl_stub.cpp
- * @brief Stub (Error) backend implementation for OmniFFT.
+ * @brief Stub (Error) backend implementation for OmniDSP.
  *
  * This file contains a stub implementation of the FFTPlanImpl class.
  * It is compiled only when no real backend (oneMKL or Accelerate) is
@@ -15,7 +15,7 @@
  * @date 2025-03-31
  */
 
-#include <OmniFFT/omnifft.h> // Public API header
+#include <OmniDSP/omnidsp.h> // Public API header
 
 // Compile this only if NEITHER Accelerate nor MKL is defined by CMake
 #if !defined(USE_ACCELERATE) && !defined(USE_ONEMKL)
@@ -28,7 +28,7 @@
 #include <cmath>      // For std::sqrt (needed for dummy scale calculation)
 #include <string>     // For exception messages
 
-namespace OmniFFT {
+namespace OmniDSP {
 
 /**
  * @internal
@@ -67,7 +67,7 @@ struct FFTPlanImpl {
      */
     FFTPlanImpl(size_t len, Precision prec, Direction dir, Domain dom, NormMode norm) {
         // Construct error message before throwing
-        std::string error_msg = "OmniFFT backend not selected/available during build. ";
+        std::string error_msg = "OmniDSP backend not selected/available during build. ";
         error_msg += "Cannot create FFTPlan. Please ensure a supported backend (oneMKL or Accelerate) is found during CMake configuration and enabled.";
         throw std::runtime_error(error_msg);
 
@@ -96,19 +96,19 @@ struct FFTPlanImpl {
 
     /** @brief Stub: Throws runtime_error. */
     void execute_c2c_oop(const std::complex<T>* input, std::complex<T>* output) const {
-         throw std::runtime_error("OmniFFT backend not available (stub execute_c2c_oop called).");
+         throw std::runtime_error("OmniDSP backend not available (stub execute_c2c_oop called).");
     }
      /** @brief Stub: Throws runtime_error. */
      void execute_c2c_ip(std::complex<T>* data) const {
-         throw std::runtime_error("OmniFFT backend not available (stub execute_c2c_ip called).");
+         throw std::runtime_error("OmniDSP backend not available (stub execute_c2c_ip called).");
      }
      /** @brief Stub: Throws runtime_error. */
      void execute_rfft_oop(const T* real_input, std::complex<T>* complex_output) const {
-         throw std::runtime_error("OmniFFT backend not available (stub execute_rfft_oop called).");
+         throw std::runtime_error("OmniDSP backend not available (stub execute_rfft_oop called).");
     }
      /** @brief Stub: Throws runtime_error. */
      void execute_irfft_oop(const std::complex<T>* complex_input, T* real_output) const {
-         throw std::runtime_error("OmniFFT backend not available (stub execute_irfft_oop called).");
+         throw std::runtime_error("OmniDSP backend not available (stub execute_irfft_oop called).");
     }
 
      // --- Rule of 5/3: Move Semantics (Default is sufficient) ---
@@ -195,6 +195,6 @@ template struct FFTPlanImpl<double>;
 template class FFTPlan<float>;
 template class FFTPlan<double>;
 
-} // namespace OmniFFT
+} // namespace OmniDSP
 
 #endif // !USE_ACCELERATE && !USE_ONEMKL

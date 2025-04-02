@@ -2,7 +2,7 @@
 // Tests for inverse Complex-to-Complex FFT functions (ifft, ifft_inplace, FFTPlan::execute)
 
 #include <gtest/gtest.h>
-#include <OmniFFT/omnifft.h> // Use correct include path
+#include <OmniDSP/omnidsp.h> // Use correct include path
 #include <vector>
 #include <complex>
 #include <limits>
@@ -49,14 +49,14 @@ TEST_F(FFT_C2C_Inverse_Test, Identity_BackwardNorm_Double) {
 
     try {
         // Use BACKWARD norm for both forward and inverse (default for convenience funcs)
-        OmniFFT::fft(original, spectrum);
-        OmniFFT::ifft(spectrum, reconstructed);
+        OmniDSP::fft(original, spectrum);
+        OmniDSP::ifft(spectrum, reconstructed);
         // With BACKWARD norm, IFFT(FFT(x)) should equal x directly
         ExpectComplexVectorNear(original, reconstructed, double_tolerance, "fft/ifft BACKWARD");
 
         // Test Plan version
-        OmniFFT::FFTPlan<double> fwd_plan(N, OmniFFT::Precision::DOUBLE, OmniFFT::Direction::FORWARD, OmniFFT::Domain::COMPLEX, OmniFFT::NormMode::BACKWARD);
-        OmniFFT::FFTPlan<double> inv_plan(N, OmniFFT::Precision::DOUBLE, OmniFFT::Direction::INVERSE, OmniFFT::Domain::COMPLEX, OmniFFT::NormMode::BACKWARD);
+        OmniDSP::FFTPlan<double> fwd_plan(N, OmniDSP::Precision::DOUBLE, OmniDSP::Direction::FORWARD, OmniDSP::Domain::COMPLEX, OmniDSP::NormMode::BACKWARD);
+        OmniDSP::FFTPlan<double> inv_plan(N, OmniDSP::Precision::DOUBLE, OmniDSP::Direction::INVERSE, OmniDSP::Domain::COMPLEX, OmniDSP::NormMode::BACKWARD);
         fwd_plan.execute(original.data(), spectrum.data());
         inv_plan.execute(spectrum.data(), reconstructed.data());
         ExpectComplexVectorNear(original, reconstructed, double_tolerance, "FFTPlan BACKWARD");
@@ -75,8 +75,8 @@ TEST_F(FFT_C2C_Inverse_Test, Identity_OrthoNorm_Float) {
 
     try {
         // Use ORTHO norm for both forward and inverse plans
-        OmniFFT::FFTPlan<float> fwd_plan(N, OmniFFT::Precision::SINGLE, OmniFFT::Direction::FORWARD, OmniFFT::Domain::COMPLEX, OmniFFT::NormMode::ORTHO);
-        OmniFFT::FFTPlan<float> inv_plan(N, OmniFFT::Precision::SINGLE, OmniFFT::Direction::INVERSE, OmniFFT::Domain::COMPLEX, OmniFFT::NormMode::ORTHO);
+        OmniDSP::FFTPlan<float> fwd_plan(N, OmniDSP::Precision::SINGLE, OmniDSP::Direction::FORWARD, OmniDSP::Domain::COMPLEX, OmniDSP::NormMode::ORTHO);
+        OmniDSP::FFTPlan<float> inv_plan(N, OmniDSP::Precision::SINGLE, OmniDSP::Direction::INVERSE, OmniDSP::Domain::COMPLEX, OmniDSP::NormMode::ORTHO);
 
         fwd_plan.execute(original.data(), spectrum.data());
         inv_plan.execute(spectrum.data(), reconstructed.data());
@@ -96,8 +96,8 @@ TEST_F(FFT_C2C_Inverse_Test, Identity_ForwardNorm_Double) {
 
     try {
         // Use FORWARD norm for both forward and inverse plans
-        OmniFFT::FFTPlan<double> fwd_plan(N, OmniFFT::Precision::DOUBLE, OmniFFT::Direction::FORWARD, OmniFFT::Domain::COMPLEX, OmniFFT::NormMode::FORWARD);
-        OmniFFT::FFTPlan<double> inv_plan(N, OmniFFT::Precision::DOUBLE, OmniFFT::Direction::INVERSE, OmniFFT::Domain::COMPLEX, OmniFFT::NormMode::FORWARD);
+        OmniDSP::FFTPlan<double> fwd_plan(N, OmniDSP::Precision::DOUBLE, OmniDSP::Direction::FORWARD, OmniDSP::Domain::COMPLEX, OmniDSP::NormMode::FORWARD);
+        OmniDSP::FFTPlan<double> inv_plan(N, OmniDSP::Precision::DOUBLE, OmniDSP::Direction::INVERSE, OmniDSP::Domain::COMPLEX, OmniDSP::NormMode::FORWARD);
 
         fwd_plan.execute(original.data(), spectrum.data());
         inv_plan.execute(spectrum.data(), reconstructed.data());
@@ -117,8 +117,8 @@ TEST_F(FFT_C2C_Inverse_Test, InPlace_Float) {
 
     try {
         // Test convenience functions (use BACKWARD norm)
-        OmniFFT::fft_inplace(data);
-        OmniFFT::ifft_inplace(data);
+        OmniDSP::fft_inplace(data);
+        OmniDSP::ifft_inplace(data);
         ExpectComplexVectorNear(original, data, float_tolerance, "fft_inplace/ifft_inplace");
 
     } catch (const std::exception& e) {

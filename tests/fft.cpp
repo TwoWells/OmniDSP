@@ -2,7 +2,7 @@
 // Tests for forward Complex-to-Complex FFT functions (fft, fft_inplace, FFTPlan::execute)
 
 #include <gtest/gtest.h>
-#include <OmniFFT/omnifft.h> // Use correct include path
+#include <OmniDSP/omnidsp.h> // Use correct include path
 #include <vector>
 #include <complex>
 #include <limits> // For numeric_limits
@@ -40,7 +40,7 @@ TEST_F(FFT_C2C_Forward_Test, KnownTransform_Delta_Double) {
 
     try {
         // Test convenience function (uses BACKWARD norm -> scale=1)
-        OmniFFT::fft(input, spectrum);
+        OmniDSP::fft(input, spectrum);
         ExpectComplexVectorNear(expected, spectrum, double_tolerance, "fft(delta)");
     } catch (const std::exception& e) {
         FAIL() << "FFT operation threw exception: " << e.what();
@@ -56,7 +56,7 @@ TEST_F(FFT_C2C_Forward_Test, KnownTransform_DC_Float) {
 
     try {
         // Test convenience function (uses BACKWARD norm -> scale=1)
-        OmniFFT::fft(input, spectrum);
+        OmniDSP::fft(input, spectrum);
         ExpectComplexVectorNear(expected, spectrum, float_tolerance, "fft(DC)");
     } catch (const std::exception& e) {
         FAIL() << "FFT operation threw exception: " << e.what();
@@ -72,10 +72,10 @@ TEST_F(FFT_C2C_Forward_Test, InPlace_Double) {
 
     try {
         // Calculate expected OOP result first (using BACKWARD norm)
-        OmniFFT::fft(input_copy, spectrum_oop);
+        OmniDSP::fft(input_copy, spectrum_oop);
 
         // Test in-place convenience function
-        OmniFFT::fft_inplace(input); // Modifies input
+        OmniDSP::fft_inplace(input); // Modifies input
         ExpectComplexVectorNear(spectrum_oop, input, double_tolerance, "fft_inplace");
 
     } catch (const std::exception& e) {
@@ -93,7 +93,7 @@ TEST_F(FFT_C2C_Forward_Test, PlanExecute_OrthoNorm_Double) {
     std::vector<Complex> expected(N, {scale, 0.0});
 
     try {
-        OmniFFT::FFTPlan<double> plan(N, OmniFFT::Precision::DOUBLE, OmniFFT::Direction::FORWARD, OmniFFT::Domain::COMPLEX, OmniFFT::NormMode::ORTHO);
+        OmniDSP::FFTPlan<double> plan(N, OmniDSP::Precision::DOUBLE, OmniDSP::Direction::FORWARD, OmniDSP::Domain::COMPLEX, OmniDSP::NormMode::ORTHO);
         plan.execute(input.data(), spectrum.data());
         ExpectComplexVectorNear(expected, spectrum, double_tolerance, "FFTPlan ORTHO");
     } catch (const std::exception& e) {
@@ -111,7 +111,7 @@ TEST_F(FFT_C2C_Forward_Test, PlanExecute_ForwardNorm_Double) {
     std::vector<Complex> expected(N, {scale, 0.0});
 
     try {
-        OmniFFT::FFTPlan<double> plan(N, OmniFFT::Precision::DOUBLE, OmniFFT::Direction::FORWARD, OmniFFT::Domain::COMPLEX, OmniFFT::NormMode::FORWARD);
+        OmniDSP::FFTPlan<double> plan(N, OmniDSP::Precision::DOUBLE, OmniDSP::Direction::FORWARD, OmniDSP::Domain::COMPLEX, OmniDSP::NormMode::FORWARD);
         plan.execute(input.data(), spectrum.data());
         ExpectComplexVectorNear(expected, spectrum, double_tolerance, "FFTPlan FORWARD");
     } catch (const std::exception& e) {

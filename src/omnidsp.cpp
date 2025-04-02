@@ -1,6 +1,6 @@
 /**
- * @file omnifft.cpp
- * @brief Implementation of convenience functions for the OmniFFT library.
+ * @file omnidsp.cpp
+ * @brief Implementation of convenience functions for the OmniDSP library.
  *
  * This file provides std::vector-based wrapper functions for common FFT operations.
  * These functions simplify common use cases by managing the creation and execution
@@ -11,7 +11,7 @@
  * @date 2025-03-31
  */
 
-#include <OmniFFT/omnifft.h> // Main public header
+#include <OmniDSP/omnidsp.h> // Main public header
 #include <vector>            // For std::vector parameters
 #include <complex>           // For std::complex type
 #include <stdexcept>         // For potential exceptions from FFTPlan
@@ -23,7 +23,7 @@
 //       fft_impl_onemkl.cpp, fft_impl_accelerate.cpp, or fft_impl_stub.cpp files.
 //       This file only defines and instantiates the convenience functions below.
 
-namespace OmniFFT {
+namespace OmniDSP {
 
 // --- Implementation of Convenience Functions ---
 
@@ -198,4 +198,4 @@ template void rfft<double>(const std::vector<double>&, std::vector<std::complex<
 template void irfft<float>(const std::vector<std::complex<float>>&, std::vector<float>&);
 template void irfft<double>(const std::vector<std::complex<double>>&, std::vector<double>&);
 
-} // namespace OmniFFT
+} // namespace OmniDSP

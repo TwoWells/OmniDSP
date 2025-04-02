@@ -2,7 +2,7 @@
 // Tests for forward Real-to-Complex FFT functions (rfft, FFTPlan::execute_rfft)
 
 #include <gtest/gtest.h>
-#include <OmniFFT/omnifft.h> // Use correct include path
+#include <OmniDSP/omnidsp.h> // Use correct include path
 #include <vector>
 #include <complex>
 #include <limits>
@@ -44,11 +44,11 @@ TEST_F(FFT_R2C_Forward_Test, KnownTransform_RealDelta_Double) {
 
     try {
         // Test convenience function (uses BACKWARD norm -> scale=1)
-        OmniFFT::rfft(input, spectrum);
+        OmniDSP::rfft(input, spectrum);
         ExpectComplexVectorNear(expected_unscaled, spectrum, double_tolerance, "rfft(delta) BACKWARD");
 
         // Test ORTHO norm
-        OmniFFT::FFTPlan<Real> plan_ortho(N, OmniFFT::Precision::DOUBLE, OmniFFT::Direction::FORWARD, OmniFFT::Domain::REAL, OmniFFT::NormMode::ORTHO);
+        OmniDSP::FFTPlan<Real> plan_ortho(N, OmniDSP::Precision::DOUBLE, OmniDSP::Direction::FORWARD, OmniDSP::Domain::REAL, OmniDSP::NormMode::ORTHO);
         ASSERT_EQ(plan_ortho.getComplexLength(), Nc);
         spectrum.assign(Nc, {0.0, 0.0}); // Clear spectrum
         plan_ortho.execute_rfft(input.data(), spectrum.data());
@@ -57,7 +57,7 @@ TEST_F(FFT_R2C_Forward_Test, KnownTransform_RealDelta_Double) {
         ExpectComplexVectorNear(expected_ortho, spectrum, double_tolerance, "rfft(delta) ORTHO");
 
         // Test FORWARD norm
-        OmniFFT::FFTPlan<Real> plan_fwd(N, OmniFFT::Precision::DOUBLE, OmniFFT::Direction::FORWARD, OmniFFT::Domain::REAL, OmniFFT::NormMode::FORWARD);
+        OmniDSP::FFTPlan<Real> plan_fwd(N, OmniDSP::Precision::DOUBLE, OmniDSP::Direction::FORWARD, OmniDSP::Domain::REAL, OmniDSP::NormMode::FORWARD);
         ASSERT_EQ(plan_fwd.getComplexLength(), Nc);
         spectrum.assign(Nc, {0.0, 0.0}); // Clear spectrum
         plan_fwd.execute_rfft(input.data(), spectrum.data());
@@ -80,7 +80,7 @@ TEST_F(FFT_R2C_Forward_Test, KnownTransform_RealDC_Float) {
     expected[0] = {static_cast<Real>(N), 0.0f}; // RFFT of DC=1 is N at freq 0
 
     try {
-        OmniFFT::rfft(input, spectrum);
+        OmniDSP::rfft(input, spectrum);
         ASSERT_EQ(spectrum.size(), Nc);
         ExpectComplexVectorNear(expected, spectrum, float_tolerance, "rfft(DC)");
     } catch (const std::exception& e) {
@@ -105,7 +105,7 @@ TEST_F(FFT_R2C_Forward_Test, KnownTransform_RealCosine_Double) {
     expected[static_cast<size_t>(freq)] = {static_cast<Real>(N) / 2.0, 0.0};
 
     try {
-        OmniFFT::rfft(input, spectrum);
+        OmniDSP::rfft(input, spectrum);
         ASSERT_EQ(spectrum.size(), Nc);
         ExpectComplexVectorNear(expected, spectrum, double_tolerance, "rfft(Cosine)");
     } catch (const std::exception& e) {

@@ -1,13 +1,13 @@
 /**
  * @file fft_impl_onemkl.cpp
- * @brief Intel oneMKL backend implementation for OmniFFT.
+ * @brief Intel oneMKL backend implementation for OmniDSP.
  *
  * This file contains the concrete implementation of the FFTPlanImpl class
  * using Intel's oneAPI Math Kernel Library (oneMKL) DFTI routines. It is
  * compiled only when USE_ONEMKL is defined by the CMake build system.
  */
 
-#include <OmniFFT/omnifft.h> // Public API header (defines FFTPlan, enums, FFTPlanImpl forward decl)
+#include <OmniDSP/omnidsp.h> // Public API header (defines FFTPlan, enums, FFTPlanImpl forward decl)
 
 #if defined(USE_ONEMKL) // Only compile contents if oneMKL backend is selected
 
@@ -21,7 +21,7 @@
 #include <string>     // For std::string in error messages
 #include <cmath>      // For std::sqrt
 
-namespace OmniFFT {
+namespace OmniDSP {
 
 /**
  * @internal
@@ -336,6 +336,6 @@ template struct FFTPlanImpl<double>;
 template class FFTPlan<float>;
 template class FFTPlan<double>;
 
-} // namespace OmniFFT
+} // namespace OmniDSP
 
 #endif // USE_ONEMKL
