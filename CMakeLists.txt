@@ -4,6 +4,9 @@ cmake_minimum_required(VERSION 3.15)
 # Set project name and version (used for installation and config files)
 project(OmniDSP VERSION 1.0.0 LANGUAGES CXX)
 
+# Show FetchContent progress
+set(FETCHCONTENT_QUIET FALSE)
+
 # Enable generation of compile_commands.json for IDEs/tools
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -22,6 +25,18 @@ endif()
 include(GNUInstallDirs) # For standard installation paths (CMAKE_INSTALL_*)
 include(CMakePackageConfigHelpers) # For generating *Config.cmake files
 include(FetchContent) # For downloading dependencies like GoogleTest
+
+# --- pybind11 Dependency (FetchContent) ---
+include(FetchContent)
+FetchContent_Declare(
+  pybind11
+  GIT_REPOSITORY https://github.com/pybind/pybind11.git
+  GIT_TAG v2.13.6
+)
+# For newer CMake versions (3.14+), pybind11 uses INTERFACE targets,
+# so setting PYBIND11_INSTALL is often not needed when using FetchContent directly.
+# set(PYBIND11_INSTALL OFF CACHE BOOL "Don't install pybind11") # Optional
+FetchContent_MakeAvailable(pybind11)
 
 # --- Unit Testing Setup (GoogleTest) ---
 enable_testing() # Enable CTest support
@@ -178,24 +193,11 @@ elseif(BACKEND STREQUAL "ONEMKL")
 endif()
 
 
-# --- Example Executable Targets (Auto-discovery) ---
-# Find all .cpp files in the examples directory
-file(GLOB EXAMPLE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/examples/*.cpp")
-
-if(EXAMPLE_SOURCES)
-    message(STATUS "Found example sources: ${EXAMPLE_SOURCES}")
-    # Loop through each found source file
-    foreach(EXAMPLE_SOURCE ${EXAMPLE_SOURCES})
-        # Get the filename without the path and extension to use as the target name
-        get_filename_component(EXAMPLE_NAME ${EXAMPLE_SOURCE} NAME_WE)
-        # Add an executable target for this example
-        add_executable(${EXAMPLE_NAME} ${EXAMPLE_SOURCE})
-        # Link the example executable against the omnidsp library
-        target_link_libraries(${EXAMPLE_NAME} PRIVATE omnidsp)
-        message(STATUS "Added example target: ${EXAMPLE_NAME}")
-    endforeach()
+# --- C++ Examples Subdirectory ---
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/cpp/CMakeLists.txt")
+    add_subdirectory(examples/cpp)
 else()
-     message(STATUS "No example source files (.cpp) found in examples/ directory.")
+    message(STATUS "C++ examples subdirectory 'examples/cpp' or its CMakeLists.txt not found, skipping C++ example configuration.")
 endif()
 
 
@@ -205,6 +207,50 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt")
     add_subdirectory(tests)
 else()
     message(STATUS "Tests subdirectory not found, skipping test configuration.")
+endif()
+
+
+# --- Python Bindings Target ---
+# Check if pybind11 was found (either via FetchContent or find_package)
+if(TARGET pybind11::module) # Recommended check for modern pybind11 usage
+
+    # Define the Python module target using pybind11's helper function
+    # pybind11_add_module(<target_name> [SHARED|MODULE] [NO_EXTRAS] source1 [source2 ...])
+    # <target_name> is the name Python will import (e.g., omnidsp_py)
+    pybind11_add_module(omnidsp_py             # Module target name
+        SHARED                              # Build as shared library (.so/.pyd)
+        src/bindings.cpp                    # Source file with PYBIND11_MODULE
+    )
+
+    # Link the Python module against your core omnidsp library
+    # Use PRIVATE linking as Python code importing omnidsp_py doesn't need
+    # direct access to omnidsp's internals, only the bindings.
+    target_link_libraries(omnidsp_py PRIVATE omnidsp)
+
+    # Add include directories needed for bindings.cpp
+    # pybind11_add_module usually handles pybind11 includes automatically.
+    # Need the public include dir for OmniDSP headers.
+    target_include_directories(omnidsp_py PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+
+    # Optional: Define where the Python module should be installed
+    # This typically goes into the Python site-packages directory.
+    # pybind11 provides helper variables/functions for this, or you can set manually.
+    # Example using pybind11's variable (might require setting PYTHON_EXECUTABLE):
+    # include(pybind11Tools)
+    # pybind11_get_include() # Ensure Python paths are set
+    # install(TARGETS omnidsp_py DESTINATION "${Python_SITELIB}") # Check variable name
+
+    # Simpler installation to a known location relative to prefix:
+    install(TARGETS omnidsp_py
+            LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}/python" # e.g., <prefix>/lib/python
+            COMPONENT Runtime)
+
+    message(STATUS "Configuring Python bindings target: omnidsp_py")
+
+else()
+    message(WARNING "pybind11 target not found. Skipping Python bindings build.")
 endif()
 
 
@@ -267,3 +313,15 @@ install(FILES
     DESTINATION "${OMNIDSP_CMAKE_INSTALL_DIR}"
     COMPONENT Devel
 )
+
+# --- Install Python Examples ---
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/python")
+    install(DIRECTORY examples/python/   # <--- Use the new path here
+            DESTINATION "${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}/examples_python" # e.g., <prefix>/share/OmniDSP/examples_python
+            COMPONENT Examples
+            FILES_MATCHING PATTERN "*.py" PATTERN "*.txt" # Optional: filter specific files
+    )
+    message(STATUS "Configuring installation for Python examples directory.")
+else()
+    message(STATUS "Python examples directory 'examples/python' not found, skipping installation.")
+endif()

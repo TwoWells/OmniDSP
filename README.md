@@ -2,7 +2,7 @@
 
 ## Overview
 
-This project provides a high-performance C++ library for Digital Signal Processing (DSP). Its primary goal is to offer a consistent, easy-to-use API while leveraging highly optimized, platform-specific backends for maximum performance across various systems. It currently includes Fast Fourier Transform (FFT) functionality, with plans to expand to a broader range of DSP functions. It automatically selects between Intel's oneAPI Math Kernel Library (oneMKL) or Apple's Accelerate framework where available to utilize hardware acceleration.
+This project provides a high-performance C++ library for Digital Signal Processing (DSP). Its primary goal is to offer a consistent, easy-to-use API while leveraging highly optimized, platform-specific backends for maximum performance across various systems. It currently includes Fast Fourier Transform (FFT) and Constant-Q Transform (CQT) functionality, with plans to expand to a broader range of DSP functions. It automatically selects between Intel's oneAPI Math Kernel Library (oneMKL) or Apple's Accelerate framework where available to utilize hardware acceleration.
 
 If neither backend is detected, a stub implementation is compiled which will throw runtime errors upon use, indicating that a functional backend was not available during the build.
 
@@ -12,6 +12,7 @@ If neither backend is detected, a stub implementation is compiled which will thr
 *   **Platform Abstraction:** Single C++ API for DSP operations, simplifying development.
 *   **Optimized Backends:** Uses Intel oneMKL (via oneAPI) or Apple Accelerate framework for hardware-accelerated FFTs.
 *   **Automatic Backend Selection:** CMake build system detects and selects the appropriate backend during the build process.
+*   **Python Bindings:** Provides Python bindings via pybind11 for easy integration with NumPy and the Python ecosystem.
 *   **Precision Support:** Works with `float` (single) and `double` (double) precision values.
 *   **Transform Types:** Supports Complex-to-Complex (C2C) and Real-to-Complex/Complex-to-Real (R2C/C2R) FFTs.
 *   **Execution Modes:** Supports in-place and out-of-place execution for C2C transforms.
@@ -31,30 +32,44 @@ OmniDSP/
 ├── CMakeLists.txt          # Main CMake build script
 ├── Config.cmake.in         # Template for CMake package config file
 │
+├── examples/               # Usage examples
+│   ├── cpp/                # C++ examples
+│   │   ├── CMakeLists.txt  # CMake script for C++ examples
+│   │   ├── cqt.cpp
+│   │   └── ...
+│   └── python/             # Python examples
+│       ├── requirements.txt
+│       ├── run_fft_example.py
+│       └── ...
+│
 ├── include/                # Public header files
 │   └── OmniDSP/
-│       ├── omnidsp.h           # Main header (include )
-│       ├── cqt.h               # CQT specific header
-│       └── window.h            # Windowing functions header
+│       ├── omnidsp.h         # Main header (include )
+│       ├── cqt.h             # CQT specific header
+│       └── windows.h         # Windowing functions header
 │
 ├── src/                    # Implementation source files
-│   ├── omnidsp.cpp             # Platform-independent convenience functions
-│   ├── fft_impl_onemkl.cpp     # oneMKL specific implementation
-│   ├── fft_impl_accelerate.cpp # Apple Accelerate specific implementation
-│   ├── fft_impl_stub.cpp       # Fallback/error implementation
-│   └── cqt.cpp                 # CQTPlan implementation using FFTPlan
+│   ├── omnidsp.cpp           # Platform-independent convenience functions
+│   ├── cqt.cpp               # CQTPlan implementation using FFTPlan
+│   ├── bindings.cpp          # Python bindings (pybind11) source
+│   └── backend/                # Backend-specific implementations
+│       ├── onemkl.cpp          # oneMKL specific implementation
+│       ├── accelerate.cpp      # Apple Accelerate specific implementation
+│       └── stub.cpp            # Fallback/error implementation
 │
-├── examples/               # Usage examples within this repo
-│   └── main.cpp
+├── examples/               # Usage examples
+│   ├── cpp/                  # C++ examples
+│   │   ├── CMakeLists.txt      # CMake script for C++ examples
+│   │   ├── *.cpp
+│   │   └── ...
+│   └── python/               # Python examples
+│       ├── requirements.txt
+│       ├── *.py
+│       └── ...
 │
 ├── tests/                  # Unit tests
 │   ├── CMakeLists.txt
-│   ├── fft.cpp
-│   ├── ifft.cpp
-│   ├── rfft.cpp
-│   ├── irfft.cpp
-│   ├── window.cpp
-│   └── cqt.cpp
+│   └── *.cpp
 │
 ├── build/                  # (Generated Directory) Build artifacts
 │
@@ -68,17 +83,19 @@ OmniDSP/
 3.  **FFT Backend (at least one for full FFT functionality):**
     *   **Intel oneMKL:** Install Intel oneAPI Base Toolkit.
     *   **Apple Accelerate:** On macOS, included with Xcode and Command Line Tools.
-4.  **Git:** Required by CMake's `FetchContent` to download GoogleTest.
+4.  **Python:** Version 3.x (for Python bindings and examples).
+5.  **Python Packages:** `numpy` is required at runtime to use the Python bindings and examples. Other packages like `matplotlib` might be used in specific examples.
+6.  **Git:** Required by CMake's `FetchContent` to download GoogleTest and pybind11.
 
 ## Building from Source
 
-This section describes how to build the library and the included example directly from the source code repository. See the 'Installation' section for installing the library for use by other projects.
+This section describes how to build the C++ library, the Python module, and the included examples directly from the source code repository.
 
 1.  **Clone or download the source code:**
     
     ```bash
     # Example using git:
-    git clone https://github.com/m-wells/OmniDSP.git # Replace URL
+    git clone https://github.com/m-wells/OmniDSP.git
     cd OmniDSP
     ```
     
@@ -102,7 +119,7 @@ This section describes how to build the library and the included example directl
     # cmake .. -DBUILD_SHARED_LIBS=OFF
     ```
     
-    Review CMake output for backend selection.
+    Review CMake output for backend selection and confirmation that pybind11 was found.
     
 4.  **Compile the code:**
     
@@ -114,6 +131,8 @@ This section describes how to build the library and the included example directl
     cmake --build . --config Release
     # Or: cmake --build . --config Debug
     ```
+
+    This will build the C++ library (`libomnidsp`), the Python module (`omnidsp_py.***.so` or `.pyd`), and the C++ example executables.
     
 5.  **Run Tests (Optional):**
     
@@ -131,11 +150,12 @@ This section describes how to build the library and the included example directl
     # Example:
     ./examples/Release/omnidsp_example # Adjust path based on generator/OS
     ```
-    
+
+    See the "Running Examples" section below for how to run the built examples.
 
 ## Installation
 
-To install the OmniDSP library (header, library files, CMake configuration files) so that other CMake projects can easily find and use it, follow these steps after configuring (step 3 in the "Building from Source" section):
+To install the OmniDSP C++ library, the Python module, and optionally the examples so they can be used system-wide or by other projects:
 
 1.  **Choose Installation Prefix (Optional but Recommended):**
     
@@ -146,7 +166,7 @@ To install the OmniDSP library (header, library files, CMake configuration files
     cmake -DCMAKE_INSTALL_PREFIX=./staging ..
     
     # Example: Install to a specific user location (Linux/macOS)
-    # cmake -DCMAKE_INSTALL_PREFIX=~/libs/omnidsp ..
+    # cmake -DCMAKE_INSTALL_PREFIX=~/local ..
     ```
     
 2.  **Build the Library:**
@@ -166,91 +186,179 @@ To install the OmniDSP library (header, library files, CMake configuration files
 
 After installation, the following structure should exist under your chosen `<prefix>`:
 
-*   `<prefix>/include/OmniDSP/omnidsp.h`
-*   `<prefix>/lib/` (containing `.a`, `.lib`, `.so` files)
-*   `<prefix>/bin/` (containing `.dll` files on Windows)
-*   `<prefix>/lib/cmake/OmniDSP/` (containing CMake package files)
+*   `<prefix>/include/OmniDSP/` (C++ headers)
+*   `<prefix>/lib/` (C++ static/shared libraries, `.a`, `.lib`, `.so`)
+*   `<prefix>/bin/` (`.dll` files on Windows)
+*   `<prefix>/lib/cmake/OmniDSP/` (CMake package configuration files)
+*   `<prefix>/lib/python/` (or similar, containing `omnidsp_py.***.so`/`.pyd` module - exact path might vary based on CMake/pybind11 config)
+*   `<prefix>/share/OmniDSP/examples_python/` (Optional, if Python examples installed)
 
 ## Using the Installed Library
 
+### From C++
+
 Once OmniDSP is installed, other CMake projects can find and use it.
 
-### 1. CMakeLists.txt for Consuming Project:
+1.  **CMakeLists.txt for Consuming Project:**
+    
+    In the `CMakeLists.txt` of your application:
+    
+    ```
+    cmake_minimum_required(VERSION 3.15)
+    project(MyCoolApp LANGUAGES CXX)
+    
+    set(CMAKE_CXX_STANDARD 17)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+    
+    # Find the installed OmniDSP package
+    # If installed to a non-standard location, set CMAKE_PREFIX_PATH
+    find_package(OmniDSP 1.0.0 REQUIRED)
+    
+    add_executable(my_app main.cpp)
+    
+    # Link against the imported OmniDSP target
+    target_link_libraries(my_app PRIVATE OmniDSP::omnidsp)
+    ```
+    
+2.  **C++ Code in Consuming Project:**
+    
+    Include the header and use the classes/functions:
+    
+    ```
+    #include <OmniDSP/omnidsp.h> // Use path relative to include directory
+    #include <vector>
+    #include <complex>
+    #include <iostream>
+    
+    int main() {
+        size_t N = 32; // Example size (Power of 2 for Accelerate REAL)
+        using Real = float;
+        using Complex = std::complex<Real>;
 
-In the `CMakeLists.txt` of your application:
+        std::vector<Real> my_real_signal(N, 0.0f);
+        my_real_signal[1] = 1.0f; // Simple delta function
 
-```cmake
-cmake_minimum_required(VERSION 3.15)
-project(MyCoolApp LANGUAGES CXX)
+        std::vector<Complex> my_spectrum; // Size N/2 + 1
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+        try {
+            // Use the installed OmniDSP library's convenience function (rfft)
+            // This uses the default NormMode::BACKWARD normalization
+            OmniDSP::rfft(my_real_signal, my_spectrum);
 
-# Find the installed OmniDSP package
-find_package(OmniDSP 1.0.0 REQUIRED)
+            std::cout << "Spectrum calculated using installed OmniDSP library:" << std::endl;
+            for(size_t i = 0; i < my_spectrum.size(); ++i) {
+                std::cout << i << ": " << my_spectrum[i] << std::endl;
+            }
 
-add_executable(my_app main.cpp YourOtherFiles.cpp)
+            // Example using a plan with ORTHO normalization
+            OmniDSP::FFTPlan<Real> plan(N, OmniDSP::Precision::SINGLE,
+                                      OmniDSP::Direction::FORWARD, OmniDSP::Domain::REAL,
+                                      OmniDSP::NormMode::ORTHO);
+            std::vector<Complex> spectrum_ortho(plan.getComplexLength());
+            plan.execute_rfft(my_real_signal.data(), spectrum_ortho.data());
+            std::cout << "\nOrtho Spectrum[0]: " << spectrum_ortho[0] << std::endl;
 
-# Link against the imported OmniDSP target provided by find_package
-# This automatically handles include directories and library dependencies
-target_link_libraries(my_app PRIVATE OmniDSP::omnidsp)
 
-```
-
-**Note on Finding the Package:** If you installed OmniDSP to a custom location, users need to tell CMake where to find it when configuring _their application_ by setting the `CMAKE_PREFIX_PATH` variable:
-
-```bash
-# Example: OmniDSP installed to ~/libs/omnidsp
-cmake -DCMAKE_PREFIX_PATH=~/libs/omnidsp /path/to/your/MyCoolApp/source
-```
-
-### 2. C++ Code in Consuming Project:
-
-In your application's source code, include the header using the path relative to the install prefix's `include` directory:
-
-```cpp
-#include <OmniDSP/omnidsp.h> // Use path relative to include directory
-#include <vector>
-#include <complex>
-#include <iostream>
-
-int main() {
-    size_t N = 32; // Example size (Power of 2 for Accelerate REAL)
-    using Real = float;
-    using Complex = std::complex<Real>;
-
-    std::vector<Real> my_real_signal(N, 0.0f);
-    my_real_signal[1] = 1.0f; // Simple delta function
-
-    std::vector<Complex> my_spectrum; // Size N/2 + 1
-
-    try {
-        // Use the installed OmniDSP library's convenience function (rfft)
-        // This uses the default NormMode::BACKWARD normalization
-        OmniDSP::rfft(my_real_signal, my_spectrum);
-
-        std::cout << "Spectrum calculated using installed OmniDSP library:" << std::endl;
-        for(size_t i = 0; i < my_spectrum.size(); ++i) {
-            std::cout << i << ": " << my_spectrum[i] << std::endl;
+        } catch(const std::exception& e) {
+            std::cerr << "OmniDSP Error: " << e.what() << std::endl;
+            return 1;
         }
 
-        // Example using a plan with ORTHO normalization
-        OmniDSP::FFTPlan<Real> plan(N, OmniDSP::Precision::SINGLE,
-                                  OmniDSP::Direction::FORWARD, OmniDSP::Domain::REAL,
-                                  OmniDSP::NormMode::ORTHO);
-        std::vector<Complex> spectrum_ortho(plan.getComplexLength());
-        plan.execute_rfft(my_real_signal.data(), spectrum_ortho.data());
-        std::cout << "\nOrtho Spectrum[0]: " << spectrum_ortho[0] << std::endl;
-
-
-    } catch(const std::exception& e) {
-        std::cerr << "OmniDSP Error: " << e.what() << std::endl;
-        return 1;
+        return 0;
     }
+    ```
 
-    return 0;
-}
-```
+### From Python
+
+Once OmniDSP is built (and optionally installed), you can use the Python module.
+
+1.  **Ensure Module is Found:**
+    *   If you installed OmniDSP to a standard Python location (e.g., site-packages), it should be found automatically.
+    *   If you installed to a custom prefix, you might need to add the Python module's directory (e.g., `<prefix>/lib/python`) to your `PYTHONPATH` environment variable.
+    *   If running directly from the build directory, add the directory containing the built `omnidsp_py***.so/.pyd` file (usually inside `build/`) to your `PYTHONPATH`.
+2.  **Import and Use:**
+    
+    Import the module and necessary libraries (like NumPy):
+    
+    ```
+    import numpy as np
+    import omnidsp_py # The name defined in bindings.cpp/CMakeLists.txt
+    
+    # Example using rfft (double precision)
+    N = 16
+    signal = np.cos(2.0 * np.pi * 3.0 * np.arange(N) / N).astype(np.float64)
+    
+    try:
+        # Use the bound convenience function
+        spectrum = omnidsp_py.rfft_double(signal)
+    
+        print(f"Input signal shape: {signal.shape}")
+        print(f"Output spectrum shape: {spectrum.shape}") # Should be N/2 + 1
+        print("Spectrum (first 5 bins):")
+        print(spectrum[:5])
+    
+        # Example using CQTPlan (assuming appropriate setup)
+        # sample_rate = 44100.0
+        # cqt_plan = omnidsp_py.CQTPlanDouble(...)
+        # cqt_output = cqt_plan.execute(signal)
+        # print(f"CQT Output shape: {cqt_output.shape}")
+    
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    
+    ```
+    
+3.  **See Examples:** Refer to the scripts in the `examples/python/` directory for more detailed usage.
+
+## Running Examples
+
+### C++ Examples
+
+1.  Build the project as described in "Building from Source".
+2.  The C++ example executables will be located in your build directory, typically under `examples/cpp/` (possibly within a configuration subfolder like `Release` or `Debug` depending on your CMake generator).
+    
+    ```
+    # Example running from the build directory:
+    ./examples/cpp/Release/fft # Adjust path as needed
+    ./examples/cpp/Release/cqt
+    ```
+    
+
+### Python Examples
+
+1.  Build the project as described in "Building from Source". This creates the `omnidsp_py` module.
+2.  Navigate to the Python examples directory:
+    
+    ```
+    cd examples/python # Run from the OmniDSP root directory
+    # Or navigate to the installed location if you installed examples
+    ```
+    
+3.  Install dependencies (primarily NumPy):
+    
+    ```
+    pip install -r requirements.txt # Or: pip install numpy
+    ```
+    
+4.  Ensure the `omnidsp_py` module can be found by Python. Adjust the path to point to the directory containing the built `omnidsp_py***.so` or `.pyd` file. If you installed OmniDSP system-wide or to your Python environment's site-packages, this step might not be necessary.
+    * Example for Linux/macOS, assuming build dir is `../build` relative to OmniDSP root
+        ```
+        export PYTHONPATH=$PYTHONPATH:$(pwd)/../build
+        ```
+    * Example for Windows (Command Prompt)
+        ```
+        set PYTHONPATH=%PYTHONPATH%;C:\path\to\OmniDSP\build
+        ```
+    * Example for Windows (PowerShell)
+        ```
+        $env:PYTHONPATH += ";C:\path\to\OmniDSP\build"
+        ```
+    
+5.  Run the desired example script:
+    
+    ```
+    python <example>.py
+    ```
 
 ## Backend Selection (Build-time of OmniDSP)
 
@@ -276,11 +384,13 @@ Therefore, the current approach prioritizes broad cross-platform CPU performance
 *   **Inverse FFT Scaling & Normalization:** The library supports different normalization modes (`NormMode::BACKWARD`, `ORTHO`, `FORWARD`) via the `FFTPlan` constructor. The convenience functions (`fft`, `ifft`, `rfft`, `irfft`) currently use the default `NormMode::BACKWARD`. Be aware of the scaling factors associated with each mode and backend:
     *   **oneMKL:** Scaling factors are set explicitly via the MKL API according to the chosen `NormMode`.
     *   **Accelerate:** Scaling is applied manually within the library after calling Accelerate functions to match the chosen `NormMode`. Verify results carefully, especially if comparing between backends or requiring strict numerical normalization.
+
+     The Python convenience functions currently use `NormMode::BACKWARD`. Use `FFTPlanFloat/Double` via Python for other modes.**
 *   **Hermitian Symmetry for IRFFT:** The input to `irfft` (or `FFTPlan::execute_irfft`) must possess [Hermitian symmetry](https://math.stackexchange.com/questions/141180/hermitian-property-for-discrete-fourier-transform) for the resulting output signal to be purely real. This symmetry is naturally produced by the forward real FFT (`rfft`). Providing non-Hermitian input may lead to non-real output or undefined behavior depending on the backend.
 *   **Accelerate Real FFT Length:** The current implementation using Accelerate for the `Domain::REAL` transforms (`rfft`/`irfft` via `FFTPlan`) requires the real signal length `N` to be a **power of 2** (or N=1). Non-power-of-2 lengths will cause an error during plan creation if the Accelerate backend is used. oneMKL does not have this restriction.
 *   **Thread Safety:**
     *   Using different `FFTPlan` objects from different threads is generally safe.
     *   Executing the _same committed plan_ (`FFTPlan::execute...`) concurrently on _different data buffers_ should be safe for both oneMKL and Accelerate backends, but consult their respective documentation for definitive guarantees.
     *   Modifying the same `FFTPlan` object concurrently is unsafe. The internal reconfiguration for in-place C2C execution in the oneMKL backend is not thread-safe if called concurrently on the _same_ `FFTPlan` object.
-*   **Supported Transforms:** Currently implements 1D Complex-to-Complex (C2C) and 1D Real <-> Complex (R2C/C2R) transforms. Multi-dimensional transforms are not supported. In-place execution is only explicitly provided for C2C transforms.
-*   **Dependencies for Consumers:** Applications linking against the installed OmniDSP library will implicitly depend on the runtime components of the backend OmniDSP was built with (e.g., oneMKL runtime libraries or the Accelerate framework). Ensure these are available on the system where the consuming application will run.
+*   **Supported Transforms:** Currently implements 1D C2C, R2C/C2R FFTs, and CQT. Multi-dimensional transforms are not supported. In-place execution is only explicitly provided for C2C transforms.
+*   **Dependencies for Consumers:** Applications using OmniDSP (via C++ or Python) will implicitly depend on the runtime components of the backend OmniDSP was built with (e.g., oneMKL runtime libraries or the Accelerate framework). Ensure these are available on the system where the consuming application will run.
