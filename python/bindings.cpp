@@ -23,11 +23,11 @@ namespace py = pybind11;
 
 // Define the Python module 'omnidsp'
 // The first argument to PYBIND11_MODULE must match the target name in CMake (omnidsp)
-PYBIND11_MODULE(omnidsp, m) {
+PYBIND11_MODULE(omnidsp_py, m) {
     m.doc() = R"pbdoc(
         OmniDSP Python Bindings
         -----------------------
-        .. currentmodule:: omnidsp
+        .. currentmodule:: omnidsp_py
         .. autosummary::
            :toctree: _generate
            Direction

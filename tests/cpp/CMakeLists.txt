@@ -1,4 +1,4 @@
-# tests/CMakeLists.txt
+# tests/cpp/CMakeLists.txt
 
 # Automatically find all .cpp source files in this directory
 file(GLOB TEST_SOURCES CONFIGURE_DEPENDS *.cpp) # Use CONFIGURE_DEPENDS for robustness

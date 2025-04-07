@@ -400,7 +400,7 @@ Once OmniDSP is installed, other CMake projects can find and use it.
 
 ### From Python
 
-Once OmniDSP is installed using `pip install .`, you can use the Python module (`omnidsp` or `omnidsp_py` depending on the name you chose).
+Once Omni DSP is installed using `pip install .`, you can use the Python module (`omnidsp_py`).
 
 1.  **Ensure Module is Found by Python:**
     *   If you installed using `pip install .` into your active environment, it should be found automatically.
@@ -432,8 +432,8 @@ Once OmniDSP is installed using `pip install .`, you can use the Python module (
     #         print(f"Error adding MKL path: {e}")
     # # --- End Optional Path Addition ---
 
-    # Use the name you configured (e.g., omnidsp)
-    import omnidsp
+# Use the name you configured (e.g., omnidsp_py)
+    import omnidsp_py
 
     # Example using rfft (double precision)
     N = 16
@@ -441,7 +441,7 @@ Once OmniDSP is installed using `pip install .`, you can use the Python module (
 
     try:
         # Use the bound convenience function
-        spectrum = omnidsp.rfft_double(signal) # Use updated module name
+        spectrum = omnidsp_py.rfft_double(signal) # Use updated module name
 
         print(f"Input signal shape: {signal.shape}")
         print(f"Output spectrum shape: {spectrum.shape}") # Should be N/2 + 1
@@ -451,13 +451,13 @@ Once OmniDSP is installed using `pip install .`, you can use the Python module (
         # Example using CQTPlan (assuming appropriate setup)
         # sample_rate = 44100.0
         # window_func = ... # Define or import appropriate window function for Python side if needed
-        # cqt_plan = omnidsp.CQTPlanDouble(sample_rate, ..., window_func) # Use updated module name
+        # cqt_plan = omnidsp_py.CQTPlanDouble(sample_rate, ..., window_func) # Use updated module name
         # cqt_output = cqt_plan.execute(signal)
         # print(f"CQT Output shape: {cqt_output.shape}")
 
     except ImportError as e:
          print(f"ImportError: {e}")
-         print("Ensure omnidsp module is installed correctly and MKL runtime (if used) is accessible.")
+         print("Ensure omnidsp_py module is installed correctly and MKL runtime (if used) is accessible.")
     except Exception as e:
         print(f"An error occurred: {e}")
     ```

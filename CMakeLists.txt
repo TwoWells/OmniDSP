@@ -1,6 +1,9 @@
 # CMakeLists.txt for OmniDSP project
 cmake_minimum_required(VERSION 3.15)
 
+message(STATUS "VIRTUAL_ENV: $ENV{VIRTUAL_ENV}")
+message(STATUS "PATH: $ENV{PATH}")
+
 # Set project name and version (used for installation and config files)
 project(OmniDSP VERSION 1.0.0 LANGUAGES CXX)
 
@@ -202,12 +205,11 @@ else()
 endif()
 
 
-# --- Tests Subdirectory ---
-# Add the 'tests' subdirectory which contains its own CMakeLists.txt
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt")
-    add_subdirectory(tests)
+# --- C++ Tests Subdirectory ---
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/cpp/CMakeLists.txt")
+    add_subdirectory(tests/cpp)
 else()
-    message(STATUS "Tests subdirectory not found, skipping test configuration.")
+    message(STATUS "C++ tests subdirectory 'tests/cpp' or its CMakeLists.txt not found, skipping C++ test configuration.")
 endif()
 
 

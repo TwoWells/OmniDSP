@@ -8,19 +8,19 @@ endif()
 # Define the Python module target using pybind11's helper function
 # pybind11_add_module(<target_name> [SHARED|MODULE] [NO_EXTRAS] source1 [source2 ...])
 # <target_name> is the name Python will import (e.g., omnidsp)
-pybind11_add_module(omnidsp             # Module target name
+pybind11_add_module(omnidsp_py             # Module target name
     SHARED                              # Build as shared library (.so/.pyd)
     bindings.cpp                        # Source file relative to this directory
 )
 
 # Link the Python module against the core omnidsp library
 # omnidsp target should be available from the parent scope
-target_link_libraries(omnidsp PRIVATE omnidsp)
+target_link_libraries(omnidsp_py PRIVATE omnidsp)
 
 # Add include directories needed for bindings.cpp
 # pybind11_add_module usually handles pybind11 includes automatically.
 # Need the public include dir for OmniDSP headers from the project root.
-target_include_directories(omnidsp PRIVATE
+target_include_directories(omnidsp_py PRIVATE
     ${PROJECT_SOURCE_DIR}/include  # Use PROJECT_SOURCE_DIR for top-level include
 )
 
@@ -100,10 +100,10 @@ if(WIN32 AND MKL_FOUND) # MKL_FOUND is manually set in root CMakeLists now
     # Install the found DLLs into the package directory created by scikit-build-core
     if(MKL_DLLS_TO_INSTALL)
         install(FILES ${MKL_DLLS_TO_INSTALL}
-                DESTINATION "omnidsp"  # Installs to <prefix>/omnidsp/
+DESTINATION "omnidsp_py"  # Installs to <prefix>/omnidsp_py/
                 COMPONENT Runtime         # Match the component of the python module
         )
-        message(STATUS "Configured installation of MKL/OpenMP DLLs: ${MKL_DLLS_TO_INSTALL} to omnidsp/ directory.")
+        message(STATUS "Configured installation of MKL/OpenMP DLLs: ${MKL_DLLS_TO_INSTALL} to omnidsp_py/ directory.")
     else()
         message(WARNING "Python Bindings: No MKL/OpenMP runtime DLLs found to install. Ensure they are available in the system PATH for the Python module to load correctly.")
     endif()
@@ -116,10 +116,10 @@ endif()
 # Install the Python module target itself. scikit-build-core requires this.
 # The destination directory should match the package name specified in pyproject.toml's
 # wheel.packages setting.
-install(TARGETS omnidsp
-    LIBRARY DESTINATION "omnidsp"  # Installs to <prefix>/omnidsp/
-    RUNTIME DESTINATION "omnidsp"  # For Windows .pyd files
+install(TARGETS omnidsp_py
+    LIBRARY DESTINATION "omnidsp_py"  # Installs to <prefix>/omnidsp_py/
+    RUNTIME DESTINATION "omnidsp_py"  # For Windows .pyd files
     COMPONENT Runtime                 # Typically 'Runtime' for installable artifacts
 )
 
-message(STATUS "Configured Python bindings target 'omnidsp' with installation rules.")
+message(STATUS "Configured Python bindings target 'omnidsp_py' with installation rules.")

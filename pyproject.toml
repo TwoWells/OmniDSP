@@ -6,7 +6,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 # Basic Python package metadata. Match version with C++ project.
-name = "omnidsp"
+name = "omnidsp_py"
 version = "1.0.0"
 description = "Python bindings for the OmniDSP library"
 readme = "README.md"
@@ -21,6 +21,17 @@ classifiers = [
 ]
 # Optional: Add author details
 # authors = [ { name="Your Name", email="your@email.com" } ]
+# Define runtime dependencies:
+dependencies = [
+    "numpy"
+]
+
+# Add this section for optional test dependencies:
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0",  # Or your desired minimum pytest version
+]
+
 
 [tool.scikit-build]
 # Point to the directory containing the root CMakeLists.txt
@@ -28,7 +39,7 @@ cmake.source-dir = "."
 
 # Define the Python package(s) to be included in the wheel.
 # The built extension module (.pyd) will be placed here.
-wheel.packages = ["omnidsp"]
+wheel.packages = ["omnidsp_py"]
 
 # We will configure MKL DLL bundling within CMakeLists.txt using install rules.
 
