@@ -1,0 +1,42 @@
+[build-system]
+# Specify build dependencies. scikit-build-core handles the CMake build.
+# pybind11 is needed by CMake during configuration.
+requires = ["scikit-build-core>=0.7", "pybind11>=2.13"]
+build-backend = "scikit_build_core.build"
+
+[project]
+# Basic Python package metadata. Match version with C++ project.
+name = "omnidsp"
+version = "1.0.0"
+description = "Python bindings for the OmniDSP library"
+readme = "README.md"
+# TODO: Replace with your actual license (e.g., "MIT", "BSD-3-Clause")
+license = { text = "LICENSE_PLACEHOLDER" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: C++",
+    "Operating System :: Microsoft :: Windows", # Specific to this setup
+    "Topic :: Scientific/Engineering",
+    # Add other relevant classifiers
+]
+# Optional: Add author details
+# authors = [ { name="Your Name", email="your@email.com" } ]
+
+[tool.scikit-build]
+# Point to the directory containing the root CMakeLists.txt
+cmake.source-dir = "."
+
+# Define the Python package(s) to be included in the wheel.
+# The built extension module (.pyd) will be placed here.
+wheel.packages = ["omnidsp"]
+
+# We will configure MKL DLL bundling within CMakeLists.txt using install rules.
+
+# Add or modify cmake.args to enable the option:
+cmake.args = ["-DOMNIDSP_BUILD_PYTHON_BINDINGS=ON"]
+
+# Optional: Add other args if needed, e.g. for MKL preference
+# cmake.args = ["-DOMNIDSP_BUILD_PYTHON_BINDINGS=ON", "-DFFT_PREFER_ONEMKL=ON"]
+
+# Optional: Build type
+# cmake.build-type = "Release"

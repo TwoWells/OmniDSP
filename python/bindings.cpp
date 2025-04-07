@@ -2,7 +2,7 @@
  * @file bindings.cpp
  * @brief Python bindings for the OmniDSP library using pybind11.
  *
- * This file defines the Python module 'omnidsp_py' which exposes the core
+ * This file defines the Python module 'omnidsp' which exposes the core
  * functionality of the OmniDSP C++ library (FFTPlan, CQTPlan, convenience functions,
  * window functions, enums) to Python, enabling its use with NumPy arrays.
  */
@@ -21,13 +21,13 @@
 
 namespace py = pybind11;
 
-// Define the Python module 'omnidsp_py'
-// The first argument to PYBIND11_MODULE must match the target name in CMake (omnidsp_py)
-PYBIND11_MODULE(omnidsp_py, m) {
+// Define the Python module 'omnidsp'
+// The first argument to PYBIND11_MODULE must match the target name in CMake (omnidsp)
+PYBIND11_MODULE(omnidsp, m) {
     m.doc() = R"pbdoc(
         OmniDSP Python Bindings
         -----------------------
-        .. currentmodule:: omnidsp_py
+        .. currentmodule:: omnidsp
         .. autosummary::
            :toctree: _generate
            Direction
@@ -54,7 +54,7 @@ PYBIND11_MODULE(omnidsp_py, m) {
     py::enum_<OmniDSP::Direction>(m, "Direction", "Specifies the direction of the Fourier Transform.")
         .value("FORWARD", OmniDSP::Direction::FORWARD, "Forward Transform (e.g., time to frequency).")
         .value("INVERSE", OmniDSP::Direction::INVERSE, "Inverse Transform (e.g., frequency to time).")
-        .export_values(); // Allows access like omnidsp_py.Direction.FORWARD
+        .export_values(); // Allows access like omnidsp.Direction.FORWARD
 
     py::enum_<OmniDSP::Precision>(m, "Precision", "Specifies the floating-point precision for calculations.")
         .value("SINGLE", OmniDSP::Precision::SINGLE, "Use float (32-bit) precision.")
@@ -414,7 +414,7 @@ PYBIND11_MODULE(omnidsp_py, m) {
     //       because directly modifying NumPy array data passed from Python via pointers
     //       can be complex regarding memory ownership and potential stride issues.
     //       It's generally safer for Python users to use the out-of-place versions:
-    //       e.g., `output_array = omnidsp_py.fft_double(input_array)`
+    //       e.g., `output_array = omnidsp.fft_double(input_array)`
 
 #ifdef VERSION_INFO
     // Expose the project version if defined by CMake (add -DVERSION_INFO=... to CXX flags)

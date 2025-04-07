@@ -4,6 +4,8 @@ cmake_minimum_required(VERSION 3.15)
 # Set project name and version (used for installation and config files)
 project(OmniDSP VERSION 1.0.0 LANGUAGES CXX)
 
+option(OMNIDSP_BUILD_PYTHON_BINDINGS "Build the Python language bindings" OFF)
+
 # Show FetchContent progress
 set(FETCHCONTENT_QUIET FALSE)
 
@@ -24,14 +26,13 @@ endif()
 # --- Include Standard CMake Modules ---
 include(GNUInstallDirs) # For standard installation paths (CMAKE_INSTALL_*)
 include(CMakePackageConfigHelpers) # For generating *Config.cmake files
-include(FetchContent) # For downloading dependencies like GoogleTest
+include(FetchContent) # For downloading dependencies like pybind11 and GoogleTest
 
 # --- pybind11 Dependency (FetchContent) ---
-include(FetchContent)
 FetchContent_Declare(
-  pybind11
-  GIT_REPOSITORY https://github.com/pybind/pybind11.git
-  GIT_TAG v2.13.6
+    pybind11
+    GIT_REPOSITORY https://github.com/pybind/pybind11.git
+    GIT_TAG v2.13.6
 )
 # For newer CMake versions (3.14+), pybind11 uses INTERFACE targets,
 # so setting PYBIND11_INSTALL is often not needed when using FetchContent directly.
@@ -139,11 +140,11 @@ endif()
 # --- Library Target Definition ---
 # Use explicit source file listing (Recommended)
 add_library(omnidsp
-    src/omnidsp.cpp       # Platform-independent wrapper/convenience functions
-    src/cqt.cpp           # CQT implementation
+    src/omnidsp.cpp # Platform-independent wrapper/convenience functions
+    src/cqt.cpp # CQT implementation
     # Add other .cpp files directly in src/ here if any
 
-    ${BACKEND_SOURCE}     # The selected platform-specific backend implementation
+    ${BACKEND_SOURCE} # The selected platform-specific backend implementation
 )
 
 # Set C++ standard for the target explicitly (good practice)
@@ -169,7 +170,7 @@ if(BACKEND STREQUAL "ACCELERATE")
     # This define controls conditional compilation within the source code
     target_compile_definitions(omnidsp PRIVATE USE_ACCELERATE)
 
-# UPDATED Variable Name Check
+    # UPDATED Variable Name Check
 elseif(BACKEND STREQUAL "ONEMKL")
     if(NOT MKL_FOUND)
         find_package(MKL REQUIRED) # Should have been found earlier, but double-check
@@ -210,47 +211,28 @@ else()
 endif()
 
 
-# --- Python Bindings Target ---
-# Check if pybind11 was found (either via FetchContent or find_package)
-if(TARGET pybind11::module) # Recommended check for modern pybind11 usage
+# --- Python Bindings & Python Tests Subdirectories ---
+# Add the python and tests/python subdirectories only if the option is enabled.
+if(OMNIDSP_BUILD_PYTHON_BINDINGS)
+    message(STATUS "Python bindings requested (OMNIDSP_BUILD_PYTHON_BINDINGS=ON).")
 
-    # Define the Python module target using pybind11's helper function
-    # pybind11_add_module(<target_name> [SHARED|MODULE] [NO_EXTRAS] source1 [source2 ...])
-    # <target_name> is the name Python will import (e.g., omnidsp_py)
-    pybind11_add_module(omnidsp_py             # Module target name
-        SHARED                              # Build as shared library (.so/.pyd)
-        src/bindings.cpp                    # Source file with PYBIND11_MODULE
-    )
+    # Add python bindings subdirectory
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/python/CMakeLists.txt")
+        add_subdirectory(python)
+    else()
+        message(WARNING "Python bindings subdirectory 'python' or its CMakeLists.txt not found, skipping Python module configuration.")
+    endif()
 
-    # Link the Python module against your core omnidsp library
-    # Use PRIVATE linking as Python code importing omnidsp_py doesn't need
-    # direct access to omnidsp's internals, only the bindings.
-    target_link_libraries(omnidsp_py PRIVATE omnidsp)
-
-    # Add include directories needed for bindings.cpp
-    # pybind11_add_module usually handles pybind11 includes automatically.
-    # Need the public include dir for OmniDSP headers.
-    target_include_directories(omnidsp_py PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-    )
-
-    # Optional: Define where the Python module should be installed
-    # This typically goes into the Python site-packages directory.
-    # pybind11 provides helper variables/functions for this, or you can set manually.
-    # Example using pybind11's variable (might require setting PYTHON_EXECUTABLE):
-    # include(pybind11Tools)
-    # pybind11_get_include() # Ensure Python paths are set
-    # install(TARGETS omnidsp_py DESTINATION "${Python_SITELIB}") # Check variable name
-
-    # Simpler installation to a known location relative to prefix:
-    install(TARGETS omnidsp_py
-            LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}/python" # e.g., <prefix>/lib/python
-            COMPONENT Runtime)
-
-    message(STATUS "Configuring Python bindings target: omnidsp_py")
+    # Add python tests subdirectory (depends on Python bindings)
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/python/CMakeLists.txt")
+        add_subdirectory(tests/python)
+    else()
+        # This message is optional, depends if you always expect python tests
+        message(STATUS "Python tests subdirectory 'tests/python' or its CMakeLists.txt not found, skipping Python test configuration.")
+    endif()
 
 else()
-    message(WARNING "pybind11 target not found. Skipping Python bindings build.")
+     message(STATUS "Skipping Python bindings and Python tests configuration (OMNIDSP_BUILD_PYTHON_BINDINGS=OFF).")
 endif()
 
 
@@ -263,10 +245,10 @@ set(OMNIDSP_CMAKE_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}")
 
 # 1. Install the public header file(s) using install(DIRECTORY)
 # This automatically handles all *.h files in include/OmniDSP/
-install(DIRECTORY include/OmniDSP/    # Source directory relative to CMakeLists.txt
-        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" # Destination directory relative to install prefix
-        COMPONENT Devel                 # Installation component group
-        FILES_MATCHING PATTERN "*.h"    # Ensures only files ending in .h are installed
+install(DIRECTORY include/OmniDSP/ # Source directory relative to CMakeLists.txt
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" # Destination directory relative to install prefix
+    COMPONENT Devel # Installation component group
+    FILES_MATCHING PATTERN "*.h" # Ensures only files ending in .h are installed
 )
 
 # 2. Prepare package configuration files for find_package(OmniDSP)
@@ -316,10 +298,10 @@ install(FILES
 
 # --- Install Python Examples ---
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/python")
-    install(DIRECTORY examples/python/   # <--- Use the new path here
-            DESTINATION "${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}/examples_python" # e.g., <prefix>/share/OmniDSP/examples_python
-            COMPONENT Examples
-            FILES_MATCHING PATTERN "*.py" PATTERN "*.txt" # Optional: filter specific files
+    install(DIRECTORY examples/python/ # <--- Use the new path here
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}/examples_python" # e.g., <prefix>/share/OmniDSP/examples_python
+        COMPONENT Examples
+        FILES_MATCHING PATTERN "*.py" PATTERN "*.txt" # Optional: filter specific files
     )
     message(STATUS "Configuring installation for Python examples directory.")
 else()

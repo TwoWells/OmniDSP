@@ -1,0 +1,5 @@
+scikit-build-core>=0.7 # Build system for CMake projects
+numpy
+librosa
+matplotlib
+# Do NOT list pybind11 here if using FetchContent in CMake
