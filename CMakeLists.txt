@@ -29,7 +29,11 @@ endif()
 # --- Include Standard CMake Modules ---
 include(GNUInstallDirs) # For standard installation paths (CMAKE_INSTALL_*)
 include(CMakePackageConfigHelpers) # For generating *Config.cmake files
-include(FetchContent) # For downloading dependencies like pybind11 and GoogleTest
+
+# set(PYBIND11_FINDPYTHON ON)
+# find_package(pybind11 CONFIG REQUIRED)
+
+include(FetchContent) # For downloading pybind11 and GoogleTest
 
 # --- pybind11 Dependency (FetchContent) ---
 FetchContent_Declare(
@@ -39,7 +43,7 @@ FetchContent_Declare(
 )
 # For newer CMake versions (3.14+), pybind11 uses INTERFACE targets,
 # so setting PYBIND11_INSTALL is often not needed when using FetchContent directly.
-# set(PYBIND11_INSTALL OFF CACHE BOOL "Don't install pybind11") # Optional
+set(PYBIND11_INSTALL OFF CACHE BOOL "Don't install pybind11") # Optional
 FetchContent_MakeAvailable(pybind11)
 
 # --- Unit Testing Setup (GoogleTest) ---

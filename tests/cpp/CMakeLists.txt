@@ -26,7 +26,7 @@ if(WIN32 AND MKL_FOUND)
 
     # --- Start: More Portable MKL/OMP DLL Finding Logic ---
     set(MKL_BIN_HINTS "")
-    set(OMP_BIN_HINTS ENV PATH) # Prioritize system PATH to find OpenMP DLL
+    set(OMP_BIN_HINTS "$ENV{PATH}") # Prioritize system PATH to find OpenMP DLL
     set(MKL_RELATIVE_BIN_PATHS "latest/bin/intel64" "latest/bin" "bin/intel64" "bin")
     set(OMP_RELATIVE_BIN_PATHS "latest/bin") # OpenMP DLL often directly in compiler/latest/bin
 
@@ -59,8 +59,8 @@ if(WIN32 AND MKL_FOUND)
         list(APPEND OMP_BIN_HINTS ${MKL_RUNTIME_LIBRARY_DIRS}) # Add here too? Might not be relevant.
     endif()
     # Always include the system PATH as a fallback hint for both
-    list(APPEND MKL_BIN_HINTS ENV PATH)
-    list(APPEND OMP_BIN_HINTS ENV PATH)
+    list(APPEND MKL_BIN_HINTS "$ENV{PATH}")
+    list(APPEND OMP_BIN_HINTS "$ENV{PATH}")
 
     message(STATUS "Tests: Searching for MKL runtime DLL with hints: ${MKL_BIN_HINTS}")
     find_file(MKL_RT_DLL_PATH NAMES mkl_rt.2.dll mkl_rt.1.dll mkl_rt.dll

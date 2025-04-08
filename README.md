@@ -405,18 +405,66 @@ Once Omni DSP is installed using `pip install .`, you can use the Python module 
 1.  **Ensure Module is Found by Python:**
     *   If you installed using `pip install .` into your active environment, it should be found automatically.
 2.  **IMPORTANT: Ensure Runtime Dependencies are Found (Especially MKL):**
-    The Python module depends on the core C++ library, which depends on its backend (MKL or Accelerate). If the MKL backend was used (common on Windows/Linux), the OS needs to find the MKL runtime libraries (e.g., `mkl_rt.dll`).
+    The Python module (`omnidsp_py`) depends on the core C++ library, which in turn depends on its backend (MKL or Accelerate). If the MKL backend was used (common on Windows/Linux), the operating system needs to find the MKL runtime libraries (e.g., `mkl_rt.dll`, `libiomp5md.dll`, potentially `tbb12.dll`) when you `import omnidsp_py`.
 
-    **If you encounter an `ImportError: DLL load failed... The specified module could not be found`** (or similar), configure your runtime environment so the MKL runtime is found. Choose **one**:
-    *   **Environment Setup Before Launch (Recommended):**
-        *   Activate the Intel oneAPI environment in your terminal **before** launching Python/Jupyter/VS Code using the appropriate script (e.g., `oneapi-vars.bat` for your version on Windows, `source setvars.sh` on Linux/macOS).
-        *   Alternatively, manually add the MKL runtime directory (e.g., `<ONEAPI_ROOT>/mkl/latest/bin/intel64` on Windows, `<ONEAPI_ROOT>/mkl/latest/lib/` on Linux/macOS) to your system's `PATH` (Windows) or `LD_LIBRARY_PATH` (Linux) / `DYLD_LIBRARY_PATH` (macOS).
-    *   **`.env` File (IDE-Friendly / VS Code):**
-        *   Create `.env` in your workspace root. Add a line prepending the MKL runtime directory to the appropriate variable (`PATH`, `LD_LIBRARY_PATH`, or `DYLD_LIBRARY_PATH`). See original README section for examples.
-        *   VS Code's Python extension often loads this automatically. Reload VS Code if needed.
-    *   **Code-Based (Windows Python 3.8+ Only):**
-        *   Use `os.add_dll_directory()` in Python *before* the import.
-    **Note:** This setup is generally not needed if using the Accelerate backend on macOS.
+    **If you encounter an `ImportError: DLL load failed... The specified module could not be found`** (or similar error) on Windows, even after trying bundling or PATH setup, the most reliable solution is often to explicitly tell Python where to find these DLLs using `os.add_dll_directory()` (requires Python 3.8+).
+
+    Choose **one** of these methods to configure your runtime environment:
+
+    * **Environment Setup Before Launch (Standard Method):**
+        * Activate the Intel oneAPI environment in your terminal **before** launching Python/Jupyter/VS Code using the appropriate script (e.g., `oneapi-vars.bat` for your version on Windows, `source setvars.sh` on Linux/macOS). This adds the necessary directories to your `PATH` (Windows) or `LD_LIBRARY_PATH` (Linux) / `DYLD_LIBRARY_PATH` (macOS).
+
+    * **Code-Based DLL Path Addition (Windows Python 3.8+ - Recommended if PATH/Bundling Fails):**
+        * Add the following code block to the **top** of your Python script, *before* `import omnidsp_py`:
+
+            ```python
+            import os
+            import sys
+
+            # Add paths for oneAPI DLLs needed by omnidsp_py at runtime
+            if sys.platform == 'win32' and sys.version_info >= (3, 8):
+                # --- Adjust these paths based on your oneAPI installation ---
+                mkl_bin_dir = r"C:\Program Files (x86)\Intel\oneAPI\mkl\latest\bin" 
+                compiler_bin_dir = r"C:\Program Files (x86)\Intel\oneAPI\compiler\latest\bin"
+                # TBB is often needed too:
+                tbb_bin_dir = r"C:\Program Files (x86)\Intel\oneAPI\tbb\latest\bin\intel64" 
+                # --- End Paths to Adjust ---
+
+                # Optionally add the directory where omnidsp_py itself is installed
+                # site_pkg_dir = os.path.join(os.path.dirname(sys.executable), r"Lib\site-packages\omnidsp_py")
+
+                print("DEBUG: Attempting to add DLL directories...", file=sys.stderr)
+                paths_to_add = [mkl_bin_dir, compiler_bin_dir, tbb_bin_dir] 
+                # if os.path.exists(site_pkg_dir): paths_to_add.append(site_pkg_dir)
+
+                added_count = 0
+                for dll_dir in paths_to_add:
+                    if os.path.exists(dll_dir):
+                        try:
+                            os.add_dll_directory(dll_dir)
+                            print(f"DEBUG: Added DLL directory: {dll_dir}", file=sys.stderr)
+                            added_count += 1
+                        except OSError as e:
+                            print(f"DEBUG: Error adding DLL directory {dll_dir}: {e}", file=sys.stderr)
+                    else:
+                        print(f"DEBUG: DLL directory not found, skipping: {dll_dir}", file=sys.stderr)
+                
+                if added_count == 0:
+                     print("DEBUG: WARNING - Failed to add any required oneAPI DLL directories.", file=sys.stderr)
+            
+            # --- Now proceed with the import ---
+            # import omnidsp_py 
+            ```
+        * This explicitly tells Python where to find the necessary DLLs, bypassing potential issues with `PATH` inheritance or bundled DLL loading. Remember to adjust the paths in the snippet to match your specific oneAPI installation directories.
+
+    * **`.env` File (IDE-Friendly / VS Code):**
+        * Create a `.env` file in your project/workspace root. Add a line prepending the required oneAPI runtime directories (MKL, Compiler, TBB) to the `PATH` variable. Example for Windows:
+            ```
+            PATH=${env:PATH};C:\Program Files (x86)\Intel\oneAPI\mkl\latest\bin;C:\Program Files (x86)\Intel\oneAPI\compiler\latest\bin;C:\Program Files (x86)\Intel\oneAPI\tbb\latest\bin\intel64
+            ```
+        * VS Code's Python extension often loads this automatically. Reload VS Code if needed.
+
+    **Note:** Runtime environment setup is generally not needed if using the Accelerate backend on macOS. If DLLs were successfully bundled during `pip install .`, the `os.add_dll_directory` method pointing to the package's directory in `site-packages` can also work.
 3.  **Import and Use:** Import the module and NumPy:
     ```python
     import numpy as np
