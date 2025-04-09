@@ -81,7 +81,7 @@ if(APPLE AND FFT_PREFER_ACCELERATE AND NOT FFT_PREFER_ONEMKL)
         message(STATUS "Found Apple Accelerate framework (via find_package).")
         set(BACKEND "ACCELERATE")
         # UPDATED Path and Name
-        set(BACKEND_SOURCE src/backend/accelerate.cpp)
+        set(BACKEND_SOURCE src/omnidsp/backend/accelerate.cpp)
     else()
         # Fallback to find_library if find_package doesn't work
         find_library(ACCELERATE_FRAMEWORK Accelerate)
@@ -89,7 +89,7 @@ if(APPLE AND FFT_PREFER_ACCELERATE AND NOT FFT_PREFER_ONEMKL)
             message(STATUS "Found Apple Accelerate framework (via find_library).")
             set(BACKEND "ACCELERATE")
             # UPDATED Path and Name
-            set(BACKEND_SOURCE src/backend/accelerate.cpp)
+            set(BACKEND_SOURCE src/omnidsp/backend/accelerate.cpp)
         else()
             message(WARNING "Apple Accelerate framework requested but not found on Apple system.")
         endif()
@@ -112,7 +112,7 @@ if(NOT BACKEND STREQUAL "ACCELERATE" OR FFT_PREFER_ONEMKL)
             # UPDATED Variable Name
             set(BACKEND "ONEMKL")
             # UPDATED Path and Name
-            set(BACKEND_SOURCE src/backend/onemkl.cpp)
+            set(BACKEND_SOURCE src/omnidsp/backend/onemkl.cpp)
         else()
             message(STATUS "Intel oneMKL found, but Accelerate backend was already selected.")
         endif()
@@ -133,7 +133,7 @@ endif()
 if(BACKEND STREQUAL "NONE")
     message(WARNING "No suitable backend (Accelerate or oneMKL) found or configured. Using stub implementation (will throw errors at runtime).")
     # UPDATED Path and Name
-    set(BACKEND_SOURCE src/backend/stub.cpp)
+    set(BACKEND_SOURCE src/omnidsp/backend/stub.cpp)
 endif()
 
 # Check that the selected implementation source file actually exists
@@ -147,8 +147,8 @@ endif()
 # --- Library Target Definition ---
 # Use explicit source file listing (Recommended)
 add_library(omnidsp
-    src/omnidsp.cpp # Platform-independent wrapper/convenience functions
-    src/cqt.cpp # CQT implementation
+    src/omnidsp/omnidsp.cpp # Platform-independent wrapper/convenience functions
+    src/omnidsp/cqt.cpp # CQT implementation
     # Add other .cpp files directly in src/ here if any
 
     ${BACKEND_SOURCE} # The selected platform-specific backend implementation
@@ -223,10 +223,10 @@ if(OMNIDSP_BUILD_PYTHON_BINDINGS)
     message(STATUS "Python bindings requested (OMNIDSP_BUILD_PYTHON_BINDINGS=ON).")
 
     # Add python bindings subdirectory
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/python/CMakeLists.txt")
-        add_subdirectory(python)
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/omnidsp_py/CMakeLists.txt")
+        add_subdirectory(src/omnidsp_py)
     else()
-        message(WARNING "Python bindings subdirectory 'python' or its CMakeLists.txt not found, skipping Python module configuration.")
+        message(WARNING "Python bindings subdirectory 'src/omnidsp_py' or its CMakeLists.txt not found, skipping Python module configuration.")
     endif()
 
     # Add python tests subdirectory (depends on Python bindings)
