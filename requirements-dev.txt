@@ -1,0 +1,24 @@
+# requirements-dev.txt
+
+# Build system requirements (also listed in pyproject.toml [build-system].requires)
+scikit-build-core>=0.7
+pybind11
+cmake>=3.21 # Useful to have explicitly in dev env, ensure version match
+
+# Runtime dependency (needed for tests/examples)
+numpy
+
+# Wheel repair for Windows (dependency bundling)
+delvewheel
+
+# Testing framework
+pytest
+
+# Optional: Package uploading tool
+# twine
+
+# Optional: Linters/Formatters (examples)
+# ruff
+# black
+# cmake-format
+# mypy

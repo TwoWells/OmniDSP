@@ -1,7 +1,7 @@
 [build-system]
 # Specify build dependencies. scikit-build-core handles the CMake build.
 # pybind11 is needed by CMake during configuration.
-requires = ["scikit-build-core>=0.7", "pybind11>=2.13"]
+requires = ["scikit-build-core>=0.7", "pybind11>=2.13", "cmake>=3.21"]
 build-backend = "scikit_build_core.build"
 
 [project]
@@ -22,32 +22,16 @@ classifiers = [
 # Optional: Add author details
 # authors = [ { name="Your Name", email="your@email.com" } ]
 # Define runtime dependencies:
-dependencies = [
-    "numpy"
-]
+dependencies = ["numpy"]
 
 # Add this section for optional test dependencies:
-[project.optional-dependencies]
-test = [
-    "pytest>=8.0",  # Or your desired minimum pytest version
+optional-dependencies.test = [
+    "pytest>=8.0", # Or your desired minimum pytest version
 ]
 
 
 [tool.scikit-build]
-# Point to the directory containing the root CMakeLists.txt
-cmake.source-dir = "."
-
-# Define the Python package(s) to be included in the wheel.
-# The built extension module (.pyd) will be placed here.
-wheel.packages = ["omnidsp_py"]
-
-# We will configure MKL DLL bundling within CMakeLists.txt using install rules.
-
-# Add or modify cmake.args to enable the option:
+# # Point to the directory containing the root CMakeLists.txt
+# cmake.source-dir = "."
+# # Add or modify cmake.args to enable the option:
 cmake.args = ["-DOMNIDSP_BUILD_PYTHON_BINDINGS=ON"]
-
-# Optional: Add other args if needed, e.g. for MKL preference
-# cmake.args = ["-DOMNIDSP_BUILD_PYTHON_BINDINGS=ON", "-DFFT_PREFER_ONEMKL=ON"]
-
-# Optional: Build type
-# cmake.build-type = "Release"

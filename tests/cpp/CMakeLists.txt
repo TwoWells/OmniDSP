@@ -22,7 +22,7 @@ target_link_libraries(omnidsp_tests PRIVATE
 
 # --- Copy MKL DLLs for Test Execution (Windows) ---
 if(WIN32 AND MKL_FOUND)
-    message(STATUS "Tests: MKL backend detected, configuring DLL copy for omnidsp_tests.")
+    message(VERBOSE "Tests: MKL backend detected, configuring DLL copy for omnidsp_tests.")
 
     # --- Start: More Portable MKL/OMP DLL Finding Logic ---
     set(MKL_BIN_HINTS "")
@@ -62,11 +62,11 @@ if(WIN32 AND MKL_FOUND)
     list(APPEND MKL_BIN_HINTS "$ENV{PATH}")
     list(APPEND OMP_BIN_HINTS "$ENV{PATH}")
 
-    message(STATUS "Tests: Searching for MKL runtime DLL with hints: ${MKL_BIN_HINTS}")
+    message(DEBUG "Tests: Searching for MKL runtime DLL with hints: ${MKL_BIN_HINTS}")
     find_file(MKL_RT_DLL_PATH NAMES mkl_rt.2.dll mkl_rt.1.dll mkl_rt.dll
         HINTS ${MKL_BIN_HINTS} NO_DEFAULT_PATH)
 
-    message(STATUS "Tests: Searching for OpenMP runtime DLL with hints: ${OMP_BIN_HINTS}")
+    message(DEBUG "Tests: Searching for OpenMP runtime DLL with hints: ${OMP_BIN_HINTS}")
     find_file(IOMP5_DLL_PATH NAMES libiomp5md.dll
         HINTS ${OMP_BIN_HINTS} NO_DEFAULT_PATH)
 
@@ -74,14 +74,14 @@ if(WIN32 AND MKL_FOUND)
     set(MKL_DLLS_TO_COPY "")
     if(MKL_RT_DLL_PATH)
         list(APPEND MKL_DLLS_TO_COPY "${MKL_RT_DLL_PATH}")
-        message(STATUS "Tests: Found MKL runtime DLL: ${MKL_RT_DLL_PATH}")
+        message(VERBOSE "Tests: Found MKL runtime DLL: ${MKL_RT_DLL_PATH}")
     else()
         message(WARNING "Tests: Could not find mkl_rt DLL using hints ${MKL_BIN_HINTS}. Test execution might fail.")
     endif()
 
     if(IOMP5_DLL_PATH)
         list(APPEND MKL_DLLS_TO_COPY "${IOMP5_DLL_PATH}")
-        message(STATUS "Tests: Found OpenMP runtime DLL: ${IOMP5_DLL_PATH}")
+        message(VERBOSE "Tests: Found OpenMP runtime DLL: ${IOMP5_DLL_PATH}")
     else()
         message(WARNING "Tests: Could not find libiomp5md.dll using hints ${OMP_BIN_HINTS}. Test execution might fail if OpenMP is needed.")
     endif()
@@ -98,7 +98,7 @@ if(WIN32 AND MKL_FOUND)
             COMMENT "Copying MKL DLLs for test execution: ${MKL_DLLS_TO_COPY}"
             VERBATIM
         )
-        message(STATUS "Tests: Added custom command to copy MKL DLLs to $<TARGET_FILE_DIR:omnidsp_tests>")
+        message(VERBOSE "Tests: Added custom command to copy MKL DLLs to $<TARGET_FILE_DIR:omnidsp_tests>")
     else()
         message(WARNING "Tests: No MKL/OpenMP runtime DLLs found to copy for test execution.")
     endif()
@@ -135,7 +135,7 @@ if(BUILD_SHARED_LIBS) # Check the option defined in the root CMakeLists.txt
 
         # Apply the modification to the test properties if a modification string was set
         if(NOT ENV_VAR_MOD STREQUAL "")
-            message(STATUS "CTest: Setting ENVIRONMENT_MODIFICATION for test 'omnidsp_tests': ${ENV_VAR_MOD}")
+            message(VERBOSE "CTest: Setting ENVIRONMENT_MODIFICATION for test 'omnidsp_tests': ${ENV_VAR_MOD}")
             set_tests_properties(omnidsp_tests PROPERTIES ENVIRONMENT_MODIFICATION "${ENV_VAR_MOD}")
         endif()
 
