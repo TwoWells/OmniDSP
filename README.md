@@ -168,12 +168,12 @@ Installing packages the headers, compiled library files, and CMake configuration
     signal = np.cos(2.0 * np.pi * 3.0 * np.arange(N) / N).astype(np.float64)
     
     try:
-        spectrum = omnidsp_py.rfft_double(signal)
+        spectrum = omnidsp_py.rfft(signal)
         print(f"Spectrum shape: {spectrum.shape}") # N/2 + 1
         print(spectrum[:5])
     
         # Reconstruct
-        reconstructed = omnidsp_py.irfft_double(spectrum)
+        reconstructed = omnidsp_py.irfft(spectrum)
         print(f"Reconstructed close to original: {np.allclose(signal, reconstructed)}")
     
     except ImportError as e:

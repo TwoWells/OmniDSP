@@ -2,12 +2,13 @@
 #define OMNIDSP_CQT_H
 
 #include <OmniDSP/omnidsp.h> // Include OmniDSP header for FFTPlan
-#include <OmniDSP/windows.h> // Include Window header
+#include <OmniDSP/windows.h> // Include Window header (though not directly used here, often relevant context)
 #include <vector>
 #include <complex>
 #include <functional> // For std::function
 #include <memory>     // For std::unique_ptr
 #include <cstddef>    // For size_t
+#include <type_traits> // For std::is_same_v
 
 namespace OmniDSP {
 
@@ -26,7 +27,19 @@ class CQTPlan {
     // Ensure T is either float or double at compile time
     static_assert(std::is_same_v<T, float> || std::is_same_v<T, double>,
                   "CQTPlan only supports float or double precision.");
+
 public:
+    /**
+     * @brief Defines the signature for the window function callback.
+     *
+     * This function will be called internally for each CQT bin.
+     * It should generate and return the window coefficients as a std::vector<T>.
+     *
+     * @param required_length The exact length of the window requested by the CQT algorithm for the current bin.
+     * @return A std::vector<T> containing the window coefficients of size `required_length`.
+     */
+    using WindowFuncType = std::function<std::vector<T>(size_t required_length)>;
+
     /**
      * @brief Constructor for the CQTPlan class (efficient version).
      *
@@ -37,15 +50,13 @@ public:
      * @param lowest_freq The lowest frequency of interest for the CQT in Hz. Must be > 0.
      * @param highest_freq The highest frequency of interest for the CQT in Hz. Must be <= sample_rate / 2.
      * @param bins_per_octave The number of frequency bins per octave. Must be > 0.
-     * @param window_function A function that takes a vector<T> (representing a window of size 1)
-     * and returns the window coefficients as a vector<T>. This function
-     * will be called internally with appropriate lengths for each CQT bin's
-     * time-domain window during kernel generation.
-     * @throws std::invalid_argument If sample_rate, lowest_freq, highest_freq, or bins_per_octave are invalid.
+     * @param window_function A function (or callable object like a lambda) matching the WindowFuncType signature.
+     * It will be called internally with the required window length for each CQT bin.
+     * @throws std::invalid_argument If sample_rate, lowest_freq, highest_freq, or bins_per_octave are invalid, or if window_function is null.
      * @throws std::runtime_error If FFT plan creation or kernel generation fails.
      */
     CQTPlan(double sample_rate, double lowest_freq, double highest_freq, int bins_per_octave,
-            std::function<std::vector<T>(const std::vector<T>&)> window_function);
+            WindowFuncType window_function); // Updated constructor signature
 
     /**
      * @brief Destructor for the CQTPlan class.
@@ -74,7 +85,7 @@ public:
      * @param input The input signal vector (real-valued).
      * @param output A vector of complex numbers where each element represents the CQT coefficient
      * for a specific frequency bin. The vector will be resized to the number of bins.
-     * @throws std::runtime_error If FFT execution or subsequent processing fails.
+     * @throws std::runtime_error If FFT execution or subsequent processing fails, or if the plan is invalid.
      */
     void execute(const std::vector<T>& input, std::vector<std::complex<T>>& output) const;
 
@@ -106,7 +117,7 @@ private:
     double highest_freq_;
     int bins_per_octave_;
     size_t num_bins_;
-    std::function<std::vector<T>(const std::vector<T>&)> window_function_;
+    WindowFuncType window_function_; // Updated member type
 
     // --- Internal Resources for Efficient Method ---
     size_t fft_len_;                             // Length of the single long FFT
