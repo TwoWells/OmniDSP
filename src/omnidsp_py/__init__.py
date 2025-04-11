@@ -6,26 +6,26 @@ import warnings
 
 # Add the directory containing this __init__.py file (which also contains the bundled DLLs)
 # to the DLL search path on Windows Python 3.8+
-# if sys.platform == 'win32' and sys.version_info >= (3, 8):
-#     _package_dir = os.path.dirname(__file__)
-#     try:
-#         # Check if the directory exists and add it
-#         if os.path.exists(_package_dir):
-#             os.add_dll_directory(_package_dir)
-#             # Optional: print statement for debugging installation/import
-#             print(f"DEBUG [omnidsp_py init]: Added DLL directory: {_package_dir}", file=sys.stderr)
-#         else:
-#              warnings.warn(f"OmniDSP package directory not found: {_package_dir}", ImportWarning)
-# 
-#     except FileNotFoundError:
-#         # This might happen in unusual circumstances
-#         warnings.warn(f"OmniDSP package directory not found during DLL path setup: {_package_dir}", ImportWarning)
-#     except OSError as e:
-#         # This might happen if the path is invalid or other OS error occurs
-#          warnings.warn(f"OSError adding OmniDSP DLL directory {_package_dir}: {e}", ImportWarning)
-#     except Exception as e:
-#         # Catch any other unexpected errors during path addition
-#          warnings.warn(f"Unexpected error adding OmniDSP DLL directory {_package_dir}: {e}", ImportWarning)
+if sys.platform == 'win32' and sys.version_info >= (3, 8):
+    _package_dir = os.path.dirname(__file__) + ".libs"
+    try:
+        # Check if the directory exists and add it
+        if os.path.exists(_package_dir):
+            os.add_dll_directory(_package_dir)
+            # Optional: print statement for debugging installation/import
+            print(f"DEBUG [omnidsp_py init]: Added DLL directory: {_package_dir}", file=sys.stderr)
+        else:
+             warnings.warn(f"OmniDSP package directory not found: {_package_dir}", ImportWarning)
+
+    except FileNotFoundError:
+        # This might happen in unusual circumstances
+        warnings.warn(f"OmniDSP package directory not found during DLL path setup: {_package_dir}", ImportWarning)
+    except OSError as e:
+        # This might happen if the path is invalid or other OS error occurs
+         warnings.warn(f"OSError adding OmniDSP DLL directory {_package_dir}: {e}", ImportWarning)
+    except Exception as e:
+        # Catch any other unexpected errors during path addition
+         warnings.warn(f"Unexpected error adding OmniDSP DLL directory {_package_dir}: {e}", ImportWarning)
 
 
 # --- Crucial Step: Import and expose symbols from the compiled C++ module ---
@@ -34,7 +34,7 @@ import warnings
 # We import everything from the C++ module into the package's namespace.
 try:
     # Assuming the PYBIND11_MODULE name in bindings.cpp is 'omnidsp_py'
-    from .omnidsp_py import * # Optionally, clean up namespace if needed, though `import *` is common here
+    from .omnidsp_py import * # type: ignore # Optionally, clean up namespace if needed, though `import *` is common here
     # Example: clean up _package_dir if you don't want it accessible
     # del _package_dir 
     # del os

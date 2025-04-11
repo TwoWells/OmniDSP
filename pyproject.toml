@@ -1,37 +1,79 @@
+# pyproject.toml
+
+# Specify the build system and its requirements
+# pip needs these to know how to build the package.
+# Even though Conda provides these, listing them here is good practice.
 [build-system]
-# Specify build dependencies. scikit-build-core handles the CMake build.
-# pybind11 is needed by CMake during configuration.
-requires = ["scikit-build-core>=0.7", "pybind11>=2.13", "cmake>=3.21"]
+requires = [
+    "scikit-build-core>=0.7", # Build backend
+    "pybind11>=2.10",         # Needed for C++ bindings (header paths)
+    "cmake>=3.21",            # Build system generator
+]
 build-backend = "scikit_build_core.build"
 
+# Project metadata (PEP 621)
 [project]
-# Basic Python package metadata. Match version with C++ project.
-name = "omnidsp_py"
-version = "1.0.0"
-description = "Python bindings for the OmniDSP library"
-readme = "README.md"
-# TODO: Replace with your actual license (e.g., "MIT", "BSD-3-Clause")
-license = { text = "LICENSE_PLACEHOLDER" }
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "Programming Language :: C++",
-    "Operating System :: Microsoft :: Windows", # Specific to this setup
-    "Topic :: Scientific/Engineering",
-    # Add other relevant classifiers
+name = "omnidsp_py" # The name of your Python package
+version = "1.0.0" # Your project's version
+description = "High-Performance Cross-Platform DSP Library with Python Bindings"
+readme = "README.md" # Link to your README file
+license = { text = "Specify Your License (e.g., MIT, BSD-3-Clause)" } # Add your license info
+authors = [
+    { name = "Your Name", email = "your.email@example.com" }, # Add author details
 ]
-# Optional: Add author details
-# authors = [ { name="Your Name", email="your@email.com" } ]
-# Define runtime dependencies:
-dependencies = ["numpy"]
+requires-python = ">=3.8" # Minimum Python version required
 
-# Add this section for optional test dependencies:
-optional-dependencies.test = [
-    "pytest>=8.0", # Or your desired minimum pytest version
+# Runtime dependencies (should match requirements.txt or environment.yml Python deps)
+dependencies = [
+    "numpy",
 ]
 
+# URLs for project homepage, repository, etc. (Optional)
+[project.urls]
+Homepage = "https://github.com/m-wells/OmniDSP" # Example URL
+Repository = "https://github.com/m-wells/OmniDSP" # Example URL
 
+# Optional dependencies (e.g., for testing, development)
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    # Add other dev tools like linters if desired
+]
+
+notebooks = [ # Or name it 'examples'
+    "jupyterlab",
+    "librosa",
+    "matplotlib",
+]
+
+# Configuration for scikit-build-core
 [tool.scikit-build]
-# # Point to the directory containing the root CMakeLists.txt
-# cmake.source-dir = "."
-# # Add or modify cmake.args to enable the option:
-cmake.args = ["-DOMNIDSP_BUILD_PYTHON_BINDINGS=ON"]
+# Directory containing the main CMakeLists.txt
+cmake.source-dir = "."
+
+# CMake arguments passed during configuration
+# Ensure Python bindings are enabled when building via pip/scikit-build-core
+cmake.args = [
+    "-DOMNIDSP_BUILD_PYTHON_BINDINGS=ON",
+    # You can add other CMake defines here if needed, e.g.,
+    # "-DFFT_PREFER_ONEMKL=ON", # Uncomment to prefer MKL if building via pip
+]
+
+# Optional: Specify build directory (relative to source dir)
+# cmake.build-dir = "_skbuild/{wheel_tag}"
+
+# Optional: Install component configuration (less common with scikit-build-core)
+# install.component = "..."
+
+# Optional: Wheel configuration (e.g., disabling strip, though usually desired)
+# wheel.strip = false
+
+# Configuration for pytest (Optional)
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q"
+testpaths = [
+    "tests/python", # Assuming pytest runs from the root
+]
+
+# Add other tool configurations if needed (e.g., ruff, black, mypy)

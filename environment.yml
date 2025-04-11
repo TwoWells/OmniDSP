@@ -1,0 +1,36 @@
+name: omnidsp_env
+channels:
+  - https://software.repos.intel.com/python/conda # <-- Add the specific Intel channel URL
+  - conda-forge
+  - defaults
+dependencies:
+  # Core Python & Pip
+  - python>=3.8
+  - pip
+
+  # Python Build/Test Dependencies (managed by Conda)
+  - numpy
+  - pytest
+  - scikit-build-core>=0.7
+  - pybind11
+
+  # Build Tools & C++ Dependencies (managed by Conda)
+  - cmake>=3.21
+  - cxx-compiler
+  - make # Or ninja
+  - gtest
+
+  # MKL (For x86, detected by CMake)
+  - intel-openmp
+  - mkl
+  - mkl-devel
+
+  # --- Dependencies for Notebooks/Examples ---
+  - jupyterlab # Or 'notebook' if you prefer the classic interface
+  - librosa
+  - matplotlib
+  # --- End Notebook Dependencies ---
+
+  # Pip dependencies (if needed)
+  # - pip:
+  #   - ...

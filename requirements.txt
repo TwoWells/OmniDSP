@@ -1,5 +1,0 @@
-scikit-build-core>=0.7 # Build system for CMake projects
-pybind11
-numpy
-librosa
-matplotlib
