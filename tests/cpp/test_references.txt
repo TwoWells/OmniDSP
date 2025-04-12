@@ -1,0 +1,66 @@
+# Auto-generated reference data for backend_conv_test.cpp
+# START expected_corr_d
+4
+6
+8
+10
+12
+14
+# END expected_corr_d
+
+# START expected_corr_f
+4f
+6f
+8f
+10f
+12f
+14f
+# END expected_corr_f
+
+# START expected_corr_edge_d
+4
+# END expected_corr_edge_d
+
+# START expected_conv_d
+7.5
+11
+14.5
+18
+21.5
+25
+# END expected_conv_d
+
+# START expected_conv_f
+7.5f
+11f
+14.5f
+18f
+21.5f
+25f
+# END expected_conv_f
+
+# START expected_conv_edge_d
+4
+# END expected_conv_edge_d
+
+# START expected_desamp_d
+4
+8
+12
+# END expected_desamp_d
+
+# START expected_desamp_f
+4f
+8f
+12f
+# END expected_desamp_f
+
+# START expected_desamp_edge_d
+4
+# END expected_desamp_edge_d
+
+# START expected_desamp_d_f3
+4
+10
+# END expected_desamp_d_f3
+

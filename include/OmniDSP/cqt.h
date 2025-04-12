@@ -1,137 +1,165 @@
+/**
+ * @file cqt.h
+ * @brief Public API header for the CQTPlan class (Recursive Implementation).
+ * Precomputes sparse kernels per octave in the constructor.
+ * @version 2.2.1 // Version bump for friend declaration
+ * @date 2025-04-12 // Or current date - updated to reflect changes
+ */
+
 #ifndef OMNIDSP_CQT_H
 #define OMNIDSP_CQT_H
 
-#include <OmniDSP/omnidsp.h> // Include OmniDSP header for FFTPlan
-#include <OmniDSP/windows.h> // Include Window header (though not directly used here, often relevant context)
+#include <OmniDSP/omnidsp.h> // For FFTPlan
 #include <vector>
 #include <complex>
-#include <functional> // For std::function
-#include <memory>     // For std::unique_ptr
-#include <cstddef>    // For size_t
+#include <functional>
+#include <memory>      // For unique_ptr
+#include <cstddef>     // For size_t
 #include <type_traits> // For std::is_same_v
+#include <map>         // For sparse kernel storage
 
-namespace OmniDSP {
+// Forward declaration of the test fixture class
+// (Alternatively, include the test header if structure allows, but forward declaration is safer)
+class PrecomputedRecursiveCQTTest;
 
-/**
- * @brief Provides functionality for performing the Constant Q Transform (CQT)
- * using an efficient frequency-domain approach.
- *
- * The CQT is a transform similar to the Fourier Transform, but with a
- * frequency resolution that varies logarithmically. This implementation uses
- * a single long FFT and precomputed frequency-domain kernels.
- *
- * @tparam T The floating-point type of the input data (float or double).
- */
-template <typename T>
-class CQTPlan {
-    // Ensure T is either float or double at compile time
-    static_assert(std::is_same_v<T, float> || std::is_same_v<T, double>,
-                  "CQTPlan only supports float or double precision.");
+namespace OmniDSP
+{
 
-public:
-    /**
-     * @brief Defines the signature for the window function callback.
-     *
-     * This function will be called internally for each CQT bin.
-     * It should generate and return the window coefficients as a std::vector<T>.
-     *
-     * @param required_length The exact length of the window requested by the CQT algorithm for the current bin.
-     * @return A std::vector<T> containing the window coefficients of size `required_length`.
-     */
-    using WindowFuncType = std::function<std::vector<T>(size_t required_length)>;
+    template <typename T>
+    class CQTPlan
+    {
+        // Ensure T is either float or double at compile time
+        static_assert(std::is_same_v<T, float> || std::is_same_v<T, double>,
+                      "CQTPlan only supports float or double precision.");
 
-    /**
-     * @brief Constructor for the CQTPlan class (efficient version).
-     *
-     * Initializes the CQT transform by creating a single FFT plan and
-     * precomputing frequency-domain kernels for each CQT bin.
-     *
-     * @param sample_rate The sample rate of the input signal in Hz.
-     * @param lowest_freq The lowest frequency of interest for the CQT in Hz. Must be > 0.
-     * @param highest_freq The highest frequency of interest for the CQT in Hz. Must be <= sample_rate / 2.
-     * @param bins_per_octave The number of frequency bins per octave. Must be > 0.
-     * @param window_function A function (or callable object like a lambda) matching the WindowFuncType signature.
-     * It will be called internally with the required window length for each CQT bin.
-     * @throws std::invalid_argument If sample_rate, lowest_freq, highest_freq, or bins_per_octave are invalid, or if window_function is null.
-     * @throws std::runtime_error If FFT plan creation or kernel generation fails.
-     */
-    CQTPlan(double sample_rate, double lowest_freq, double highest_freq, int bins_per_octave,
-            WindowFuncType window_function); // Updated constructor signature
+        // Default anti-aliasing filter order (must be odd)
+        static constexpr int DEFAULT_RECURSIVE_FIR_ORDER = 101;
 
-    /**
-     * @brief Destructor for the CQTPlan class.
-     *
-     * Releases resources associated with the CQT plan, including the FFT plan.
-     */
-    ~CQTPlan();
+        // Grant access to the test fixture
+        friend class ::PrecomputedRecursiveCQTTest; // Use global scope :: if test class is not in OmniDSP namespace
 
-    // --- Rule of Five: Move-Only ---
-    /** @brief Deleted copy constructor. CQTPlan is not copyable. */
-    CQTPlan(const CQTPlan&) = delete;
-    /** @brief Deleted copy assignment operator. CQTPlan is not copyable. */
-    CQTPlan& operator=(const CQTPlan&) = delete;
-    /** @brief Move constructor. Transfers ownership of the plan resources. */
-    CQTPlan(CQTPlan&&) noexcept;
-    /** @brief Move assignment operator. Transfers ownership of the plan resources. */
-    CQTPlan& operator=(CQTPlan&&) noexcept;
+    public:
+        // Type alias for the window function signature expected by CQTPlan
+        // It receives the required length and should return a vector of coefficients.
+        using WindowFuncType = std::function<std::vector<T>(size_t required_length)>;
+        // Type alias for sparse kernel representation for one bin (FreqIndex -> ComplexValue)
+        using SparseKernelBin = std::map<size_t, std::complex<T>>;
+        // Type alias for sparse kernels for one octave (vector of bins)
+        using SparseKernelOctave = std::vector<SparseKernelBin>;
 
+        /**
+         * @brief Constructor for the CQTPlan class (recursive, precomputed kernels).
+         *
+         * Initializes CQT parameters and precomputes necessary FFT plans and
+         * sparse spectral kernels for each octave. This involves significant setup time.
+         *
+         * @param sample_rate Initial sample rate in Hz.
+         * @param hop_length Hop size in samples (must be divisible by 2^(num_octaves-1)).
+         * @param lowest_freq Lowest frequency in Hz (> 0).
+         * @param highest_freq Highest frequency in Hz (<= sample_rate / 2).
+         * @param bins_per_octave Number of bins per octave (> 0).
+         * @param window_function Function to generate time-domain windows for kernels.
+         * @param sparsity_threshold Threshold below which kernel values are treated as zero (e.g., 1e-5).
+         * @param fir_filter_order Order (length) of the FIR anti-aliasing filter used in recursion (must be positive and odd). Defaults to DEFAULT_RECURSIVE_FIR_ORDER.
+         * @throws std::invalid_argument If parameters are invalid.
+         * @throws std::runtime_error If precomputation fails (e.g., FFT plan creation).
+         */
+        CQTPlan(double sample_rate, size_t hop_length, double lowest_freq, double highest_freq, int bins_per_octave,
+                WindowFuncType window_function, T sparsity_threshold = 1e-5,
+                int fir_filter_order = DEFAULT_RECURSIVE_FIR_ORDER); // Added parameter with default
 
-    /**
-     * @brief Executes the Constant Q Transform using the efficient frequency-domain method.
-     *
-     * Performs a single long FFT on the input signal, then multiplies the spectrum
-     * by precomputed kernels and sums the results to obtain CQT coefficients.
-     *
-     * @param input The input signal vector (real-valued).
-     * @param output A vector of complex numbers where each element represents the CQT coefficient
-     * for a specific frequency bin. The vector will be resized to the number of bins.
-     * @throws std::runtime_error If FFT execution or subsequent processing fails, or if the plan is invalid.
-     */
-    void execute(const std::vector<T>& input, std::vector<std::complex<T>>& output) const;
+        /** @brief Destructor. */
+        ~CQTPlan();
 
-    // --- Getters ---
+        // --- Rule of Five: Move-Only ---
+        CQTPlan(const CQTPlan &) = delete;
+        CQTPlan &operator=(const CQTPlan &) = delete;
+        CQTPlan(CQTPlan &&) noexcept;
+        CQTPlan &operator=(CQTPlan &&) noexcept;
 
-    /** @brief Gets the number of CQT frequency bins. */
-    size_t getNumBins() const { return num_bins_; }
+        /**
+         * @brief Executes the Constant Q Transform using precomputed resources.
+         *
+         * The output format is a vector of vectors (bins x frames).
+         * `output[bin_index][frame_index]` gives the complex CQT coefficient.
+         *
+         * @param input The input signal vector (real-valued).
+         * @param output Resulting CQT coefficients [bin][frame]. Resized internally.
+         * @throws std::runtime_error If execution fails.
+         */
+        void execute(const std::vector<T> &input, std::vector<std::vector<std::complex<T>>> &output) const;
 
-    /** @brief Gets the sample rate used for this plan (Hz). */
-    double getSampleRate() const { return sample_rate_; }
+        // --- Getters ---
+        size_t getNumBins() const { return num_bins_; }
+        double getSampleRate() const { return sample_rate_; } // Initial sample rate
+        size_t getHopLength() const { return hop_length_; }   // Initial hop length
+        double getLowestFrequency() const { return lowest_freq_; }
+        double getHighestFrequency() const { return highest_freq_; }
+        int getBinsPerOctave() const { return bins_per_octave_; }
+        int getNumOctaves() const { return num_octaves_; }
+        T getSparsityThreshold() const { return sparsity_threshold_; }
+        int getFirFilterOrder() const { return fir_filter_order_; } // Getter for the filter order
+        // Optional: Get FFT lengths per octave if needed for external info
+        // const std::vector<size_t>& getOctaveFFTLengths() const { return octave_fft_lens_; }
 
-    /** @brief Gets the lowest frequency configured for this plan (Hz). */
-    double getLowestFrequency() const { return lowest_freq_; }
+    private: // Keep helpers private, accessible via friend declaration above
+        // --- Configuration & Parameters ---
+        double sample_rate_;
+        size_t hop_length_;
+        double lowest_freq_;
+        double highest_freq_;
+        int bins_per_octave_;
+        size_t num_bins_;
+        int num_octaves_;
+        WindowFuncType window_function_;
+        int fir_filter_order_; // Store the filter order
+        T sparsity_threshold_;
 
-    /** @brief Gets the highest frequency configured for this plan (Hz). */
-    double getHighestFrequency() const { return highest_freq_; }
+        // --- Precomputed Resources (per octave) ---
+        std::vector<size_t> octave_fft_lens_;                              // FFT length for each octave
+        std::vector<size_t> octave_spectrum_lens_;                         // Spectrum length (N/2+1) for each octave
+        std::vector<std::unique_ptr<FFTPlan<T>>> octave_signal_fft_plans_; // RFFT plans for signal frames
+        std::vector<std::unique_ptr<FFTPlan<T>>> octave_kernel_fft_plans_; // C2C plans for kernel FFT gen
+        std::vector<SparseKernelOctave> precomputed_sparse_kernels_;       // Kernels[octave][bin_in_octave]
 
-    /** @brief Gets the number of bins per octave configured for this plan. */
-    int getBinsPerOctave() const { return bins_per_octave_; }
+        // --- Private Helper Function Declarations ---
 
-    /** @brief Gets the length of the internal FFT used by the plan. */
-    size_t getFFTLength() const { return fft_len_; }
+        /**
+         * @brief Calculates the CQT for a single octave using precomputed FFT plan and sparse kernels.
+         * @param signal The input signal for this octave (potentially downsampled).
+         * @param current_sample_rate The sample rate corresponding to the input signal.
+         * @param current_hop_length The hop length corresponding to the input signal.
+         * @param octave_idx The index of the octave to process (used to retrieve precomputed resources).
+         * @return CQT coefficients for this octave [bin_in_octave][frame].
+         */
+        std::vector<std::vector<std::complex<T>>> calculateSingleOctaveCQT(
+            const std::vector<T> &signal, double current_sample_rate, size_t current_hop_length,
+            int octave_idx) const;
 
+        /**
+         * @brief Calculates FIR filter coefficients for anti-aliasing using the windowed-sinc method.
+         * @param current_sample_rate The sample rate for which to design the filter.
+         * @param N The desired filter order (length, must be odd).
+         * @return A vector containing the normalized filter coefficients.
+         */
+        std::vector<T> calculateFirCoefficients(double current_sample_rate, int N) const;
 
-private:
-    // --- Configuration & Parameters ---
-    double sample_rate_;
-    double lowest_freq_;
-    double highest_freq_;
-    int bins_per_octave_;
-    size_t num_bins_;
-    WindowFuncType window_function_; // Updated member type
+        /**
+         * @brief Applies the anti-aliasing FIR filter and downsamples the signal by a factor of 2.
+         * Uses the backend implementation selected at compile time.
+         * @param signal The input signal to filter and downsample.
+         * @param current_sample_rate The sample rate of the input signal.
+         * @return The filtered and downsampled signal.
+         */
+        std::vector<T> filterAndDownsampleBy2(const std::vector<T> &signal, double current_sample_rate) const;
+    };
 
-    // --- Internal Resources for Efficient Method ---
-    size_t fft_len_;                             // Length of the single long FFT
-    std::unique_ptr<FFTPlan<T>> fft_plan_;       // Single plan for the long FFT (likely REAL domain)
-    std::vector<std::vector<std::complex<T>>> cqt_kernels_; // Precomputed frequency-domain kernels
-};
-
-// --- Explicit Template Instantiations (Declarations) ---
-// Ensures the class is instantiated for float and double in the implementation file.
-/** @cond OMNIDSP_INTERNAL */
-extern template class CQTPlan<float>;
-extern template class CQTPlan<double>;
-/** @endcond */
-
+    // --- Explicit Template Instantiations (Declarations) ---
+    // These tell the compiler that the full definitions exist elsewhere (in cqt.cpp)
+    /** @cond OMNIDSP_INTERNAL */
+    extern template class CQTPlan<float>;
+    extern template class CQTPlan<double>;
+    /** @endcond */
 
 } // namespace OmniDSP
 

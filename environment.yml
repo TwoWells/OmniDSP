@@ -1,36 +1,62 @@
+# Conda environment configuration for OmniDSP project
+
+# Environment name
 name: omnidsp_env
+
+# Channels to search for packages, order matters
 channels:
-  - https://software.repos.intel.com/python/conda # <-- Add the specific Intel channel URL
-  - conda-forge
-  - defaults
+  - conda-forge    # Primary channel for many C/C++ libraries and build tools
+  - https://software.repos.intel.com/python/conda # For Intel MKL
+  - defaults       # Default Anaconda channel
+
+# List of dependencies
 dependencies:
-  # Core Python & Pip
-  - python>=3.8
-  - pip
+  # --------------------------------------------------------------------
+  # Core Python & Package Management
+  # --------------------------------------------------------------------
+  - python>=3.8     # Base Python version requirement
+  - pip             # For installing packages not available via Conda (if needed)
 
-  # Python Build/Test Dependencies (managed by Conda)
-  - numpy
-  - pytest
-  - scikit-build-core>=0.7
-  - pybind11
+  # --------------------------------------------------------------------
+  # C++ Build Toolchain & Dependencies (Managed by Conda)
+  # --------------------------------------------------------------------
+  - cmake>=3.21     # Build system generator
+  - cxx-compiler    # Provides platform-specific C++ compiler (e.g., g++, clang++, msvc)
+  - make            # Build tool (alternative: ninja)
+  - gtest           # GoogleTest framework for C++ unit tests
 
-  # Build Tools & C++ Dependencies (managed by Conda)
-  - cmake>=3.21
-  - cxx-compiler
-  - make # Or ninja
-  - gtest
+  # --------------------------------------------------------------------
+  # Optimized DSP Backends (Selected by CMake based on availability)
+  # --------------------------------------------------------------------
+  # MKL (For x86 Linux/Windows/macOS - if preferred/available)
+  - intel-openmp    # Required runtime for MKL OpenMP threading
+  - mkl             # Intel Math Kernel Library runtime
+  - mkl-devel       # MKL development headers and libraries for linking
 
-  # MKL (For x86, detected by CMake)
-  - intel-openmp
-  - mkl
-  - mkl-devel
+  # Accelerate framework (For macOS) is provided by the OS, not Conda.
 
-  # --- Dependencies for Notebooks/Examples ---
-  - jupyterlab # Or 'notebook' if you prefer the classic interface
-  - librosa
-  - matplotlib
-  # --- End Notebook Dependencies ---
+  # --------------------------------------------------------------------
+  # Python Package Build & Runtime Dependencies
+  # --------------------------------------------------------------------
+  - numpy           # Fundamental package for numerical computation
+  - scipy           # For signal processing (convolution/correlation) in reference generation script [cite: OmniDSP/environment.yml]
+  - pybind11        # For creating Python bindings for C++ code
+  - scikit-build-core>=0.7 # Build backend for CMake-based Python extensions
 
-  # Pip dependencies (if needed)
-  # - pip:
-  #   - ...
+  # --------------------------------------------------------------------
+  # Python Testing
+  # --------------------------------------------------------------------
+  - pytest          # Framework for Python unit tests
+
+  # --------------------------------------------------------------------
+  # Dependencies for Notebooks/Examples (Optional)
+  # --------------------------------------------------------------------
+  - jupyterlab      # Interactive development environment (or 'notebook')
+  - librosa         # Python library for audio and music analysis (for comparison)
+  - matplotlib      # For plotting in examples
+
+# --------------------------------------------------------------------
+# Pip dependencies (if any package is only available via pip)
+# --------------------------------------------------------------------
+# - pip:
+#   - some-pip-only-package

@@ -1,310 +1,205 @@
-# -*- coding: utf-8 -*-
-# Stubs for the omnidsp_py C++ extension module
-# Generated based on OmniDSP/python/bindings.cpp
+# omnidsp_py/omnidsp_py.pyi
+# This file provides type hints for the omnidsp_py C++ extension module.
+# It helps with static analysis and code completion in Python IDEs.
 
-from enum import Enum
-from typing import Callable, TypeAlias
+from typing import TypeVar, Union, overload, Callable, Optional, Sequence, Any
 import numpy as np
-from numpy.typing import NDArray
+from enum import Enum
 
-# --- Type Aliases for NumPy Arrays ---
-Float32Array: TypeAlias = NDArray[np.float32]
-Float64Array: TypeAlias = NDArray[np.float64]
-Complex64Array: TypeAlias = NDArray[np.complex64]
-Complex128Array: TypeAlias = NDArray[np.complex128]
-
-# --- Module Attributes ---
-__version__: str
-__doc__: str | None
+# --- Type Aliases ---
+# Define type hints for common NumPy array types used in the library.
+# Note: Using generic np.ndarray as precise dtype hinting within generics can be complex.
+# The function/method docstrings and runtime checks provide specific dtype info.
+_Float = TypeVar("_Float", bound=np.floating)
+_Complex = TypeVar("_Complex", bound=np.complexfloating)
+ArrayF32 = np.ndarray[Any, np.dtype[np.float32]]
+ArrayF64 = np.ndarray[Any, np.dtype[np.float64]]
+ArrayC64 = np.ndarray[Any, np.dtype[np.complex64]]
+ArrayC128 = np.ndarray[Any, np.dtype[np.complex128]]
+ArrayReal = Union[ArrayF32, ArrayF64]
+ArrayComplex = Union[ArrayC64, ArrayC128]
+# Type variable for the window function callable passed to CQTPlan
+T_WindowFunc = Callable[[np.ndarray], np.ndarray]
 
 # --- Enums ---
+# Define Python Enum classes corresponding to the C++ enums.
+
+
 class Direction(Enum):
+    """Specifies the direction of the Fourier Transform."""
     FORWARD: Direction = ...
     INVERSE: Direction = ...
-    def __int__(self) -> int: ...
+
 
 class Precision(Enum):
+    """Specifies the floating-point precision for calculations."""
     SINGLE: Precision = ...
     DOUBLE: Precision = ...
-    def __int__(self) -> int: ...
+
 
 class Domain(Enum):
+    """Specifies the domain of the input/output signals."""
     COMPLEX: Domain = ...
     REAL: Domain = ...
-    def __int__(self) -> int: ...
+
 
 class NormMode(Enum):
+    """Specifies the normalization/scaling mode applied to the transforms."""
     BACKWARD: NormMode = ...
     ORTHO: NormMode = ...
     FORWARD: NormMode = ...
-    def __int__(self) -> int: ...
 
-# --- Classes ---
+# --- Plan Classes ---
+# Define the classes representing the precomputed plans.
+
+
 class FFTPlanFloat:
-    """
-    Manages a pre-calculated plan for efficient FFT execution (float precision).
-    """
-    def __init__(
-        self,
-        length: int,
-        precision: Precision,
-        direction: Direction,
-        domain: Domain,
-        norm: NormMode = NormMode.BACKWARD,
-    ) -> None:
-        """
-        Constructs and initializes an FFT plan.
+    """Manages a pre-calculated plan for efficient FFT execution (float precision)."""
 
-        Args:
-            length (int): The size 'N' of the transform.
-                - For Domain.COMPLEX: Number of complex points.
-                - For Domain.REAL: Number of real points (complex size will be N/2 + 1).
-                - Note: Accelerate backend requires N to be power-of-2 for REAL domain.
-            precision (Precision): Must be Precision.SINGLE for FFTPlanFloat.
-            direction (Direction): Transform direction (Direction.FORWARD or Direction.INVERSE).
-            domain (Domain): Transform domain (Domain.COMPLEX or Domain.REAL).
-            norm (NormMode, optional): Normalization mode. Defaults to NormMode.BACKWARD.
-        """
-        ...
-    def getLength(self) -> int:
-        """Gets the length 'N' associated with the plan."""
-        ...
-    def getComplexLength(self) -> int:
-        """
-        Gets the length (Nc = N/2 + 1) of the complex spectrum for Domain.REAL plans.
-        Returns N for Domain.COMPLEX plans.
-        """
-        ...
-    def getDirection(self) -> Direction:
-        """Gets the transform direction configured for this plan."""
-        ...
-    def getPrecision(self) -> Precision:
-        """Gets the floating-point precision configured for this plan."""
-        ...
-    def getDomain(self) -> Domain:
-        """Gets the transform domain configured for this plan."""
-        ...
-    def getNormMode(self) -> NormMode:
-        """Gets the normalization mode configured for this plan."""
-        ...
+    def __init__(self, length: int, precision: Precision, direction: Direction,
+                 domain: Domain, norm: NormMode = NormMode.BACKWARD) -> None: ...
+
+    def getLength(self) -> int: ...
+    def getComplexLength(self) -> int: ...
+    def getDirection(self) -> Direction: ...
+    def getPrecision(self) -> Precision: ...
+    def getDomain(self) -> Domain: ...
+    def getNormMode(self) -> NormMode: ...
+    # Note: execute methods are not typically called directly on the plan from Python;
+    # use the convenience functions (fft, ifft, etc.) instead.
+
 
 class FFTPlanDouble:
-    """
-    Manages a pre-calculated plan for efficient FFT execution (double precision).
-    """
-    def __init__(
-        self,
-        length: int,
-        precision: Precision,
-        direction: Direction,
-        domain: Domain,
-        norm: NormMode = NormMode.BACKWARD,
-    ) -> None:
-        """
-        Constructs and initializes an FFT plan.
+    """Manages a pre-calculated plan for efficient FFT execution (double precision)."""
 
-        Args:
-            length (int): The size 'N' of the transform.
-            precision (Precision): Must be Precision.DOUBLE for FFTPlanDouble.
-            direction (Direction): Transform direction.
-            domain (Domain): Transform domain.
-            norm (NormMode, optional): Normalization mode. Defaults to NormMode.BACKWARD.
-        """
-        ...
-    def getLength(self) -> int:
-        """Gets the length 'N' associated with the plan."""
-        ...
-    def getComplexLength(self) -> int:
-        """
-        Gets the length (Nc = N/2 + 1) of the complex spectrum for Domain.REAL plans.
-        Returns N for Domain.COMPLEX plans.
-        """
-        ...
-    def getDirection(self) -> Direction:
-        """Gets the transform direction configured for this plan."""
-        ...
-    def getPrecision(self) -> Precision:
-        """Gets the floating-point precision configured for this plan."""
-        ...
-    def getDomain(self) -> Domain:
-        """Gets the transform domain configured for this plan."""
-        ...
-    def getNormMode(self) -> NormMode:
-        """Gets the normalization mode configured for this plan."""
-        ...
+    def __init__(self, length: int, precision: Precision, direction: Direction,
+                 domain: Domain, norm: NormMode = NormMode.BACKWARD) -> None: ...
 
-# Type hint for the window function callable passed to CQTPlan
-# It takes an array (often just size 1 from C++) and should return window coefficients
-WindowFuncFloat: TypeAlias = Callable[[Float32Array], Float32Array]
-WindowFuncDouble: TypeAlias = Callable[[Float64Array], Float64Array]
+    def getLength(self) -> int: ...
+    def getComplexLength(self) -> int: ...
+    def getDirection(self) -> Direction: ...
+    def getPrecision(self) -> Precision: ...
+    def getDomain(self) -> Domain: ...
+    def getNormMode(self) -> NormMode: ...
+    # Note: execute methods are not typically called directly on the plan from Python.
+
 
 class CQTPlanFloat:
-    """
-    Manages a pre-calculated plan for efficient Constant Q Transform (CQT) execution (float precision).
-    """
-    def __init__(
-        self,
-        sample_rate: float,
-        lowest_freq: float,
-        highest_freq: float,
-        bins_per_octave: int,
-        window_function: WindowFuncFloat,
-    ) -> None:
-        """
-        Constructs and initializes a CQT plan.
+    """Manages a pre-calculated plan for efficient recursive CQT execution (float precision)."""
 
-        Args:
-            sample_rate (float): Sample rate of the input signal in Hz.
-            lowest_freq (float): Lowest frequency of interest (Hz, must be > 0).
-            highest_freq (float): Highest frequency of interest (Hz, must be <= sample_rate / 2).
-            bins_per_octave (int): Number of frequency bins per octave (must be > 0).
-            window_function (callable): A Python function that accepts a NumPy array (placeholder)
-                and returns a NumPy array containing the window coefficients of the appropriate length
-                as determined internally by the CQT algorithm for the current bin.
-        """
-        ...
-    def execute(self, input: Float32Array) -> Complex64Array:
-        """
-        Executes the CQT transform.
+    def __init__(self, sample_rate: float, hop_length: int, lowest_freq: float, highest_freq: float, bins_per_octave: int,
+                 window_function: T_WindowFunc, sparsity_threshold: float = 1e-5, fir_filter_order: int = 101) -> None: ...
+    def execute(
+        self, input: ArrayF32) -> ArrayC64: ...  # Takes 1D real, returns 2D complex
 
-        Args:
-            input (numpy.ndarray[float32]): A 1D NumPy array containing the input signal.
+    def getNumBins(self) -> int: ...
+    def getSampleRate(self) -> float: ...
+    def getHopLength(self) -> int: ...
+    def getLowestFrequency(self) -> float: ...
+    def getHighestFrequency(self) -> float: ...
+    def getBinsPerOctave(self) -> int: ...
+    def getNumOctaves(self) -> int: ...
+    def getSparsityThreshold(self) -> float: ...
+    def getFirFilterOrder(self) -> int: ...
+    # def getFFTLength(self) -> int: ... # Old getter, might be replaced by getOctaveFFTLengths if bound
+    # def getOctaveFFTLengths(self) -> list[int]: ... # Example if bound
 
-        Returns:
-            numpy.ndarray[complex64]: A 1D NumPy array containing the complex CQT coefficients.
-        """
-        ...
-    def getNumBins(self) -> int:
-        """Gets the number of CQT frequency bins."""
-        ...
-    def getSampleRate(self) -> float:
-        """Gets the sample rate used for this plan (Hz)."""
-        ...
-    def getLowestFrequency(self) -> float:
-        """Gets the lowest frequency configured for this plan (Hz)."""
-        ...
-    def getHighestFrequency(self) -> float:
-        """Gets the highest frequency configured for this plan (Hz)."""
-        ...
-    def getBinsPerOctave(self) -> int:
-        """Gets the number of bins per octave configured for this plan."""
-        ...
-    def getFFTLength(self) -> int:
-        """Gets the length of the internal FFT used by the plan."""
-        ...
 
 class CQTPlanDouble:
-    """
-    Manages a pre-calculated plan for efficient CQT execution (double precision).
-    """
-    def __init__(
-        self,
-        sample_rate: float,
-        lowest_freq: float,
-        highest_freq: float,
-        bins_per_octave: int,
-        window_function: WindowFuncDouble,
-    ) -> None:
-        """
-        Constructs and initializes a CQT plan.
+    """Manages a pre-calculated plan for efficient recursive CQT execution (double precision)."""
 
-        Args:
-            sample_rate (float): Sample rate in Hz.
-            lowest_freq (float): Lowest frequency in Hz.
-            highest_freq (float): Highest frequency in Hz.
-            bins_per_octave (int): Number of bins per octave.
-            window_function (callable): Python function returning window coefficients.
-        """
-        ...
-    def execute(self, input: Float64Array) -> Complex128Array:
-        """
-        Executes the CQT transform.
+    def __init__(self, sample_rate: float, hop_length: int, lowest_freq: float, highest_freq: float, bins_per_octave: int,
+                 window_function: T_WindowFunc, sparsity_threshold: float = 1e-5, fir_filter_order: int = 101) -> None: ...
+    def execute(
+        self, input: ArrayF64) -> ArrayC128: ...  # Takes 1D real, returns 2D complex
 
-        Args:
-            input (numpy.ndarray[float64]): A 1D NumPy array containing the input signal.
+    def getNumBins(self) -> int: ...
+    def getSampleRate(self) -> float: ...
+    def getHopLength(self) -> int: ...
+    def getLowestFrequency(self) -> float: ...
+    def getHighestFrequency(self) -> float: ...
+    def getBinsPerOctave(self) -> int: ...
+    def getNumOctaves(self) -> int: ...
+    def getSparsityThreshold(self) -> float: ...
+    def getFirFilterOrder(self) -> int: ...
+    # def getFFTLength(self) -> int: ... # Old getter
+    # def getOctaveFFTLengths(self) -> list[int]: ... # Example if bound
 
-        Returns:
-            numpy.ndarray[complex128]: A 1D NumPy array containing the complex CQT coefficients.
-        """
-        ...
-    def getNumBins(self) -> int:
-        """Gets the number of CQT frequency bins."""
-        ...
-    def getSampleRate(self) -> float:
-        """Gets the sample rate used for this plan (Hz)."""
-        ...
-    def getLowestFrequency(self) -> float:
-        """Gets the lowest frequency configured for this plan (Hz)."""
-        ...
-    def getHighestFrequency(self) -> float:
-        """Gets the highest frequency configured for this plan (Hz)."""
-        ...
-    def getBinsPerOctave(self) -> int:
-        """Gets the number of bins per octave configured for this plan."""
-        ...
-    def getFFTLength(self) -> int:
-        """Gets the length of the internal FFT used by the plan."""
-        ...
+# --- Window Class ---
+# Define the Window class with its overloaded static methods.
+
 
 class Window:
     """Provides common window functions for signal processing."""
     @staticmethod
-    def hann_float(input: Float32Array) -> Float32Array:
-        """Applies the Hann window (float precision)."""
-        ...
+    @overload
+    def hann(input: ArrayF32) -> ArrayF32: ...
     @staticmethod
-    def hann_double(input: Float64Array) -> Float64Array:
-        """Applies the Hann window (double precision)."""
-        ...
+    @overload
+    def hann(input: ArrayF64) -> ArrayF64: ...
     @staticmethod
-    def hamming_float(input: Float32Array) -> Float32Array:
-        """Applies the Hamming window (float precision)."""
-        ...
+    def hann(input: ArrayReal) -> ArrayReal: ...  # Implementation signature
+
     @staticmethod
-    def hamming_double(input: Float64Array) -> Float64Array:
-        """Applies the Hamming window (double precision)."""
-        ...
+    @overload
+    def hamming(input: ArrayF32) -> ArrayF32: ...
     @staticmethod
-    def kaiser_float(input: Float32Array, beta: float) -> Float32Array:
-        """Applies the Kaiser window (float precision)."""
-        ...
+    @overload
+    def hamming(input: ArrayF64) -> ArrayF64: ...
     @staticmethod
-    def kaiser_double(input: Float64Array, beta: float) -> Float64Array:
-        """Applies the Kaiser window (double precision)."""
-        ...
+    def hamming(input: ArrayReal) -> ArrayReal: ...  # Implementation signature
+
     @staticmethod
-    def flattop_float(input: Float32Array) -> Float32Array:
-        """Applies the Flat-top window (float precision)."""
-        ...
+    @overload
+    def kaiser(input: ArrayF32, beta: float) -> ArrayF32: ...
     @staticmethod
-    def flattop_double(input: Float64Array) -> Float64Array:
-        """Applies the Flat-top window (double precision)."""
-        ...
+    @overload
+    def kaiser(input: ArrayF64, beta: float) -> ArrayF64: ...
+
+    @staticmethod
+    def kaiser(input: ArrayReal,
+               beta: float) -> ArrayReal: ...  # Implementation signature
+
+    @staticmethod
+    @overload
+    def flattop(input: ArrayF32) -> ArrayF32: ...
+    @staticmethod
+    @overload
+    def flattop(input: ArrayF64) -> ArrayF64: ...
+    @staticmethod
+    def flattop(input: ArrayReal) -> ArrayReal: ...  # Implementation signature
+
 
 # --- Convenience Functions ---
-def fft_float(input: Complex64Array) -> Complex64Array:
-    """Performs C2C forward FFT (float, out-of-place, NormMode.BACKWARD)."""
-    ...
-def fft_double(input: Complex128Array) -> Complex128Array:
-    """Performs C2C forward FFT (double, out-of-place, NormMode.BACKWARD)."""
-    ...
-def ifft_float(input: Complex64Array) -> Complex64Array:
-    """Performs C2C inverse FFT (float, out-of-place, NormMode.BACKWARD)."""
-    ...
-def ifft_double(input: Complex128Array) -> Complex128Array:
-    """Performs C2C inverse FFT (double, out-of-place, NormMode.BACKWARD)."""
-    ...
-def rfft_float(real_input: Float32Array) -> Complex64Array:
-    """Performs R2C forward FFT (float, out-of-place, NormMode.BACKWARD). Returns N/2+1 complex points."""
-    ...
-def rfft_double(real_input: Float64Array) -> Complex128Array:
-    """Performs R2C forward FFT (double, out-of-place, NormMode.BACKWARD). Returns N/2+1 complex points."""
-    ...
-def irfft_float(complex_input: Complex64Array) -> Float32Array:
-    """Performs C2R inverse FFT (float, out-of-place, NormMode.BACKWARD). Input must have Hermitian symmetry."""
-    ...
-def irfft_double(complex_input: Complex128Array) -> Float64Array:
-    """Performs C2R inverse FFT (double, out-of-place, NormMode.BACKWARD). Input must have Hermitian symmetry."""
-    ...
+# Define the module-level convenience functions using @overload for type hinting.
 
-# Note: In-place convenience functions (fft_inplace, ifft_inplace) were not bound in bindings.cpp
+@overload
+def fft(input: ArrayC64) -> ArrayC64: ...
+@overload
+def fft(input: ArrayC128) -> ArrayC128: ...
+def fft(input: ArrayComplex) -> ArrayComplex: ...  # Implementation signature
+
+
+@overload
+def ifft(input: ArrayC64) -> ArrayC64: ...
+@overload
+def ifft(input: ArrayC128) -> ArrayC128: ...
+def ifft(input: ArrayComplex) -> ArrayComplex: ...  # Implementation signature
+
+
+@overload
+def rfft(real_input: ArrayF32) -> ArrayC64: ...
+@overload
+def rfft(real_input: ArrayF64) -> ArrayC128: ...
+def rfft(real_input: ArrayReal) -> ArrayComplex: ...  # Implementation signature
+
+
+@overload
+def irfft(complex_input: ArrayC64) -> ArrayF32: ...
+@overload
+def irfft(complex_input: ArrayC128) -> ArrayF64: ...
+def irfft(complex_input: ArrayComplex) -> ArrayReal: ...  # Implementation signature
+
+
+# --- Version Attribute ---
+__version__: str = ...
