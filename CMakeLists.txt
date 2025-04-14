@@ -1,14 +1,31 @@
 # CMakeLists.txt for OmniDSP project
-# Updated to use Conda for managing CMake, pybind11, GTest, and libsamplerate dependencies
-
+# Updated to use Conda for managing CMake, pybind11, GTest, and MKL/IPP dependencies
+# Includes options for controlling debug logs and CMP0148 policy.
+# Includes GenerateExportHeader for Windows DLL builds with PUBLIC include fix.
+# Uses BUILD_INTERFACE generator expression for build directory include path.
+# Explicitly adds Conda include paths (using $ENV{CONDA_PREFIX}) when MKL backend is active.
+# Renamed backend preference options.
+# Links IPP libraries by name, removing find_package(IPP).
+# Added $CONDA_PREFIX/include/ipp path for MKL backend.
+# Added target_link_directories for IPP .lib files with PUBLIC scope.
+# Refactored Conda include path logic for potentially better IntelliSense parsing.
+# Fixed multiple CMake syntax errors (if/message/endif). # <-- Change Description
 cmake_minimum_required(VERSION 3.21)
+cmake_policy(SET CMP0148 NEW) # Policy for modern FindPython behavior (suppresses warning)
 
 # Set project name and version (used for installation and config files)
 project(OmniDSP VERSION 1.0.0 LANGUAGES CXX)
 
 enable_testing() # Enable CTest support
 
+# Option to control whether Python bindings are built
 option(OMNIDSP_BUILD_PYTHON_BINDINGS "Build the Python language bindings" OFF)
+# Option to control shared/static library build type
+option(BUILD_SHARED_LIBS "Build shared libraries (.dll/.so/.dylib)" ON)
+
+# Options to control verbose logging (added)
+option(OMNIDSP_ENABLE_MKL_DEBUG_LOGS "Enable verbose MKL backend debug logs" OFF)
+option(OMNIDSP_ENABLE_CQT_WARNINGS "Enable CQT Nk clamping warnings" OFF)
 
 # Enable generation of compile_commands.json for IDEs/tools
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -27,252 +44,286 @@ endif()
 # --- Include Standard CMake Modules ---
 include(GNUInstallDirs) # For standard installation paths (CMAKE_INSTALL_*)
 include(CMakePackageConfigHelpers) # For generating *Config.cmake files
+include(GenerateExportHeader) # For handling DLL exports/imports
 
 # --- Find Dependencies (Managed by Conda) ---
 
 # Find pybind11 (Needed regardless of OMNIDSP_BUILD_PYTHON_BINDINGS for conditional logic)
-# Assumes Conda environment provides pybind11.
 find_package(pybind11 CONFIG REQUIRED)
 message(STATUS "Found pybind11 version ${pybind11_VERSION} via find_package at ${pybind11_DIR}")
 
+# Find Python (needed for Python tests if bindings are ON)
+if(OMNIDSP_BUILD_PYTHON_BINDINGS)
+    find_package(Python COMPONENTS Interpreter Development REQUIRED)
+    message(STATUS "Found Python Interpreter: ${Python_EXECUTABLE}")
+endif()
+
+# Find GTest (needed for C++ tests if bindings are OFF)
+if(NOT OMNIDSP_BUILD_PYTHON_BINDINGS)
+    find_package(GTest REQUIRED)
+    message(STATUS "Found GoogleTest for C++ tests.")
+endif()
+
 # --- Option to control backend preference ---
-option(FFT_PREFER_ACCELERATE "Prefer Apple Accelerate if available" ${APPLE})
-option(FFT_PREFER_ONEMKL "Prefer Intel oneMKL if available" OFF)
+option(PREFER_ACCELERATE "Prefer Apple Accelerate if available" ${APPLE})
+option(PREFER_ONEMKL "Prefer Intel oneMKL if available" OFF)
 
 # --- Backend Detection and Source File Selection ---
-# Initialize backend variables
 set(BACKEND "NONE")
 set(BACKEND_SOURCE "")
-set(BACKEND_LINK_LIBS "") # Renamed variable
-set(BACKEND_DEFINITION "") # Renamed variable, initialized here
+set(BACKEND_LINK_LIBS "")
+set(BACKEND_DEFINITION "")
+set(BACKEND_INCLUDE_DIRS "")
+set(BACKEND_LINK_DIRS "") # Initialize link dirs
 
-# Prefer Accelerate on Apple unless MKL is explicitly preferred
-if(APPLE AND FFT_PREFER_ACCELERATE AND NOT FFT_PREFER_ONEMKL)
+if(APPLE AND PREFER_ACCELERATE AND NOT PREFER_ONEMKL)
     find_package(Accelerate QUIET)
     if(Accelerate_FOUND)
         message(STATUS "Found Apple Accelerate framework (via find_package).")
         set(BACKEND "ACCELERATE")
         set(BACKEND_SOURCE src/omnidsp/backend/accelerate.cpp)
-        set(BACKEND_LINK_LIBS Accelerate::Accelerate) # Set renamed variable
-        set(BACKEND_DEFINITION "USE_ACCELERATE") # Set renamed variable here
+        set(BACKEND_LINK_LIBS Accelerate::Accelerate)
+        set(BACKEND_DEFINITION "USE_ACCELERATE")
     else()
-        # Fallback check
         find_library(ACCELERATE_FRAMEWORK Accelerate)
         if(ACCELERATE_FRAMEWORK)
             message(STATUS "Found Apple Accelerate framework (via find_library).")
             set(BACKEND "ACCELERATE")
             set(BACKEND_SOURCE src/omnidsp/backend/accelerate.cpp)
-            set(BACKEND_LINK_LIBS ${ACCELERATE_FRAMEWORK}) # Set renamed variable
-            set(BACKEND_DEFINITION "USE_ACCELERATE") # Set renamed variable here
+            set(BACKEND_LINK_LIBS ${ACCELERATE_FRAMEWORK})
+            set(BACKEND_DEFINITION "USE_ACCELERATE")
         else()
             message(WARNING "Apple Accelerate framework requested but not found on Apple system.")
         endif()
-        unset(ACCELERATE_FRAMEWORK CACHE) # Clean up variable
+        unset(ACCELERATE_FRAMEWORK CACHE)
     endif()
 endif()
 
-# Check for oneMKL if not using Accelerate or if MKL is preferred
-if(NOT BACKEND STREQUAL "ACCELERATE" OR FFT_PREFER_ONEMKL)
-    find_package(MKL QUIET) # Assumes Conda environment provides MKL correctly.
+if(NOT BACKEND STREQUAL "ACCELERATE" OR PREFER_ONEMKL)
+    find_package(MKL QUIET)
     if(MKL_FOUND)
         message(STATUS "Found Intel oneMKL (version ${MKL_VERSION}).")
-        if(NOT BACKEND STREQUAL "ACCELERATE" OR FFT_PREFER_ONEMKL)
+        if(NOT BACKEND STREQUAL "ACCELERATE" OR PREFER_ONEMKL)
             message(STATUS "Selecting Intel oneMKL backend.")
             set(BACKEND "ONEMKL")
             set(BACKEND_SOURCE src/omnidsp/backend/onemkl.cpp)
-            set(BACKEND_DEFINITION "USE_ONEMKL") # Set renamed variable here
-            # Store MKL link information
+            set(BACKEND_DEFINITION "USE_ONEMKL")
             if(TARGET MKL::MKL)
-                set(BACKEND_LINK_LIBS MKL::MKL) # Set renamed variable
+                set(BACKEND_LINK_LIBS MKL::MKL)
             elseif(MKL_LIBRARIES)
-                set(BACKEND_LINK_LIBS ${MKL_LIBRARIES}) # Set renamed variable
+                set(BACKEND_LINK_LIBS ${MKL_LIBRARIES})
             else()
                 message(WARNING "FindMKL found MKL but did not define MKL::MKL target or MKL_LIBRARIES.")
             endif()
+            list(APPEND BACKEND_LINK_LIBS ippcore ipps)
+            message(STATUS "Adding IPP link libraries by name: ippcore ipps")
+            if(DEFINED MKL_INCLUDE_DIRS AND NOT MKL_INCLUDE_DIRS STREQUAL "")
+                set(BACKEND_INCLUDE_DIRS ${MKL_INCLUDE_DIRS})
+                message(STATUS "Adding MKL include directory found by find_package: ${BACKEND_INCLUDE_DIRS}")
+            else()
+                message(STATUS "MKL_INCLUDE_DIRS not set by find_package(MKL). Will rely on CONDA_PREFIX.")
+            endif()
+            # --- Set Backend Link Directories for MKL/IPP ---
+            if(DEFINED ENV{CONDA_PREFIX})
+                set(CONDA_PREFIX_PATH "$ENV{CONDA_PREFIX}")
+                if(WIN32)
+                    set(conda_library_lib_dir "${CONDA_PREFIX_PATH}/Library/lib")
+                else() # Linux/macOS
+                    set(conda_library_lib_dir "${CONDA_PREFIX_PATH}/lib")
+                endif()
+                if(EXISTS "${conda_library_lib_dir}")
+                    set(BACKEND_LINK_DIRS ${conda_library_lib_dir})
+                    message(STATUS "Setting backend link directory from CONDA_PREFIX: ${BACKEND_LINK_DIRS}")
+                else()
+                    message(WARNING "Guessed Conda library directory does not exist: ${conda_library_lib_dir}. Linker might not find MKL/IPP libs.")
+                endif()
+            else()
+                 message(WARNING "CONDA_PREFIX environment variable not set! Cannot automatically set linker path for MKL/IPP.")
+            endif()
+            # --- END Set ---
         else()
             message(STATUS "Intel oneMKL found, but Accelerate backend was already selected.")
         endif()
     else()
+        # --- CORRECTED SYNTAX ---
         if(NOT BACKEND STREQUAL "ACCELERATE")
-            message(STATUS "Intel oneMKL not found.")
+             message(STATUS "Intel oneMKL not found.")
         endif()
-        if(FFT_PREFER_ONEMKL)
-            message(WARNING "Preferred oneMKL backend not found.")
+        if(PREFER_ONEMKL)
+             message(WARNING "Preferred oneMKL backend not found.")
         endif()
+        # --- END CORRECTION ---
     endif()
 endif()
 
-# --- Select Stub Implementation if no backend was successfully selected ---
 if(BACKEND STREQUAL "NONE")
     message(WARNING "No suitable backend (Accelerate or oneMKL) found or configured. Using stub implementation (will throw errors at runtime).")
     set(BACKEND_SOURCE src/omnidsp/backend/stub.cpp)
-    # BACKEND_DEFINITION and BACKEND_LINK_LIBS remain empty
 endif()
 
-# Check that the selected implementation source file actually exists
 if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${BACKEND_SOURCE}")
     message(FATAL_ERROR "Selected backend implementation source file not found: ${CMAKE_CURRENT_SOURCE_DIR}/${BACKEND_SOURCE}")
 endif()
 
-message(STATUS "OmniDSP selected backend: ${BACKEND}") # Log final backend choice
+message(STATUS "OmniDSP selected backend: ${BACKEND}")
 message(STATUS "OmniDSP backend source: ${BACKEND_SOURCE}")
-message(STATUS "OmniDSP backend definition: ${BACKEND_DEFINITION}") # Log definition
-message(STATUS "OmniDSP backend link libs: ${BACKEND_LINK_LIBS}") # Log link libs
+message(STATUS "OmniDSP backend definition: ${BACKEND_DEFINITION}")
+message(STATUS "OmniDSP backend link libs: ${BACKEND_LINK_LIBS}")
+message(STATUS "OmniDSP backend link dirs: ${BACKEND_LINK_DIRS}")
 
 # --- Library Target Definition ---
-add_library(omnidsp
+add_library(omnidsp # Target name
     src/omnidsp/omnidsp.cpp
     src/omnidsp/cqt.cpp
     src/omnidsp/convolution.cpp
     ${BACKEND_SOURCE}
 )
 
-# Set C++ standard for the target explicitly
+generate_export_header(omnidsp BASE_NAME OMNIDSP EXPORT_FILE_NAME OmniDSP/omnidsp_export.h)
 target_compile_features(omnidsp PRIVATE cxx_std_17)
 
-# Define include directories needed to build and use the library
+# --- Define Include Directories ---
 target_include_directories(omnidsp PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
 )
+
+# Add backend-specific include directories as PRIVATE
+if(BACKEND STREQUAL "ONEMKL")
+    if(DEFINED BACKEND_INCLUDE_DIRS AND NOT BACKEND_INCLUDE_DIRS STREQUAL "")
+        target_include_directories(omnidsp PRIVATE ${BACKEND_INCLUDE_DIRS})
+    endif()
+    if(DEFINED ENV{CONDA_PREFIX})
+        set(CONDA_PREFIX_PATH "$ENV{CONDA_PREFIX}")
+        set(conda_library_include_dir "")
+        set(conda_main_include_dir "")
+        set(conda_ipp_include_dir "")
+        if(WIN32)
+            set(conda_library_include_dir "${CONDA_PREFIX_PATH}/Library/include")
+            set(conda_main_include_dir "${CONDA_PREFIX_PATH}/include")
+            set(conda_ipp_include_dir "${CONDA_PREFIX_PATH}/include/ipp")
+        else()
+            set(conda_library_include_dir "${CONDA_PREFIX_PATH}/include")
+            set(conda_main_include_dir "${CONDA_PREFIX_PATH}/include")
+            set(conda_ipp_include_dir "${CONDA_PREFIX_PATH}/include/ipp")
+        endif()
+        if(EXISTS "${conda_library_include_dir}")
+            target_include_directories(omnidsp PRIVATE "${conda_library_include_dir}")
+            message(STATUS "Explicitly adding Conda Library include path from CONDA_PREFIX: ${conda_library_include_dir}")
+        else()
+            # --- CORRECTED SYNTAX ---
+            if(WIN32)
+                 message(WARNING "Guessed Conda Library include path from CONDA_PREFIX does not exist: ${conda_library_include_dir}")
+            endif()
+            # --- END CORRECTION ---
+        endif()
+        if(EXISTS "${conda_main_include_dir}")
+            if(NOT conda_main_include_dir STREQUAL conda_library_include_dir)
+                target_include_directories(omnidsp PRIVATE "${conda_main_include_dir}")
+                message(STATUS "Explicitly adding Conda main include path from CONDA_PREFIX: ${conda_main_include_dir}")
+            endif()
+        else()
+            message(WARNING "Guessed Conda main include path from CONDA_PREFIX does not exist: ${conda_main_include_dir}")
+        endif()
+        if(EXISTS "${conda_ipp_include_dir}")
+            target_include_directories(omnidsp PRIVATE "${conda_ipp_include_dir}")
+            message(STATUS "Explicitly adding Conda IPP include path from CONDA_PREFIX: ${conda_ipp_include_dir}")
+        else()
+             message(FATAL_ERROR "Required Conda IPP include path does not exist: ${conda_ipp_include_dir}. Check IPP installation in environment.")
+        endif()
+    else()
+        message(FATAL_ERROR "CONDA_PREFIX environment variable not set! Cannot find Conda includes. Make sure the Conda environment is activated BEFORE running CMake.")
+    endif()
+endif()
 
 # Add backend-specific compile definitions TO THE LIBRARY TARGET
 if(NOT BACKEND_DEFINITION STREQUAL "")
     target_compile_definitions(omnidsp PRIVATE ${BACKEND_DEFINITION})
 endif()
-# Add MKL include directory needed *only* for compiling omnidsp implementation
-if(BACKEND STREQUAL "ONEMKL" AND DEFINED MKL_INCLUDE_DIRS)
-    target_include_directories(omnidsp PRIVATE ${MKL_INCLUDE_DIRS})
+
+# Add compile definitions based on logging options
+if(OMNIDSP_ENABLE_MKL_DEBUG_LOGS)
+    target_compile_definitions(omnidsp PRIVATE OMNIDSP_ENABLE_MKL_DEBUG_LOGS)
+    message(STATUS "Enabling MKL debug logs for omnidsp target.")
+endif()
+if(OMNIDSP_ENABLE_CQT_WARNINGS)
+    target_compile_definitions(omnidsp PRIVATE OMNIDSP_ENABLE_CQT_WARNINGS)
+    message(STATUS "Enabling CQT Nk clamping warnings for omnidsp target.")
+endif()
+
+# --- Add Linker Directories ---
+# Explicitly tell the linker where to find backend libraries if needed
+if(NOT BACKEND_LINK_DIRS STREQUAL "")
+    target_link_directories(omnidsp PUBLIC ${BACKEND_LINK_DIRS})
+    message(STATUS "Adding PUBLIC link directories for omnidsp: ${BACKEND_LINK_DIRS}")
 endif()
 
 # Link omnidsp library target against its dependencies
-target_link_libraries(omnidsp PUBLIC
-    # Link against libsamplerate (Assuming it's found earlier and provides SampleRate::samplerate)
-    # find_package(SampleRate REQUIRED) # Make sure this is present earlier
-    # SampleRate::samplerate
-    # Link against backend libraries (using the renamed variable)
-    ${BACKEND_LINK_LIBS}
+target_link_libraries(omnidsp
+PUBLIC
+    ${BACKEND_LINK_LIBS} # Link MKL/Accelerate/IPP libs by name
 )
 
 # =============================================================================
 # Conditionally Add Subdirectories based on Build Type
 # =============================================================================
-
 if(OMNIDSP_BUILD_PYTHON_BINDINGS)
-    # --- Add Python Bindings & Python Tests Subdirectories ---
     message(STATUS "Configuring Python bindings and tests (OMNIDSP_BUILD_PYTHON_BINDINGS=ON).")
-
-    # Add python bindings subdirectory (will link against pybind11::module)
+    # --- CORRECTED SYNTAX ---
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/omnidsp_py/CMakeLists.txt")
         add_subdirectory(src/omnidsp_py)
     else()
         message(WARNING "Python bindings subdirectory 'src/omnidsp_py' or its CMakeLists.txt not found, skipping Python module configuration.")
     endif()
-
-    # Add python tests subdirectory (depends on Python bindings)
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/python/CMakeLists.txt")
-        # enable_testing() called earlier
         add_subdirectory(tests/python)
     else()
         message(STATUS "Python tests subdirectory 'tests/python' or its CMakeLists.txt not found, skipping Python test configuration.")
     endif()
-
+    # --- END CORRECTION ---
 else()
-    # --- Add C++ Examples & C++ Tests Subdirectories ---
     message(STATUS "Configuring C++ examples and tests (OMNIDSP_BUILD_PYTHON_BINDINGS=OFF).")
-
-    # Add C++ Examples Subdirectory
+    # --- CORRECTED SYNTAX ---
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/cpp/CMakeLists.txt")
-        add_subdirectory(examples/cpp) # Process C++ examples
+        add_subdirectory(examples/cpp)
     else()
         message(STATUS "C++ examples subdirectory 'examples/cpp' or its CMakeLists.txt not found, skipping C++ example configuration.")
     endif()
-
-    # Add C++ Tests Subdirectory (will link against GTest::gtest_main)
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/cpp/CMakeLists.txt")
-        # enable_testing() called earlier
-        add_subdirectory(tests/cpp) # Process C++ tests
+        add_subdirectory(tests/cpp)
     else()
         message(STATUS "C++ tests subdirectory 'tests/cpp' or its CMakeLists.txt not found, skipping C++ test configuration.")
     endif()
-
-endif() # End conditional add_subdirectory
+    # --- END CORRECTION ---
+endif()
 
 # =============================================================================
 # Installation Rules
 # =============================================================================
-
 if(OMNIDSP_BUILD_PYTHON_BINDINGS)
-    # --- Install Python Examples ---
-    # (Installation of the python module itself is handled in src/omnidsp_py/CMakeLists.txt
-    # and by scikit-build-core / pip)
     message(STATUS "Configuring Python examples installation (Python bindings ON)")
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/notebooks") # Check for notebooks dir
-        install(DIRECTORY examples/notebooks/ # Install notebooks dir
-            DESTINATION "${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}/examples_python"
-            COMPONENT Examples
-            FILES_MATCHING PATTERN "*.ipynb" # Include notebooks
-        )
+    # --- CORRECTED SYNTAX ---
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/notebooks")
+        install(DIRECTORY examples/notebooks/ DESTINATION "${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}/examples_python" COMPONENT Examples FILES_MATCHING PATTERN "*.ipynb")
     else()
         message(STATUS "Python examples directory 'examples/notebooks' not found, skipping installation.")
     endif()
+    # --- END CORRECTION ---
 else()
-    # --- Install C++ Development Files ---
     message(STATUS "Configuring C++ library installation rules (Python bindings OFF)")
-
-    # Use a variable for the CMake config destination for consistency
     set(OMNIDSP_CMAKE_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}")
-
-    # 1. Install the public header files
-    install(DIRECTORY include/OmniDSP/
-        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" # <prefix>/include/OmniDSP
-        COMPONENT Devel
-        FILES_MATCHING PATTERN "*.h"
-    )
-
-    # 2. Prepare package configuration files (Ensure Config.cmake.in exists)
+    install(DIRECTORY include/OmniDSP/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" COMPONENT Devel FILES_MATCHING PATTERN "*.h")
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/OmniDSP/omnidsp_export.h" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/OmniDSP" COMPONENT Devel)
+    # --- CORRECTED SYNTAX ---
     if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/Config.cmake.in")
-        message(WARNING "Config.cmake.in not found in project root. Cannot generate CMake package configuration files for installation.")
+        message(WARNING "Config.cmake.in not found. Cannot generate CMake package configuration files.")
     else()
-        # 3. Generate version file
-        write_basic_package_version_file(
-            "${CMAKE_CURRENT_BINARY_DIR}/OmniDSPConfigVersion.cmake"
-            VERSION ${PROJECT_VERSION}
-            COMPATIBILITY AnyNewerVersion
-        )
-        # 4. Generate main config file from template
-        configure_package_config_file(
-            Config.cmake.in
-            "${CMAKE_CURRENT_BINARY_DIR}/OmniDSPConfig.cmake"
-            INSTALL_DESTINATION "${OMNIDSP_CMAKE_INSTALL_DIR}"
-            # PATH_VARS # Add path variables here if Config.cmake.in needs them
-        )
-
-        # 5. Install the generated configuration files
-        install(FILES
-            "${CMAKE_CURRENT_BINARY_DIR}/OmniDSPConfig.cmake"
-            "${CMAKE_CURRENT_BINARY_DIR}/OmniDSPConfigVersion.cmake"
-            DESTINATION "${OMNIDSP_CMAKE_INSTALL_DIR}"
-            COMPONENT Devel
-        )
-    endif() # End check for Config.cmake.in
-
-    # 6. Install the C++ library target and export set
-    install(TARGETS omnidsp
-        EXPORT OmniDSPTargets # Associate target with an export set name
-        # Define destinations for different artifact types and components
-        ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Lib # Static libs (.a, .lib)
-        LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Lib # Shared libs (.so, .dylib)
-        RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT Runtime # Executables or DLLs (Windows)
-        INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" # Headers associated via target_include_directories
-    )
-
-    # 7. Install the export set definitions file
-    install(EXPORT OmniDSPTargets # The export set name defined above
-        FILE OmniDSPTargets.cmake # The file to generate
-        NAMESPACE OmniDSP:: # Namespace for imported targets
-        DESTINATION "${OMNIDSP_CMAKE_INSTALL_DIR}" # Install alongside config files
-        COMPONENT Devel
-    )
-
-endif() # End conditional install rules
+        write_basic_package_version_file("${CMAKE_CURRENT_BINARY_DIR}/OmniDSPConfigVersion.cmake" VERSION ${PROJECT_VERSION} COMPATIBILITY AnyNewerVersion)
+        configure_package_config_file(Config.cmake.in "${CMAKE_CURRENT_BINARY_DIR}/OmniDSPConfig.cmake" INSTALL_DESTINATION "${OMNIDSP_CMAKE_INSTALL_DIR}")
+        install(FILES "${CMAKE_CURRENT_BINARY_DIR}/OmniDSPConfig.cmake" "${CMAKE_CURRENT_BINARY_DIR}/OmniDSPConfigVersion.cmake" DESTINATION "${OMNIDSP_CMAKE_INSTALL_DIR}" COMPONENT Devel)
+    endif()
+    # --- END CORRECTION ---
+    install(TARGETS omnidsp EXPORT OmniDSPTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Lib LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Lib RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT Runtime INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
+    install(EXPORT OmniDSPTargets FILE OmniDSPTargets.cmake NAMESPACE OmniDSP:: DESTINATION "${OMNIDSP_CMAKE_INSTALL_DIR}" COMPONENT Devel)
+endif()

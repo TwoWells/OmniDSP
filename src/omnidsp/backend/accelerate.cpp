@@ -298,42 +298,8 @@ namespace OmniDSP
         }
 
         // --- Rule of 5/3: Move Semantics ---
-        // Enable moving FFTPlanImpl objects (transfer ownership of handles/buffers)
-        // but disable copying (as handles are not trivially copyable).
-        FFTPlanImpl(FFTPlanImpl &&other) noexcept
-            : length(other.length), complex_length(other.complex_length), direction(other.direction),
-              precision(other.precision), domain(other.domain), norm_mode(other.norm_mode),
-              forward_scale(other.forward_scale), backward_scale(other.backward_scale),
-              setup_handle_c2c(other.setup_handle_c2c), setup_handle_real(other.setup_handle_real),
-              real_buffer(std::move(other.real_buffer)), imag_buffer(std::move(other.imag_buffer)),
-              stride(other.stride)
-        {
-            // Nullify handles in the moved-from object to prevent double-free
-            other.setup_handle_c2c = nullptr;
-            other.setup_handle_real = nullptr;
-        }
-        FFTPlanImpl &operator=(FFTPlanImpl &&other) noexcept
-        {
-            if (this != &other)
-            {
-                // Release existing resources first
-                if (setup_handle_c2c)
-                { /* destroy c2c */
-                }
-                if (setup_handle_real)
-                { /* destroy real */
-                }
-                // Swap members
-                std::swap(length, other.length);
-                std::swap(complex_length, other.complex_length);
-                // ... swap all other members ...
-                std::swap(setup_handle_c2c, other.setup_handle_c2c);
-                std::swap(setup_handle_real, other.setup_handle_real);
-                std::swap(real_buffer, other.real_buffer);
-                std::swap(imag_buffer, other.imag_buffer);
-            }
-            return *this;
-        }
+        // Move constructor and assignment are defaulted in omnidsp.h
+        // Definitions are REMOVED from here to avoid C2995 error.
         FFTPlanImpl(const FFTPlanImpl &) = delete;            // Disable copy constructor
         FFTPlanImpl &operator=(const FFTPlanImpl &) = delete; // Disable copy assignment
 
@@ -406,7 +372,8 @@ namespace OmniDSP
             // We use vDSP_ctoz to convert the real input into this format.
             if constexpr (std::is_same_v<T, float>)
             {
-                DSPSplitComplex split_input = {real_buffer.data(), imag_buffer.data()};
+                // Need mutable buffers for vDSP_fft_zrip (even though it's "in-place" on split)
+                DSPSplitComplex split_input = {const_cast<float *>(real_buffer.data()), const_cast<float *>(imag_buffer.data())};
                 // Convert real input to split complex format (real parts in realp, imag parts in imagp)
                 vDSP_ctoz(reinterpret_cast<const DSPComplex *>(real_input), 2, // Source (treat real as complex with imag=0), stride 2
                           &split_input, 1, length / 2);                        // Destination split complex, stride 1, N/2 elements
@@ -427,7 +394,7 @@ namespace OmniDSP
             }
             else
             {
-                DSPDoubleSplitComplex split_input = {real_buffer.data(), imag_buffer.data()};
+                DSPDoubleSplitComplex split_input = {const_cast<double *>(real_buffer.data()), const_cast<double *>(imag_buffer.data())};
                 vDSP_ctozD(reinterpret_cast<const DSPDoubleComplex *>(real_input), 2,
                            &split_input, 1, length / 2);
 
@@ -453,7 +420,7 @@ namespace OmniDSP
             // Pack the input CCE complex data into the required split complex format.
             if constexpr (std::is_same_v<T, float>)
             {
-                DSPSplitComplex split_packed = {real_buffer.data(), imag_buffer.data()};
+                DSPSplitComplex split_packed = {const_cast<float *>(real_buffer.data()), const_cast<float *>(imag_buffer.data())};
                 pack_complex_to_split(complex_input, &split_packed);
 
                 // Perform in-place inverse FFT on the split complex data
@@ -474,7 +441,7 @@ namespace OmniDSP
             }
             else
             {
-                DSPDoubleSplitComplex split_packed = {real_buffer.data(), imag_buffer.data()};
+                DSPDoubleSplitComplex split_packed = {const_cast<double *>(real_buffer.data()), const_cast<double *>(imag_buffer.data())};
                 pack_complex_to_split(complex_input, &split_packed);
 
                 vDSP_fft_zripD(setup_handle_real, &split_packed, stride, get_log2n(length), kFFTDirection_Inverse);
@@ -508,11 +475,7 @@ namespace OmniDSP
     template <typename T>
     FFTPlan<T>::~FFTPlan() = default; // Default destructor (unique_ptr handles pimpl_ cleanup)
 
-    template <typename T>
-    FFTPlan<T>::FFTPlan(FFTPlan &&other) noexcept = default; // Default move constructor
-
-    template <typename T>
-    FFTPlan<T> &FFTPlan<T>::operator=(FFTPlan<T> &&other) noexcept = default; // Default move assignment
+    // Move constructor/assignment are defaulted in the header (omnidsp.h)
 
     // Execute C2C OOP
     template <typename T>
@@ -594,9 +557,9 @@ namespace OmniDSP
         return pimpl_->norm_mode;
     }
 
-    // Explicit Instantiations for FFTPlan class (required by compiler)
-    template class FFTPlan<float>;
-    template class FFTPlan<double>;
+    // Explicit Instantiations for FFTPlan class (already done in omnidsp.cpp)
+    // template class FFTPlan<float>; // Defined in omnidsp.cpp
+    // template class FFTPlan<double>; // Defined in omnidsp.cpp
 
     // === Backend Implementation for FIR, Conv/Corr, Desamp ===
 
@@ -763,6 +726,10 @@ namespace OmniDSP
         template std::vector<double> filter_and_downsample_impl<double>(const std::vector<double> &, const std::vector<double> &, int);
 
     } // namespace Backend
+
+    // Explicit Instantiations for FFTPlan class (needed when definition is here)
+    template class OMNIDSP_EXPORT OmniDSP::FFTPlan<float>;
+    template class OMNIDSP_EXPORT OmniDSP::FFTPlan<double>;
 } // namespace OmniDSP
 
 #endif // USE_ACCELERATE

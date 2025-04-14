@@ -1,12 +1,13 @@
 # Conda environment configuration for OmniDSP project
+# Updated to include resampy dependency for librosa
 
 # Environment name
 name: omnidsp_env
 
 # Channels to search for packages, order matters
 channels:
-  - conda-forge    # Primary channel for many C/C++ libraries and build tools
   - https://software.repos.intel.com/python/conda # For Intel MKL
+  - conda-forge    # Primary channel for many C/C++ libraries and build tools
   - defaults       # Default Anaconda channel
 
 # List of dependencies
@@ -30,8 +31,9 @@ dependencies:
   # --------------------------------------------------------------------
   # MKL (For x86 Linux/Windows/macOS - if preferred/available)
   - intel-openmp    # Required runtime for MKL OpenMP threading
-  - mkl             # Intel Math Kernel Library runtime
   - mkl-devel       # MKL development headers and libraries for linking
+  - ipp-devel
+  # - mkl             # Intel Math Kernel Library runtime
 
   # Accelerate framework (For macOS) is provided by the OS, not Conda.
 
@@ -53,6 +55,7 @@ dependencies:
   # --------------------------------------------------------------------
   - jupyterlab      # Interactive development environment (or 'notebook')
   - librosa         # Python library for audio and music analysis (for comparison)
+  - resampy         # Added: Dependency for librosa (needed for reference generation)
   - matplotlib      # For plotting in examples
 
 # --------------------------------------------------------------------

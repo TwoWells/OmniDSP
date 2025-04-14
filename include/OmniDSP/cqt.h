@@ -1,13 +1,17 @@
 /**
  * @file cqt.h
  * @brief Public API header for the CQTPlan class (Recursive Implementation).
- * Precomputes sparse kernels per octave in the constructor.
- * @version 2.2.1 // Version bump for friend declaration
- * @date 2025-04-12 // Or current date - updated to reflect changes
+ * Precomputes sparse kernels per octave in the constructor. Includes export macros.
+ * @version 2.2.2 // Version bump for getter definition separation
+ * @date 2025-04-13 // Or current date - updated to reflect changes
  */
 
 #ifndef OMNIDSP_CQT_H
 #define OMNIDSP_CQT_H
+
+// --- Include the generated export header ---
+// Defines OMNIDSP_EXPORT for DLL symbol handling
+#include <OmniDSP/omnidsp_export.h> // Adjust path/name if EXPORT_FILE_NAME was used in CMake
 
 #include <OmniDSP/omnidsp.h> // For FFTPlan
 #include <vector>
@@ -19,14 +23,22 @@
 #include <map>         // For sparse kernel storage
 
 // Forward declaration of the test fixture class
-// (Alternatively, include the test header if structure allows, but forward declaration is safer)
+// (Allows friend declaration without including the test header here)
 class PrecomputedRecursiveCQTTest;
 
 namespace OmniDSP
 {
-
+    /**
+     * @brief Manages precomputation and execution for the Constant Q Transform (Recursive Method).
+     *
+     * This class implements the CQT using a recursive, multi-resolution approach.
+     * It precomputes sparse spectral kernels during construction for efficient execution.
+     * Marked with OMNIDSP_EXPORT for DLL usage.
+     *
+     * @tparam T The floating-point type (float or double).
+     */
     template <typename T>
-    class CQTPlan
+    class OMNIDSP_EXPORT CQTPlan // <--- OMNIDSP_EXPORT macro added here
     {
         // Ensure T is either float or double at compile time
         static_assert(std::is_same_v<T, float> || std::is_same_v<T, double>,
@@ -35,8 +47,8 @@ namespace OmniDSP
         // Default anti-aliasing filter order (must be odd)
         static constexpr int DEFAULT_RECURSIVE_FIR_ORDER = 101;
 
-        // Grant access to the test fixture
-        friend class ::PrecomputedRecursiveCQTTest; // Use global scope :: if test class is not in OmniDSP namespace
+        // Grant access to the test fixture for testing private helpers
+        friend class ::PrecomputedRecursiveCQTTest; // Use global scope ::
 
     public:
         // Type alias for the window function signature expected by CQTPlan
@@ -66,16 +78,16 @@ namespace OmniDSP
          */
         CQTPlan(double sample_rate, size_t hop_length, double lowest_freq, double highest_freq, int bins_per_octave,
                 WindowFuncType window_function, T sparsity_threshold = 1e-5,
-                int fir_filter_order = DEFAULT_RECURSIVE_FIR_ORDER); // Added parameter with default
+                int fir_filter_order = DEFAULT_RECURSIVE_FIR_ORDER);
 
-        /** @brief Destructor. */
+        /** @brief Destructor. Releases internal resources. */
         ~CQTPlan();
 
         // --- Rule of Five: Move-Only ---
-        CQTPlan(const CQTPlan &) = delete;
-        CQTPlan &operator=(const CQTPlan &) = delete;
-        CQTPlan(CQTPlan &&) noexcept;
-        CQTPlan &operator=(CQTPlan &&) noexcept;
+        CQTPlan(const CQTPlan &) = delete;            // Disable copy constructor
+        CQTPlan &operator=(const CQTPlan &) = delete; // Disable copy assignment
+        CQTPlan(CQTPlan &&) noexcept;                 // Enable move constructor
+        CQTPlan &operator=(CQTPlan &&) noexcept;      // Enable move assignment
 
         /**
          * @brief Executes the Constant Q Transform using precomputed resources.
@@ -89,20 +101,28 @@ namespace OmniDSP
          */
         void execute(const std::vector<T> &input, std::vector<std::vector<std::complex<T>>> &output) const;
 
-        // --- Getters ---
-        size_t getNumBins() const { return num_bins_; }
-        double getSampleRate() const { return sample_rate_; } // Initial sample rate
-        size_t getHopLength() const { return hop_length_; }   // Initial hop length
-        double getLowestFrequency() const { return lowest_freq_; }
-        double getHighestFrequency() const { return highest_freq_; }
-        int getBinsPerOctave() const { return bins_per_octave_; }
-        int getNumOctaves() const { return num_octaves_; }
-        T getSparsityThreshold() const { return sparsity_threshold_; }
-        int getFirFilterOrder() const { return fir_filter_order_; } // Getter for the filter order
-        // Optional: Get FFT lengths per octave if needed for external info
-        // const std::vector<size_t>& getOctaveFFTLengths() const { return octave_fft_lens_; }
+        // --- Getters (Declarations ONLY) ---
+        // Definitions moved to cqt.cpp to ensure proper DLL export/import
+        /** @brief Gets the total number of CQT frequency bins calculated by the plan. */
+        size_t getNumBins() const;
+        /** @brief Gets the initial sample rate (in Hz) the plan was configured with. */
+        double getSampleRate() const;
+        /** @brief Gets the hop length (in samples) between CQT frames. */
+        size_t getHopLength() const;
+        /** @brief Gets the lowest frequency (in Hz) represented by the CQT bins. */
+        double getLowestFrequency() const;
+        /** @brief Gets the highest frequency (in Hz) the CQT attempts to cover. */
+        double getHighestFrequency() const;
+        /** @brief Gets the number of CQT bins per octave. */
+        int getBinsPerOctave() const;
+        /** @brief Gets the total number of octaves covered by the CQT plan. */
+        int getNumOctaves() const;
+        /** @brief Gets the threshold used for sparsifying the CQT kernels during precomputation. */
+        T getSparsityThreshold() const;
+        /** @brief Gets the order (length) of the FIR anti-aliasing filter used. */
+        int getFirFilterOrder() const;
 
-    private: // Keep helpers private, accessible via friend declaration above
+    private: // Keep implementation details private
         // --- Configuration & Parameters ---
         double sample_rate_;
         size_t hop_length_;
@@ -156,9 +176,9 @@ namespace OmniDSP
 
     // --- Explicit Template Instantiations (Declarations) ---
     // These tell the compiler that the full definitions exist elsewhere (in cqt.cpp)
-    /** @cond OMNIDSP_INTERNAL */
-    extern template class CQTPlan<float>;
-    extern template class CQTPlan<double>;
+    /** @cond OMNIDSP_INTERNAL */                         // Hide from Doxygen index
+    extern template class OMNIDSP_EXPORT CQTPlan<float>;  // Add export macro here too
+    extern template class OMNIDSP_EXPORT CQTPlan<double>; // Add export macro here too
     /** @endcond */
 
 } // namespace OmniDSP

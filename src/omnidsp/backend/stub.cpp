@@ -60,8 +60,8 @@ namespace OmniDSP
         ~FFTPlanImpl() = default;
 
         // --- Rule of 5/3: Move Semantics ---
-        FFTPlanImpl(FFTPlanImpl &&) noexcept = default;
-        FFTPlanImpl &operator=(FFTPlanImpl &&) noexcept = default;
+        // Move constructor and assignment are defaulted in omnidsp.h
+        // Definitions are REMOVED from here to avoid C2995 error.
         FFTPlanImpl(const FFTPlanImpl &) = delete;
         FFTPlanImpl &operator=(const FFTPlanImpl &) = delete;
 
@@ -92,12 +92,12 @@ namespace OmniDSP
     template <typename T>
     FFTPlan<T>::FFTPlan(size_t l, Precision p, Direction d, Domain dom, NormMode n)
         : pimpl_(std::make_unique<FFTPlanImpl<T>>(l, p, d, dom, n)) {} // This line throws
+
     template <typename T>
     FFTPlan<T>::~FFTPlan() = default;
-    template <typename T>
-    FFTPlan<T>::FFTPlan(FFTPlan &&) noexcept = default;
-    template <typename T>
-    FFTPlan<T> &FFTPlan<T>::operator=(FFTPlan<T> &&) noexcept = default;
+
+    // Move constructor/assignment are defaulted in the header (omnidsp.h)
+
     // Execute methods will likely never be reached if constructor throws, but define anyway
     template <typename T>
     void FFTPlan<T>::execute(const std::complex<T> *i, std::complex<T> *o) const
@@ -171,9 +171,9 @@ namespace OmniDSP
         return pimpl_->norm_mode;
     }
 
-    // Explicit Instantiations for FFTPlan class (using stub definitions)
-    template class FFTPlan<float>;
-    template class FFTPlan<double>;
+    // Explicit Instantiations for FFTPlan class (already done in omnidsp.cpp)
+    // template class FFTPlan<float>; // Defined in omnidsp.cpp
+    // template class FFTPlan<double>; // Defined in omnidsp.cpp
 
     // --- Backend Conv/Corr/Filter+Downsample Implementation (Stub) ---
     namespace Backend
@@ -193,6 +193,10 @@ namespace OmniDSP
             throw std::runtime_error("OmniDSP backend not available (stub filter_and_downsample_impl called).");
             return {};
         }
+
+        // Explicit Instantiations for FFTPlan class (needed when definition is here)
+        template class OMNIDSP_EXPORT OmniDSP::FFTPlan<float>;
+        template class OMNIDSP_EXPORT OmniDSP::FFTPlan<double>;
 
         // --- Explicit Instantiations for Backend Stubs ---
         template std::vector<float> convolve1d_impl<float>(const std::vector<float> &, const std::vector<float> &, bool);
