@@ -85,7 +85,7 @@ If you only need the C++ library for use in another C++ project:
 
 * `include/OmniDSP/`: Public C++ headers.
 * `src/omnidsp/`: Core C++ library implementation (platform-independent parts).
-* `src/omnidsp/backend/`: Backend-specific C++ implementations (MKL, Accelerate, Stub).
+* `src/omnidsp/backend/`: Backend-specific C++ implementations (MKL, Accelerate, Stub). *(Refactoring to subdirs in progress)*
 * `src/omnidsp_py/`: Python bindings source code (pybind11, wrappers).
 * `tests/cpp/`: C++ unit tests (GoogleTest).
 * `tests/python/`: Python unit tests (pytest).
@@ -102,6 +102,8 @@ OmniDSP uses different backends for performance:
 * **Stub:** A fallback implementation that throws runtime errors if no optimized backend is found/selected.
 
 CMake automatically detects and selects the backend based on the platform and libraries available within the **active Conda environment** during configuration.
+
+**Handling Backend Differences:** While functional parity between backends is a primary goal, sometimes the underlying libraries (e.g., MKL/IPP vs. Accelerate/vDSP) have different capabilities, interfaces, or constraints for the same conceptual operation (like resampling with filtering). When such discrepancies arise, the general strategy is often to **conform the internal C++ implementation to the more restrictive backend interface first** (e.g., adapting to IPP's requirements for resampling filter parameters). Once that backend is working correctly, we then determine the best approach for the other backend(s) to achieve similar functionality, potentially adapting the C++ interface or using alternative functions within that backend's library if necessary.
 
 ## Running Tests
 
@@ -165,6 +167,7 @@ Please use the GitHub Issues tracker for the OmniDSP repository to:
 ## Where to Contribute
 
 Check the `TODO.md` file for a list of known tasks and desired features. Some key areas include:
+* Refactoring the backend structure (Highest Priority).
 * Tuning the CQT scaling factor.
 * Implementing `double` precision support for resampling in the MKL backend.
 * Adding 'same'/'full' convolution modes.
