@@ -24,6 +24,7 @@ jobs:
           # environment-file is omitted - action should auto-detect conda-lock.yml
           auto-activate-base: false
           # python-version is omitted - defined by lock file
+          environment-file: conda-lock.yml
 
       # Configure CMake - Match working local command
       - name: Configure CMake
