@@ -24,16 +24,18 @@ jobs:
           auto-activate-base: false
           # python-version is omitted - defined by lock file
 
-      # Configure CMake - Ensure Accelerate is preferred and tests are enabled
+      # Configure CMake - Add --debug-find for diagnostics
       - name: Configure CMake
         shell: bash -el {0}
         run: |
           conda activate omnidsp_env
+          # Add --debug-find to see find_package search paths
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
                 -DCMAKE_PREFIX_PATH=$CONDA_PREFIX \
                 -D PREFER_ACCELERATE=ON \
                 -D PREFER_ONEMKL=OFF \
-                -D OMNIDSP_BUILD_TESTS=ON
+                -D OMNIDSP_BUILD_TESTS=ON \
+                --debug-find
 
       # Build the C++ code
       - name: Build
