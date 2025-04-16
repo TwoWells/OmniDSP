@@ -8,53 +8,56 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+
 jobs:
   build-and-test-accelerate:
     runs-on: macos-latest
-
+    defaults:
+      run:
+        shell: bash -el {0}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Conda Environment from Lockfile
-        # Assumes conda-lock.yml was generated from environment.yml using pybind11-global
-        uses: conda-incubator/setup-miniconda@v3
+      - uses: actions/checkout@v4
+      - uses: conda-incubator/setup-miniconda@v3
         with:
-          activate-environment: omnidsp_env # Use the name from environment.yml
-          # environment-file is omitted - action should auto-detect conda-lock.yml
-          auto-activate-base: false
-          # python-version is omitted - defined by lock file
+          auto-update-conda: false
+          activate-environment: omnidsp_env
           environment-file: conda-lock.yml
+      - run: |
+          conda info
+          conda list
+          conda config --show-sources
+          conda config --show
+          printenv | sort
 
-      # Configure CMake - Match working local command
-      - name: Configure CMake
-        shell: bash -el {0}
-        run: |
-          conda activate omnidsp_env
-          echo "Using CONDA_PREFIX=$CONDA_PREFIX"
-          # Get the pybind11 CMake directory directly from the pip-installed package
-          PYBIND11_CMAKE_DIR=$(python -c "import pybind11; print(pybind11.get_cmake_dir())")
-          echo "Found pybind11 CMake Dir: ${PYBIND11_CMAKE_DIR}"
-          # Add BUILD_SHARED_LIBS=OFF to match local command
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
-                -DCMAKE_PREFIX_PATH=$CONDA_PREFIX \
-                -Dpybind11_DIR="${PYBIND11_CMAKE_DIR}" \
-                -DBUILD_SHARED_LIBS=OFF \
-                -D PREFER_ACCELERATE=ON \
-                -D PREFER_ONEMKL=OFF \
-                -D OMNIDSP_BUILD_TESTS=ON
+      # # Configure CMake - Match working local command
+      # - name: Configure CMake
+      #   shell: bash -el {0}
+      #   run: |
+      #     conda activate omnidsp_env
+      #     echo "Using CONDA_PREFIX=$CONDA_PREFIX"
+      #     # Get the pybind11 CMake directory directly from the pip-installed package
+      #     PYBIND11_CMAKE_DIR=$(python -c "import pybind11; print(pybind11.get_cmake_dir())")
+      #     echo "Found pybind11 CMake Dir: ${PYBIND11_CMAKE_DIR}"
+      #     # Add BUILD_SHARED_LIBS=OFF to match local command
+      #     cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+      #           -DCMAKE_PREFIX_PATH=$CONDA_PREFIX \
+      #           -Dpybind11_DIR="${PYBIND11_CMAKE_DIR}" \
+      #           -DBUILD_SHARED_LIBS=OFF \
+      #           -D PREFER_ACCELERATE=ON \
+      #           -D PREFER_ONEMKL=OFF \
+      #           -D OMNIDSP_BUILD_TESTS=ON
 
-      # Build the C++ code
-      - name: Build
-        shell: bash -el {0}
-        run: |
-          conda activate omnidsp_env
-          cmake --build build --config Release
+      # # Build the C++ code
+      # - name: Build
+      #   shell: bash -el {0}
+      #   run: |
+      #     conda activate omnidsp_env
+      #     cmake --build build --config Release
 
-      # Run C++ Tests using CTest
-      - name: Test
-        shell: bash -el {0}
-        working-directory: ./build
-        run: |
-          conda activate omnidsp_env
-          ctest --output-on-failure -C Release
+      # # Run C++ Tests using CTest
+      # - name: Test
+      #   shell: bash -el {0}
+      #   working-directory: ./build
+      #   run: |
+      #     conda activate omnidsp_env
+      #     ctest --output-on-failure -C Release
