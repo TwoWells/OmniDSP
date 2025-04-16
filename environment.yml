@@ -6,7 +6,6 @@
 name: omnidsp_env
 
 # Channels to search for packages, order matters
-# Keep all channels listed for all platforms
 channels:
   - https://software.repos.intel.com/python/conda
   - conda-forge
@@ -52,7 +51,7 @@ dependencies:
   # --------------------------------------------------------------------
   - numpy
   - scipy
-  - pybind11
+  - pybind11==2.13.1 # <-- Pinned version
   - scikit-build-core>=0.7
 
   # --------------------------------------------------------------------
