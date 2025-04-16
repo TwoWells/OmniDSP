@@ -17,6 +17,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Conda Environment from Lockfile
+        # Assumes conda-lock.yml was generated from environment.yml using pybind11-global
         uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: omnidsp_env # Use the name from environment.yml
@@ -24,70 +25,29 @@ jobs:
           auto-activate-base: false
           # python-version is omitted - defined by lock file
 
-      # Add Step to check where pybind11 thinks its CMake dir is
-      - name: Check pybind11 Python Module for CMake Dir
-        id: pybind11_loc # Give step an id to potentially use output later
-        shell: bash -el {0}
-        run: |
-          conda activate omnidsp_env
-          echo "--- Querying pybind11 Python module ---"
-          PYTHON_PYBIND11_CMAKE_DIR=$(python -c "import pybind11; print(pybind11.get_cmake_dir())")
-          echo "pybind11.get_cmake_dir() reports: ${PYTHON_PYBIND11_CMAKE_DIR}"
-          # Set output for next step
-          echo "cmake_dir=${PYTHON_PYBIND11_CMAKE_DIR}" >> $GITHUB_OUTPUT
-          echo "--- End Querying pybind11 ---"
-
-      # Add Step to Verify pybind11 CMake files installation using reported path
-      - name: Verify pybind11 CMake Files
-        shell: bash -el {0}
-        run: |
-          conda activate omnidsp_env
-          # Use the path reported by the previous step
-          REPORTED_CMAKE_DIR="${{ steps.pybind11_loc.outputs.cmake_dir }}"
-          echo "--- Checking contents of reported CMake dir: ${REPORTED_CMAKE_DIR} ---"
-          if [ -z "$REPORTED_CMAKE_DIR" ]; then
-             echo "ERROR: pybind11.get_cmake_dir() returned an empty string!"
-             exit 1
-          fi
-          if [ -d "$REPORTED_CMAKE_DIR" ]; then
-            ls -lR "$REPORTED_CMAKE_DIR"
-            echo "--- Checking pybind11Config.cmake in reported dir ---"
-            if [ -f "$REPORTED_CMAKE_DIR/pybind11Config.cmake" ]; then
-              echo "pybind11Config.cmake found in reported directory."
-            else
-              echo "ERROR: pybind11Config.cmake NOT FOUND in reported directory ${REPORTED_CMAKE_DIR}"
-              # Also check the standard location just in case
-              STD_CMAKE_DIR="$CONDA_PREFIX/share/cmake/pybind11"
-              echo "--- Checking standard location: $STD_CMAKE_DIR ---"
-              ls -lR "$STD_CMAKE_DIR" || echo "Standard location $STD_CMAKE_DIR also not found or error listing."
-              exit 1 # Fail the job if config is missing from reported path
-            fi
-          else
-            echo "ERROR: Reported directory ${REPORTED_CMAKE_DIR} NOT FOUND."
-            exit 1 # Fail the job if directory is missing
-          fi
-          echo "--- End Verify pybind11 CMake Files ---"
-
-      # Configure CMake - Removed explicit pybind11_DIR hint
+      # Configure CMake - Match working local command
       - name: Configure CMake
         shell: bash -el {0}
         run: |
           conda activate omnidsp_env
           echo "Using CONDA_PREFIX=$CONDA_PREFIX"
+          # Match local working command: rely on CMAKE_PREFIX_PATH, no pybind11_DIR hint needed
+          # Add BUILD_SHARED_LIBS=OFF to match local command
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
                 -DCMAKE_PREFIX_PATH=$CONDA_PREFIX \
+                -DBUILD_SHARED_LIBS=OFF \ # Added to match local command
                 -D PREFER_ACCELERATE=ON \
                 -D PREFER_ONEMKL=OFF \
                 -D OMNIDSP_BUILD_TESTS=ON
 
       # Build the C++ code
-      # ... (Build and Test steps remain the same) ...
       - name: Build
         shell: bash -el {0}
         run: |
           conda activate omnidsp_env
           cmake --build build --config Release
 
+      # Run C++ Tests using CTest
       - name: Test
         shell: bash -el {0}
         working-directory: ./build

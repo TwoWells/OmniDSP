@@ -1,5 +1,5 @@
 # Conda environment configuration for OmniDSP project
-# Uses preprocessing selectors to conditionally include MKL dependencies
+# Uses preprocessing selectors for MKL deps, pip for pybind11
 # Specifies target platforms for conda-lock
 
 # Environment name
@@ -23,7 +23,7 @@ dependencies:
   # Core Python & Package Management
   # --------------------------------------------------------------------
   - python>=3.8
-  - pip
+  - pip # Required to install packages listed under the 'pip:' key below
 
   # --------------------------------------------------------------------
   # C++ Build Toolchain & Dependencies (Managed by Conda)
@@ -51,8 +51,7 @@ dependencies:
   # --------------------------------------------------------------------
   - numpy
   - scipy
-  # - pybind11 # <-- Use global version instead
-  - pybind11-global # <-- Trying global package
+  - pybind11-global
   - scikit-build-core>=0.7
 
   # --------------------------------------------------------------------
@@ -69,7 +68,7 @@ dependencies:
   - matplotlib
 
 # --------------------------------------------------------------------
-# Pip dependencies
+# Pip dependencies (Installed after Conda dependencies)
 # --------------------------------------------------------------------
-# - pip:
-#   - some-pip-only-package
+#  - pip:
+#    - pybind11[global]
