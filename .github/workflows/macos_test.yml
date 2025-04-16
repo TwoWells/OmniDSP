@@ -31,11 +31,14 @@ jobs:
         run: |
           conda activate omnidsp_env
           echo "Using CONDA_PREFIX=$CONDA_PREFIX"
-          # Match local working command: rely on CMAKE_PREFIX_PATH, no pybind11_DIR hint needed
+          # Get the pybind11 CMake directory directly from the pip-installed package
+          PYBIND11_CMAKE_DIR=$(python -c "import pybind11; print(pybind11.get_cmake_dir())")
+          echo "Found pybind11 CMake Dir: ${PYBIND11_CMAKE_DIR}"
           # Add BUILD_SHARED_LIBS=OFF to match local command
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
                 -DCMAKE_PREFIX_PATH=$CONDA_PREFIX \
-                -DBUILD_SHARED_LIBS=OFF \ # Added to match local command
+                -Dpybind11_DIR="${PYBIND11_CMAKE_DIR}" \
+                -DBUILD_SHARED_LIBS=OFF \
                 -D PREFER_ACCELERATE=ON \
                 -D PREFER_ONEMKL=OFF \
                 -D OMNIDSP_BUILD_TESTS=ON

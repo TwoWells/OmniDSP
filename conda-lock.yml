@@ -13,9 +13,9 @@
 version: 1
 metadata:
   content_hash:
-    osx-arm64: 17937621ad7e4d1fe1c04c6b139d658970f5c23c23b0fcdd071362ab242161f7
-    linux-64: 4e2ebeede36d5391b136fdc71d9df6e6cae5f7d3f765ed0bfad7916cf8310808
-    win-64: 7ae39251403c14b65fd0443689c38752916f5af6af4bb0febb2940ddb5d8ad22
+    osx-arm64: 79bfbcaaa7b111e74098a50c79421b36395fffd7be925085ed443088d7327954
+    linux-64: 9e1c348d8ac53fb8ef561eac62c7e26ded2879658d542a67a4243c0dc2781e9d
+    win-64: 7c53e963c8f2d0ca0352cd743dd31e80e1ad9a158f597bd402fb942b9ef3bea9
   channels:
   - url: https://software.repos.intel.com/python/conda
     used_env_vars: []
@@ -9380,6 +9380,45 @@ package:
   hash:
     md5: 3bfdfb8dbcdc4af1ae3f9a8eb3948f04
     sha256: 71bd24600d14bb171a6321d523486f6a06f855e75e547fa0cb2a0953b02047f0
+  category: main
+  optional: false
+- name: pybind11
+  version: 2.13.6
+  manager: conda
+  platform: linux-64
+  dependencies:
+    pybind11-global: 2.13.6
+    python: ''
+  url: https://conda.anaconda.org/conda-forge/noarch/pybind11-2.13.6-pyh1ec8472_2.conda
+  hash:
+    md5: 8088a5e7b2888c780738c3130f2a969d
+    sha256: 27f888492af3d5ab19553f263b0015bf3766a334668b5b3a79c7dc0416e603c1
+  category: main
+  optional: false
+- name: pybind11
+  version: 2.13.6
+  manager: conda
+  platform: osx-arm64
+  dependencies:
+    pybind11-global: 2.13.6
+    python: ''
+  url: https://conda.anaconda.org/conda-forge/noarch/pybind11-2.13.6-pyh1ec8472_2.conda
+  hash:
+    md5: 8088a5e7b2888c780738c3130f2a969d
+    sha256: 27f888492af3d5ab19553f263b0015bf3766a334668b5b3a79c7dc0416e603c1
+  category: main
+  optional: false
+- name: pybind11
+  version: 2.13.6
+  manager: conda
+  platform: win-64
+  dependencies:
+    pybind11-global: 2.13.6
+    python: ''
+  url: https://conda.anaconda.org/conda-forge/noarch/pybind11-2.13.6-pyh1ec8472_2.conda
+  hash:
+    md5: 8088a5e7b2888c780738c3130f2a969d
+    sha256: 27f888492af3d5ab19553f263b0015bf3766a334668b5b3a79c7dc0416e603c1
   category: main
   optional: false
 - name: pybind11-global
