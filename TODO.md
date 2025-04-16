@@ -1,6 +1,6 @@
-# OmniDSP TODO List (Updated April 15, 2025)
+# OmniDSP TODO List (Updated April 16, 2025)
 
-Reflects successful backend code structure refactoring. Focus is now on resolving remaining test failures, MKL resampling strategy, CQT scaling, and CI setup.
+Reflects successful backend code structure refactoring and resolution of the stub backend test execution issue. Focus remains on remaining test failures, MKL resampling strategy, CQT scaling, and CI setup.
 
 **I. Core Implementation Tasks (in `src/omnidsp/`)**
 
@@ -32,7 +32,7 @@ Reflects successful backend code structure refactoring. Focus is now on resolvin
 
 * **Investigate Test Failures (High Priority):**
     * **`FullRecursiveCQT_Execute_vs_Librosa` Test:** Debug why this test failed. Check for unexpected errors during float execution or shape mismatches vs Librosa reference.
-    * **`StubBackend_PublicApiThrowsError` Test:** Determine why this test failed. If MKL/Accelerate was active, it shouldn't have run (check `#if` guard logic/CMake flags). If Stub *was* active, why didn't the public API calls throw the expected `std::runtime_error`?
+    * **RESOLVED: `StubBackend_PublicApiThrowsError` Test:** This was resolved by refactoring backend-specific tests into separate files (`tests/cpp/backend/`) which are now conditionally compiled based on the CMake `BACKEND` variable, fixing the test discovery issue with C++ preprocessor guards.
     * **`WindowTest.Kaiser` Test:** Determine cause of failure. Compare IPP Kaiser output vs manual calculation more closely. Adjust test tolerance if appropriate.
     * **`WindowTest.EdgeCases` Test:** Determine which edge case failed (empty input throw, N=1 output check, negative beta throw). Debug the corresponding public API call and backend implementation.
 * **`cqt.cpp` (Test Fixture `PrecomputedRecursiveCQTTest`):**
@@ -76,7 +76,7 @@ Reflects successful backend code structure refactoring. Focus is now on resolvin
 
 **Summary of Next Steps (Prioritized):**
 
-1.  **Focus on Task II:** Debug the 4 unexpected test failures.
+1.  **Focus on Task II:** Debug the **3** remaining unexpected test failures.
 2.  **Focus on Task I.onemkl.cpp:** Address filter coefficient strategy for resampling.
 3.  **Focus on Task I.cqt.cpp:** Determine the correct `scale_factor` for CQT (float precision).
 4.  Implement CI (Task III).
