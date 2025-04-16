@@ -51,7 +51,8 @@ dependencies:
   # --------------------------------------------------------------------
   - numpy
   - scipy
-  - pybind11
+  # - pybind11 # <-- Use global version instead
+  - pybind11-global # <-- Trying global package
   - scikit-build-core>=0.7
 
   # --------------------------------------------------------------------

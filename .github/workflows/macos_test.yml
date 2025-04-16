@@ -24,40 +24,13 @@ jobs:
           auto-activate-base: false
           # python-version is omitted - defined by lock file
 
-      # Add Step to Verify pybind11 CMake files installation
-      - name: Verify pybind11 CMake Files
-        shell: bash -el {0}
-        run: |
-          conda activate omnidsp_env
-          PYBIND11_CMAKE_DIR="$CONDA_PREFIX/share/cmake/pybind11"
-          echo "--- Checking contents of ${PYBIND11_CMAKE_DIR} ---"
-          if [ -d "$PYBIND11_CMAKE_DIR" ]; then
-            ls -lR "$PYBIND11_CMAKE_DIR"
-            echo "--- Checking pybind11Config.cmake ---"
-            if [ -f "$PYBIND11_CMAKE_DIR/pybind11Config.cmake" ]; then
-              echo "pybind11Config.cmake found."
-              # Optionally cat the file, might be very long
-              # echo "--- pybind11Config.cmake Contents ---"
-              # cat "$PYBIND11_CMAKE_DIR/pybind11Config.cmake"
-            else
-              echo "ERROR: pybind11Config.cmake NOT FOUND in ${PYBIND11_CMAKE_DIR}"
-              exit 1 # Fail the job if config is missing
-            fi
-          else
-            echo "ERROR: Directory ${PYBIND11_CMAKE_DIR} NOT FOUND."
-            # List share/cmake to see what is there
-            echo "Listing contents of $CONDA_PREFIX/share/cmake/:"
-            ls -l "$CONDA_PREFIX/share/cmake/" || echo "share/cmake not found."
-            exit 1 # Fail the job if directory is missing
-          fi
-          echo "--- End Verify pybind11 CMake Files ---"
+      # Removed the Verify pybind11 CMake Files step
 
       # Configure CMake - Keep explicit hint for pybind11_DIR for now
       - name: Configure CMake
         shell: bash -el {0}
         run: |
           conda activate omnidsp_env
-          # Add echo to confirm CONDA_PREFIX value being used
           echo "Using CONDA_PREFIX=$CONDA_PREFIX"
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
                 -DCMAKE_PREFIX_PATH=$CONDA_PREFIX \
