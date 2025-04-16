@@ -24,18 +24,19 @@ jobs:
           auto-activate-base: false
           # python-version is omitted - defined by lock file
 
-      # Configure CMake - Add --debug-find for diagnostics
+      # Configure CMake - Re-add explicit hint for pybind11_DIR
       - name: Configure CMake
         shell: bash -el {0}
         run: |
           conda activate omnidsp_env
-          # Add --debug-find to see find_package search paths
+          # Explicitly point CMake to the pybind11 config location within conda env
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
                 -DCMAKE_PREFIX_PATH=$CONDA_PREFIX \
+                -Dpybind11_DIR=$CONDA_PREFIX/share/cmake/pybind11 \ # <-- Re-added hint
                 -D PREFER_ACCELERATE=ON \
                 -D PREFER_ONEMKL=OFF \
-                -D OMNIDSP_BUILD_TESTS=ON \
-                --debug-find
+                -D OMNIDSP_BUILD_TESTS=ON
+                # --debug-find # <-- Removed debug flag
 
       # Build the C++ code
       - name: Build
