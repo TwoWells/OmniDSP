@@ -1,12 +1,12 @@
 # Conda environment configuration for OmniDSP project
-# Updated to include resampy dependency for librosa
+# Uses preprocessing selectors to conditionally include MKL dependencies
 
 # Environment name
 name: omnidsp_env
 
 # Channels to search for packages, order matters
 channels:
-  - https://software.repos.intel.com/python/conda # For Intel MKL
+  - https://software.repos.intel.com/python/conda # [not osx] # Only add Intel channel if not on macOS
   - conda-forge    # Primary channel for many C/C++ libraries and build tools
   - defaults       # Default Anaconda channel
 
@@ -15,51 +15,50 @@ dependencies:
   # --------------------------------------------------------------------
   # Core Python & Package Management
   # --------------------------------------------------------------------
-  - python>=3.8     # Base Python version requirement
-  - pip             # For installing packages not available via Conda (if needed)
+  - python>=3.8
+  - pip
 
   # --------------------------------------------------------------------
   # C++ Build Toolchain & Dependencies (Managed by Conda)
   # --------------------------------------------------------------------
-  - cmake>=3.21     # Build system generator
-  - cxx-compiler    # Provides platform-specific C++ compiler (e.g., g++, clang++, msvc)
-  - make            # Build tool (alternative: ninja)
-  - gtest           # GoogleTest framework for C++ unit tests
+  - cmake>=3.21
+  - cxx-compiler
+  - make # Or ninja
+  - gtest
 
   # --------------------------------------------------------------------
   # Optimized DSP Backends (Selected by CMake based on availability)
   # --------------------------------------------------------------------
-  # MKL (For x86 Linux/Windows/macOS - if preferred/available)
-  - intel-openmp    # Required runtime for MKL OpenMP threading
-  - mkl-devel       # MKL development headers and libraries for linking
-  - ipp-devel
-  # - mkl             # Intel Math Kernel Library runtime
+  # MKL dependencies (Only install if not on macOS)
+  - intel-openmp # [not osx]
+  - mkl-devel    # [not osx]
+  - ipp-devel    # [not osx]
 
   # Accelerate framework (For macOS) is provided by the OS, not Conda.
 
   # --------------------------------------------------------------------
   # Python Package Build & Runtime Dependencies
   # --------------------------------------------------------------------
-  - numpy           # Fundamental package for numerical computation
-  - scipy           # For signal processing (convolution/correlation) in reference generation script [cite: OmniDSP/environment.yml]
-  - pybind11        # For creating Python bindings for C++ code
-  - scikit-build-core>=0.7 # Build backend for CMake-based Python extensions
+  - numpy
+  - scipy
+  - pybind11
+  - scikit-build-core>=0.7
 
   # --------------------------------------------------------------------
   # Python Testing
   # --------------------------------------------------------------------
-  - pytest          # Framework for Python unit tests
+  - pytest
 
   # --------------------------------------------------------------------
   # Dependencies for Notebooks/Examples (Optional)
   # --------------------------------------------------------------------
-  - jupyterlab      # Interactive development environment (or 'notebook')
-  - librosa         # Python library for audio and music analysis (for comparison)
-  - resampy         # Added: Dependency for librosa (needed for reference generation)
-  - matplotlib      # For plotting in examples
+  - jupyterlab # Or 'notebook'
+  - librosa
+  - resampy
+  - matplotlib
 
 # --------------------------------------------------------------------
-# Pip dependencies (if any package is only available via pip)
+# Pip dependencies
 # --------------------------------------------------------------------
 # - pip:
 #   - some-pip-only-package
