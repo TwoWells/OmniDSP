@@ -24,7 +24,7 @@ jobs:
           auto-activate-base: false
           # python-version is omitted - defined by lock file
 
-      # Configure CMake - Re-add explicit hint for pybind11_DIR
+      # Configure CMake - Removed comment interfering with line continuation
       - name: Configure CMake
         shell: bash -el {0}
         run: |
@@ -32,11 +32,10 @@ jobs:
           # Explicitly point CMake to the pybind11 config location within conda env
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
                 -DCMAKE_PREFIX_PATH=$CONDA_PREFIX \
-                -Dpybind11_DIR=$CONDA_PREFIX/share/cmake/pybind11 \ # <-- Re-added hint
+                -Dpybind11_DIR=$CONDA_PREFIX/share/cmake/pybind11 \
                 -D PREFER_ACCELERATE=ON \
                 -D PREFER_ONEMKL=OFF \
                 -D OMNIDSP_BUILD_TESTS=ON
-                # --debug-find # <-- Removed debug flag
 
       # Build the C++ code
       - name: Build
