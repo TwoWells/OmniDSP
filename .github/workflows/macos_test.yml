@@ -16,40 +16,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Conda Environment Base
-        id: setup_conda # Give the step an ID to reference its outputs if needed
+      - name: Setup Conda Environment from Lockfile
         uses: conda-incubator/setup-miniconda@v3
         with:
-          # Don't activate here, we'll activate manually in debug/later steps
+          activate-environment: omnidsp_env # Use the name from environment.yml
+          # environment-file is omitted - action should auto-detect conda-lock.yml
           auto-activate-base: false
-          python-version: 3.12
-          # We specify the environment name here for clarity,
-          # but creation happens in the debug step
-          activate-environment: omnidsp_env # Name from environment.yml
-          environment-file: environment.yml
-
-      # Add Debug Step Here
-      - name: Debug Conda Environment Creation
-        shell: bash -el {0}
-        run: |
-          echo "--- Conda Info ---"
-          conda info
-          echo "--- Environment File Content ---"
-          cat environment.yml
-          echo "--- Attempting Environment Creation with Verbosity ---"
-          # Activate the intended environment name's path (might not exist yet)
-          # Or just ensure conda command is available from base
-          # Use --verbose flag (or -vv) for more detailed output
-          conda env create -f environment.yml --name omnidsp_env --verbose
-          echo "--- Listing Packages after creation attempt (if successful) ---"
-          conda list -n omnidsp_env || echo "Environment creation likely failed."
-          echo "--- Debug Step Complete ---"
+          # python-version is omitted - defined by lock file
 
       # Configure CMake - Ensure Accelerate is preferred and tests are enabled
       - name: Configure CMake
         shell: bash -el {0}
         run: |
-          # Ensure the environment is activated for this step
           conda activate omnidsp_env
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
                 -DCMAKE_PREFIX_PATH=$CONDA_PREFIX \
@@ -61,7 +39,6 @@ jobs:
       - name: Build
         shell: bash -el {0}
         run: |
-          # Ensure the environment is activated for this step
           conda activate omnidsp_env
           cmake --build build --config Release
 
@@ -70,6 +47,5 @@ jobs:
         shell: bash -el {0}
         working-directory: ./build
         run: |
-          # Ensure the environment is activated for this step
           conda activate omnidsp_env
           ctest --output-on-failure -C Release

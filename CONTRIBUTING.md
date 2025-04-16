@@ -9,6 +9,8 @@ Thank you for your interest in contributing to OmniDSP! We welcome contributions
   - [Getting Started](#getting-started)
     - [Prerequisites](#prerequisites)
     - [Setting up the Conda Environment](#setting-up-the-conda-environment)
+  - [Dependency Management with Conda Lock](#dependency-management-with-conda-lock)
+    - [Contributor Workflow for Dependencies](#contributor-workflow-for-dependencies)
   - [Building for Development](#building-for-development)
     - [Python Package (Recommended)](#python-package-recommended)
     - [C++ Library Only](#c-library-only)
@@ -36,15 +38,55 @@ Thank you for your interest in contributing to OmniDSP! We welcome contributions
 
 The project uses a Conda environment to manage all dependencies, including the C++ compiler, CMake, Python, MKL, IPP, and Python packages.
 
-1.  **Create Environment:** From the project root directory, create the environment using the provided file:
+1.  **Create Environment:** From the project root directory, create the environment. Using the lock file (see next section) is recommended for reproducibility:
     ```bash
-    conda env create -f environment.yml
+    # Recommended method using the lock file:
+    conda-lock install --name omnidsp_env conda-lock.yml
+    # Or, less reproducible, using the environment.yml directly:
+    # conda env create -f environment.yml
     ```
+    *(Install `conda-lock` first if needed: `pip install conda-lock` or `conda install -c conda-forge conda-lock`)*
 2.  **Activate Environment:** Activate the newly created environment (the name is defined inside `environment.yml`, likely `omnidsp_env`):
     ```bash
     conda activate omnidsp_env
     ```
-    **Important:** Always ensure this environment is activated before building, running tests, or using the library.
+    **Important:** Always ensure this environment is activated before building, running tests, using the library, or installing contributor tools like `conda-lock`.
+
+## Dependency Management with Conda Lock
+
+To ensure consistent and reproducible development environments across different operating systems and in our Continuous Integration (CI) workflows, this project uses `conda-lock`.
+
+* **Source File:** The `environment.yml` file defines the primary dependencies, their constraints, and the target platforms for locking.
+* **Lock File:** A single, unified lock file (`conda-lock.yml`) containing the exact package versions and URLs for all specified platforms is generated from `environment.yml` and committed to the repository.
+* **Environment Creation:** Development and CI environments should be created using this `conda-lock.yml` file for guaranteed consistency.
+
+### Contributor Workflow for Dependencies
+
+**If you are NOT changing dependencies in `environment.yml`:**
+
+You generally don't need `conda-lock` installed. You should create your local environment using the `conda-lock.yml` file (see setup instructions above).
+
+**If you ARE changing dependencies in `environment.yml`:**
+
+1.  **Install `conda-lock`:** You must have `conda-lock` installed. The recommended way is to install it **into your activated project environment (`omnidsp_env`)**. After activating the environment (`conda activate omnidsp_env`), use either pip or conda:
+    ```bash
+    # Option 1: Using pip (often simpler for command-line tools)
+    pip install conda-lock
+
+    # Option 2: Using conda (if you prefer managing tools via conda)
+    # conda install -c conda-forge conda-lock
+    ```
+    *(Do **not** add `conda-lock` to the `environment.yml` file itself.)*
+
+2.  **Modify `environment.yml`:** Add, remove, or update packages or target platforms in `environment.yml` as needed. Remember to use platform selectors (e.g., `# [win]`, `# [linux]`) if a dependency is platform-specific.
+
+3.  **Regenerate Lock File:** After modifying `environment.yml`, you **MUST** regenerate the unified lock file. `conda-lock` will automatically detect the target platforms listed in the `environment.yml` file. From the project root directory (with the `omnidsp_env` environment activated), use the `conda-lock lock` command:
+    ```bash
+    # Reads platforms from environment.yml, generates conda-lock.yml
+    conda-lock lock -f environment.yml
+    ```
+
+4.  **Commit Changes:** Commit **both** the updated `environment.yml` file AND the regenerated `conda-lock.yml` file in the same commit. This keeps the source definition and the resolved dependencies in sync.
 
 ## Building for Development
 
@@ -85,12 +127,13 @@ If you only need the C++ library for use in another C++ project:
 
 * `include/OmniDSP/`: Public C++ headers.
 * `src/omnidsp/`: Core C++ library implementation (platform-independent parts).
-* `src/omnidsp/backend/`: Backend-specific C++ implementations (MKL, Accelerate, Stub). *(Refactoring to subdirs in progress)*
+* `src/omnidsp/backend/`: Backend-specific C++ implementations (MKL, Accelerate, Stub).
 * `src/omnidsp_py/`: Python bindings source code (pybind11, wrappers).
 * `tests/cpp/`: C++ unit tests (GoogleTest).
 * `tests/python/`: Python unit tests (pytest).
 * `examples/`: Usage examples (C++ and Python notebooks).
-* `environment.yml`: Conda environment definition.
+* `environment.yml`: Conda environment definition source.
+* `conda-lock.yml`: Unified, multi-platform Conda lock file (generated by `conda-lock`).
 * `CMakeLists.txt`: Main CMake build script.
 * `pyproject.toml`: Python packaging configuration.
 
@@ -146,10 +189,11 @@ We appreciate contributions! Please follow this general workflow:
 2.  **Create a Branch:** Create a new branch in your fork for your feature or bug fix (e.g., `git checkout -b feature/add-convolution-modes`).
 3.  **Make Changes:** Implement your feature or fix the bug.
 4.  **Add Tests:** Add appropriate unit tests (C++ and/or Python) to cover your changes. Ensure all tests pass.
-5.  **Update Documentation:** If you add new features or change existing ones, update the README, docstrings, and potentially other documentation files.
-6.  **Commit Changes:** Commit your changes with clear and concise commit messages.
-7.  **Push to Your Fork:** Push your branch to your GitHub fork.
-8.  **Open a Pull Request:** Create a Pull Request (PR) from your branch to the main OmniDSP repository's `main` (or appropriate development) branch. Provide a clear description of your changes in the PR.
+5.  **Update Dependencies (if needed):** If you changed `environment.yml`, regenerate and commit the `conda-lock.yml` file (see Dependency Management section above).
+6.  **Update Documentation:** If you add new features or change existing ones, update the README, docstrings, and potentially other documentation files.
+7.  **Commit Changes:** Commit your changes with clear and concise commit messages.
+8.  **Push to Your Fork:** Push your branch to your GitHub fork.
+9.  **Open a Pull Request:** Create a Pull Request (PR) from your branch to the main OmniDSP repository's `main` (or appropriate development) branch. Provide a clear description of your changes in the PR.
 
 ### Pull Request Workflow
 
@@ -167,11 +211,10 @@ Please use the GitHub Issues tracker for the OmniDSP repository to:
 ## Where to Contribute
 
 Check the `TODO.md` file for a list of known tasks and desired features. Some key areas include:
-* Refactoring the backend structure (Highest Priority).
 * Tuning the CQT scaling factor.
 * Implementing `double` precision support for resampling in the MKL backend.
 * Adding 'same'/'full' convolution modes.
-* Setting up CI.
+* Expanding CI coverage.
 * Adding more tests and examples.
 * Improving documentation.
 

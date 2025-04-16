@@ -1,14 +1,22 @@
 # Conda environment configuration for OmniDSP project
 # Uses preprocessing selectors to conditionally include MKL dependencies
+# Specifies target platforms for conda-lock
 
 # Environment name
 name: omnidsp_env
 
 # Channels to search for packages, order matters
+# Keep all channels listed for all platforms
 channels:
-  - https://software.repos.intel.com/python/conda # [not osx] # Only add Intel channel if not on macOS
-  - conda-forge    # Primary channel for many C/C++ libraries and build tools
-  - defaults       # Default Anaconda channel
+  - https://software.repos.intel.com/python/conda
+  - conda-forge
+  - defaults
+
+# Target platforms for conda-lock
+platforms:
+  - osx-arm64
+  - linux-64
+  - win-64
 
 # List of dependencies
 dependencies:
@@ -29,10 +37,13 @@ dependencies:
   # --------------------------------------------------------------------
   # Optimized DSP Backends (Selected by CMake based on availability)
   # --------------------------------------------------------------------
-  # MKL dependencies (Only install if not on macOS)
-  - intel-openmp # [not osx]
-  - mkl-devel    # [not osx]
-  - ipp-devel    # [not osx]
+  # MKL dependencies (Only install on Linux or Windows)
+  - intel-openmp # [linux]
+  - mkl-devel    # [linux]
+  - ipp-devel    # [linux]
+  - intel-openmp # [win]
+  - mkl-devel    # [win]
+  - ipp-devel    # [win]
 
   # Accelerate framework (For macOS) is provided by the OS, not Conda.
 
