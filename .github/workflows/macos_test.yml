@@ -1,0 +1,46 @@
+# .github/workflows/macos_test.yml
+name: macOS C++ Tests (Accelerate Backend)
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-and-test-accelerate:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Conda Environment
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: omnidsp_env # Name defined in environment.yml
+          environment-file: environment.yml
+          auto-activate-base: false
+          python-version: 3.12
+
+      # Configure CMake - Add CMAKE_PREFIX_PATH
+      - name: Configure CMake
+        shell: bash -el {0}
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_PREFIX_PATH=$CONDA_PREFIX \
+                -D PREFER_ACCELERATE=ON \
+                -D PREFER_ONEMKL=OFF \
+                -D OMNIDSP_BUILD_TESTS=ON
+
+      # Build the C++ code
+      - name: Build
+        shell: bash -el {0}
+        run: cmake --build build --config Release
+
+      # Run C++ Tests using CTest
+      - name: Test
+        shell: bash -el {0}
+        working-directory: ./build
+        run: ctest --output-on-failure -C Release
