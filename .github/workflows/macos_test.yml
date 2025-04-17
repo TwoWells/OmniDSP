@@ -1,5 +1,7 @@
 # .github/workflows/macos_test.yml
-name: macOS Sanity Check Conda Lock Install (Explicit Create)
+# Version to match documentation Example 7 using explicit lock file
+
+name: macOS Sanity Check Explicit Lock Install
 
 on:
   push:
@@ -19,30 +21,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Step 1: Setup base Conda only
-      - name: Setup Miniconda
+      # Step 1: Setup Conda using the platform-specific explicit lock file
+      - name: Setup Miniconda and Environment
         uses: conda-incubator/setup-miniconda@v3
         with:
-          auto-update-conda: true # Keep conda updated
-          auto-activate-base: false # Don't activate base
-          # Remove environment activation/file inputs that trigger 'conda env update'
-          # activate-environment: omnidsp_env
-          # environment-file: conda-lock.yml
+          activate-environment: omnidsp_env # Name for the environment
+          # Use the explicit lock file matching the runner platform
+          environment-file: conda-osx-arm64.conda.lock # <-- Use explicit file
+          auto-update-conda: true
+          auto-activate-base: false
 
-      # Step 2: Explicitly create environment from the unified lock file
-      - name: Create environment from lock file
-        run: |
-          echo "Attempting to create environment from conda-lock.yml"
-          conda create --name omnidsp_env --file conda-lock.yml
-          echo "Environment creation command finished."
-          # Optional: Add command to check if env exists
-          conda info --envs
-
-      # Step 3: Activate and run diagnostics
+      # Step 2: Run Diagnostics (Should activate omnidsp_env automatically)
       - name: Run Diagnostics
         run: |
-          echo "Activating omnidsp_env..."
-          conda activate omnidsp_env
           echo "--- Conda Info ---"
           conda info
           echo "--- Conda List ---"
