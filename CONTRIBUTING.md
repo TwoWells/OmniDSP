@@ -40,7 +40,7 @@ Thank you for your interest in contributing to OmniDSP! We welcome contributions
 
 ### Setting up the Development Environment
 
-The project uses Conda to manage dependencies. For contributors, we provide a specific development environment definition (`environment-dev.yml`) that includes not only the runtime dependencies needed to run OmniDSP but also essential tools for development, testing, code formatting, and managing dependencies.
+The project uses Conda to manage dependencies. For contributors, we provide a specific development environment definition (`environment-dev.yml`) that includes not only the runtime dependencies needed to run OmniDSP but also essential tools for development, testing, and managing dependencies. Code formatting/linting tools are primarily managed via `pre-commit`.
 
 1.  **Create Development Environment:** From the project root directory, create the development environment using the `environment-dev.yml` file:
 
@@ -48,7 +48,7 @@ The project uses Conda to manage dependencies. For contributors, we provide a sp
     conda env create -f environment-dev.yml
     ```
 
-    This command creates a Conda environment named `omnidsp-dev` (defined within the file). This environment contains all packages from `environment.yml` plus developer-specific tools like `pytest`, `ruff`, `clang-format`, `pre-commit`, and `conda-lock`.
+    This command creates a Conda environment named `omnidsp-dev` (defined within the file). This environment contains all packages from `environment.yml` plus developer-specific tools like `pytest`, `ruff`, `pre-commit`, and `conda-lock`. Note that formatters like `clang-format` and `prettier` are installed automatically by `pre-commit` itself.
 
 2.  **Activate Environment:** Activate the newly created environment:
 
@@ -56,7 +56,7 @@ The project uses Conda to manage dependencies. For contributors, we provide a sp
     conda activate omnidsp-dev
     ```
 
-    **Important:** Always ensure this environment is activated before building, running tests, using the library, or running developer tools like `pre-commit` or `conda-lock`. The `pre-commit` hooks rely on tools (`clang-format`, `ruff`, etc.) being available within this activated environment.
+    **Important:** Always ensure this environment is activated before building, running tests, using the library, or running developer tools like `pre-commit` or `conda-lock`. Although some tools like `clang-format` are installed by `pre-commit`, activating the environment ensures `pre-commit` itself and other dependencies are found correctly.
 
 3.  **Install Git Hooks:** After activating the environment for the first time in a new clone, install the `pre-commit` Git hooks:
     ```bash
@@ -72,7 +72,7 @@ To ensure consistent and reproducible _runtime_ environments across different op
 
 - **Source File:** The `environment.yml` file defines the primary _runtime_ dependencies (for the `omnidsp` environment), their constraints, and the target platforms for locking.
 - **Lock Files:** Explicit, platform-specific lock files (e.g., `conda-osx-arm64.lock`, `conda-linux-64.lock`, `conda-win-64.lock`) are generated from `environment.yml`. These lock files contain the exact package URLs and hashes needed for _each specific platform_ and are committed to the repository. End-users and CI should ideally use these lock files to create the `omnidsp` environment.
-- **Development Environment:** The `environment-dev.yml` file includes all runtime dependencies _plus_ developer tools. It is typically used directly for creating the separate `omnidsp-dev` developer environment (`conda env create -f environment-dev.yml`).
+- **Development Environment:** The `environment-dev.yml` file includes all runtime dependencies _plus_ developer tools like `pytest`, `ruff`, `pre-commit`, and `conda-lock`. It is typically used directly for creating the separate `omnidsp-dev` developer environment (`conda env create -f environment-dev.yml`).
 
 ### Contributor Workflow for Runtime Dependencies
 
@@ -99,20 +99,20 @@ You generally don't need to interact directly with `conda-lock`. Simply use the 
 
 ## Developer Tools and Workflow
 
-The `omnidsp-dev` Conda environment (created from `environment-dev.yml`) provides several tools to aid development and ensure code quality:
+The `omnidsp-dev` Conda environment (created from `environment-dev.yml`) provides essential tools like `pytest`, `ruff`, `pre-commit`, and `conda-lock`. Other tools used for code quality are managed directly by `pre-commit`:
 
-- **`pytest`:** For running the Python test suite.
-- **`ruff`:** A fast Python linter and formatter (used via `pre-commit`).
-- **`clang-format`:** A C++ code formatter (provided by this environment and used via `pre-commit`).
-- **`prettier`:** An opinionated code formatter used via `pre-commit` for Markdown (`.md`), YAML (`.yaml`/`.yml`), and TOML (`.toml`) files.
-- **`pre-commit`:** A framework for managing Git hooks that run checks before commits.
+- **`pytest`:** For running the Python test suite (provided by Conda env).
+- **`ruff`:** A fast Python linter and formatter (provided by Conda env, used via `pre-commit`).
+- **`clang-format`:** A C++ code formatter (installed automatically by the `pre-commit` hook `mirrors-clang-format`).
+- **`prettier`:** An opinionated code formatter (installed automatically by the `pre-commit` hook `mirrors-prettier`) for Markdown (`.md`), YAML (`.yaml`/`.yml`), and TOML (`.toml`) files.
+- **`pre-commit`:** A framework for managing Git hooks (provided by Conda env).
 - **`conventional-pre-commit`:** A hook (used via `pre-commit`) to validate commit messages against the Conventional Commits standard.
-- **`conda-lock`:** For regenerating runtime dependency lock files (see previous section).
-- **`nbstripout`:** Removes output cells from Jupyter Notebooks (used via `pre-commit`).
+- **`conda-lock`:** For regenerating runtime dependency lock files (provided by Conda env).
+- **`nbstripout`:** Removes output cells from Jupyter Notebooks (installed automatically by its `pre-commit` hook).
 
 ### Using `pre-commit` for Code Quality
 
-To maintain consistent code style, catch potential issues early, and ensure informative commit messages, this project uses `pre-commit` hooks defined in `.pre-commit-config.yaml`. These hooks automatically run tools like `ruff`, `clang-format`, and `prettier` (using the versions installed in the `omnidsp-dev` environment or managed by the hook itself) on changed files or the commit message itself before you make a commit.
+To maintain consistent code style, catch potential issues early, and ensure informative commit messages, this project uses `pre-commit` hooks defined in `.pre-commit-config.yaml`. These hooks automatically run tools like `ruff`, `clang-format`, and `prettier` (using versions managed internally by `pre-commit` itself) on changed files or the commit message itself before you make a commit.
 
 1.  **Initial Setup:** After creating and activating the `omnidsp-dev` environment, run `pre-commit install --hook-type commit-msg --hook-type pre-commit` once per clone (as described in "Setting up the Development Environment"). This installs hooks for both pre-commit (formatting/linting) and commit-msg (message validation) stages.
 2.  **Workflow:**
@@ -121,7 +121,7 @@ To maintain consistent code style, catch potential issues early, and ensure info
     - **Commit Message Validation:** The `commit-msg` hook (`conventional-pre-commit`) runs first. If your commit message doesn't follow the Conventional Commits format, the commit will be aborted with an error message. Edit your commit message and try again.
     - **Formatting/Linting:** If the message is valid, the `pre-commit` hooks (formatters, linters) run on the staged files.
     - **If hooks pass:** Your commit proceeds as usual.
-    - **If hooks fail (e.g., a formatter modified files):** The commit will be aborted. `pre-commit` will output messages indicating which files were changed. Simply `git add` the modified files again and re-run `git commit`. The second attempt should pass if the only issues were formatting changes fixed by the hooks.
+    - **If hooks fail (e.g., a formatter modified files):** The commit will be aborted. `pre-commit` will output messages indicating which files were changed. Note that `pre-commit` modifies your files in place but **does not automatically stage** these changes. You must manually run `git add` on the files listed in the output before attempting the commit again. The second attempt should pass if the only issues were formatting changes fixed by the hooks.
 
 ### Updating Development Tools
 
@@ -129,7 +129,7 @@ The tools used for development might occasionally need updates or additions.
 
 - **Adding/Updating a Tool in the Conda Environment:**
 
-  1.  Modify the `dependencies:` list within `environment-dev.yml` to add, remove, or change the version constraint of a Conda package (e.g., updating `pytest` or `clang-format`). Remember this file contains both runtime and dev dependencies, so modify the appropriate section.
+  1.  Modify the `dependencies:` list within `environment-dev.yml` to add, remove, or change the version constraint of a Conda package (e.g., updating `pytest` or `ruff`). Remember this file contains both runtime and dev dependencies, so modify the appropriate section.
   2.  Commit the changes to `environment-dev.yml`.
   3.  Existing developers will need to update their local `omnidsp-dev` environment by running:
       ```bash
@@ -141,9 +141,9 @@ The tools used for development might occasionally need updates or additions.
       The `--prune` option removes packages that are no longer listed in the file.
 
 - **Adding/Updating a `pre-commit` Hook:**
-  1.  Modify the `.pre-commit-config.yaml` file to add a new hook, update the `rev:` of an existing hook repository, or change hook arguments.
+  1.  Modify the `.pre-commit-config.yaml` file to add a new hook, update the `rev:` of an existing hook repository (e.g., updating the version of `clang-format` used by `mirrors-clang-format`), or change hook arguments.
   2.  Commit the changes to `.pre-commit-config.yaml`.
-  3.  **No extra steps are usually required by developers.** The `pre-commit` framework automatically detects changes to `.pre-commit-config.yaml`. The next time you run `git commit` (or manually run `pre-commit run ...`), it will download and install any new tools or updated versions specified in the configuration into its internal cache _unless_ the hook is configured to use the `language: system` entry (which we try to avoid). You generally **do not** need to re-run `pre-commit install` or run commands like `pre-commit clean`.
+  3.  **No extra steps are usually required by developers.** The `pre-commit` framework automatically detects changes to `.pre-commit-config.yaml`. The next time you run `git commit` (or manually run `pre-commit run ...`), it will download and install any new tools or updated versions specified in the configuration into its internal cache. You generally **do not** need to re-run `pre-commit install` or run commands like `pre-commit clean`.
   4.  If a hook fails unexpectedly after an update (e.g., after pulling changes that modified `.pre-commit-config.yaml`), you can try running `pre-commit run <hook_id> --all-files` (replace `<hook_id>` with the specific hook ID) to see more detailed output or potentially force a refresh of that hook's environment. In rare cases, `pre-commit clean` followed by a hook run might be needed for troubleshooting, but avoid it unless necessary.
 
 **Always commit changes to configuration files (`environment.yml`, `environment-dev.yml`, `conda-*.lock`, `.pre-commit-config.yaml`) so that all contributors stay synchronized.**
@@ -230,7 +230,7 @@ _(No changes needed here)_
 
 ## Coding Style
 
-- **C++:** Please try to follow the existing code style. We use `clang-format` via `pre-commit` to enforce consistency (check `.pre-commit-config.yaml` and potentially a `.clang-format` file for style details). The `clang-format` executable itself is provided by the `omnidsp-dev` conda environment defined in `environment-dev.yml`. Use Doxygen-style comments for documenting headers (`/** ... */`) and implementation details where appropriate.
+- **C++:** Please try to follow the existing code style. We use `clang-format` via `pre-commit` to enforce consistency (check `.pre-commit-config.yaml` and potentially a `.clang-format` file for style details). The `clang-format` executable itself is installed and managed automatically by the relevant `pre-commit` hook (`mirrors-clang-format`) and **does not** need to be installed separately in the Conda environment. Use Doxygen-style comments for documenting headers (`/** ... */`) and implementation details where appropriate.
 - **Python:** We use `ruff` via `pre-commit` for code formatting and linting. Please follow PEP 8 guidelines. Use Google-style docstrings.
 - **CMake:** Follow standard CMake practices for readability.
 - **YAML/TOML/Markdown:** We use `prettier` via `pre-commit` to ensure consistent formatting for configuration and documentation files (`.yaml`, `.yml`, `.toml`, `.md`).
