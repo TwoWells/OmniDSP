@@ -1,7 +1,7 @@
 # .github/workflows/macos_test.yml
-# Version to match documentation Example 7 using explicit lock file
+# Full workflow using explicit lock file via setup-miniconda
 
-name: macOS Sanity Check Explicit Lock Install
+name: macOS C++ Tests (Accelerate Backend)
 
 on:
   push:
@@ -15,7 +15,7 @@ jobs:
     runs-on: macos-latest
     defaults:
       run:
-        # Keep bash -el to ensure conda init works for subsequent steps
+        # Use bash -el to ensure conda init works correctly
         shell: bash -el {0}
     steps:
       - name: Checkout repository
@@ -27,20 +27,28 @@ jobs:
         with:
           activate-environment: omnidsp_env # Name for the environment
           # Use the explicit lock file matching the runner platform
-          environment-file: conda-osx-arm64.lock # <-- Use explicit file
+          environment-file: conda-osx-arm64.lock
           auto-update-conda: true
           auto-activate-base: false
 
-      # Step 2: Run Diagnostics (Should activate omnidsp_env automatically)
-      - name: Run Diagnostics
+      # Step 2: Configure CMake
+      # Rely on CMAKE_PREFIX_PATH set by activated conda env
+      - name: Configure CMake
         run: |
-          echo "--- Conda Info ---"
-          conda info
-          echo "--- Conda List ---"
-          conda list
-          echo "--- Conda Config Sources ---"
-          conda config --show-sources
-          echo "--- Conda Config Show ---"
-          conda config --show
-          echo "--- Environment Variables ---"
-          printenv | sort
+          echo "Using CONDA_PREFIX=$CONDA_PREFIX"
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_PREFIX_PATH=$CONDA_PREFIX \
+                -D PREFER_ACCELERATE=ON \
+                -D PREFER_ONEMKL=OFF \
+                -D OMNIDSP_BUILD_TESTS=ON
+
+      # Step 3: Build the C++ code
+      - name: Build
+        run: |
+          cmake --build build --config Release
+
+      # Step 4: Run C++ Tests using CTest
+      - name: Test
+        working-directory: ./build
+        run: |
+          ctest --output-on-failure -C Release
