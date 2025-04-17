@@ -1,0 +1,75 @@
+# .pre-commit-config.yaml
+# Configuration for pre-commit Git hooks.
+# See https://pre-commit.com/ for more information.
+
+repos:
+  # === General Purpose Hooks ===
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0 # Use the latest stable version
+    hooks:
+      # Fixes trailing whitespace
+      - id: trailing-whitespace
+      # Ensures files end with a single newline
+      - id: end-of-file-fixer
+      # Checks YAML files for parseable syntax
+      - id: check-yaml
+        # exclude: ^(environment\.yml|environment-dev\.yml)$ # Example if selectors cause issues
+      # Checks for files that may have been accidentally added (e.g., large binaries)
+      - id: check-added-large-files
+        args: ["--maxkb=1024"] # Set max file size in KB (e.g., 1MB)
+
+  # === Commit Message Linting (Conventional Commits) ===
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v3.2.0 # Use the latest stable version
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg] # Hook into the commit-msg stage
+
+  # === Python Formatting & Linting ===
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.4 # Use the latest stable version
+    hooks:
+      # Run the formatter first
+      - id: ruff-format
+        types_or: [python, pyi, jupyter] # Format .py, .pyi, and .ipynb files
+      # Then run the linter with auto-fix enabled
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        types_or: [python, pyi, jupyter]
+
+  # === C++ Formatting (Using mirrors-clang-format) ===
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v18.1.3 # Use a recent clang-format version tag (check for latest)
+    hooks:
+      - id: clang-format
+        files: \.(c|h|cpp|hpp|cc|cxx|hh|hxx)$
+        # Optional: Specify style if not using a .clang-format file in the root
+        args: ["--style=Google"] # e.g., Google, LLVM, Microsoft, Mozilla, WebKit, file
+
+  # === CMake Formatting ===
+  - repo: https://github.com/cheshirekow/cmake-format-precommit
+    rev: v0.6.13 # Check for newer versions
+    hooks:
+      - id: cmake-format
+        types: [cmake] # Targets CMakeLists.txt and potentially .cmake files
+        # Optional args, e.g., specify config file location
+        # args: ["-c", "path/to/.cmake-format.yaml"]
+
+  # === YAML, TOML, Markdown Formatting ===
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: "v4.0.0-alpha.8" # Use the latest stable/alpha version
+    hooks:
+      - id: prettier
+        # Specify all file types Prettier should handle
+        types_or: [yaml, toml, markdown]
+        # Exclude environment files if conda selectors cause issues with prettier
+        # exclude: ^(environment\.yml|environment-dev\.yml)$
+        # Optional: Add args if you use a .prettierrc config file
+        # args: ['--config', '.prettierrc.yaml']
+
+  # === Jupyter Notebook Output Stripping ===
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.7.1 # Check for newer versions
+    hooks:
+      - id: nbstripout
+        types: [jupyter] # Ensure it targets notebook files

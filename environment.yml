@@ -2,8 +2,8 @@
 # Uses preprocessing selectors for MKL deps, pip for pybind11
 # Specifies target platforms for conda-lock
 
-# Environment name
-name: omnidsp_env
+# Environment name (Updated)
+name: omnidsp
 
 # Channels to search for packages, order matters
 channels:
@@ -38,11 +38,11 @@ dependencies:
   # --------------------------------------------------------------------
   # MKL dependencies (Only install on Linux or Windows)
   - intel-openmp # [linux]
-  - mkl-devel    # [linux]
-  - ipp-devel    # [linux]
+  - mkl-devel # [linux]
+  - ipp-devel # [linux]
   - intel-openmp # [win]
-  - mkl-devel    # [win]
-  - ipp-devel    # [win]
+  - mkl-devel # [win]
+  - ipp-devel # [win]
 
   # Accelerate framework (For macOS) is provided by the OS, not Conda.
 
@@ -66,9 +66,7 @@ dependencies:
   - librosa
   - resampy
   - matplotlib
-
 # --------------------------------------------------------------------
 # Pip dependencies (Installed after Conda dependencies)
 # --------------------------------------------------------------------
 #  - pip:
-#    - pybind11[global]

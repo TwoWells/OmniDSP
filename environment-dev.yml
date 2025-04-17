@@ -1,0 +1,61 @@
+# environment-dev.yml
+# Development environment for OmniDSP contributors.
+# Includes runtime dependencies from environment.yml plus developer tools.
+
+name: omnidsp-dev # Distinct name for the development environment
+
+# Channels copied from environment.yml, ensure conda-forge is present
+channels:
+  - https://software.repos.intel.com/python/conda
+  - conda-forge # clang-format is usually available here
+  - defaults
+
+dependencies:
+  # ====================================================================
+  # == Runtime Dependencies (Copied VERBATIM from environment.yml) ===
+  # ====================================================================
+
+  # --- Core Python & Package Management ---
+  - python>=3.8
+  - pip
+
+  # --- C++ Build Toolchain & Dependencies (Managed by Conda) ---
+  - cmake>=3.21
+  - cxx-compiler
+  - make # Or ninja
+  - gtest
+
+  # --- Optimized DSP Backends (Selected by CMake based on availability) ---
+  # MKL dependencies (Only install on Linux or Windows)
+  - intel-openmp # [linux]
+  - mkl-devel # [linux]
+  - ipp-devel # [linux]
+  - intel-openmp # [win]
+  - mkl-devel # [win]
+  - ipp-devel # [win]
+
+  # --- Python Package Build & Runtime Dependencies ---
+  - numpy
+  - scipy
+  - pybind11
+  - scikit-build-core>=0.7
+
+  # --- Python Testing ---
+  - pytest
+
+  # --- Dependencies for Notebooks/Examples (Optional) ---
+  - jupyterlab # Or 'notebook'
+  - librosa
+  - resampy
+  - matplotlib
+
+  # ====================================================================
+  # ================ Development-Specific Tools ========================
+  # ====================================================================
+
+  - pre-commit # For managing Git pre-commit hooks
+  - ruff # Fast Python linter & formatter
+  - conda-lock # For managing runtime dependency lock files
+
+# --- Pip dependencies (Copied from environment.yml - currently empty/commented) ---
+#  - pip:

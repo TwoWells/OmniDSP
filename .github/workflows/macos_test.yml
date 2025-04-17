@@ -1,14 +1,36 @@
 # .github/workflows/macos_test.yml
-# Full workflow using explicit lock file via setup-miniconda
+# Runs C++ tests on macOS using the Accelerate backend.
+# Uses explicit lock file via setup-miniconda.
+# Skips execution if only documentation or specific config files are changed.
 
 name: macOS C++ Tests (Accelerate Backend)
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
+    # Ignore pushes that only change documentation or specific non-code files
+    paths-ignore:
+      - "**.md"
+      - "LICENSE"
+      - ".gitignore"
+      - ".gitattributes"
+      - "docs/**"
+      - "notebooks/**"
+      # Add other non-code paths to ignore if needed
+
   pull_request:
-    branches: [ main, master ]
-  workflow_dispatch:
+    branches: [main, master]
+    # Ignore pull requests that only change documentation or specific non-code files
+    paths-ignore:
+      - "**.md"
+      - "LICENSE"
+      - ".gitignore"
+      - ".gitattributes"
+      - "docs/**"
+      - "notebooks/**"
+      # Add other non-code paths to ignore if needed
+
+  workflow_dispatch: # Allows manual triggering
 
 jobs:
   build-and-test-accelerate:
@@ -25,8 +47,9 @@ jobs:
       - name: Setup Miniconda and Environment
         uses: conda-incubator/setup-miniconda@v3
         with:
-          activate-environment: omnidsp_env # Name for the environment
+          activate-environment: omnidsp # UPDATED environment name
           # Use the explicit lock file matching the runner platform
+          # Assuming macos-latest uses arm64
           environment-file: conda-osx-arm64.lock
           auto-update-conda: true
           auto-activate-base: false

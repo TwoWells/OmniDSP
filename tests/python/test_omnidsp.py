@@ -2,8 +2,9 @@
 # Updated for overloaded API and factory functions
 
 import unittest
-import omnidsp_py # Import the main package
+import omnidsp_py  # Import the main package
 import numpy as np
+
 
 # A simple Python window function for CQT tests
 def python_hann_window(placeholder_array: np.ndarray) -> np.ndarray:
@@ -18,13 +19,12 @@ def python_hann_window(placeholder_array: np.ndarray) -> np.ndarray:
     dtype = placeholder_array.dtype
     # Returning a simple Hann window coefficient for size 1 for simplicity
     # The C++ CQTPlan implementation needs to generate the actual window internally.
-    return np.array([0.0], dtype=dtype) # Placeholder for testing callable passing
+    return np.array([0.0], dtype=dtype)  # Placeholder for testing callable passing
 
 
 class TestOmniDSP(unittest.TestCase):
-
-    N = 1024 # Default test size
-    N_cqt = 4096 # Longer size often better for CQT
+    N = 1024  # Default test size
+    N_cqt = 4096  # Longer size often better for CQT
 
     def test_enums(self):
         """Tests accessing Enum values."""
@@ -41,14 +41,16 @@ class TestOmniDSP(unittest.TestCase):
             length=self.N,
             precision=omnidsp_py.Precision.SINGLE,
             direction=omnidsp_py.Direction.FORWARD,
-            domain=omnidsp_py.Domain.COMPLEX
+            domain=omnidsp_py.Domain.COMPLEX,
         )
         self.assertIsInstance(plan_f, omnidsp_py.FFTPlanFloat)
         self.assertEqual(plan_f.getLength(), self.N)
         self.assertEqual(plan_f.getPrecision(), omnidsp_py.Precision.SINGLE)
         self.assertEqual(plan_f.getDirection(), omnidsp_py.Direction.FORWARD)
         self.assertEqual(plan_f.getDomain(), omnidsp_py.Domain.COMPLEX)
-        self.assertEqual(plan_f.getNormMode(), omnidsp_py.NormMode.BACKWARD) # Default norm
+        self.assertEqual(
+            plan_f.getNormMode(), omnidsp_py.NormMode.BACKWARD
+        )  # Default norm
 
         # Create Double Plan with different options
         plan_d = omnidsp_py.create_fft_plan(
@@ -56,7 +58,7 @@ class TestOmniDSP(unittest.TestCase):
             precision=omnidsp_py.Precision.DOUBLE,
             direction=omnidsp_py.Direction.INVERSE,
             domain=omnidsp_py.Domain.REAL,
-            norm=omnidsp_py.NormMode.ORTHO
+            norm=omnidsp_py.NormMode.ORTHO,
         )
         self.assertIsInstance(plan_d, omnidsp_py.FFTPlanDouble)
         self.assertEqual(plan_d.getLength(), self.N // 2)
@@ -78,8 +80,8 @@ class TestOmniDSP(unittest.TestCase):
             lowest_freq=fmin,
             highest_freq=fmax,
             bins_per_octave=bpo,
-            window_function=python_hann_window, # Pass Python callable
-            precision=omnidsp_py.Precision.DOUBLE
+            window_function=python_hann_window,  # Pass Python callable
+            precision=omnidsp_py.Precision.DOUBLE,
         )
         self.assertIsInstance(plan_d, omnidsp_py.CQTPlanDouble)
         self.assertEqual(plan_d.getSampleRate(), sr)
@@ -87,7 +89,9 @@ class TestOmniDSP(unittest.TestCase):
         # Add checks for other properties if needed
 
         # Test basic execution (Double)
-        signal_d = np.sin(2 * np.pi * 440.0 * np.arange(self.N_cqt) / sr).astype(np.float64)
+        signal_d = np.sin(2 * np.pi * 440.0 * np.arange(self.N_cqt) / sr).astype(
+            np.float64
+        )
         cqt_output_d = plan_d.execute(signal_d)
         self.assertEqual(cqt_output_d.ndim, 1)
         self.assertEqual(cqt_output_d.shape[0], plan_d.getNumBins())
@@ -99,8 +103,8 @@ class TestOmniDSP(unittest.TestCase):
             lowest_freq=fmin,
             highest_freq=fmax,
             bins_per_octave=bpo,
-            window_function=python_hann_window, # Pass Python callable
-            precision=omnidsp_py.Precision.SINGLE
+            window_function=python_hann_window,  # Pass Python callable
+            precision=omnidsp_py.Precision.SINGLE,
         )
         self.assertIsInstance(plan_f, omnidsp_py.CQTPlanFloat)
 
@@ -110,7 +114,6 @@ class TestOmniDSP(unittest.TestCase):
         self.assertEqual(cqt_output_f.ndim, 1)
         self.assertEqual(cqt_output_f.shape[0], plan_f.getNumBins())
         self.assertEqual(cqt_output_f.dtype, np.complex64)
-
 
     def test_window_hann(self):
         """Tests overloaded Window.hann static method."""
@@ -177,17 +180,20 @@ class TestOmniDSP(unittest.TestCase):
         self.assertEqual(output_f64.shape, (self.N,))
         self.assertEqual(output_f64.dtype, np.float64)
 
-
     def test_fft(self):
         """Tests overloaded fft convenience function."""
         # Float
-        input_c64 = (np.random.rand(self.N) + 1j * np.random.rand(self.N)).astype(np.complex64)
+        input_c64 = (np.random.rand(self.N) + 1j * np.random.rand(self.N)).astype(
+            np.complex64
+        )
         output_c64 = omnidsp_py.fft(input_c64)
         self.assertEqual(output_c64.shape, (self.N,))
         self.assertEqual(output_c64.dtype, np.complex64)
 
         # Double
-        input_c128 = (np.random.rand(self.N) + 1j * np.random.rand(self.N)).astype(np.complex128)
+        input_c128 = (np.random.rand(self.N) + 1j * np.random.rand(self.N)).astype(
+            np.complex128
+        )
         output_c128 = omnidsp_py.fft(input_c128)
         self.assertEqual(output_c128.shape, (self.N,))
         self.assertEqual(output_c128.dtype, np.complex128)
@@ -196,17 +202,20 @@ class TestOmniDSP(unittest.TestCase):
         recon_c128 = omnidsp_py.ifft(output_c128)
         self.assertTrue(np.allclose(input_c128, recon_c128, atol=1e-12))
 
-
     def test_ifft(self):
         """Tests overloaded ifft convenience function."""
         # Float
-        input_c64 = (np.random.rand(self.N) + 1j * np.random.rand(self.N)).astype(np.complex64)
+        input_c64 = (np.random.rand(self.N) + 1j * np.random.rand(self.N)).astype(
+            np.complex64
+        )
         output_c64 = omnidsp_py.ifft(input_c64)
         self.assertEqual(output_c64.shape, (self.N,))
         self.assertEqual(output_c64.dtype, np.complex64)
 
         # Double
-        input_c128 = (np.random.rand(self.N) + 1j * np.random.rand(self.N)).astype(np.complex128)
+        input_c128 = (np.random.rand(self.N) + 1j * np.random.rand(self.N)).astype(
+            np.complex128
+        )
         output_c128 = omnidsp_py.ifft(input_c128)
         self.assertEqual(output_c128.shape, (self.N,))
         self.assertEqual(output_c128.dtype, np.complex128)
@@ -233,7 +242,7 @@ class TestOmniDSP(unittest.TestCase):
 
         # Check identity (approximately) using default BACKWARD norm
         recon_f64 = omnidsp_py.irfft(output_c128)
-        self.assertEqual(recon_f64.shape, (self.N,)) # irfft should restore length
+        self.assertEqual(recon_f64.shape, (self.N,))  # irfft should restore length
         self.assertTrue(np.allclose(input_f64, recon_f64, atol=1e-12))
 
     def test_irfft(self):
@@ -243,19 +252,23 @@ class TestOmniDSP(unittest.TestCase):
 
         # Float
         # Create valid Hermitian input for irfft
-        spec_f32 = (np.random.rand(input_len) + 1j * np.random.rand(input_len)).astype(np.complex64)
-        spec_f32[0] = spec_f32[0].real + 0j # Ensure DC is real
-        if self.N % 2 == 0: # Ensure Nyquist is real if N is even
-             spec_f32[-1] = spec_f32[-1].real + 0j
+        spec_f32 = (np.random.rand(input_len) + 1j * np.random.rand(input_len)).astype(
+            np.complex64
+        )
+        spec_f32[0] = spec_f32[0].real + 0j  # Ensure DC is real
+        if self.N % 2 == 0:  # Ensure Nyquist is real if N is even
+            spec_f32[-1] = spec_f32[-1].real + 0j
         output_f32 = omnidsp_py.irfft(spec_f32)
         self.assertEqual(output_f32.shape, (expected_len,))
         self.assertEqual(output_f32.dtype, np.float32)
 
         # Double
-        spec_c128 = (np.random.rand(input_len) + 1j * np.random.rand(input_len)).astype(np.complex128)
-        spec_c128[0] = spec_c128[0].real + 0j # Ensure DC is real
-        if self.N % 2 == 0: # Ensure Nyquist is real if N is even
-             spec_c128[-1] = spec_c128[-1].real + 0j
+        spec_c128 = (np.random.rand(input_len) + 1j * np.random.rand(input_len)).astype(
+            np.complex128
+        )
+        spec_c128[0] = spec_c128[0].real + 0j  # Ensure DC is real
+        if self.N % 2 == 0:  # Ensure Nyquist is real if N is even
+            spec_c128[-1] = spec_c128[-1].real + 0j
         output_f64 = omnidsp_py.irfft(spec_c128)
         self.assertEqual(output_f64.shape, (expected_len,))
         self.assertEqual(output_f64.dtype, np.float64)
@@ -268,5 +281,5 @@ class TestOmniDSP(unittest.TestCase):
         self.assertTrue(np.allclose(signal_f64, recon_f64, atol=1e-12))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

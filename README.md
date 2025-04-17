@@ -4,88 +4,109 @@ OmniDSP is a C++ library designed for high-performance Digital Signal Processing
 
 ## Features
 
-*   **Fast Fourier Transforms (FFT):**
-    *   Complex-to-Complex (C2C) FFT and IFFT.
-    *   Real-to-Complex (RFFT) and Complex-to-Real (IRFFT).
-    *   Configurable normalization modes (`BACKWARD`, `ORTHO`, `FORWARD`).
-    *   Uses `FFTPlan` objects for efficient repeated transforms.
-*   **Constant-Q Transform (CQT):**
-    *   Efficient recursive implementation based on FFTs and downsampling.
-    *   Precomputed sparse kernels for reduced runtime computation.
-    *   Configurable parameters (sample rate, hop length, frequency range, bins per octave, window function, sparsity).
-*   **Convolution / Correlation:**
-    *   1D linear convolution and correlation (`valid` mode currently implemented).
-*   **Window Functions:**
-    *   Application of standard windows (Hann, Hamming, Kaiser, Flattop) via `OmniDSP::Window` class.
-*   **Resampling:**
-    *   Combined FIR filtering and downsampling (currently used internally by CQT).
-*   **Backend System:**
-    *   Automatically selects optimized backends (Intel oneMKL/IPP, Apple Accelerate) at build time based on platform and availability.
-    *   Provides a stub backend (throws runtime errors) if no optimized backend is found.
-*   **Python Bindings:** Easy-to-use Python API mirroring the C++ functionality.
+- **Fast Fourier Transforms (FFT):**
+  - Complex-to-Complex (C2C) FFT and IFFT.
+  - Real-to-Complex (RFFT) and Complex-to-Real (IRFFT).
+  - Configurable normalization modes (`BACKWARD`, `ORTHO`, `FORWARD`).
+  - Uses `FFTPlan` objects for efficient repeated transforms.
+- **Constant-Q Transform (CQT):**
+  - Efficient recursive implementation based on FFTs and downsampling.
+  - Precomputed sparse kernels for reduced runtime computation.
+  - Configurable parameters (sample rate, hop length, frequency range, bins per octave, window function, sparsity).
+- **Convolution / Correlation:**
+  - 1D linear convolution and correlation (`valid` mode currently implemented).
+- **Window Functions:**
+  - Application of standard windows (Hann, Hamming, Kaiser, Flattop) via `OmniDSP::Window` class.
+- **Resampling:**
+  - Combined FIR filtering and downsampling (currently used internally by CQT).
+- **Backend System:**
+  - Automatically selects optimized backends (Intel oneMKL/IPP, Apple Accelerate) at build time based on platform and availability within the Conda environment.
+  - Provides a stub backend (throws runtime errors) if no optimized backend is found.
+- **Python Bindings:** Easy-to-use Python API mirroring the C++ functionality.
 
 ## Project Status
 
-*   Core FFT, CQT (recursive), Convolution/Correlation (valid mode), and Windowing functionalities are implemented.
-*   Backend system refactored for better organization and parity (MKL, Accelerate, Stub).
-*   Build system uses CMake and Conda for managing dependencies.
-*   **Current Work:** Addressing remaining test failures (see `TODO.md`), implementing additional convolution modes, resolving IPP resampling details (filter coefficient usage, double precision), tuning CQT scaling, and setting up CI.
+- Core FFT, CQT (recursive), Convolution/Correlation (valid mode), and Windowing functionalities are implemented.
+- Backend system refactored for better organization and parity (MKL, Accelerate, Stub).
+- Build system uses CMake and Conda for managing dependencies.
+- **Current Work:** Addressing remaining test failures (see `TODO.md`), implementing additional convolution modes, resolving IPP resampling details (filter coefficient usage, double precision), tuning CQT scaling, and setting up CI.
 
 ## Project Structure
 
-*   `include/OmniDSP/`: Public C++ headers defining the API (`fft.h`, `cqt.h`, `convolution.h`, `window.h`, `resample.h`, `omnidsp.h`).
-*   `src/omnidsp/`: Core C++ library implementation files defining the public API wrappers (`fft.cpp`, `cqt.cpp`, `convolution.cpp`, `window.cpp`, `resample.cpp`).
-*   `src/omnidsp/backend/`: Contains backend-specific implementations.
-    *   `backend_impl.h`: Declares the interface required by all backends.
-    *   `onemkl/`: Implementations using Intel oneMKL/IPP (`fft.cpp`, `convolution.cpp`, `resample.cpp`, `window.cpp`).
-    *   `accelerate/`: Implementations using Apple Accelerate/vDSP (`fft.cpp`, `convolution.cpp`, `resample.cpp`, `window.cpp`).
-    *   `stub/`: Stub implementations that throw runtime errors (`fft.cpp`, `convolution.cpp`, `resample.cpp`, `window.cpp`).
-*   `src/omnidsp_py/`: Python bindings source code (pybind11 wrappers).
-*   `tests/`: Unit tests.
-    *   `cpp/`: C++ tests using GoogleTest. Requires `test_references.txt`.
-    *   `python/`: Python tests using pytest.
-*   `examples/`: Usage examples.
-    *   `cpp/`: C++ examples.
-    *   `notebooks/`: Python examples using Jupyter notebooks.
-*   `environment.yml`: Conda environment definition.
-*   `CMakeLists.txt`: Main CMake build script.
-*   `pyproject.toml`: Python packaging configuration (uses `scikit-build-core`).
-*   `TODO.md`: Current development tasks.
-*   `CONTRIBUTING.md`: Guidelines for contributors.
+- `include/OmniDSP/`: Public C++ headers defining the API (`fft.h`, `cqt.h`, `convolution.h`, `window.h`, `resample.h`, `omnidsp.h`).
+- `src/omnidsp/`: Core C++ library implementation files defining the public API wrappers (`fft.cpp`, `cqt.cpp`, `convolution.cpp`, `window.cpp`, `resample.cpp`).
+- `src/omnidsp/backend/`: Contains backend-specific implementations.
+  - `backend_impl.h`: Declares the interface required by all backends.
+  - `onemkl/`: Implementations using Intel oneMKL/IPP.
+  - `accelerate/`: Implementations using Apple Accelerate/vDSP.
+  - `stub/`: Stub implementations that throw runtime errors.
+- `src/omnidsp_py/`: Python bindings source code (pybind11 wrappers).
+- `tests/`: Unit tests (primarily for developers).
+  - `cpp/`: C++ tests using GoogleTest.
+  - `python/`: Python tests using pytest.
+- `examples/`: Usage examples.
+  - `cpp/`: C++ examples.
+  - `notebooks/`: Python examples using Jupyter notebooks.
+- `environment.yml`: Conda environment definition source (for the `omnidsp` runtime environment).
+- `environment-dev.yml`: Conda environment definition source (for the `omnidsp-dev` developer environment).
+- `conda-*.lock`: Explicit, platform-specific Conda lock files for reproducible installation of the `omnidsp` runtime environment.
+- `.pre-commit-config.yaml`: Configuration for developer Git hooks (see `CONTRIBUTING.md`).
+- `CMakeLists.txt`: Main CMake build script.
+- `pyproject.toml`: Python packaging configuration (uses `scikit-build-core`).
+- `TODO.md`: Current development tasks.
+- `CONTRIBUTING.md`: Guidelines for contributors.
 
-## Getting Started & Building
+## Getting Started & Installation
 
-Building OmniDSP requires **Conda** to manage dependencies (Compiler, CMake, MKL, IPP, Python libs).
+Using OmniDSP (especially the Python bindings) requires **Conda** to manage dependencies (Compiler, CMake, MKL, IPP, Python libs).
 
 1.  **Set up Conda Environment:**
-    *   Clone the repository.
-    *   Navigate to the root directory.
-    *   Create and activate the environment:
-        
-        ```
-        conda env create -f environment.yml
-        conda activate omnidsp_env # Or the name specified in the yml file
-        ```
-        
-    *   **Important:** Always ensure the Conda environment is activated before building or running.
-2.  **Build (Python Package - Recommended for Development):**
-    *   From the activated environment in the project root directory:
-        
-        ```
-        pip install -e . -v
-        ```
-        
-    *   This performs an "editable" install, building the C++ library and Python bindings and making them available in your environment.
-3.  **Build (C++ Library Only):**
-    *   See `CONTRIBUTING.md` for instructions using CMake directly.
+
+    - Clone the repository:
+
+      ```
+      git clone https://github.com/your-username/OmniDSP.git # Replace with actual URL
+      cd OmniDSP
+      ```
+
+    - Create and activate the environment using the provided lock files for reproducibility. Choose the file matching your platform (e.g., `linux-64`, `osx-arm64`, `win-64`):
+
+      ```
+      # Example for Linux:
+      conda create --name omnidsp --file conda-linux-64.lock
+      # Example for macOS (Apple Silicon):
+      # conda create --name omnidsp --file conda-osx-arm64.lock
+      # Example for Windows:
+      # conda create --name omnidsp --file conda-win-64.lock
+
+      conda activate omnidsp
+      ```
+
+      _(Alternatively, for the latest definitions but less reproducibility, you could use `conda env create -f environment.yml` and then `conda activate omnidsp`)_
+
+    - **Important:** Always ensure the `omnidsp` Conda environment is activated before building or using the library.
+
+2.  **Install OmniDSP Python Package:**
+
+    - Once the `omnidsp` environment is activated, install the package from the project root directory:
+
+      ```
+      pip install . -v
+      ```
+
+    - This command uses `scikit-build-core` and CMake to compile the C++ library and Python bindings, installing them into your active `omnidsp` environment. The `-v` flag provides verbose output.
+    - _(Note: For development, using `pip install -e . -v` enables an "editable" install. See `CONTRIBUTING.md`)_
+
+3.  **(Optional) Build C++ Library Only:**
+    - If you only need the C++ library for use in another C++ project, please refer to the developer guidelines in `CONTRIBUTING.md` for instructions using CMake directly.
 
 ## Basic Usage
 
 ### Python
 
-```
+```python
 import numpy as np
-import omnidsp_py as ods # Assuming this is the import name
+import omnidsp_py as ods # Assuming this is the import name after installation
 
 # --- FFT Example ---
 fs = 1000
@@ -132,7 +153,7 @@ print(f"Hann windowed signal: {windowed_signal}")
 
 Include necessary headers (e.g., `<OmniDSP/omnidsp.h>`, `<OmniDSP/cqt.h>`) and link against the built library. See `examples/cpp/` for detailed usage.
 
-```
+```cpp
 #include <OmniDSP/omnidsp.h>
 #include <OmniDSP/cqt.h>
 #include <vector>

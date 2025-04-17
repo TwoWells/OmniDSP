@@ -11,18 +11,24 @@ plan objects.
 """
 
 import numpy as np
+
 # Import standard typing utilities
-from typing import Callable, Union, Optional, TypeVar, cast
-import warnings  # Import warnings module (currently unused, but good practice)
+from typing import Callable, Union, Optional, TypeVar
 
 # --- Import C++ components ---
 # Import the compiled C++ extension module, aliased as 'cpp' for clarity
 from . import omnidsp_py as cpp
+
 # Import Enums and specific Plan classes which are needed directly by the factory functions
 from .omnidsp_py import (
-    Precision, Direction, Domain, NormMode,  # Enums
-    FFTPlanFloat, FFTPlanDouble,             # Specific FFT Plan classes
-    CQTPlanFloat, CQTPlanDouble              # Specific CQT Plan classes
+    Precision,
+    Direction,
+    Domain,
+    NormMode,  # Enums
+    FFTPlanFloat,
+    FFTPlanDouble,  # Specific FFT Plan classes
+    CQTPlanFloat,
+    CQTPlanDouble,  # Specific CQT Plan classes
     # The C++ bound Window class is accessed via cpp.Window
     # The C++ bound fft, ifft, etc functions are accessed via cpp.fft, cpp.ifft
 )
@@ -45,8 +51,7 @@ AnyCQTPlan = Union[CQTPlanFloat, CQTPlanDouble]
 
 # Type variable for hinting the signature of the window function callable.
 # It takes an array and returns an array.
-T_WindowFunc = TypeVar(
-    'T_WindowFunc', bound=Callable[[np.ndarray], np.ndarray])
+T_WindowFunc = TypeVar("T_WindowFunc", bound=Callable[[np.ndarray], np.ndarray])
 
 # Default values matching C++ implementation (from bindings.cpp/cqt.h)
 DEFAULT_SPARSITY_THRESHOLD = 1e-5
@@ -78,7 +83,8 @@ def fft(input_array: ArrayComplex) -> ArrayComplex:
     # Check if the input array's data type is supported.
     if not (input_array.dtype == np.complex64 or input_array.dtype == np.complex128):
         raise TypeError(
-            f"Unsupported dtype {input_array.dtype} for fft. Expected complex64 or complex128.")
+            f"Unsupported dtype {input_array.dtype} for fft. Expected complex64 or complex128."
+        )
     # Call the bound C++ function (cpp.fft), which is overloaded in bindings.cpp.
     # pybind11 automatically selects the correct C++ overload based on the input array type.
     return cpp.fft(input_array)
@@ -104,7 +110,8 @@ def ifft(input_array: ArrayComplex) -> ArrayComplex:
     # Check input dtype.
     if not (input_array.dtype == np.complex64 or input_array.dtype == np.complex128):
         raise TypeError(
-            f"Unsupported dtype {input_array.dtype} for ifft. Expected complex64 or complex128.")
+            f"Unsupported dtype {input_array.dtype} for ifft. Expected complex64 or complex128."
+        )
     # Call the bound C++ function (cpp.ifft).
     return cpp.ifft(input_array)
 
@@ -130,8 +137,9 @@ def rfft(input_array: ArrayReal) -> ArrayComplex:
     # Check input dtype.
     if not (input_array.dtype == np.float32 or input_array.dtype == np.float64):
         raise TypeError(
-            f"Unsupported dtype {input_array.dtype} for rfft. Expected float32 or float64.")
-     # Call the bound C++ function (cpp.rfft).
+            f"Unsupported dtype {input_array.dtype} for rfft. Expected float32 or float64."
+        )
+    # Call the bound C++ function (cpp.rfft).
     return cpp.rfft(input_array)
 
 
@@ -158,8 +166,9 @@ def irfft(input_array: ArrayComplex) -> ArrayReal:
     # Check input dtype.
     if not (input_array.dtype == np.complex64 or input_array.dtype == np.complex128):
         raise TypeError(
-            f"Unsupported dtype {input_array.dtype} for irfft. Expected complex64 or complex128.")
-     # Call the bound C++ function (cpp.irfft).
+            f"Unsupported dtype {input_array.dtype} for irfft. Expected complex64 or complex128."
+        )
+    # Call the bound C++ function (cpp.irfft).
     return cpp.irfft(input_array)
 
 
@@ -167,12 +176,13 @@ def irfft(input_array: ArrayComplex) -> ArrayReal:
 # These functions provide a Pythonic way to create instances of the C++ plan objects
 # (FFTPlanFloat, FFTPlanDouble, CQTPlanFloat, CQTPlanDouble) bound in bindings.cpp.
 
+
 def create_fft_plan(
     length: int,
     precision: Precision,
     direction: Direction,
     domain: Domain,
-    norm: NormMode = NormMode.BACKWARD  # Default normalization mode
+    norm: NormMode = NormMode.BACKWARD,  # Default normalization mode
 ) -> AnyFFTPlan:
     """
     Factory function to create an FFTPlan instance.
@@ -205,21 +215,22 @@ def create_fft_plan(
         return FFTPlanDouble(length, precision, direction, domain, norm)
     else:
         # Handle invalid precision enum values.
-        prec_repr = repr(precision) if isinstance(
-            precision, Precision) else str(precision)
+        prec_repr = (
+            repr(precision) if isinstance(precision, Precision) else str(precision)
+        )
         raise ValueError(f"Unsupported precision: {prec_repr}")
 
 
 def create_cqt_plan(
     sample_rate: float,
-    hop_length: int,            # Added hop_length parameter
+    hop_length: int,  # Added hop_length parameter
     lowest_freq: float,
     highest_freq: float,
     bins_per_octave: int,
     window_function: T_WindowFunc,  # Use TypeVar for better hinting of callable type
     precision: Precision = Precision.DOUBLE,  # Default precision to DOUBLE
     sparsity_threshold: Optional[float] = None,  # Optional sparsity threshold
-    fir_filter_order: Optional[int] = None    # Optional FIR filter order
+    fir_filter_order: Optional[int] = None,  # Optional FIR filter order
 ) -> AnyCQTPlan:
     """
     Factory function to create a recursive CQTPlan instance.
@@ -261,13 +272,20 @@ def create_cqt_plan(
     # Validate that the window_function is actually callable.
     if not callable(window_function):
         raise TypeError(
-            "window_function must be a callable (e.g., a Python function or lambda).")
+            "window_function must be a callable (e.g., a Python function or lambda)."
+        )
 
     # Determine the sparsity threshold and FIR filter order to pass to C++,
     # using the C++ defaults if the Python arguments are None.
     # The C++ binding layer expects these values explicitly.
-    sparsity_thresh_cpp = sparsity_threshold if sparsity_threshold is not None else DEFAULT_SPARSITY_THRESHOLD
-    fir_order_cpp = fir_filter_order if fir_filter_order is not None else DEFAULT_FIR_FILTER_ORDER
+    sparsity_thresh_cpp = (
+        sparsity_threshold
+        if sparsity_threshold is not None
+        else DEFAULT_SPARSITY_THRESHOLD
+    )
+    fir_order_cpp = (
+        fir_filter_order if fir_filter_order is not None else DEFAULT_FIR_FILTER_ORDER
+    )
 
     # Instantiate the appropriate C++ plan class based on the requested precision.
     if precision == Precision.SINGLE:
@@ -281,7 +299,7 @@ def create_cqt_plan(
             bins_per_octave,
             window_function,  # Pass the Python callable
             float(sparsity_thresh_cpp),  # Ensure correct type for float plan
-            fir_order_cpp
+            fir_order_cpp,
         )
     elif precision == Precision.DOUBLE:
         # Call the constructor bound in bindings.cpp for CQTPlanDouble.
@@ -293,13 +311,15 @@ def create_cqt_plan(
             bins_per_octave,
             window_function,  # Pass the Python callable
             float(sparsity_thresh_cpp),  # Ensure correct type for double plan
-            fir_order_cpp
+            fir_order_cpp,
         )
     else:
         # Handle invalid precision enum values.
-        prec_repr = repr(precision) if isinstance(
-            precision, Precision) else str(precision)
+        prec_repr = (
+            repr(precision) if isinstance(precision, Precision) else str(precision)
+        )
         raise ValueError(f"Unsupported precision: {prec_repr}")
+
 
 # Note: Python wrappers are generally not needed for the Window class static methods
 # (like Window.hann). The __init__.py file can directly expose the C++ bound

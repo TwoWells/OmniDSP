@@ -1,10 +1,12 @@
 /**
  * @file tests/cpp/backend/onemkl.cpp
- * @brief Unit tests specifically for the MKL backend convolution/correlation (if any).
+ * @brief Unit tests specifically for the MKL backend convolution/correlation
+ * (if any).
  */
-#include <gtest/gtest.h>
-#include <vector>
 #include <OmniDSP/convolution.h>
+#include <gtest/gtest.h>
+
+#include <vector>
 
 // Only compile these tests if the MKL backend is active
 #ifdef USE_ONEMKL
@@ -15,7 +17,7 @@
 
 // Example Placeholder Test (can be removed if no MKL-specific tests yet)
 TEST(BackendConvMKLTest, Placeholder) {
-    SUCCEED() << "No MKL-specific convolution tests yet.";
+  SUCCEED() << "No MKL-specific convolution tests yet.";
 }
 
-#endif // USE_ONEMKL
+#endif  // USE_ONEMKL
