@@ -12,9 +12,12 @@
 
 // --- Include the generated export header ---
 // Defines OMNIDSP_EXPORT for DLL symbol handling
-#include <OmniDSP/omnidsp.h>  // For FFTPlan
 #include <OmniDSP/omnidsp_export.h>  // Adjust path/name if EXPORT_FILE_NAME was used in CMake
 
+// --- Include necessary OmniDSP headers ---
+#include <OmniDSP/fft.h>  // <<< Added: Include FFTPlan definition
+
+// --- Include standard library headers ---
 #include <complex>
 #include <cstddef>  // For size_t
 #include <functional>
@@ -153,6 +156,7 @@ class OMNIDSP_EXPORT CQTPlan  // <--- OMNIDSP_EXPORT macro added here
   std::vector<size_t> octave_fft_lens_;  // FFT length for each octave
   std::vector<size_t>
       octave_spectrum_lens_;  // Spectrum length (N/2+1) for each octave
+  // FFTPlan is now declared due to the added include above
   std::vector<std::unique_ptr<FFTPlan<T>>>
       octave_signal_fft_plans_;  // RFFT plans for signal frames
   std::vector<std::unique_ptr<FFTPlan<T>>>
