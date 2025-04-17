@@ -24,6 +24,7 @@ dependencies:
   - cxx-compiler
   - make # Or ninja
   - gtest
+  - boost
 
   # --- Optimized DSP Backends (Selected by CMake based on availability) ---
   # MKL dependencies (Only install on Linux or Windows)

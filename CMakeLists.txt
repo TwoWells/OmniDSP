@@ -8,7 +8,8 @@
 # $CONDA_PREFIX/include/ipp path for MKL backend. Added target_link_directories
 # for IPP .lib files with PUBLIC scope. Refactored Conda include path logic for
 # potentially better IntelliSense parsing. Updated library sources for backend
-# refactoring. Corrected if()/command() syntax errors. # <-- Change Description
+# refactoring. Corrected if()/command() syntax errors. Added Boost dependency
+# finding and linking. # <-- Change Description
 cmake_minimum_required(VERSION 3.21)
 cmake_policy(SET CMP0148 NEW) # Policy for modern FindPython behavior
                               # (suppresses warning)
@@ -74,6 +75,13 @@ if(NOT OMNIDSP_BUILD_PYTHON_BINDINGS)
   find_package(GTest REQUIRED)
   message(STATUS "Found GoogleTest for C++ tests.")
 endif()
+
+# <<< Added: Find Boost >>>
+# Find the Boost library (required for Bessel function in windowing) Headers are
+# usually sufficient for basic math functions.
+find_package(Boost REQUIRED)
+message(STATUS "Found Boost version ${Boost_VERSION}")
+# <<< End Added Boost >>>
 
 # --- Option to control backend preference ---
 option(PREFER_ACCELERATE "Prefer Apple Accelerate if available" ${APPLE})
@@ -280,7 +288,6 @@ if(BACKEND STREQUAL "ONEMKL")
           "Explicitly adding Conda Library include path from CONDA_PREFIX: ${conda_library_include_dir}"
       )
     else()
-      # Corrected syntax: message on newline
       if(WIN32)
         message(
           WARNING
@@ -289,7 +296,6 @@ if(BACKEND STREQUAL "ONEMKL")
       endif()
     endif()
     if(EXISTS "${conda_main_include_dir}")
-      # Corrected syntax: command on newline
       if(NOT conda_main_include_dir STREQUAL conda_library_include_dir)
         target_include_directories(omnidsp PRIVATE "${conda_main_include_dir}")
         message(
@@ -323,26 +329,22 @@ if(BACKEND STREQUAL "ONEMKL")
   endif()
 endif()
 
-# Add backend-specific compile definitions TO THE LIBRARY TARGET Corrected
-# syntax: command on newline
+# Add backend-specific compile definitions TO THE LIBRARY TARGET
 if(NOT BACKEND_DEFINITION STREQUAL "")
   target_compile_definitions(omnidsp PRIVATE ${BACKEND_DEFINITION})
 endif()
 
-# Add compile definitions based on logging options Corrected syntax: command on
-# newline
+# Add compile definitions based on logging options
 if(OMNIDSP_ENABLE_MKL_DEBUG_LOGS)
   target_compile_definitions(omnidsp PRIVATE OMNIDSP_ENABLE_MKL_DEBUG_LOGS)
   message(STATUS "Enabling MKL debug logs for omnidsp target.")
 endif()
-# Corrected syntax: command on newline
 if(OMNIDSP_ENABLE_CQT_WARNINGS)
   target_compile_definitions(omnidsp PRIVATE OMNIDSP_ENABLE_CQT_WARNINGS)
   message(STATUS "Enabling CQT Nk clamping warnings for omnidsp target.")
 endif()
 
 # --- Add Linker Directories ---
-# Corrected syntax: command on newline
 if(NOT BACKEND_LINK_DIRS STREQUAL "")
   target_link_directories(
     omnidsp PUBLIC ${BACKEND_LINK_DIRS}) # Use PUBLIC if downstream targets need
@@ -356,7 +358,9 @@ target_link_libraries(
   omnidsp
   PUBLIC # Use PUBLIC if backend libs need to be propagated (e.g., MKL
          # interface)
-         ${BACKEND_LINK_LIBS})
+         ${BACKEND_LINK_LIBS}
+  PRIVATE # <<< Added: Link Boost privately >>>
+          Boost::boost)
 
 # =============================================================================
 # Conditionally Add Subdirectories based on Build Type
@@ -366,7 +370,6 @@ if(OMNIDSP_BUILD_PYTHON_BINDINGS)
     STATUS
       "Configuring Python bindings and tests (OMNIDSP_BUILD_PYTHON_BINDINGS=ON)."
   )
-  # Corrected syntax: command on newline
   if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/omnidsp_py/CMakeLists.txt")
     add_subdirectory(src/omnidsp_py)
   else()
@@ -375,7 +378,6 @@ if(OMNIDSP_BUILD_PYTHON_BINDINGS)
         "Python bindings subdirectory 'src/omnidsp_py' or its CMakeLists.txt not found, skipping Python module configuration."
     )
   endif()
-  # Corrected syntax: command on newline
   if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/python/CMakeLists.txt")
     add_subdirectory(tests/python)
   else()
@@ -388,7 +390,6 @@ else()
   message(
     STATUS
       "Configuring C++ examples and tests (OMNIDSP_BUILD_PYTHON_BINDINGS=OFF).")
-  # Corrected syntax: command on newline
   if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/cpp/CMakeLists.txt")
     add_subdirectory(examples/cpp)
   else()
@@ -397,7 +398,6 @@ else()
         "C++ examples subdirectory 'examples/cpp' or its CMakeLists.txt not found, skipping C++ example configuration."
     )
   endif()
-  # Corrected syntax: command on newline
   if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/cpp/CMakeLists.txt")
     add_subdirectory(tests/cpp)
   else()
@@ -414,7 +414,6 @@ endif()
 if(OMNIDSP_BUILD_PYTHON_BINDINGS)
   message(
     STATUS "Configuring Python examples installation (Python bindings ON)")
-  # Corrected syntax: command on newline
   if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/notebooks")
     install(
       DIRECTORY examples/notebooks/
@@ -444,7 +443,7 @@ else()
     FILES "${CMAKE_CURRENT_BINARY_DIR}/OmniDSP/omnidsp_export.h"
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/OmniDSP"
     COMPONENT Devel)
-  # Generate and install CMake config files Corrected syntax: command on newline
+  # Generate and install CMake config files
   if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/Config.cmake.in")
     message(
       WARNING

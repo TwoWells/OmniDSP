@@ -3,18 +3,21 @@
  * @brief Apple Accelerate backend implementation for OmniDSP window functions.
  *
  * Implements backend functions to generate window coefficients using vDSP
- * where available (Hann, Hamming). Kaiser and Flattop use manual calculations.
- * Compiled only when USE_ACCELERATE is defined.
+ * where available (Hann, Hamming). Kaiser uses Boost Math, Flattop uses manual
+ * calculations. Compiled only when USE_ACCELERATE is defined.
  */
 
 // --- Includes ---
-#include <cmath>      // For M_PI, cos, sin, sqrt, std::abs, std::cyl_bessel_i
+#include <cmath>      // For M_PI, cos, sin, sqrt, std::abs
 #include <limits>     // For std::numeric_limits
 #include <numeric>    // For std::accumulate
 #include <stdexcept>  // For std::runtime_error, std::invalid_argument
 #include <string>
 #include <type_traits>  // For std::is_same_v
 #include <vector>
+
+// <<< Added: Include Boost header for Bessel functions >>>
+#include <boost/math/special_functions/bessel.hpp>
 
 #include "../backend_impl.h"  // Internal backend function declarations
 
@@ -31,7 +34,6 @@
 
 namespace OmniDSP {
 namespace Backend {
-
 // --- Backend Window Generation Implementations ---
 
 /**
@@ -46,14 +48,10 @@ std::vector<T> generate_hann_window_impl(size_t length) {
   vDSP_Length n_vDSP = static_cast<vDSP_Length>(length);
 
   if constexpr (std::is_same_v<T, float>) {
-    // vDSP_hann_window_f(OutputVector, Length, Flags);
     vDSP_hann_window_f(coeffs.data(), n_vDSP, vDSP_HANN_NORM);
   } else {  // double
-    // vDSP_hann_window(OutputVector, Length, Flags);
     vDSP_hann_window(coeffs.data(), n_vDSP, vDSP_HANN_NORM);
   }
-  // Note: vDSP_hann_window might have slightly different scaling/endpoint
-  // handling compared to the manual formula or IPP. Test comparison needed.
   return coeffs;
 }
 
@@ -68,21 +66,17 @@ std::vector<T> generate_hamming_window_impl(size_t length) {
   vDSP_Length n_vDSP = static_cast<vDSP_Length>(length);
 
   if constexpr (std::is_same_v<T, float>) {
-    // vDSP_hamm_window_f(OutputVector, Length, Flags=0);
     vDSP_hamm_window_f(coeffs.data(), n_vDSP,
                        0);  // Flags = 0 for standard Hamming
   } else {                  // double
-    // vDSP_hamm_window(OutputVector, Length, Flags=0);
     vDSP_hamm_window(coeffs.data(), n_vDSP, 0);
   }
-  // Note: vDSP_hamm_window might have slightly different scaling/endpoint
-  // handling compared to the manual formula or IPP. Test comparison needed.
   return coeffs;
 }
 
 /**
- * @brief Generates Kaiser window coefficients (manual calculation, as vDSP
- * lacks native support).
+ * @brief Generates Kaiser window coefficients using Boost Math for Bessel
+ * function.
  * @param beta The Kaiser window beta parameter.
  */
 template <typename T>
@@ -91,37 +85,34 @@ std::vector<T> generate_kaiser_window_impl(size_t length, T beta) {
   if (length == 1) return {static_cast<T>(1.0)};  // Handle N=1 case
 
   std::vector<T> coeffs(length);
-  // Precompute I0(beta)
-  T i0_beta = std::cyl_bessel_i(static_cast<T>(0.0), beta);
+  // Precompute I0(beta) using Boost Math
+  // Note: Boost takes order first (0), then value (beta)
+  T i0_beta = boost::math::cyl_bessel_i(static_cast<T>(0.0),
+                                        beta);  // <<< Use Boost function
   if (std::abs(i0_beta) < std::numeric_limits<T>::epsilon()) {
-    // Handle potential division by zero if I0(beta) is zero
-    // This is unlikely for typical beta values but possible for beta=0
     if (std::abs(beta) < std::numeric_limits<T>::epsilon()) {
-      // If beta is 0, Kaiser window is effectively a rectangular window
       std::fill(coeffs.begin(), coeffs.end(), static_cast<T>(1.0));
       return coeffs;
     } else {
-      // Should not happen for typical positive beta, but throw if it does
       throw std::runtime_error("Kaiser window denominator I0(beta) is zero.");
     }
   }
 
-  double N_minus_1 = static_cast<double>(length - 1);
+  // Use double for intermediate calculations for better precision
+  double N_minus_1_double = static_cast<double>(length - 1);
+  if (N_minus_1_double == 0.0)
+    N_minus_1_double = 1.0;  // Avoid division by zero if length is 1
 
   for (size_t n = 0; n < length; ++n) {
-    // Argument for the square root term: 1 - ( (2n / (N-1)) - 1 )^2
-    double factor = (static_cast<double>(n) * 2.0) / N_minus_1 - 1.0;
+    double factor = (static_cast<double>(n) * 2.0) / N_minus_1_double - 1.0;
     double sqrt_arg = 1.0 - factor * factor;
-
-    // Ensure argument to sqrt is non-negative (can happen at endpoints due to
-    // precision)
-    if (sqrt_arg < 0.0) sqrt_arg = 0.0;
+    if (sqrt_arg < 0.0) sqrt_arg = 0.0;  // Ensure non-negative
 
     T sqrt_term = static_cast<T>(std::sqrt(sqrt_arg));
-    // Argument for Bessel function: beta * sqrt(...)
     T bessel_arg = beta * sqrt_term;
-    // Calculate I0(bessel_arg) / I0(beta)
-    coeffs[n] = std::cyl_bessel_i(static_cast<T>(0.0), bessel_arg) / i0_beta;
+    // Calculate I0(bessel_arg) / I0(beta) using Boost Math
+    coeffs[n] = boost::math::cyl_bessel_i(static_cast<T>(0.0), bessel_arg) /
+                i0_beta;  // <<< Use Boost function
   }
   return coeffs;
 }
@@ -134,22 +125,22 @@ template <typename T>
 std::vector<T> generate_flattop_window_impl(size_t length) {
   if (length == 0) return {};
   std::vector<T> coeffs(length);
-  // Coefficients from standard definition (e.g., SciPy)
   constexpr T a0 = static_cast<T>(0.21557895);
   constexpr T a1 = static_cast<T>(0.41663158);
   constexpr T a2 = static_cast<T>(0.277263158);
   constexpr T a3 = static_cast<T>(0.083578947);
   constexpr T a4 = static_cast<T>(0.006947368);
-  // Denominator for cosine terms
   double denom = (length > 1) ? static_cast<double>(length - 1) : 1.0;
+  if (denom == 0.0) denom = 1.0;  // Avoid division by zero if length is 1
 
   for (size_t n = 0; n < length; ++n) {
-    T cos_2pi_term = static_cast<T>(cos(2.0 * M_PI * n / denom));
-    T cos_4pi_term = static_cast<T>(cos(4.0 * M_PI * n / denom));
-    T cos_6pi_term = static_cast<T>(cos(6.0 * M_PI * n / denom));
-    T cos_8pi_term = static_cast<T>(cos(8.0 * M_PI * n / denom));
-    coeffs[n] = a0 - a1 * cos_2pi_term + a2 * cos_4pi_term - a3 * cos_6pi_term +
-                a4 * cos_8pi_term;
+    double angle_base = 2.0 * M_PI * static_cast<double>(n) / denom;
+    T cos_1x_term = static_cast<T>(cos(angle_base));
+    T cos_2x_term = static_cast<T>(cos(2.0 * angle_base));
+    T cos_3x_term = static_cast<T>(cos(3.0 * angle_base));
+    T cos_4x_term = static_cast<T>(cos(4.0 * angle_base));
+    coeffs[n] = a0 - a1 * cos_1x_term + a2 * cos_2x_term - a3 * cos_3x_term +
+                a4 * cos_4x_term;
   }
   return coeffs;
 }
