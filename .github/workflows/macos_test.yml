@@ -27,7 +27,7 @@ jobs:
         with:
           activate-environment: omnidsp_env # Name for the environment
           # Use the explicit lock file matching the runner platform
-          environment-file: conda-osx-arm64.conda.lock # <-- Use explicit file
+          environment-file: conda-osx-arm64.lock # <-- Use explicit file
           auto-update-conda: true
           auto-activate-base: false
 
