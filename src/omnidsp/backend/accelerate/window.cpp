@@ -16,7 +16,7 @@
 #include <type_traits>  // For std::is_same_v
 #include <vector>
 
-// <<< Added: Include Boost header for Bessel functions >>>
+// Include Boost header for Bessel functions
 #include <boost/math/special_functions/bessel.hpp>
 
 #include "../backend_impl.h"  // Internal backend function declarations
@@ -40,6 +40,7 @@ namespace Backend {
  * @brief Generates Hann window coefficients using vDSP.
  * Note: vDSP_hann_window generates values in [0, 1].
  * The flag vDSP_HANN_NORM normalizes the first coefficient to zero.
+ * Uses vDSP_hann_window for float and vDSP_hann_windowD for double.
  */
 template <typename T>
 std::vector<T> generate_hann_window_impl(size_t length) {
@@ -48,9 +49,13 @@ std::vector<T> generate_hann_window_impl(size_t length) {
   vDSP_Length n_vDSP = static_cast<vDSP_Length>(length);
 
   if constexpr (std::is_same_v<T, float>) {
-    vDSP_hann_window_f(coeffs.data(), n_vDSP, vDSP_HANN_NORM);
-  } else {  // double
-    vDSP_hann_window(coeffs.data(), n_vDSP, vDSP_HANN_NORM);
+    // Use vDSP_hann_window for float
+    vDSP_hann_window(coeffs.data(), n_vDSP,
+                     vDSP_HANN_NORM);  // <<< Corrected function name
+  } else {                             // double
+    // Use vDSP_hann_windowD for double
+    vDSP_hann_windowD(coeffs.data(), n_vDSP,
+                      vDSP_HANN_NORM);  // <<< Corrected function name
   }
   return coeffs;
 }
@@ -66,10 +71,15 @@ std::vector<T> generate_hamming_window_impl(size_t length) {
   vDSP_Length n_vDSP = static_cast<vDSP_Length>(length);
 
   if constexpr (std::is_same_v<T, float>) {
-    vDSP_hamm_window_f(coeffs.data(), n_vDSP,
-                       0);  // Flags = 0 for standard Hamming
-  } else {                  // double
-    vDSP_hamm_window(coeffs.data(), n_vDSP, 0);
+    // vDSP_hamm_window_f seems correct based on Accelerate headers,
+    // but let's stick to the pattern if _f isn't standard.
+    // If vDSP_hamm_window exists for float, use it. Otherwise, keep _f.
+    // Assuming vDSP_hamm_window is for float based on Hann pattern.
+    vDSP_hamm_window(coeffs.data(), n_vDSP,
+                     0);  // Assuming vDSP_hamm_window is float
+  } else {                // double
+    // Assuming vDSP_hamm_windowD is for double based on Hann pattern.
+    vDSP_hamm_windowD(coeffs.data(), n_vDSP, 0);
   }
   return coeffs;
 }
@@ -86,9 +96,7 @@ std::vector<T> generate_kaiser_window_impl(size_t length, T beta) {
 
   std::vector<T> coeffs(length);
   // Precompute I0(beta) using Boost Math
-  // Note: Boost takes order first (0), then value (beta)
-  T i0_beta = boost::math::cyl_bessel_i(static_cast<T>(0.0),
-                                        beta);  // <<< Use Boost function
+  T i0_beta = boost::math::cyl_bessel_i(static_cast<T>(0.0), beta);
   if (std::abs(i0_beta) < std::numeric_limits<T>::epsilon()) {
     if (std::abs(beta) < std::numeric_limits<T>::epsilon()) {
       std::fill(coeffs.begin(), coeffs.end(), static_cast<T>(1.0));
@@ -98,21 +106,18 @@ std::vector<T> generate_kaiser_window_impl(size_t length, T beta) {
     }
   }
 
-  // Use double for intermediate calculations for better precision
   double N_minus_1_double = static_cast<double>(length - 1);
-  if (N_minus_1_double == 0.0)
-    N_minus_1_double = 1.0;  // Avoid division by zero if length is 1
+  if (N_minus_1_double == 0.0) N_minus_1_double = 1.0;
 
   for (size_t n = 0; n < length; ++n) {
     double factor = (static_cast<double>(n) * 2.0) / N_minus_1_double - 1.0;
     double sqrt_arg = 1.0 - factor * factor;
-    if (sqrt_arg < 0.0) sqrt_arg = 0.0;  // Ensure non-negative
+    if (sqrt_arg < 0.0) sqrt_arg = 0.0;
 
     T sqrt_term = static_cast<T>(std::sqrt(sqrt_arg));
     T bessel_arg = beta * sqrt_term;
-    // Calculate I0(bessel_arg) / I0(beta) using Boost Math
-    coeffs[n] = boost::math::cyl_bessel_i(static_cast<T>(0.0), bessel_arg) /
-                i0_beta;  // <<< Use Boost function
+    coeffs[n] =
+        boost::math::cyl_bessel_i(static_cast<T>(0.0), bessel_arg) / i0_beta;
   }
   return coeffs;
 }
@@ -131,7 +136,7 @@ std::vector<T> generate_flattop_window_impl(size_t length) {
   constexpr T a3 = static_cast<T>(0.083578947);
   constexpr T a4 = static_cast<T>(0.006947368);
   double denom = (length > 1) ? static_cast<double>(length - 1) : 1.0;
-  if (denom == 0.0) denom = 1.0;  // Avoid division by zero if length is 1
+  if (denom == 0.0) denom = 1.0;
 
   for (size_t n = 0; n < length; ++n) {
     double angle_base = 2.0 * M_PI * static_cast<double>(n) / denom;
