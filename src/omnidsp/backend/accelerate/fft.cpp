@@ -59,8 +59,9 @@ struct FFTPlanImpl {
   // --- Helper: Calculate log2(N) for FFTSetup ---
   // vDSP FFTSetup requires the length N as log2(N).
   // It also currently requires N to be a power of 2 for REAL domain FFTs using
-  // vDSP_fft_zrip.
-  vDSP_Length get_log2n(size_t n) {
+  // vDSP_fft_zrip. Marked const because it does not modify the object state.
+  vDSP_Length get_log2n(size_t n) const  // <<< Added const here
+  {
     if (n == 0) throw std::invalid_argument("FFT length cannot be zero.");
     // Check if n is a power of 2 (handles n=1 correctly)
     bool is_power_of_two = (n > 0) && ((n & (n - 1)) == 0);
@@ -186,7 +187,7 @@ struct FFTPlanImpl {
       }
 
       // Get log2(N) and create FFTSetup handle (throws if N not power-of-2)
-      vDSP_Length log2n = get_log2n(length);
+      vDSP_Length log2n = get_log2n(length);   // Call the const version
       if constexpr (std::is_same_v<T, float>)  // SINGLE precision
         setup_handle_real = vDSP_create_fftsetup(log2n, kFFTRadix2);
       else  // DOUBLE precision
@@ -230,7 +231,8 @@ struct FFTPlanImpl {
 
   // --- Packing Helper: Complex Conjugate Even (CCE) to vDSP Split Complex ---
   // Converts standard complex array (size N/2+1) to vDSP split format for
-  // IRFFT.
+  // IRFFT. Marked const as it only reads complex_input and writes to
+  // split_output_void (passed by pointer) and doesn't modify member variables.
   void pack_complex_to_split(const std::complex<T> *complex_input,
                              void *split_output_void) const {
     const size_t N = length;
@@ -242,8 +244,10 @@ struct FFTPlanImpl {
       DSPSplitComplex *split =
           reinterpret_cast<DSPSplitComplex *>(split_output_void);
       split->realp[0] = complex_input[0].real();  // DC component
-      split->imagp[0] = (N % 2 == 0 && Nc > 1) ? complex_input[Nc - 1].real()
-                                               : 0.0f;  // Nyquist component
+      // Nyquist component (real part of last element) goes into imagp[0] for N
+      // even
+      split->imagp[0] =
+          (N % 2 == 0 && Nc > N / 2) ? complex_input[N / 2].real() : 0.0f;
       for (size_t k = 1; k < N / 2; ++k) {  // Components 1 to N/2 - 1
         split->realp[k] = complex_input[k].real();
         split->imagp[k] = complex_input[k].imag();
@@ -253,8 +257,10 @@ struct FFTPlanImpl {
       DSPDoubleSplitComplex *split =
           reinterpret_cast<DSPDoubleSplitComplex *>(split_output_void);
       split->realp[0] = complex_input[0].real();  // DC component
-      split->imagp[0] = (N % 2 == 0 && Nc > 1) ? complex_input[Nc - 1].real()
-                                               : 0.0;  // Nyquist component
+      // Nyquist component (real part of last element) goes into imagp[0] for N
+      // even
+      split->imagp[0] =
+          (N % 2 == 0 && Nc > N / 2) ? complex_input[N / 2].real() : 0.0;
       for (size_t k = 1; k < N / 2; ++k) {  // Components 1 to N/2 - 1
         split->realp[k] = complex_input[k].real();
         split->imagp[k] = complex_input[k].imag();
@@ -264,24 +270,31 @@ struct FFTPlanImpl {
 
   // --- Unpacking Helper: vDSP Split Complex to Complex Conjugate Even (CCE)
   // --- Converts vDSP split format (from RFFT) to standard complex array (size
-  // N/2+1).
+  // N/2+1). Marked const as it only reads split_input_void and writes to
+  // cce_output (passed by pointer) and doesn't modify member variables.
   void unpack_split_to_complex(const void *split_input_void,
                                std::complex<T> *cce_output) const {
     const size_t N = length;
-    const size_t Nc = complex_length;
+    const size_t Nc = complex_length;  // Should be N/2 + 1
     if (Nc == 0 || N == 0) return;
 
     if constexpr (std::is_same_v<T, float>)  // SINGLE precision
     {
       const DSPSplitComplex *split =
           reinterpret_cast<const DSPSplitComplex *>(split_input_void);
-      cce_output[0] = std::complex<T>(split->realp[0], 0.0f);  // DC component
-      for (size_t k = 1; k < N / 2; ++k) {  // Components 1 to N/2 - 1
+      cce_output[0] =
+          std::complex<T>(split->realp[0], 0.0f);  // DC component from realp[0]
+      for (size_t k = 1; k < N / 2; ++k) {         // Components 1 to N/2 - 1
         cce_output[k] = std::complex<T>(split->realp[k], split->imagp[k]);
       }
-      if (N % 2 == 0 && Nc > 1) {  // Nyquist component
+      if (N % 2 == 0 &&
+          Nc > N / 2) {  // Nyquist component (if N is even) from imagp[0]
         cce_output[N / 2] = std::complex<T>(split->imagp[0], 0.0f);
       }
+      // If N is odd, Nc = (N-1)/2 + 1 = N/2 + 0.5 + 1 -> Nc = N/2 + 1.5 ? No.
+      // Nc=(N+1)/2 If N is odd, the loop goes up to k < N/2, e.g. N=5, k<2.5 ->
+      // k=1, 2. Nc=3. cce_output[0], cce_output[1], cce_output[2] are filled.
+      // Correct.
     } else  // DOUBLE precision
     {
       const DSPDoubleSplitComplex *split =
@@ -290,7 +303,7 @@ struct FFTPlanImpl {
       for (size_t k = 1; k < N / 2; ++k) {  // Components 1 to N/2 - 1
         cce_output[k] = std::complex<T>(split->realp[k], split->imagp[k]);
       }
-      if (N % 2 == 0 && Nc > 1) {  // Nyquist component
+      if (N % 2 == 0 && Nc > N / 2) {  // Nyquist component
         cce_output[N / 2] = std::complex<T>(split->imagp[0], 0.0);
       }
     }
@@ -302,6 +315,9 @@ struct FFTPlanImpl {
   // Move constructor/assignment defaulted in omnidsp.h
 
   // --- Execute Methods (FFT) ---
+  // These methods are const because they operate using the pre-configured plan
+  // (handles) and potentially temporary buffers, but don't modify the plan's
+  // configuration itself.
 
   // Execute Complex-to-Complex FFT (Out-of-Place) using vDSP_DFT
   void execute_c2c_oop(const std::complex<T> *input,
@@ -314,41 +330,37 @@ struct FFTPlanImpl {
     if constexpr (std::is_same_v<T, float>) {
       vDSP_DFT_Execute(
           reinterpret_cast<vDSP_DFT_Setup>(setup_handle_c2c),
-          reinterpret_cast<const float *>(input),      // Real part of input
-          reinterpret_cast<const float *>(input) + 1,  // Imag part of input
-          reinterpret_cast<float *>(output),           // Real part of output
-          reinterpret_cast<float *>(output) + 1);      // Imag part of output
+          reinterpret_cast<const float *>(input),  // Real part of input
+          reinterpret_cast<const float *>(input) +
+              1,                              // Imag part of input (stride 2)
+          reinterpret_cast<float *>(output),  // Real part of output
+          reinterpret_cast<float *>(output) +
+              1);  // Imag part of output (stride 2)
       // Apply external scaling if necessary (vDSP_DFT does not scale)
-      if (std::abs(forward_scale - 1.0f) >
-              std::numeric_limits<float>::epsilon() &&
-          direction == Direction::FORWARD) {
-        vDSP_vsmul(reinterpret_cast<const float *>(output), 2, &forward_scale,
-                   reinterpret_cast<float *>(output), 2, length);
-      } else if (std::abs(backward_scale - 1.0f) >
-                     std::numeric_limits<float>::epsilon() &&
-                 direction == Direction::INVERSE) {
-        vDSP_vsmul(reinterpret_cast<const float *>(output), 2, &backward_scale,
-                   reinterpret_cast<float *>(output), 2, length);
+      T scale_factor =
+          (direction == Direction::FORWARD) ? forward_scale : backward_scale;
+      if (std::abs(scale_factor - 1.0f) >
+          std::numeric_limits<float>::epsilon()) {
+        // Scale the interleaved complex output (length * 2 floats)
+        vDSP_vsmul(reinterpret_cast<const float *>(output), 1, &scale_factor,
+                   reinterpret_cast<float *>(output), 1, length * 2);
       }
     } else  // Double precision
     {
-      vDSP_DFT_ExecuteD(reinterpret_cast<vDSP_DFT_SetupD>(setup_handle_c2c),
-                        reinterpret_cast<const double *>(input),
-                        reinterpret_cast<const double *>(input) + 1,
-                        reinterpret_cast<double *>(output),
-                        reinterpret_cast<double *>(output) + 1);
+      vDSP_DFT_ExecuteD(
+          reinterpret_cast<vDSP_DFT_SetupD>(setup_handle_c2c),
+          reinterpret_cast<const double *>(input),
+          reinterpret_cast<const double *>(input) + 1,  // Stride 2
+          reinterpret_cast<double *>(output),
+          reinterpret_cast<double *>(output) + 1);  // Stride 2
       // Apply external scaling
-      if (std::abs(forward_scale - 1.0) >
-              std::numeric_limits<double>::epsilon() &&
-          direction == Direction::FORWARD) {
-        vDSP_vsmulD(reinterpret_cast<const double *>(output), 2, &forward_scale,
-                    reinterpret_cast<double *>(output), 2, length);
-      } else if (std::abs(backward_scale - 1.0) >
-                     std::numeric_limits<double>::epsilon() &&
-                 direction == Direction::INVERSE) {
-        vDSP_vsmulD(reinterpret_cast<const double *>(output), 2,
-                    &backward_scale, reinterpret_cast<double *>(output), 2,
-                    length);
+      T scale_factor =
+          (direction == Direction::FORWARD) ? forward_scale : backward_scale;
+      if (std::abs(scale_factor - 1.0) >
+          std::numeric_limits<double>::epsilon()) {
+        // Scale the interleaved complex output (length * 2 doubles)
+        vDSP_vsmulD(reinterpret_cast<const double *>(output), 1, &scale_factor,
+                    reinterpret_cast<double *>(output), 1, length * 2);
       }
     }
   }
@@ -358,9 +370,13 @@ struct FFTPlanImpl {
     if (!setup_handle_c2c)
       throw std::runtime_error("C2C FFT plan not initialized.");
     // vDSP_DFT does not support true in-place. Simulate using OOP.
-    std::vector<std::complex<T>> temp_output(length);
-    execute_c2c_oop(data, temp_output.data());
-    std::copy(temp_output.begin(), temp_output.end(), data);
+    // Create a temporary copy of the input data
+    std::vector<std::complex<T>> temp_input(data, data + length);
+    // Execute out-of-place from the temporary input back to the original buffer
+    execute_c2c_oop(temp_input.data(), data);
+    // Note: Original implementation copied output to a temp vector then back.
+    // This revised approach avoids one copy if execute_c2c_oop writes directly
+    // to 'data'.
   }
 
   // Execute Real-to-Complex FFT (Out-of-Place) using vDSP_fft_zrip
@@ -374,30 +390,34 @@ struct FFTPlanImpl {
     }
 
     // vDSP_fft_zrip operates in-place on a split complex buffer.
+    // We need mutable access to the internal real/imag buffers for this.
+    // Use const_cast carefully, as we know vDSP_fft_zrip uses them as scratch
+    // space.
+    T *real_buf_ptr = const_cast<T *>(real_buffer.data());
+    T *imag_buf_ptr = const_cast<T *>(imag_buffer.data());
+
     if constexpr (std::is_same_v<T, float>) {
-      // Need mutable buffers for vDSP_fft_zrip
-      DSPSplitComplex split_buffer = {const_cast<float *>(real_buffer.data()),
-                                      const_cast<float *>(imag_buffer.data())};
-      // Convert real input to split complex format
+      DSPSplitComplex split_buffer = {real_buf_ptr, imag_buf_ptr};
+      // Convert real input to split complex format (writes to split_buffer)
       vDSP_ctoz(reinterpret_cast<const DSPComplex *>(real_input), 2,
                 &split_buffer, 1, length / 2);
-      // Perform FFT
+      // Perform FFT (modifies split_buffer in-place)
       vDSP_fft_zrip(setup_handle_real, &split_buffer, stride, get_log2n(length),
                     kFFTDirection_Forward);
-      // Unpack result to standard CCE complex format
+      // Unpack result from split_buffer to standard CCE complex format (writes
+      // to complex_output)
       unpack_split_to_complex(&split_buffer, complex_output);
-      // Apply external scaling
+      // Apply external scaling (reads and writes complex_output)
       if (std::abs(forward_scale - 1.0f) >
           std::numeric_limits<float>::epsilon()) {
+        // Scale the interleaved complex output (complex_length * 2 floats)
         vDSP_vsmul(reinterpret_cast<float *>(complex_output), 1, &forward_scale,
                    reinterpret_cast<float *>(complex_output), 1,
                    complex_length * 2);
       }
     } else  // Double precision
     {
-      DSPDoubleSplitComplex split_buffer = {
-          const_cast<double *>(real_buffer.data()),
-          const_cast<double *>(imag_buffer.data())};
+      DSPDoubleSplitComplex split_buffer = {real_buf_ptr, imag_buf_ptr};
       vDSP_ctozD(reinterpret_cast<const DSPDoubleComplex *>(real_input), 2,
                  &split_buffer, 1, length / 2);
       vDSP_fft_zripD(setup_handle_real, &split_buffer, stride,
@@ -406,6 +426,7 @@ struct FFTPlanImpl {
       // Apply external scaling
       if (std::abs(forward_scale - 1.0) >
           std::numeric_limits<double>::epsilon()) {
+        // Scale the interleaved complex output (complex_length * 2 doubles)
         vDSP_vsmulD(reinterpret_cast<double *>(complex_output), 1,
                     &forward_scale, reinterpret_cast<double *>(complex_output),
                     1, complex_length * 2);
@@ -424,15 +445,21 @@ struct FFTPlanImpl {
           "REAL/INVERSE).");
     }
 
+    // Need mutable access to internal buffers. Use const_cast carefully.
+    T *real_buf_ptr = const_cast<T *>(real_buffer.data());
+    T *imag_buf_ptr = const_cast<T *>(imag_buffer.data());
+
     // Pack CCE complex input into split complex format.
     if constexpr (std::is_same_v<T, float>) {
-      DSPSplitComplex split_buffer = {const_cast<float *>(real_buffer.data()),
-                                      const_cast<float *>(imag_buffer.data())};
+      DSPSplitComplex split_buffer = {real_buf_ptr, imag_buf_ptr};
+      // Pack input into split_buffer
       pack_complex_to_split(complex_input, &split_buffer);
-      // Perform inverse FFT
+      // Perform inverse FFT (modifies split_buffer in-place)
       vDSP_fft_zrip(setup_handle_real, &split_buffer, stride, get_log2n(length),
                     kFFTDirection_Inverse);
-      // Apply external scaling (vDSP inverse has implicit 2/N scaling)
+      // Apply external scaling (modifies split_buffer before unpacking)
+      // Note: vDSP inverse FFT implicitly scales by 2/N. backward_scale
+      // includes adjustment for this.
       if (std::abs(backward_scale - 1.0f) >
           std::numeric_limits<float>::epsilon()) {
         vDSP_vsmul(split_buffer.realp, 1, &backward_scale, split_buffer.realp,
@@ -440,14 +467,13 @@ struct FFTPlanImpl {
         vDSP_vsmul(split_buffer.imagp, 1, &backward_scale, split_buffer.imagp,
                    1, length / 2);
       }
-      // Convert resulting split complex back to interleaved real output
+      // Convert resulting split complex back to interleaved real output (writes
+      // to real_output)
       vDSP_ztoc(&split_buffer, 1, reinterpret_cast<DSPComplex *>(real_output),
                 2, length / 2);
     } else  // Double precision
     {
-      DSPDoubleSplitComplex split_buffer = {
-          const_cast<double *>(real_buffer.data()),
-          const_cast<double *>(imag_buffer.data())};
+      DSPDoubleSplitComplex split_buffer = {real_buf_ptr, imag_buf_ptr};
       pack_complex_to_split(complex_input, &split_buffer);
       vDSP_fft_zripD(setup_handle_real, &split_buffer, stride,
                      get_log2n(length), kFFTDirection_Inverse);
@@ -482,7 +508,7 @@ FFTPlan<T>::~FFTPlan() = default;
 
 // Move constructor/assignment defaulted in header
 
-// Execute methods
+// Execute methods are const as they delegate to the const pimpl methods
 template <typename T>
 void FFTPlan<T>::execute(const std::complex<T> *i, std::complex<T> *o) const {
   if (!pimpl_)
@@ -508,7 +534,8 @@ void FFTPlan<T>::execute_irfft(const std::complex<T> *ci, T *ro) const {
   pimpl_->execute_irfft_oop(ci, ro);
 }
 
-// Getters
+// Getters are const as they delegate to the const pimpl methods or return
+// members
 template <typename T>
 size_t FFTPlan<T>::getLength() const {
   if (!pimpl_)
