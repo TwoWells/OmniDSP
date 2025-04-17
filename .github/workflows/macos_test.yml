@@ -1,5 +1,5 @@
 # .github/workflows/macos_test.yml
-name: macOS C++ Tests (Accelerate Backend)
+name: macOS Sanity Check Conda Lock Install (Explicit Create)
 
 on:
   push:
@@ -8,56 +8,48 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
-
 jobs:
   build-and-test-accelerate:
     runs-on: macos-latest
     defaults:
       run:
+        # Keep bash -el to ensure conda init works for subsequent steps
         shell: bash -el {0}
     steps:
-      - uses: actions/checkout@v4
-      - uses: conda-incubator/setup-miniconda@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 1: Setup base Conda only
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v3
         with:
-          auto-update-conda: false
-          activate-environment: omnidsp_env
-          environment-file: conda-lock.yml
-      - run: |
+          auto-update-conda: true # Keep conda updated
+          auto-activate-base: false # Don't activate base
+          # Remove environment activation/file inputs that trigger 'conda env update'
+          # activate-environment: omnidsp_env
+          # environment-file: conda-lock.yml
+
+      # Step 2: Explicitly create environment from the unified lock file
+      - name: Create environment from lock file
+        run: |
+          echo "Attempting to create environment from conda-lock.yml"
+          conda create --name omnidsp_env --file conda-lock.yml
+          echo "Environment creation command finished."
+          # Optional: Add command to check if env exists
+          conda info --envs
+
+      # Step 3: Activate and run diagnostics
+      - name: Run Diagnostics
+        run: |
+          echo "Activating omnidsp_env..."
+          conda activate omnidsp_env
+          echo "--- Conda Info ---"
           conda info
+          echo "--- Conda List ---"
           conda list
+          echo "--- Conda Config Sources ---"
           conda config --show-sources
+          echo "--- Conda Config Show ---"
           conda config --show
+          echo "--- Environment Variables ---"
           printenv | sort
-
-      # # Configure CMake - Match working local command
-      # - name: Configure CMake
-      #   shell: bash -el {0}
-      #   run: |
-      #     conda activate omnidsp_env
-      #     echo "Using CONDA_PREFIX=$CONDA_PREFIX"
-      #     # Get the pybind11 CMake directory directly from the pip-installed package
-      #     PYBIND11_CMAKE_DIR=$(python -c "import pybind11; print(pybind11.get_cmake_dir())")
-      #     echo "Found pybind11 CMake Dir: ${PYBIND11_CMAKE_DIR}"
-      #     # Add BUILD_SHARED_LIBS=OFF to match local command
-      #     cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
-      #           -DCMAKE_PREFIX_PATH=$CONDA_PREFIX \
-      #           -Dpybind11_DIR="${PYBIND11_CMAKE_DIR}" \
-      #           -DBUILD_SHARED_LIBS=OFF \
-      #           -D PREFER_ACCELERATE=ON \
-      #           -D PREFER_ONEMKL=OFF \
-      #           -D OMNIDSP_BUILD_TESTS=ON
-
-      # # Build the C++ code
-      # - name: Build
-      #   shell: bash -el {0}
-      #   run: |
-      #     conda activate omnidsp_env
-      #     cmake --build build --config Release
-
-      # # Run C++ Tests using CTest
-      # - name: Test
-      #   shell: bash -el {0}
-      #   working-directory: ./build
-      #   run: |
-      #     conda activate omnidsp_env
-      #     ctest --output-on-failure -C Release
