@@ -2,6 +2,21 @@
 
 OmniDSP is a C++ library designed for high-performance Digital Signal Processing tasks, with Python bindings provided via pybind11. It aims to offer efficient implementations of common DSP algorithms, leveraging optimized backend libraries like Intel oneMKL (including IPP) and Apple Accelerate where available.
 
+## Table of Contents
+
+- [OmniDSP](#omnidsp)
+  - [Table of Contents](#table-of-contents)
+  - [Features](#features)
+  - [Dependencies](#dependencies)
+  - [Project Status](#project-status)
+  - [Project Structure](#project-structure)
+  - [Getting Started and Installation](#getting-started-and-installation)
+  - [Basic Usage](#basic-usage)
+    - [Python](#python)
+    - [C++](#c)
+  - [Contributing](#contributing)
+  - [License](#license)
+
 ## Features
 
 - **Fast Fourier Transforms (FFT):**
@@ -69,7 +84,7 @@ OmniDSP requires the following to build and run:
 - `TODO.md`: Current development tasks.
 - `CONTRIBUTING.md`: Guidelines for contributors.
 
-## Getting Started & Installation
+## Getting Started and Installation
 
 Using OmniDSP (especially the Python bindings) requires **Conda** to manage dependencies (Compiler, CMake, MKL, IPP, Python libs).
 
