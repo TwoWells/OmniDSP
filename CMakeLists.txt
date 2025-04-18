@@ -13,6 +13,8 @@
 cmake_minimum_required(VERSION 3.21)
 cmake_policy(SET CMP0148 NEW) # Policy for modern FindPython behavior
                               # (suppresses warning)
+cmake_policy(SET CMP0167 NEW) # Policy for FindBoost module removal (suppresses
+                              # warning)
 
 # Set project name and version (used for installation and config files)
 project(
