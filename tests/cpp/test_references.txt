@@ -1,5 +1,5 @@
 # Auto-generated reference data for OmniDSP C++ tests
-# Includes Window (from SciPy), Conv/Corr (from SciPy), Filter+Downsample (from SciPy), and CQT (from Librosa)
+# Includes Window(F/D), Conv/Corr, Filter+Downsample, CQT, FFT(F/D)
 
 # START WINDOW_HANN_N5_D
 0
@@ -32,6 +32,38 @@
 -0.054736840000000002
 -0.00042105100000000128
 # END WINDOW_FLATTOP_N5_D
+
+# START WINDOW_HANN_N5_F
+0f
+0.5f
+1f
+0.5f
+0f
+# END WINDOW_HANN_N5_F
+
+# START WINDOW_HAMMING_N5_F
+0.0799999982f
+0.540000021f
+1f
+0.540000021f
+0.0799999982f
+# END WINDOW_HAMMING_N5_F
+
+# START WINDOW_KAISER_N5_B8_F
+0.00233883061f
+0.368972719f
+1f
+0.368972719f
+0.00233883061f
+# END WINDOW_KAISER_N5_B8_F
+
+# START WINDOW_FLATTOP_N5_F
+-0.000421050994f
+-0.0547368415f
+1f
+-0.0547368415f
+-0.000421050994f
+# END WINDOW_FLATTOP_N5_F
 
 # START expected_corr_d
 4
@@ -12474,3 +12506,771 @@
 -0.094013749214806375 # real
 0.031632973035961222 # imag
 # END librosa_cqt_complex_d
+
+# START FFT_INPUT_COMPLEX_D
+0 # real
+0.9375 # imag
+0.0625 # real
+0.875 # imag
+0.125 # real
+0.8125 # imag
+0.1875 # real
+0.75 # imag
+0.25 # real
+0.6875 # imag
+0.3125 # real
+0.625 # imag
+0.375 # real
+0.5625 # imag
+0.4375 # real
+0.5 # imag
+0.5 # real
+0.4375 # imag
+0.5625 # real
+0.375 # imag
+0.625 # real
+0.3125 # imag
+0.6875 # real
+0.25 # imag
+0.75 # real
+0.1875 # imag
+0.8125 # real
+0.125 # imag
+0.875 # real
+0.0625 # imag
+0.9375 # real
+0 # imag
+# END FFT_INPUT_COMPLEX_D
+
+# START FFT_INPUT_COMPLEX_F
+0f # real
+0.9375f # imag
+0.0625f # real
+0.875f # imag
+0.125f # real
+0.8125f # imag
+0.1875f # real
+0.75f # imag
+0.25f # real
+0.6875f # imag
+0.3125f # real
+0.625f # imag
+0.375f # real
+0.5625f # imag
+0.4375f # real
+0.5f # imag
+0.5f # real
+0.4375f # imag
+0.5625f # real
+0.375f # imag
+0.625f # real
+0.3125f # imag
+0.6875f # real
+0.25f # imag
+0.75f # real
+0.1875f # imag
+0.8125f # real
+0.125f # imag
+0.875f # real
+0.0625f # imag
+0.9375f # real
+0f # imag
+# END FFT_INPUT_COMPLEX_F
+
+# START FFT_INPUT_REAL_D
+0
+0.0625
+0.125
+0.1875
+0.25
+0.3125
+0.375
+0.4375
+0.5
+0.5625
+0.625
+0.6875
+0.75
+0.8125
+0.875
+0.9375
+# END FFT_INPUT_REAL_D
+
+# START FFT_INPUT_REAL_F
+0f
+0.0625f
+0.125f
+0.1875f
+0.25f
+0.3125f
+0.375f
+0.4375f
+0.5f
+0.5625f
+0.625f
+0.6875f
+0.75f
+0.8125f
+0.875f
+0.9375f
+# END FFT_INPUT_REAL_F
+
+# START FFT_EXPECTED_BACKWARD_D
+7.5 # real
+7.5 # imag
+2.013669746062924 # real
+3.013669746062924 # imag
+0.70710678118654757 # real
+1.7071067811865475 # imag
+0.2483028813327447 # real
+1.2483028813327448 # imag
+0 # real
+1 # imag
+-0.16591068104035067 # real
+0.83408931895964933 # imag
+-0.29289321881345243 # real
+0.70710678118654757 # imag
+-0.40054381631017089 # real
+0.599456183689829 # imag
+-0.5 # real
+0.5 # imag
+-0.599456183689829 # real
+0.40054381631017089 # imag
+-0.70710678118654757 # real
+0.29289321881345243 # imag
+-0.83408931895964955 # real
+0.16591068104035045 # imag
+-1 # real
+0 # imag
+-1.2483028813327444 # real
+-0.24830288133274447 # imag
+-1.7071067811865475 # real
+-0.70710678118654757 # imag
+-3.013669746062924 # real
+-2.013669746062924 # imag
+# END FFT_EXPECTED_BACKWARD_D
+
+# START FFT_EXPECTED_BACKWARD_F
+7.5f # real
+7.5f # imag
+2.01366973f # real
+3.01366973f # imag
+0.707106769f # real
+1.70710683f # imag
+0.248302817f # real
+1.24830282f # imag
+0f # real
+1f # imag
+-0.165910661f # real
+0.834089339f # imag
+-0.292893231f # real
+0.707106769f # imag
+-0.400543928f # real
+0.599456131f # imag
+-0.5f # real
+0.5f # imag
+-0.599456131f # real
+0.400543928f # imag
+-0.707106769f # real
+0.292893231f # imag
+-0.834089279f # real
+0.165910721f # imag
+-1f # real
+0f # imag
+-1.24830294f # real
+-0.248302877f # imag
+-1.70710683f # real
+-0.707106769f # imag
+-3.01366973f # real
+-2.01366973f # imag
+# END FFT_EXPECTED_BACKWARD_F
+
+# START FFT_EXPECTED_ORTHO_D
+1.875 # real
+1.875 # imag
+0.50341743651573101 # real
+0.75341743651573101 # imag
+0.17677669529663689 # real
+0.42677669529663687 # imag
+0.062075720333186174 # real
+0.3120757203331862 # imag
+0 # real
+0.25 # imag
+-0.041477670260087668 # real
+0.20852232973991233 # imag
+-0.073223304703363107 # real
+0.17677669529663689 # imag
+-0.10013595407754272 # real
+0.14986404592245725 # imag
+-0.125 # real
+0.125 # imag
+-0.14986404592245725 # real
+0.10013595407754272 # imag
+-0.17677669529663689 # real
+0.073223304703363107 # imag
+-0.20852232973991239 # real
+0.041477670260087612 # imag
+-0.25 # real
+0 # imag
+-0.31207572033318609 # real
+-0.062075720333186118 # imag
+-0.42677669529663687 # real
+-0.17677669529663689 # imag
+-0.75341743651573101 # real
+-0.50341743651573101 # imag
+# END FFT_EXPECTED_ORTHO_D
+
+# START FFT_EXPECTED_ORTHO_F
+1.875f # real
+1.875f # imag
+0.503417432f # real
+0.753417432f # imag
+0.176776692f # real
+0.426776707f # imag
+0.0620757043f # real
+0.312075704f # imag
+0f # real
+0.25f # imag
+-0.0414776653f # real
+0.208522335f # imag
+-0.0732233077f # real
+0.176776692f # imag
+-0.100135982f # real
+0.149864033f # imag
+-0.125f # real
+0.125f # imag
+-0.149864033f # real
+0.100135982f # imag
+-0.176776692f # real
+0.0732233077f # imag
+-0.20852232f # real
+0.0414776802f # imag
+-0.25f # real
+0f # imag
+-0.312075734f # real
+-0.0620757192f # imag
+-0.426776707f # real
+-0.176776692f # imag
+-0.753417432f # real
+-0.503417432f # imag
+# END FFT_EXPECTED_ORTHO_F
+
+# START FFT_EXPECTED_FORWARD_D
+0.46875 # real
+0.46875 # imag
+0.12585435912893275 # real
+0.18835435912893275 # imag
+0.044194173824159223 # real
+0.10669417382415922 # imag
+0.015518930083296543 # real
+0.07801893008329655 # imag
+0 # real
+0.0625 # imag
+-0.010369417565021917 # real
+0.052130582434978083 # imag
+-0.018305826175840777 # real
+0.044194173824159223 # imag
+-0.02503398851938568 # real
+0.037466011480614313 # imag
+-0.03125 # real
+0.03125 # imag
+-0.037466011480614313 # real
+0.02503398851938568 # imag
+-0.044194173824159223 # real
+0.018305826175840777 # imag
+-0.052130582434978097 # real
+0.010369417565021903 # imag
+-0.0625 # real
+0 # imag
+-0.078018930083296523 # real
+-0.01551893008329653 # imag
+-0.10669417382415922 # real
+-0.044194173824159223 # imag
+-0.18835435912893275 # real
+-0.12585435912893275 # imag
+# END FFT_EXPECTED_FORWARD_D
+
+# START FFT_EXPECTED_FORWARD_F
+0.46875f # real
+0.46875f # imag
+0.125854358f # real
+0.188354358f # imag
+0.0441941731f # real
+0.106694177f # imag
+0.0155189261f # real
+0.0780189261f # imag
+0f # real
+0.0625f # imag
+-0.0103694163f # real
+0.0521305837f # imag
+-0.0183058269f # real
+0.0441941731f # imag
+-0.0250339955f # real
+0.0374660082f # imag
+-0.03125f # real
+0.03125f # imag
+-0.0374660082f # real
+0.0250339955f # imag
+-0.0441941731f # real
+0.0183058269f # imag
+-0.0521305799f # real
+0.0103694201f # imag
+-0.0625f # real
+0f # imag
+-0.0780189335f # real
+-0.0155189298f # imag
+-0.106694177f # real
+-0.0441941731f # imag
+-0.188354358f # real
+-0.125854358f # imag
+# END FFT_EXPECTED_FORWARD_F
+
+# START IFFT_EXPECTED_BACKWARD_D
+0 # real
+0.9375 # imag
+0.0625 # real
+0.875 # imag
+0.125 # real
+0.8125 # imag
+0.1875 # real
+0.75 # imag
+0.25 # real
+0.6875 # imag
+0.3125 # real
+0.625 # imag
+0.375 # real
+0.5625 # imag
+0.4375 # real
+0.5 # imag
+0.5 # real
+0.4375 # imag
+0.5625 # real
+0.375 # imag
+0.625 # real
+0.3125 # imag
+0.6875 # real
+0.25 # imag
+0.75 # real
+0.1875 # imag
+0.8125 # real
+0.125 # imag
+0.875 # real
+0.0625 # imag
+0.9375 # real
+0 # imag
+# END IFFT_EXPECTED_BACKWARD_D
+
+# START IFFT_EXPECTED_BACKWARD_F
+0f # real
+0.9375f # imag
+0.0625f # real
+0.875f # imag
+0.125f # real
+0.8125f # imag
+0.18750003f # real
+0.75f # imag
+0.25f # real
+0.6875f # imag
+0.3125f # real
+0.625f # imag
+0.375f # real
+0.5625f # imag
+0.43750003f # real
+0.49999997f # imag
+0.5f # real
+0.4375f # imag
+0.5625f # real
+0.375f # imag
+0.625f # real
+0.3125f # imag
+0.6875f # real
+0.25000003f # imag
+0.75f # real
+0.1875f # imag
+0.8125f # real
+0.12500003f # imag
+0.875f # real
+0.0625f # imag
+0.9375f # real
+2.98023224e-08f # imag
+# END IFFT_EXPECTED_BACKWARD_F
+
+# START IFFT_EXPECTED_ORTHO_D
+0 # real
+0.9375 # imag
+0.0625 # real
+0.875 # imag
+0.125 # real
+0.8125 # imag
+0.1875 # real
+0.75 # imag
+0.25 # real
+0.6875 # imag
+0.3125 # real
+0.625 # imag
+0.375 # real
+0.5625 # imag
+0.4375 # real
+0.5 # imag
+0.5 # real
+0.4375 # imag
+0.5625 # real
+0.375 # imag
+0.625 # real
+0.3125 # imag
+0.6875 # real
+0.25 # imag
+0.75 # real
+0.1875 # imag
+0.8125 # real
+0.125 # imag
+0.875 # real
+0.0625 # imag
+0.9375 # real
+0 # imag
+# END IFFT_EXPECTED_ORTHO_D
+
+# START IFFT_EXPECTED_ORTHO_F
+0f # real
+0.9375f # imag
+0.0625f # real
+0.875f # imag
+0.125f # real
+0.8125f # imag
+0.18750003f # real
+0.75f # imag
+0.25f # real
+0.6875f # imag
+0.3125f # real
+0.625f # imag
+0.375f # real
+0.5625f # imag
+0.43750003f # real
+0.49999997f # imag
+0.5f # real
+0.4375f # imag
+0.5625f # real
+0.375f # imag
+0.625f # real
+0.3125f # imag
+0.6875f # real
+0.25000003f # imag
+0.75f # real
+0.1875f # imag
+0.8125f # real
+0.12500003f # imag
+0.875f # real
+0.0625f # imag
+0.9375f # real
+2.98023224e-08f # imag
+# END IFFT_EXPECTED_ORTHO_F
+
+# START IFFT_EXPECTED_FORWARD_D
+0 # real
+0.9375 # imag
+0.0625 # real
+0.875 # imag
+0.125 # real
+0.8125 # imag
+0.1875 # real
+0.75 # imag
+0.25 # real
+0.6875 # imag
+0.3125 # real
+0.625 # imag
+0.375 # real
+0.5625 # imag
+0.4375 # real
+0.5 # imag
+0.5 # real
+0.4375 # imag
+0.5625 # real
+0.375 # imag
+0.625 # real
+0.3125 # imag
+0.6875 # real
+0.25 # imag
+0.75 # real
+0.1875 # imag
+0.8125 # real
+0.125 # imag
+0.875 # real
+0.0625 # imag
+0.9375 # real
+0 # imag
+# END IFFT_EXPECTED_FORWARD_D
+
+# START IFFT_EXPECTED_FORWARD_F
+0f # real
+0.9375f # imag
+0.0625f # real
+0.875f # imag
+0.125f # real
+0.8125f # imag
+0.18750003f # real
+0.75f # imag
+0.25f # real
+0.6875f # imag
+0.3125f # real
+0.625f # imag
+0.375f # real
+0.5625f # imag
+0.43750003f # real
+0.49999997f # imag
+0.5f # real
+0.4375f # imag
+0.5625f # real
+0.375f # imag
+0.625f # real
+0.3125f # imag
+0.6875f # real
+0.25000003f # imag
+0.75f # real
+0.1875f # imag
+0.8125f # real
+0.12500003f # imag
+0.875f # real
+0.0625f # imag
+0.9375f # real
+2.98023224e-08f # imag
+# END IFFT_EXPECTED_FORWARD_F
+
+# START RFFT_EXPECTED_BACKWARD_D
+7.5 # real
+0 # imag
+-0.5 # real
+2.513669746062924 # imag
+-0.5 # real
+1.2071067811865475 # imag
+-0.5 # real
+0.74830288133274447 # imag
+-0.5 # real
+0.5 # imag
+-0.5 # real
+0.33408931895964933 # imag
+-0.5 # real
+0.20710678118654757 # imag
+-0.5 # real
+0.099456183689829114 # imag
+-0.5 # real
+0 # imag
+# END RFFT_EXPECTED_BACKWARD_D
+
+# START RFFT_EXPECTED_BACKWARD_F
+7.5f # real
+0f # imag
+-0.5f # real
+2.51366973f # imag
+-0.5f # real
+1.20710683f # imag
+-0.5f # real
+0.748302877f # imag
+-0.5f # real
+0.5f # imag
+-0.5f # real
+0.334089339f # imag
+-0.5f # real
+0.207106769f # imag
+-0.5f # real
+0.0994560719f # imag
+-0.5f # real
+0f # imag
+# END RFFT_EXPECTED_BACKWARD_F
+
+# START RFFT_EXPECTED_ORTHO_D
+1.875 # real
+0 # imag
+-0.125 # real
+0.62841743651573101 # imag
+-0.125 # real
+0.30177669529663687 # imag
+-0.125 # real
+0.18707572033318612 # imag
+-0.125 # real
+0.125 # imag
+-0.125 # real
+0.083522329739912332 # imag
+-0.125 # real
+0.051776695296636893 # imag
+-0.125 # real
+0.024864045922457279 # imag
+-0.125 # real
+0 # imag
+# END RFFT_EXPECTED_ORTHO_D
+
+# START RFFT_EXPECTED_ORTHO_F
+1.875f # real
+0f # imag
+-0.125f # real
+0.628417432f # imag
+-0.125f # real
+0.301776707f # imag
+-0.125f # real
+0.187075719f # imag
+-0.125f # real
+0.125f # imag
+-0.125f # real
+0.0835223347f # imag
+-0.125f # real
+0.0517766923f # imag
+-0.125f # real
+0.024864018f # imag
+-0.125f # real
+0f # imag
+# END RFFT_EXPECTED_ORTHO_F
+
+# START RFFT_EXPECTED_FORWARD_D
+0.46875 # real
+0 # imag
+-0.03125 # real
+0.15710435912893275 # imag
+-0.03125 # real
+0.075444173824159216 # imag
+-0.03125 # real
+0.04676893008329653 # imag
+-0.03125 # real
+0.03125 # imag
+-0.03125 # real
+0.020880582434978083 # imag
+-0.03125 # real
+0.012944173824159223 # imag
+-0.03125 # real
+0.0062160114806143196 # imag
+-0.03125 # real
+0 # imag
+# END RFFT_EXPECTED_FORWARD_D
+
+# START RFFT_EXPECTED_FORWARD_F
+0.46875f # real
+0f # imag
+-0.03125f # real
+0.157104358f # imag
+-0.03125f # real
+0.0754441768f # imag
+-0.03125f # real
+0.0467689298f # imag
+-0.03125f # real
+0.03125f # imag
+-0.03125f # real
+0.0208805837f # imag
+-0.03125f # real
+0.0129441731f # imag
+-0.03125f # real
+0.00621600449f # imag
+-0.03125f # real
+0f # imag
+# END RFFT_EXPECTED_FORWARD_F
+
+# START IRFFT_EXPECTED_BACKWARD_D
+0
+0.062500000000000028
+0.125
+0.1875
+0.25
+0.3125
+0.375
+0.4375
+0.5
+0.5625
+0.625
+0.6875
+0.75
+0.8125
+0.875
+0.9375
+# END IRFFT_EXPECTED_BACKWARD_D
+
+# START IRFFT_EXPECTED_BACKWARD_F
+0f
+0.0625f
+0.125f
+0.187500015f
+0.25f
+0.3125f
+0.375f
+0.4375f
+0.5f
+0.5625f
+0.625f
+0.6875f
+0.75f
+0.8125f
+0.875f
+0.9375f
+# END IRFFT_EXPECTED_BACKWARD_F
+
+# START IRFFT_EXPECTED_ORTHO_D
+0
+0.062500000000000028
+0.125
+0.1875
+0.25
+0.3125
+0.375
+0.4375
+0.5
+0.5625
+0.625
+0.6875
+0.75
+0.8125
+0.875
+0.9375
+# END IRFFT_EXPECTED_ORTHO_D
+
+# START IRFFT_EXPECTED_ORTHO_F
+0f
+0.0625f
+0.125f
+0.187500015f
+0.25f
+0.3125f
+0.375f
+0.4375f
+0.5f
+0.5625f
+0.625f
+0.6875f
+0.75f
+0.8125f
+0.875f
+0.9375f
+# END IRFFT_EXPECTED_ORTHO_F
+
+# START IRFFT_EXPECTED_FORWARD_D
+0
+0.062500000000000028
+0.125
+0.1875
+0.25
+0.3125
+0.375
+0.4375
+0.5
+0.5625
+0.625
+0.6875
+0.75
+0.8125
+0.875
+0.9375
+# END IRFFT_EXPECTED_FORWARD_D
+
+# START IRFFT_EXPECTED_FORWARD_F
+0f
+0.0625f
+0.125f
+0.187500015f
+0.25f
+0.3125f
+0.375f
+0.4375f
+0.5f
+0.5625f
+0.625f
+0.6875f
+0.75f
+0.8125f
+0.875f
+0.9375f
+# END IRFFT_EXPECTED_FORWARD_F

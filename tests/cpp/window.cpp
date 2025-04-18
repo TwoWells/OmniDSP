@@ -1,290 +1,267 @@
-/**
- * @file tests/cpp/window.cpp
- * @brief Unit tests for the OmniDSP Window class.
- * Refactored to read reference coefficients from test_references.txt.
- */
-#include <OmniDSP/window.h>  // Use the renamed window header
+// tests/window.cpp
+// Tests for window application functions using reference data.
+
+#include <OmniDSP/window.h>  // Header for OmniDSP::Window class
 #include <gtest/gtest.h>
 
-#include <algorithm>  // For std::copy, std::transform
 #include <cmath>
-#include <fstream>    // <<< Added for file reading
-#include <limits>     // For std::numeric_limits
-#include <map>        // <<< Added for storing reference data
-#include <numeric>    // For std::accumulate
-#include <sstream>    // <<< Added for file reading
-#include <stdexcept>  // <<< Added for file reading errors
-#include <string>     // <<< Added for file reading
+#include <limits>     // For numeric_limits
+#include <numeric>    // For std::accumulate, std::vector initialization
+#include <stdexcept>  // For exception checks
 #include <vector>
 
-// Define M_PI if it's not already defined
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
-
-// --- Test Utilities ---
-
-// Helper to compare vectors
-template <typename T>
-void ExpectVectorNear(const std::vector<T>& expected,
-                      const std::vector<T>& actual, T tolerance) {
-  ASSERT_EQ(expected.size(), actual.size());
-  for (size_t i = 0; i < expected.size(); ++i) {
-    EXPECT_NEAR(expected[i], actual[i], tolerance) << "at index " << i;
-  }
-}
-
-// Helper function to read reference data from the text file
-// NOTE: This is a simplified reader. Adapt if you have a more robust one
-// elsewhere.
-std::map<std::string, std::vector<double>> readReferenceData(
-    const std::string& filename) {
-  std::map<std::string, std::vector<double>> dataMap;
-  std::ifstream infile(filename);
-  if (!infile) {
-    throw std::runtime_error("Could not open reference file: " + filename);
-  }
-
-  std::string line;
-  std::string currentKey;
-  bool readingData = false;
-
-  while (std::getline(infile, line)) {
-    // Trim leading/trailing whitespace
-    line.erase(0, line.find_first_not_of(" \t\n\r"));
-    line.erase(line.find_last_not_of(" \t\n\r") + 1);
-
-    if (line.empty() || line[0] == '#') {
-      if (line.rfind("# START ", 0) ==
-          0) {                        // Check if line starts with "# START "
-        currentKey = line.substr(8);  // Extract key name
-        readingData = true;
-        dataMap[currentKey] =
-            std::vector<double>();  // Initialize vector for the key
-      } else if (line.rfind("# END ", 0) ==
-                 0) {  // Check if line starts with "# END "
-        if (readingData && line.substr(6) == currentKey) {
-          readingData = false;
-          currentKey = "";
-        }
-      }
-      continue;  // Skip comments and empty lines
-    }
-
-    if (readingData && !currentKey.empty()) {
-      std::stringstream ss(line);
-      double value;
-      // Handle potential 'f' suffix for float data if needed, though we read as
-      // double Remove 'f' before conversion
-      size_t f_pos = line.find('f');
-      if (f_pos != std::string::npos) {
-        line.resize(f_pos);  // Remove 'f' and anything after
-      }
-
-      std::stringstream ss_cleaned(line);
-      if (ss_cleaned >> value) {
-        dataMap[currentKey].push_back(value);
-      } else {
-        throw std::runtime_error(
-            "Error parsing value in reference file for key " + currentKey +
-            ": '" + line + "'");
-      }
-    }
-  }
-  return dataMap;
-}
+#include "test_data_utils.h"  // Use the data loading utility
 
 // --- Test Fixture ---
-
-// Test fixture for Window tests
 class WindowTest : public ::testing::Test {
  protected:
-  // Define test signal
-  std::vector<float> signal_f = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f};
-  std::vector<double> signal_d = {1.0, 2.0, 3.0, 4.0, 5.0};
-  size_t N = 5;
-  double kaiser_beta = 8.0;  // Beta used in reference generation
+  // Window length matches the one used in generate_references.py
+  const size_t N = 5;
+  // Kaiser beta matches the one used in generate_references.py
+  const double kaiser_beta = 8.0;
 
-  // Tolerance for floating point comparisons
-  float tol_f = std::numeric_limits<float>::epsilon() * 100;
-  double tol_d = std::numeric_limits<double>::epsilon() * 1000;
+  // Tolerances might need adjustment based on backend precision
+  const double double_tolerance =
+      std::numeric_limits<double>::epsilon() * N * 10;
+  const float float_tolerance =
+      std::numeric_limits<float>::epsilon() * N * 10;  // Float tolerance
 
-  // Reference coefficients (loaded from file)
-  std::vector<double> hann_coeffs_d;
-  std::vector<double> hamming_coeffs_d;
-  std::vector<double> kaiser_coeffs_d;
-  std::vector<double> flattop_coeffs_d;
-
-  // Float versions (calculated from double)
-  std::vector<float> hann_coeffs_f;
-  std::vector<float> hamming_coeffs_f;
-  std::vector<float> kaiser_coeffs_f;
-  std::vector<float> flattop_coeffs_f;
-
-  // Expected windowed signals (calculated)
-  std::vector<float> expected_hann_f;
-  std::vector<double> expected_hann_d;
-  std::vector<float> expected_hamming_f;
-  std::vector<double> expected_hamming_d;
-  std::vector<float> expected_kaiser_f;
-  std::vector<double> expected_kaiser_d;
-  std::vector<float> expected_flattop_f;
-  std::vector<double> expected_flattop_d;
-
-  // Map to hold all reference data
-  static std::map<std::string, std::vector<double>> referenceData;
-  static bool dataLoaded;
-
-  // Load data once for all tests in the fixture
-  static void SetUpTestSuite() {
-    if (!dataLoaded) {
-      try {
-// Get reference file path from compile definition set by CMake
-#ifndef OMNIDSP_TEST_REF_FILE_PATH
-#error "OMNIDSP_TEST_REF_FILE_PATH is not defined. Check CMakeLists.txt"
-#endif
-        std::string ref_file_path = OMNIDSP_TEST_REF_FILE_PATH;
-        referenceData = readReferenceData(ref_file_path);
-        dataLoaded = true;
-      } catch (const std::exception& e) {
-        // Fail fast if reference data cannot be loaded
-        FAIL() << "Failed to load reference data: " << e.what();
-      }
-    }
-  }
-
-  // Setup per test case
-  void SetUp() override {
-    // Retrieve specific data from the loaded map
-    ASSERT_TRUE(referenceData.count("WINDOW_HANN_N5_D"))
-        << "Hann reference data not found.";
-    hann_coeffs_d =
-        referenceData.at("WINDOW_HANN_N5_D");  // Use .at() for safety
-    ASSERT_EQ(hann_coeffs_d.size(), N) << "Hann reference data has wrong size.";
-
-    ASSERT_TRUE(referenceData.count("WINDOW_HAMMING_N5_D"))
-        << "Hamming reference data not found.";
-    hamming_coeffs_d = referenceData.at("WINDOW_HAMMING_N5_D");
-    ASSERT_EQ(hamming_coeffs_d.size(), N)
-        << "Hamming reference data has wrong size.";
-
-    ASSERT_TRUE(referenceData.count("WINDOW_KAISER_N5_B8_D"))
-        << "Kaiser reference data not found.";
-    kaiser_coeffs_d = referenceData.at("WINDOW_KAISER_N5_B8_D");
-    ASSERT_EQ(kaiser_coeffs_d.size(), N)
-        << "Kaiser reference data has wrong size.";
-
-    ASSERT_TRUE(referenceData.count("WINDOW_FLATTOP_N5_D"))
-        << "Flattop reference data not found.";
-    flattop_coeffs_d = referenceData.at("WINDOW_FLATTOP_N5_D");
-    ASSERT_EQ(flattop_coeffs_d.size(), N)
-        << "Flattop reference data has wrong size.";
-
-    // --- Calculations based on loaded reference coefficients ---
-
-    // Convert double coeffs to float
-    hann_coeffs_f.resize(N);
-    std::transform(hann_coeffs_d.begin(), hann_coeffs_d.end(),
-                   hann_coeffs_f.begin(),
-                   [](double d) { return static_cast<float>(d); });
-    hamming_coeffs_f.resize(N);
-    std::transform(hamming_coeffs_d.begin(), hamming_coeffs_d.end(),
-                   hamming_coeffs_f.begin(),
-                   [](double d) { return static_cast<float>(d); });
-    kaiser_coeffs_f.resize(N);
-    std::transform(kaiser_coeffs_d.begin(), kaiser_coeffs_d.end(),
-                   kaiser_coeffs_f.begin(),
-                   [](double d) { return static_cast<float>(d); });
-    flattop_coeffs_f.resize(N);
-    std::transform(flattop_coeffs_d.begin(), flattop_coeffs_d.end(),
-                   flattop_coeffs_f.begin(),
-                   [](double d) { return static_cast<float>(d); });
-
-    // Calculate expected windowed signals
-    expected_hann_f.resize(N);
-    expected_hann_d.resize(N);
-    expected_hamming_f.resize(N);
-    expected_hamming_d.resize(N);
-    expected_kaiser_f.resize(N);
-    expected_kaiser_d.resize(N);
-    expected_flattop_f.resize(N);
-    expected_flattop_d.resize(N);
-    for (size_t i = 0; i < N; ++i) {
-      expected_hann_f[i] = signal_f[i] * hann_coeffs_f[i];
-      expected_hann_d[i] = signal_d[i] * hann_coeffs_d[i];
-      expected_hamming_f[i] = signal_f[i] * hamming_coeffs_f[i];
-      expected_hamming_d[i] = signal_d[i] * hamming_coeffs_d[i];
-      expected_kaiser_f[i] = signal_f[i] * kaiser_coeffs_f[i];
-      expected_kaiser_d[i] = signal_d[i] * kaiser_coeffs_d[i];
-      expected_flattop_f[i] = signal_f[i] * flattop_coeffs_f[i];
-      expected_flattop_d[i] = signal_d[i] * flattop_coeffs_d[i];
+  // Helper to compare real vectors with tolerance
+  template <typename T>
+  void ExpectVectorNear(const std::vector<T> &expected,
+                        const std::vector<T> &actual, T tolerance,
+                        const std::string &msg = "") {
+    ASSERT_EQ(expected.size(), actual.size()) << msg << " - Size mismatch";
+    for (size_t i = 0; i < expected.size(); ++i) {
+      EXPECT_NEAR(expected[i], actual[i], tolerance)
+          << msg << " - Mismatch at index " << i;
     }
   }
 };
 
-// Initialize static members
-std::map<std::string, std::vector<double>> WindowTest::referenceData;
-bool WindowTest::dataLoaded = false;
-
 // --- Test Cases ---
 
-// Test Hann window
 TEST_F(WindowTest, Hann) {
-  auto result_f = OmniDSP::Window::hann(signal_f);
-  ExpectVectorNear(expected_hann_f, result_f, tol_f);
-
-  auto result_d = OmniDSP::Window::hann(signal_d);
-  ExpectVectorNear(expected_hann_d, result_d, tol_d);
+  // Test Double Precision
+  {
+    std::vector<double> input_signal(N, 1.0);  // Dummy input of ones
+    std::vector<double> actual_windowed_signal;
+    // Correct API call: OmniDSP::Window class, static hann method
+    ASSERT_NO_THROW(actual_windowed_signal =
+                        OmniDSP::Window::hann<double>(input_signal));
+    // Compare against reference coefficients (since input was 1.0)
+    const auto &expected_coeffs =
+        TestDataUtils::getExpectedDoubleVec("WINDOW_HANN_N5_D");
+    ExpectVectorNear(expected_coeffs, actual_windowed_signal, double_tolerance,
+                     "Hann Window (Double)");
+  }
+  // Test Float Precision
+  {
+    std::vector<float> input_signal(N, 1.0f);  // Dummy input of ones
+    std::vector<float> actual_windowed_signal;
+    // Correct API call: OmniDSP::Window class, static hann method
+    ASSERT_NO_THROW(actual_windowed_signal =
+                        OmniDSP::Window::hann<float>(input_signal));
+    // Compare against reference coefficients (since input was 1.0)
+    const auto &expected_coeffs =
+        TestDataUtils::getExpectedFloatVec("WINDOW_HANN_N5_F");
+    ExpectVectorNear(expected_coeffs, actual_windowed_signal, float_tolerance,
+                     "Hann Window (Float)");
+  }
 }
 
-// Test Hamming window
 TEST_F(WindowTest, Hamming) {
-  auto result_f = OmniDSP::Window::hamming(signal_f);
-  ExpectVectorNear(expected_hamming_f, result_f, tol_f);
-
-  auto result_d = OmniDSP::Window::hamming(signal_d);
-  ExpectVectorNear(expected_hamming_d, result_d, tol_d);
+  // Test Double Precision
+  {
+    std::vector<double> input_signal(N, 1.0);
+    std::vector<double> actual_windowed_signal;
+    // Correct API call
+    ASSERT_NO_THROW(actual_windowed_signal =
+                        OmniDSP::Window::hamming<double>(input_signal));
+    const auto &expected_coeffs =
+        TestDataUtils::getExpectedDoubleVec("WINDOW_HAMMING_N5_D");
+    ExpectVectorNear(expected_coeffs, actual_windowed_signal, double_tolerance,
+                     "Hamming Window (Double)");
+  }
+  // Test Float Precision
+  {
+    std::vector<float> input_signal(N, 1.0f);
+    std::vector<float> actual_windowed_signal;
+    // Correct API call
+    ASSERT_NO_THROW(actual_windowed_signal =
+                        OmniDSP::Window::hamming<float>(input_signal));
+    const auto &expected_coeffs =
+        TestDataUtils::getExpectedFloatVec("WINDOW_HAMMING_N5_F");
+    ExpectVectorNear(expected_coeffs, actual_windowed_signal, float_tolerance,
+                     "Hamming Window (Float)");
+  }
 }
 
-// Test Kaiser window
 TEST_F(WindowTest, Kaiser) {
-  auto result_f =
-      OmniDSP::Window::kaiser(signal_f, static_cast<float>(kaiser_beta));
-  ExpectVectorNear(expected_kaiser_f, result_f, tol_f);
-
-  auto result_d = OmniDSP::Window::kaiser(signal_d, kaiser_beta);
-  ExpectVectorNear(expected_kaiser_d, result_d, tol_d);
+  // Test Double Precision
+  {
+    std::vector<double> input_signal(N, 1.0);
+    std::vector<double> actual_windowed_signal;
+    // Correct API call
+    ASSERT_NO_THROW(actual_windowed_signal = OmniDSP::Window::kaiser<double>(
+                        input_signal, kaiser_beta));
+    const auto &expected_coeffs =
+        TestDataUtils::getExpectedDoubleVec("WINDOW_KAISER_N5_B8_D");
+    ExpectVectorNear(expected_coeffs, actual_windowed_signal, double_tolerance,
+                     "Kaiser Window (Double)");
+  }
+  // Test Float Precision
+  {
+    std::vector<float> input_signal(N, 1.0f);
+    std::vector<float> actual_windowed_signal;
+    // Correct API call
+    ASSERT_NO_THROW(actual_windowed_signal = OmniDSP::Window::kaiser<float>(
+                        input_signal, static_cast<float>(kaiser_beta)));
+    const auto &expected_coeffs =
+        TestDataUtils::getExpectedFloatVec("WINDOW_KAISER_N5_B8_F");
+    ExpectVectorNear(expected_coeffs, actual_windowed_signal, float_tolerance,
+                     "Kaiser Window (Float)");
+  }
 }
 
-// Test Flattop window
-TEST_F(WindowTest, Flattop) {
-  auto result_f = OmniDSP::Window::flattop(signal_f);
-  ExpectVectorNear(expected_flattop_f, result_f, tol_f);
-
-  auto result_d = OmniDSP::Window::flattop(signal_d);
-  ExpectVectorNear(expected_flattop_d, result_d, tol_d);
+TEST_F(WindowTest, FlatTop) {
+  // Test Double Precision
+  {
+    std::vector<double> input_signal(N, 1.0);
+    std::vector<double> actual_windowed_signal;
+    // Correct API call
+    ASSERT_NO_THROW(actual_windowed_signal =
+                        OmniDSP::Window::flattop<double>(input_signal));
+    const auto &expected_coeffs =
+        TestDataUtils::getExpectedDoubleVec("WINDOW_FLATTOP_N5_D");
+    ExpectVectorNear(expected_coeffs, actual_windowed_signal, double_tolerance,
+                     "FlatTop Window (Double)");
+  }
+  // Test Float Precision
+  {
+    std::vector<float> input_signal(N, 1.0f);
+    std::vector<float> actual_windowed_signal;
+    // Correct API call
+    ASSERT_NO_THROW(actual_windowed_signal =
+                        OmniDSP::Window::flattop<float>(input_signal));
+    const auto &expected_coeffs =
+        TestDataUtils::getExpectedFloatVec("WINDOW_FLATTOP_N5_F");
+    ExpectVectorNear(expected_coeffs, actual_windowed_signal, float_tolerance,
+                     "FlatTop Window (Float)");
+  }
 }
 
-// Test edge cases
-TEST_F(WindowTest, EdgeCases) {
-  std::vector<float> empty_f;
-  std::vector<double> empty_d;
-  std::vector<float> single_f = {1.0f};
-  std::vector<double> single_d = {1.0};
+// Test edge case N=1 (Input size 1)
+TEST_F(WindowTest, SizeOne) {
+  // Test Double Precision
+  {
+    std::vector<double> input_signal(1, 1.0);
+    std::vector<double> actual_windowed_signal;
+    ASSERT_NO_THROW(actual_windowed_signal =
+                        OmniDSP::Window::hann<double>(input_signal));
+    ASSERT_EQ(actual_windowed_signal.size(), 1);
+    EXPECT_NEAR(actual_windowed_signal[0], 1.0, double_tolerance)
+        << "Hann N=1 (Double)";
 
-  // Expect throw for empty input
-  EXPECT_THROW(OmniDSP::Window::hann(empty_f), std::invalid_argument);
-  EXPECT_THROW(OmniDSP::Window::hamming(empty_d), std::invalid_argument);
-  EXPECT_THROW(OmniDSP::Window::kaiser(empty_f, 8.0f), std::invalid_argument);
-  EXPECT_THROW(OmniDSP::Window::flattop(empty_d), std::invalid_argument);
+    ASSERT_NO_THROW(actual_windowed_signal =
+                        OmniDSP::Window::hamming<double>(input_signal));
+    ASSERT_EQ(actual_windowed_signal.size(), 1);
+    EXPECT_NEAR(actual_windowed_signal[0], 1.0, double_tolerance)
+        << "Hamming N=1 (Double)";
 
-  // Expect single output of input value for N=1 (window coeff is 1)
-  EXPECT_EQ(OmniDSP::Window::hann(single_f)[0], 1.0f);
-  EXPECT_EQ(OmniDSP::Window::hamming(single_d)[0], 1.0);
-  EXPECT_EQ(OmniDSP::Window::kaiser(single_f, 8.0f)[0],
-            1.0f);  // Beta doesn't matter for N=1
-  EXPECT_EQ(OmniDSP::Window::flattop(single_d)[0], 1.0);
+    ASSERT_NO_THROW(actual_windowed_signal = OmniDSP::Window::kaiser<double>(
+                        input_signal, kaiser_beta));
+    ASSERT_EQ(actual_windowed_signal.size(), 1);
+    EXPECT_NEAR(actual_windowed_signal[0], 1.0, double_tolerance)
+        << "Kaiser N=1 (Double)";
 
-  // Expect throw for negative beta in Kaiser
-  EXPECT_THROW(OmniDSP::Window::kaiser(signal_f, -1.0f), std::invalid_argument);
+    ASSERT_NO_THROW(actual_windowed_signal =
+                        OmniDSP::Window::flattop<double>(input_signal));
+    ASSERT_EQ(actual_windowed_signal.size(), 1);
+    EXPECT_NEAR(actual_windowed_signal[0], 1.0, double_tolerance)
+        << "FlatTop N=1 (Double)";
+  }
+  // Test Float Precision
+  {
+    std::vector<float> input_signal(1, 1.0f);
+    std::vector<float> actual_windowed_signal;
+    ASSERT_NO_THROW(actual_windowed_signal =
+                        OmniDSP::Window::hann<float>(input_signal));
+    ASSERT_EQ(actual_windowed_signal.size(), 1);
+    EXPECT_NEAR(actual_windowed_signal[0], 1.0f, float_tolerance)
+        << "Hann N=1 (Float)";
+
+    ASSERT_NO_THROW(actual_windowed_signal =
+                        OmniDSP::Window::hamming<float>(input_signal));
+    ASSERT_EQ(actual_windowed_signal.size(), 1);
+    EXPECT_NEAR(actual_windowed_signal[0], 1.0f, float_tolerance)
+        << "Hamming N=1 (Float)";
+
+    ASSERT_NO_THROW(actual_windowed_signal = OmniDSP::Window::kaiser<float>(
+                        input_signal, static_cast<float>(kaiser_beta)));
+    ASSERT_EQ(actual_windowed_signal.size(), 1);
+    EXPECT_NEAR(actual_windowed_signal[0], 1.0f, float_tolerance)
+        << "Kaiser N=1 (Float)";
+
+    ASSERT_NO_THROW(actual_windowed_signal =
+                        OmniDSP::Window::flattop<float>(input_signal));
+    ASSERT_EQ(actual_windowed_signal.size(), 1);
+    EXPECT_NEAR(actual_windowed_signal[0], 1.0f, float_tolerance)
+        << "FlatTop N=1 (Float)";
+  }
+}
+
+// Test edge case N=0 (Input size 0) - Should throw invalid_argument
+TEST_F(WindowTest, SizeZero) {
+  // Test Double Precision
+  {
+    std::vector<double> input_signal;  // Empty vector
+    ASSERT_THROW(OmniDSP::Window::hann<double>(input_signal),
+                 std::invalid_argument)
+        << "Hann N=0 (Double)";
+    ASSERT_THROW(OmniDSP::Window::hamming<double>(input_signal),
+                 std::invalid_argument)
+        << "Hamming N=0 (Double)";
+    ASSERT_THROW(OmniDSP::Window::kaiser<double>(input_signal, kaiser_beta),
+                 std::invalid_argument)
+        << "Kaiser N=0 (Double)";
+    ASSERT_THROW(OmniDSP::Window::flattop<double>(input_signal),
+                 std::invalid_argument)
+        << "FlatTop N=0 (Double)";
+  }
+  // Test Float Precision
+  {
+    std::vector<float> input_signal;  // Empty vector
+    ASSERT_THROW(OmniDSP::Window::hann<float>(input_signal),
+                 std::invalid_argument)
+        << "Hann N=0 (Float)";
+    ASSERT_THROW(OmniDSP::Window::hamming<float>(input_signal),
+                 std::invalid_argument)
+        << "Hamming N=0 (Float)";
+    ASSERT_THROW(OmniDSP::Window::kaiser<float>(
+                     input_signal, static_cast<float>(kaiser_beta)),
+                 std::invalid_argument)
+        << "Kaiser N=0 (Float)";
+    ASSERT_THROW(OmniDSP::Window::flattop<float>(input_signal),
+                 std::invalid_argument)
+        << "FlatTop N=0 (Float)";
+  }
+}
+
+// Test Kaiser specific edge case: negative beta - Should throw invalid_argument
+TEST_F(WindowTest, KaiserNegativeBeta) {
+  // Test Double Precision
+  {
+    std::vector<double> input_signal(N, 1.0);
+    ASSERT_THROW(OmniDSP::Window::kaiser<double>(input_signal, -1.0),
+                 std::invalid_argument)
+        << "Kaiser Negative Beta (Double)";
+  }
+  // Test Float Precision
+  {
+    std::vector<float> input_signal(N, 1.0f);
+    ASSERT_THROW(OmniDSP::Window::kaiser<float>(input_signal, -1.0f),
+                 std::invalid_argument)
+        << "Kaiser Negative Beta (Float)";
+  }
 }

@@ -22,11 +22,11 @@ if(NOT TARGET GTest::gtest_main)
   if(NOT TARGET GTest::gtest_main)
     message(
       FATAL_ERROR
-        "GoogleTest target (GTest::gtest_main) still not found. Cannot build C++ tests."
+        "GoogleTest target (GTest::gtest_main) still not found. Cannot build C++ tests." #
     )
   endif()
 else()
-  message(STATUS "tests/cpp: GoogleTest target GTest::gtest_main found.")
+  message(STATUS "tests/cpp: GoogleTest target GTest::gtest_main found.") #
 endif()
 
 # --- Determine which backend-specific test file to include ---
@@ -48,7 +48,7 @@ elseif(BACKEND STREQUAL "ACCELERATE")
       ${CMAKE_CURRENT_SOURCE_DIR}/backend/accelerate.cpp) # Use relative path
   message(
     STATUS
-      "tests/cpp: Including Accelerate-specific tests: ${BACKEND_SPECIFIC_TEST_SRC}"
+      "tests/cpp: Including Accelerate-specific tests: ${BACKEND_SPECIFIC_TEST_SRC}" #
   )
 else() # Assuming "NONE" or empty means Stub backend
   set(BACKEND_SPECIFIC_TEST_SRC ${CMAKE_CURRENT_SOURCE_DIR}/backend/stub.cpp
@@ -62,20 +62,22 @@ endif()
 add_executable(
   omnidsp_tests
   # Common tests (sources relative to this CMakeLists.txt)
-  fft.cpp
-  ifft.cpp
-  rfft.cpp
-  irfft.cpp
+  fft.cpp # Now includes ifft, rfft, irfft tests
+  # ifft.cpp        # Removed - tests moved to fft.cpp
+  # rfft.cpp        # Removed - tests moved to fft.cpp
+  # irfft.cpp       # Removed - tests moved to fft.cpp
   cqt.cpp
   window.cpp
+  test_data_utils.cpp # Utility for loading reference data
   # Common backend tests + fixture (source relative to this CMakeLists.txt)
   ${CMAKE_CURRENT_SOURCE_DIR}/backend/backend.cpp # Use relative path
-  # Backend-specific tests (variable now holds the full relative path)
+  # Backend-specific tests (variable now holds the full relative path) #
   ${BACKEND_SPECIFIC_TEST_SRC})
 
 # --- Define Path to Reference Data ---
 set(TEST_REF_FILE_BUILD_PATH "${CMAKE_CURRENT_BINARY_DIR}/test_references.txt")
 if(WIN32)
+  # Escape backslashes for Windows paths in C++ string literals
   string(REPLACE "\\" "\\\\" TEST_REF_FILE_BUILD_PATH_ESC
                  ${TEST_REF_FILE_BUILD_PATH})
 else()
@@ -91,26 +93,32 @@ message(
   STATUS "tests/cpp: Final COMPILE_DEFINITIONS for omnidsp_tests: ${TEST_DEFS}")
 
 # --- Copy Reference Data ---
+# Ensure the reference data file is copied to the build directory where the test
+# executable runs
 add_custom_command(
   TARGET omnidsp_tests
   POST_BUILD
   COMMAND
     ${CMAKE_COMMAND} -E copy_if_different
-    "${CMAKE_CURRENT_SOURCE_DIR}/test_references.txt"
-    "${CMAKE_CURRENT_BINARY_DIR}/test_references.txt"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_references.txt" # Source file location
+    "${CMAKE_CURRENT_BINARY_DIR}/test_references.txt" # Destination in build dir
   COMMENT
     "Copying test_references.txt to build directory (${CMAKE_CURRENT_BINARY_DIR})"
 )
 
-# Link the test executable
-target_link_libraries(omnidsp_tests PRIVATE GTest::gtest_main omnidsp)
+# Link the test executable #
+target_link_libraries(omnidsp_tests PRIVATE GTest::gtest_main omnidsp) #
 message(
   STATUS
-    "tests/cpp: Linking omnidsp_tests against GTest::gtest_main and omnidsp.")
+    "tests/cpp: Linking omnidsp_tests against GTest::gtest_main and omnidsp.") #
 
 # Add include directories needed for the tests
-target_include_directories(omnidsp_tests PRIVATE ${PROJECT_SOURCE_DIR}/include
-                                                 ${PROJECT_SOURCE_DIR}/src)
+target_include_directories(
+  omnidsp_tests
+  PRIVATE ${PROJECT_SOURCE_DIR}/include # For OmniDSP headers
+          ${PROJECT_SOURCE_DIR}/src # Potentially for internal headers if needed
+                                    # by tests
+)
 message(STATUS "tests/cpp: Added include directories for omnidsp_tests.")
 
 # Add tests to CTest

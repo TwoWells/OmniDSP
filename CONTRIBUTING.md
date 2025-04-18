@@ -23,7 +23,11 @@ Thank you for your interest in contributing to OmniDSP! We welcome contributions
   - [Running Tests](#running-tests)
     - [C++ Tests (GoogleTest)](#c-tests-googletest)
     - [Python Tests (pytest)](#python-tests-pytest)
-    - [Test Reference Data](#test-reference-data)
+    - [C++ Test Reference Data Details](#c-test-reference-data-details)
+      - [Reference Data Generation](#reference-data-generation)
+      - [Reference Data Loading](#reference-data-loading)
+      - [Build Integration (CMake)](#build-integration-cmake)
+      - [Updating/Adding C++ Reference Data and Tests](#updatingadding-c-reference-data-and-tests)
   - [Coding Style](#coding-style)
   - [Commit Message Format (Conventional Commits)](#commit-message-format-conventional-commits)
   - [Submitting Contributions](#submitting-contributions)
@@ -94,9 +98,7 @@ You generally don't need to interact directly with `conda-lock`. Simply use the 
 **If you ARE changing runtime dependencies in `environment.yml`:**
 
 1.  **Ensure `conda-lock` is Available:** The `conda-lock` tool is included in the `omnidsp-dev` environment defined by `environment-dev.yml`. Ensure this environment is active (`conda activate omnidsp-dev`).
-
 2.  **Modify `environment.yml`:** Add, remove, or update _runtime_ packages or target platforms in `environment.yml` as needed. Remember to use platform selectors (e.g., `# [win]`, `# [linux]`) if a dependency is platform-specific. **Crucially, also make the same additions/removals/updates to the corresponding runtime dependency section in `environment-dev.yml` to keep the development environment consistent.**
-
 3.  **Regenerate Lock Files:** After modifying `environment.yml`, you **MUST** regenerate the explicit lock files for all supported platforms. From the project root directory (with the `omnidsp-dev` environment activated), run:
 
     ```bash
@@ -126,9 +128,7 @@ The `omnidsp-dev` Conda environment (created from `environment-dev.yml`) provide
 To maintain consistent code style, catch potential issues early, and ensure informative commit messages, this project uses `pre-commit` hooks defined in `.pre-commit-config.yaml`. These hooks automatically run tools like `ruff`, `clang-format`, and `prettier` (using versions managed internally by `pre-commit` itself) on changed files or the commit message itself before you make a commit.
 
 1.  **Initial Setup:** After creating and activating the `omnidsp-dev` environment, run `pre-commit install --hook-type commit-msg --hook-type pre-commit` once per clone (as described in "Setting up the Development Environment"). This installs hooks for both pre-commit (formatting/linting) and commit-msg (message validation) stages.
-
 2.  **Workflow:**
-
     - Stage your changes (`git add ...`).
     - Run `git commit`.
     - **Commit Message Validation:** The `commit-msg` hook (`conventional-pre-commit`) runs first. If your commit message doesn't follow the Conventional Commits format, the commit will be aborted with an error message. Edit your commit message and try again.
@@ -156,7 +156,6 @@ The tools used for development might occasionally need updates or additions.
       The `--prune` option removes packages that are no longer listed in the file.
 
 - **Adding/Updating a `pre-commit` Hook:**
-
   1.  Modify the `.pre-commit-config.yaml` file to add a new hook, update the `rev:` of an existing hook repository (e.g., updating the version of `clang-format` used by `mirrors-clang-format`), or change hook arguments.
   2.  Commit the changes to `.pre-commit-config.yaml`.
   3.  **No extra steps are usually required by developers.** The `pre-commit` framework automatically detects changes to `.pre-commit-config.yaml`. The next time you run `git commit` (or manually run `pre-commit run ...`), it will download and install any new tools or updated versions specified in the configuration into its internal cache. You generally **do not** need to re-run `pre-commit install` or run commands like `pre-commit clean`.
@@ -179,7 +178,9 @@ This is the standard way to build if you intend to use or test the Python bindin
     pip install -e . -v
     ```
 
-    - The `-e` flag installs the package in "editable" mode... _(rest of explanation unchanged)_
+    The `-e` flag installs the package in "editable" mode, meaning changes to the Python source code (in `src/omnidsp_py`) are reflected immediately without reinstalling. Changes to C++ code still require rebuilding (which \`pip install -e .\` triggers if needed).
+
+    The `-v` flag provides verbose output, showing the CMake configuration and build process, which is helpful for debugging.
 
 ### C++ Library Only
 
@@ -247,20 +248,24 @@ CMake automatically detects and selects the backend based on the platform and li
 
 _(Assumes `omnidsp-dev` environment is active)_
 
+OmniDSP uses both Python (pytest) and C++ (GoogleTest) tests to ensure correctness and stability.
+
 ### C++ Tests (GoogleTest)
 
-1.  **Build:** Ensure the project is built (either via `pip install -e .` or CMake directly). The tests are built as part of the default CMake build when `OMNIDSP_BUILD_PYTHON_BINDINGS` is OFF, or potentially alongside the Python build depending on configuration.
+The C++ tests are located in the `tests/cpp` directory and utilize the GoogleTest framework. They primarily focus on verifying the numerical output of core DSP functions (like FFT, CQT, windows) against pre-computed reference values.
+
+1.  **Build:** Ensure the project is built (either via `pip install -e .` or CMake directly). The C++ tests are built by default.
 2.  **Run:** Execute tests using CTest from the `build` directory:
 
     ```bash
     cd build
     ctest -C Release --verbose
-    # Or run the executable directly if built:
+    # Or run the executable directly:
     # ./tests/cpp/Release/omnidsp_tests.exe (Windows)
-    # ./tests/cpp/omnidsp_tests (Linux/macOS)
+    # ./tests/cpp/omnidsp_tests         (Linux/macOS)
     ```
 
-    - Note: The C++ tests require the `test_references.txt` file, which CMake copies to the build directory.
+    Note: The C++ tests require the `test_references.txt` file, which CMake copies to the build directory.
 
 ### Python Tests (pytest)
 
@@ -271,9 +276,61 @@ _(Assumes `omnidsp-dev` environment is active)_
     pytest tests/python
     ```
 
-### Test Reference Data
+### C++ Test Reference Data Details
 
-Some C++ tests rely on reference data generated by `tests/cpp/generate_references.py` (using NumPy, SciPy, and Librosa) and stored in `tests/cpp/test_references.txt`. If you modify inputs or expected outputs for these tests, re-run the Python script to update the reference file.
+#### Reference Data Generation
+
+- Reference data is generated using the Python script `tests/cpp/generate_references.py`.
+- This script uses libraries like NumPy, SciPy, and Librosa to calculate the expected outputs for various functions and parameters.
+- The generated data is stored in the text file `tests/cpp/test_references.txt`.
+- The format of `test_references.txt` is:
+  - Plain text with one value per line (or real/imaginary parts on consecutive lines for complex numbers).
+  - Data sections are delimited by `# START KEY_NAME` and `# END KEY_NAME` markers.
+  - Float values are typically suffixed with 'f'.
+  - 2D complex matrices (like CQT output) include a `# SHAPE: rows cols` line.
+- Currently covers: Window functions (float/double), FFT/IFFT/RFFT/IRFFT (float/double, various norms), CQT (double), Convolution/Correlation (float/double), Filter+Downsample (float/double).
+
+#### Reference Data Loading
+
+- A dedicated C++ utility, defined in `tests/cpp/test_data_utils.h` and `tests/cpp/test_data_utils.cpp`, handles loading and parsing the `test_references.txt` file.
+- The utility loads the data \*once\* per test executable run upon the first request (lazy, thread-safe loading).
+- C++ test files (e.g., `tests/cpp/fft.cpp`, `tests/cpp/window.cpp`) include `test_data_utils.h`.
+- Tests access the reference data using specific getter functions within the `TestDataUtils` namespace, for example:
+  - `TestDataUtils::getExpectedDoubleVec("WINDOW_HANN_N5_D")`
+  - `TestDataUtils::getExpectedFloatVec("WINDOW_HANN_N5_F")`
+  - `TestDataUtils::getExpectedComplexDoubleVec("FFT_EXPECTED_ORTHO_D")`
+  - `TestDataUtils::getExpectedComplexFloatVec("RFFT_EXPECTED_BACKWARD_F")`
+  - `TestDataUtils::getExpectedCQTD()`
+
+#### Build Integration (CMake)
+
+- The `tests/cpp/CMakeLists.txt` file configures the C++ test build.
+- It defines a preprocessor macro `OMNIDSP_TEST_REF_FILE_PATH` containing the full path to where the reference file will be located \*in the build directory\*.
+- A custom post-build command copies `tests/cpp/test_references.txt` from the source tree to the build directory, ensuring the test executable (`omnidsp_tests`) can find it at runtime using the path provided by the macro.
+
+#### Updating/Adding C++ Reference Data and Tests
+
+1.  **Updating/Adding Reference Data:**
+
+    - Modify or add calculations within `tests/cpp/generate_references.py` for the desired function or parameters.
+    - Add new NumPy arrays with descriptive keys (using `_D` for double, `_F` for float) to the `data_to_write` dictionary in the script.
+    - Run the Python script to regenerate `tests/cpp/test_references.txt`:
+
+      ```bash
+      python tests/cpp/generate_references.py
+      ```
+
+    - Commit the updated `test_references.txt` file along with your changes to the Python script.
+
+2.  **Updating/Adding C++ Tests:**
+    - If adding tests for existing data keys, simply modify the relevant C++ test file (e.g., `tests/cpp/fft.cpp`) to call the appropriate `TestDataUtils::getExpected...` function with the correct key.
+    - If adding reference data with a \*new structure\* (e.g., a 3D tensor), you will need to:
+      1.  Update the parsing logic in `tests/cpp/test_data_utils.cpp`.
+      2.  Add a new static variable to store the data in `test_data_utils.cpp`.
+      3.  Declare a new getter function in `tests/cpp/test_data_utils.h`.
+      4.  Implement the new getter function in `test_data_utils.cpp`.
+    - If adding a completely new C++ test file, remember to add it to the `add_executable` command in `tests/cpp/CMakeLists.txt`.
+    - Rebuild the project and run the tests using `ctest`.
 
 ## Coding Style
 
