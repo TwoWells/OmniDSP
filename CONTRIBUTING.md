@@ -9,6 +9,7 @@ Thank you for your interest in contributing to OmniDSP! We welcome contributions
   - [Getting Started](#getting-started)
     - [Prerequisites](#prerequisites)
     - [Setting up the Development Environment](#setting-up-the-development-environment)
+    - [Dependency Rationale: Boost](#dependency-rationale-boost)
   - [Dependency Management with Conda Lock](#dependency-management-with-conda-lock)
     - [Contributor Workflow for Runtime Dependencies](#contributor-workflow-for-runtime-dependencies)
   - [Developer Tools and Workflow](#developer-tools-and-workflow)
@@ -59,12 +60,22 @@ The project uses Conda to manage dependencies. For contributors, we provide a sp
     **Important:** Always ensure this environment is activated before building, running tests, using the library, or running developer tools like `pre-commit` or `conda-lock`. Although some tools like `clang-format` are installed by `pre-commit`, activating the environment ensures `pre-commit` itself and other dependencies are found correctly.
 
 3.  **Install Git Hooks:** After activating the environment for the first time in a new clone, install the `pre-commit` Git hooks:
+
     ```bash
     pre-commit install --hook-type commit-msg --hook-type pre-commit
     ```
+
     This sets up automatic code quality checks (formatting, linting) and commit message validation that run before each commit. See the "Developer Tools and Workflow" section for more details.
 
-_(Note: While end-users or CI might use the platform-specific `conda-_.lock`files derived from`environment.yml`for maximum reproducibility of the runtime environment (which will be named`omnidsp`), developers typically work with the slightly more flexible `environment-dev.yml`which creates the`omnidsp-dev` environment.)\*
+_(Note: While end-users or CI might use the platform-specific `conda-*.lock` files derived from `environment.yml` for maximum reproducibility of the runtime environment (which will be named `omnidsp`), developers typically work with the slightly more flexible `environment-dev.yml` which creates the `omnidsp-dev` environment.)_
+
+### Dependency Rationale: Boost
+
+The Boost C++ libraries were added as a dependency primarily for `Boost.Math`. Specifically, the library requires the 0th order modified Bessel function of the first kind (`I₀`) to generate Kaiser windows coefficients accurately and consistently.
+
+While C++17 includes mathematical special functions like `std::cyl_bessel_i` in the `<cmath>` header, its implementation is missing in certain standard library versions, most notably libc++ (used by default with Clang on macOS and some Linux distributions). This lack of universal availability caused cross-platform build failures.
+
+Using `boost::math::cyl_bessel_i` ensures that OmniDSP has access to a reliable and high-quality implementation of this function across all supported compilers and platforms, guaranteeing consistent Kaiser window generation. Boost is automatically installed via the Conda environment file (`environment.yml` and `environment-dev.yml`).
 
 ## Dependency Management with Conda Lock
 
@@ -115,7 +126,9 @@ The `omnidsp-dev` Conda environment (created from `environment-dev.yml`) provide
 To maintain consistent code style, catch potential issues early, and ensure informative commit messages, this project uses `pre-commit` hooks defined in `.pre-commit-config.yaml`. These hooks automatically run tools like `ruff`, `clang-format`, and `prettier` (using versions managed internally by `pre-commit` itself) on changed files or the commit message itself before you make a commit.
 
 1.  **Initial Setup:** After creating and activating the `omnidsp-dev` environment, run `pre-commit install --hook-type commit-msg --hook-type pre-commit` once per clone (as described in "Setting up the Development Environment"). This installs hooks for both pre-commit (formatting/linting) and commit-msg (message validation) stages.
+
 2.  **Workflow:**
+
     - Stage your changes (`git add ...`).
     - Run `git commit`.
     - **Commit Message Validation:** The `commit-msg` hook (`conventional-pre-commit`) runs first. If your commit message doesn't follow the Conventional Commits format, the commit will be aborted with an error message. Edit your commit message and try again.
@@ -132,15 +145,18 @@ The tools used for development might occasionally need updates or additions.
   1.  Modify the `dependencies:` list within `environment-dev.yml` to add, remove, or change the version constraint of a Conda package (e.g., updating `pytest` or `ruff`). Remember this file contains both runtime and dev dependencies, so modify the appropriate section.
   2.  Commit the changes to `environment-dev.yml`.
   3.  Existing developers will need to update their local `omnidsp-dev` environment by running:
+
       ```bash
       # Ensure no environment is active or activate a different one first
       # conda deactivate
       conda env update --name omnidsp-dev --file environment-dev.yml --prune
       conda activate omnidsp-dev
       ```
+
       The `--prune` option removes packages that are no longer listed in the file.
 
 - **Adding/Updating a `pre-commit` Hook:**
+
   1.  Modify the `.pre-commit-config.yaml` file to add a new hook, update the `rev:` of an existing hook repository (e.g., updating the version of `clang-format` used by `mirrors-clang-format`), or change hook arguments.
   2.  Commit the changes to `.pre-commit-config.yaml`.
   3.  **No extra steps are usually required by developers.** The `pre-commit` framework automatically detects changes to `.pre-commit-config.yaml`. The next time you run `git commit` (or manually run `pre-commit run ...`), it will download and install any new tools or updated versions specified in the configuration into its internal cache. You generally **do not** need to re-run `pre-commit install` or run commands like `pre-commit clean`.
@@ -158,9 +174,11 @@ This is the standard way to build if you intend to use or test the Python bindin
 
 1.  **Activate Conda Environment:** `conda activate omnidsp-dev`
 2.  **Editable Install:** From the project root directory (containing `pyproject.toml`), run:
+
     ```bash
     pip install -e . -v
     ```
+
     - The `-e` flag installs the package in "editable" mode... _(rest of explanation unchanged)_
 
 ### C++ Library Only
@@ -169,16 +187,21 @@ If you only need the C++ library for use in another C++ project:
 
 1.  **Activate Conda Environment:** `conda activate omnidsp-dev`
 2.  **Configure with CMake:**
+
     ```bash
     mkdir build && cd build
     # Configure without Python bindings (default)
     cmake .. -DCMAKE_INSTALL_PREFIX=../install # Or another install location
     ```
+
 3.  **Build:**
+
     ```bash
     cmake --build . --config Release --parallel
     ```
+
 4.  **(Optional) Install:**
+
     ```bash
     cmake --install . --config Release
     ```
@@ -210,7 +233,15 @@ If you only need the C++ library for use in another C++ project:
 
 ## Understanding Backends
 
-_(No changes needed here)_
+OmniDSP uses different backends for performance:
+
+- **oneMKL:** Uses Intel MKL and IPP. Preferred on non-Apple platforms if found by Conda. Requires `USE_ONEMKL` preprocessor definition (set by CMake).
+- **Accelerate:** Uses Apple's Accelerate framework. Preferred on macOS unless MKL is explicitly preferred. Requires `USE_ACCELERATE` definition.
+- **Stub:** A fallback implementation that throws runtime errors if no optimized backend is found/selected.
+
+CMake automatically detects and selects the backend based on the platform and libraries available within the **active Conda environment** during configuration.
+
+**Handling Backend Differences:** While functional parity between backends is a primary goal, sometimes the underlying libraries (e.g., MKL/IPP vs. Accelerate/vDSP) have different capabilities, interfaces, or constraints for the same conceptual operation (like resampling with filtering). When such discrepancies arise, the general strategy is often to **conform the internal C++ implementation to the more restrictive backend interface first** (e.g., adapting to IPP's requirements for resampling filter parameters). Once that backend is working correctly, we then determine the best approach for the other backend(s) to achieve similar functionality, potentially adapting the C++ interface or using alternative functions within that backend's library if necessary.
 
 ## Running Tests
 
@@ -218,15 +249,31 @@ _(Assumes `omnidsp-dev` environment is active)_
 
 ### C++ Tests (GoogleTest)
 
-_(No changes needed here)_
+1.  **Build:** Ensure the project is built (either via `pip install -e .` or CMake directly). The tests are built as part of the default CMake build when `OMNIDSP_BUILD_PYTHON_BINDINGS` is OFF, or potentially alongside the Python build depending on configuration.
+2.  **Run:** Execute tests using CTest from the `build` directory:
+
+    ```bash
+    cd build
+    ctest -C Release --verbose
+    # Or run the executable directly if built:
+    # ./tests/cpp/Release/omnidsp_tests.exe (Windows)
+    # ./tests/cpp/omnidsp_tests (Linux/macOS)
+    ```
+
+    - Note: The C++ tests require the `test_references.txt` file, which CMake copies to the build directory.
 
 ### Python Tests (pytest)
 
-_(No changes needed here)_
+1.  **Build/Install:** Ensure the Python package is installed (e.g., `pip install -e .`).
+2.  **Run:** Execute pytest from the project root directory:
+
+    ```bash
+    pytest tests/python
+    ```
 
 ### Test Reference Data
 
-_(No changes needed here)_
+Some C++ tests rely on reference data generated by `tests/cpp/generate_references.py` (using NumPy, SciPy, and Librosa) and stored in `tests/cpp/test_references.txt`. If you modify inputs or expected outputs for these tests, re-run the Python script to update the reference file.
 
 ## Coding Style
 
@@ -252,7 +299,7 @@ To ensure a clear and informative Git history, and to enable automated tooling (
 - **Types:** Use standard types like `feat` (new feature), `fix` (bug fix), `docs` (documentation changes), `style` (formatting, code style), `refactor`, `test`, `build`, `ci`, `chore`, `perf`.
 - **Pre-commit Check:** A `pre-commit` hook (`conventional-pre-commit`) is configured to validate your commit message format _before_ the commit is finalized. If your message is invalid, the commit will be aborted, and you will need to amend the message.
 - **Purpose:** This helps maintain a semantic history, makes it easier to automatically generate changelogs, and allows CI workflows to intelligently skip runs for commits that don't affect production code (e.g., those starting with `docs:`, `style:`, `chore:`, `test:`).
-- **Learn More:** <https://www.conventionalcommits.org/>
+- **Learn More:** [https://www.conventionalcommits.org/](https://www.conventionalcommits.org/)
 
 ## Submitting Contributions
 

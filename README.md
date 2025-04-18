@@ -24,6 +24,19 @@ OmniDSP is a C++ library designed for high-performance Digital Signal Processing
   - Provides a stub backend (throws runtime errors) if no optimized backend is found.
 - **Python Bindings:** Easy-to-use Python API mirroring the C++ functionality.
 
+## Dependencies
+
+OmniDSP requires the following to build and run:
+
+- A C++17 compliant compiler (e.g., GCC, Clang, MSVC)
+- CMake (version 3.21 or higher)
+- Python (version 3.8 or higher, if building Python bindings)
+- **Boost C++ Libraries:** Required for certain cross-platform mathematical functions (specifically, the Bessel function needed for Kaiser window generation).
+- Optional: Intel oneMKL (including IPP) for the MKL backend (recommended on Linux/Windows for performance).
+- Optional: macOS users automatically use the Accelerate framework backend if oneMKL is not preferred/available.
+
+**Note:** All required dependencies (except for the C++ compiler and the macOS Accelerate framework) are managed via the provided Conda `environment.yml` file. Please see the Installation section for details on setting up the environment.
+
 ## Project Status
 
 - Core FFT, CQT (recursive), Convolution/Correlation (valid mode), and Windowing functionalities are implemented.
