@@ -1,186 +1,277 @@
 /**
- * @file src/omnidsp/backend/onemkl/convolution.cpp
- * @brief Intel oneMKL backend implementation for OmniDSP
- * convolution/correlation.
- *
- * Implements the convolve1d_impl function using Intel oneMKL VSL routines.
- * Compiled only when USE_ONEMKL is defined.
+ * @file convolution.cpp
+ * @brief oneMKL/IPP backend implementation for convolution and correlation.
  */
+#include <ipp.h>  // Main IPP header for ipps functions
 
-// --- Includes ---
-#include <complex>  // Although not used directly, often included with DSP headers
-#include <memory>     // For smart pointers if needed (not directly here)
-#include <stdexcept>  // For std::runtime_error, std::invalid_argument
-#include <string>
+#include <algorithm>    // For std::min, std::max
+#include <cmath>        // For std::floor
+#include <memory>       // For std::unique_ptr
+#include <stdexcept>    // For std::runtime_error, std::invalid_argument
+#include <string>       // For exception messages
 #include <type_traits>  // For std::is_same_v
 #include <vector>
 
-#include "../backend_impl.h"  // Internal backend function declarations
-
-// Only compile if USE_ONEMKL is defined by CMake
-#if defined(USE_ONEMKL)
-
-#include <mkl.h>      // Main MKL header
-#include <mkl_vsl.h>  // VSL header (for convolution/correlation)
+#include "../backend_impl.h"  // For ConvMode enum
 
 namespace OmniDSP {
 namespace Backend {
+namespace oneMKL {
 
-// --- MKL VSL Helper ---
-// Checks the status code returned by MKL VSL functions and throws an error if
-// it's not VSL_STATUS_OK.
-inline void check_mkl_status(int status, const char *error_msg) {
-  if (status != VSL_STATUS_OK) {
-    std::string full_msg = error_msg;
-    // Append MKL VSL status code for detailed diagnostics.
-    full_msg += ": MKL VSL Status " + std::to_string(status);
-    // Note: VSL doesn't have a direct equivalent of DftiErrorMessage.
-    // You might need to consult MKL documentation for status code meanings.
-    throw std::runtime_error(full_msg);
+// --- Helper to check IPP status ---
+namespace {  // Anonymous namespace for internal helpers
+void check_ipp_status(IppStatus status, const std::string& func_name,
+                      const std::string& step_name = "") {
+  if (status != ippStsNoErr) {
+    throw std::runtime_error("IPP Error in " + func_name +
+                             (step_name.empty() ? "" : " (" + step_name + ")") +
+                             ": " + std::string(ippGetStatusString(status)));
   }
 }
 
-/**
- * @brief MKL backend implementation for 1D convolution or correlation using
- * VSL. Calculates the 'valid' part of the linear convolution/correlation.
- *
- * @tparam T float or double.
- * @param signal The input signal vector.
- * @param kernel The kernel vector.
- * @param use_correlation If true, perform correlation; otherwise, perform
- * convolution.
- * @return std::vector<T> The result vector.
- * @throws std::invalid_argument If inputs are invalid (empty, or kernel >
- * signal).
- * @throws std::runtime_error If an MKL VSL error occurs.
- */
+// Helper to determine output size based on mode
+size_t calculate_output_size(size_t signal_len, size_t kernel_len,
+                             ConvMode mode) {
+  if (signal_len == 0 || kernel_len == 0) return 0;
+  switch (mode) {
+    case ConvMode::Full:
+      return signal_len + kernel_len - 1;
+    case ConvMode::Same:
+      return signal_len;
+    case ConvMode::Valid:
+      if (kernel_len > signal_len) return 0;
+      return signal_len - kernel_len + 1;
+    default:
+      throw std::invalid_argument("Unknown ConvMode in calculate_output_size");
+  }
+}
+
+// Helper to determine output size and lowLag for correlation based on mode
+struct CorrParams {
+  size_t dstLen = 0;
+  int lowLag = 0;
+};
+
+CorrParams calculate_corr_params(size_t signal_len, size_t kernel_len,
+                                 ConvMode mode) {
+  if (signal_len == 0 || kernel_len == 0) return {0, 0};
+  CorrParams params;
+  long long N = static_cast<long long>(signal_len);
+  long long M = static_cast<long long>(kernel_len);
+
+  switch (mode) {
+    case ConvMode::Full:
+      params.lowLag = -static_cast<int>(M - 1);
+      params.dstLen = static_cast<size_t>(N + M - 1);
+      break;
+    case ConvMode::Same:
+      params.lowLag = -static_cast<int>((M - 1) / 2);
+      params.dstLen = static_cast<size_t>(N);
+      break;
+    case ConvMode::Valid:
+      if (M > N) {
+        params.lowLag = 0;
+        params.dstLen = 0;
+      } else {
+        params.lowLag = 0;
+        params.dstLen = static_cast<size_t>(N - M + 1);
+      }
+      break;
+    default:
+      throw std::invalid_argument("Unknown ConvMode in calculate_corr_params");
+  }
+  return params;
+}
+
+// Custom deleter for ippsMalloc'd buffers
+struct IPPBufferDeleter {
+  void operator()(Ipp8u* ptr) const {
+    if (ptr) {
+      ippsFree(ptr);
+    }
+  }
+};
+using IPPBufferPtr = std::unique_ptr<Ipp8u, IPPBufferDeleter>;
+
+}  // anonymous namespace
+
+// --- Convolution Implementation (Templated) ---
 template <typename T>
-std::vector<T> convolve1d_impl(const std::vector<T> &signal,
-                               const std::vector<T> &kernel,
-                               bool use_correlation) {
-  // --- Input Validation ---
-  if (signal.empty() || kernel.empty()) {
-    // Return empty vector for empty inputs, consistent with public API
-    // expectation
-    return {};
+std::vector<T> convolve1d_onemkl_impl(const T* signal, size_t signal_len,
+                                      const T* kernel, size_t kernel_len,
+                                      ConvMode mode) {
+  if (signal_len == 0 || kernel_len == 0) return {};
+
+  size_t full_len = signal_len + kernel_len - 1;
+  std::vector<T> full_result(full_len);
+  IppStatus status = ippStsNoErr;
+  int bufferSize = 0;
+  IPPBufferPtr pBuffer = nullptr;
+  IppEnum algType = ippAlgAuto;  // Use auto algorithm selection
+
+  if constexpr (std::is_same_v<T, float>) {
+    status = ippsConvolveGetBufferSize(static_cast<int>(signal_len),
+                                       static_cast<int>(kernel_len), ipp32f,
+                                       algType, &bufferSize);
+    check_ipp_status(status, "ippsConvolveGetBufferSize (float)");
+    if (bufferSize > 0) pBuffer.reset(ippsMalloc_8u(bufferSize));
+    if (bufferSize > 0 && !pBuffer)
+      throw std::runtime_error("Failed to allocate IPP buffer.");
+    status = ippsConvolve_32f(signal, static_cast<int>(signal_len), kernel,
+                              static_cast<int>(kernel_len), full_result.data(),
+                              algType, pBuffer.get());
+    check_ipp_status(status, "ippsConvolve_32f");
+  } else if constexpr (std::is_same_v<T, double>) {
+    status = ippsConvolveGetBufferSize(static_cast<int>(signal_len),
+                                       static_cast<int>(kernel_len), ipp64f,
+                                       algType, &bufferSize);
+    check_ipp_status(status, "ippsConvolveGetBufferSize (double)");
+    if (bufferSize > 0) pBuffer.reset(ippsMalloc_8u(bufferSize));
+    if (bufferSize > 0 && !pBuffer)
+      throw std::runtime_error("Failed to allocate IPP buffer.");
+    status = ippsConvolve_64f(signal, static_cast<int>(signal_len), kernel,
+                              static_cast<int>(kernel_len), full_result.data(),
+                              algType, pBuffer.get());
+    check_ipp_status(status, "ippsConvolve_64f");
+  } else {
+    throw std::runtime_error("Unsupported data type for oneMKL convolution.");
   }
 
-  // VSL uses 'int' for dimensions
-  int nx = static_cast<int>(kernel.size());  // Kernel length (MKL xlen)
-  int ny = static_cast<int>(signal.size());  // Signal length (MKL ylen)
-  // Calculate output length for 'valid' mode equivalent
-  int nz = ny - nx + 1;  // Result length (MKL zlen)
+  // --- Extract desired portion based on mode ---
+  size_t output_size = calculate_output_size(signal_len, kernel_len, mode);
+  if (output_size == 0 && mode == ConvMode::Valid) return {};
 
-  if (nz <= 0) {
-    throw std::invalid_argument(
-        "MKL Conv/Corr ('valid' mode equivalent): signal length (" +
-        std::to_string(ny) + ") must be >= kernel length (" +
-        std::to_string(nx) + ").");
-  }
+  std::vector<T> result(output_size);
+  const T* full_result_ptr = full_result.data();
+  T* result_ptr = result.data();
 
-  std::vector<T> result(nz);  // Allocate result vector
-
-  // --- MKL VSL Setup ---
-  const int mode = VSL_CONV_MODE_AUTO;  // Let MKL choose FFT or direct
-  VSLConvTaskPtr task = nullptr;        // Task descriptor
-  int status = VSL_STATUS_OK;           // Status variable
-
-  // Strides are typically 1 for contiguous std::vector data
-  MKL_INT stride_kernel = 1, stride_signal = 1, stride_result = 1;
-  // Start index for 'valid' mode equivalent (depends on conv vs corr)
-  // For convolution (use_correlation=false), start index is nx-1.
-  // For correlation (use_correlation=true), start index is 0.
-  MKL_INT start_index = use_correlation ? 0 : (nx - 1);
-
-  // Flags to clarify which MKL function branch to take
-  bool call_mkl_convolution = !use_correlation;
-  bool call_mkl_correlation = use_correlation;
-
-  try {
-    // --- Create and Execute VSL Task ---
-    if constexpr (std::is_same_v<T, float>) {  // SINGLE PRECISION
-      if (call_mkl_convolution) {
-        // Create convolution task
-        status = vslsConvNewTask1D(&task, mode, nx, ny, nz);
-        check_mkl_status(status, "MKL vslsConvNewTask1D failed");
-        // Set start index for 'valid' mode
-        status = vslConvSetStart(task, &start_index);
-        check_mkl_status(status, "MKL vslConvSetStart failed");
-        // Execute convolution
-        status =
-            vslsConvExec(task, kernel.data(), &stride_kernel, signal.data(),
-                         &stride_signal, result.data(), &stride_result);
-        check_mkl_status(status, "MKL vslsConvExec failed");
-      } else {  // Correlation
-        // Create correlation task
-        status = vslsCorrNewTask1D(&task, mode, nx, ny, nz);
-        check_mkl_status(status, "MKL vslsCorrNewTask1D failed");
-        // Set start index for 'valid' mode
-        status = vslCorrSetStart(task, &start_index);
-        check_mkl_status(status, "MKL vslCorrSetStart failed");
-        // Execute correlation
-        status =
-            vslsCorrExec(task, kernel.data(), &stride_kernel, signal.data(),
-                         &stride_signal, result.data(), &stride_result);
-        check_mkl_status(status, "MKL vslsCorrExec failed");
+  switch (mode) {
+    case ConvMode::Full:
+      result = std::move(full_result);
+      break;
+    case ConvMode::Same: {
+      size_t start_index = (kernel_len - 1) / 2;
+      if (start_index + output_size <= full_len) {
+        const T* start_ptr = full_result_ptr + start_index;
+        if constexpr (std::is_same_v<T, float>)
+          ippsCopy_32f(reinterpret_cast<const Ipp32f*>(start_ptr),
+                       reinterpret_cast<Ipp32f*>(result_ptr),
+                       static_cast<int>(output_size));
+        else
+          ippsCopy_64f(reinterpret_cast<const Ipp64f*>(start_ptr),
+                       reinterpret_cast<Ipp64f*>(result_ptr),
+                       static_cast<int>(output_size));
+      } else {
+        throw std::runtime_error(
+            "oneMKL convolve1d 'Same' mode calculation error: bounds "
+            "mismatch.");
       }
-    } else {  // DOUBLE PRECISION (T = double)
-      if (call_mkl_convolution) {
-        // Create convolution task
-        status = vsldConvNewTask1D(&task, mode, nx, ny, nz);
-        check_mkl_status(status, "MKL vsldConvNewTask1D failed");
-        // Set start index for 'valid' mode
-        status = vslConvSetStart(task, &start_index);
-        check_mkl_status(status, "MKL vslConvSetStart failed");
-        // Execute convolution
-        status =
-            vsldConvExec(task, kernel.data(), &stride_kernel, signal.data(),
-                         &stride_signal, result.data(), &stride_result);
-        check_mkl_status(status, "MKL vsldConvExec failed");
-      } else {  // Correlation
-        // Create correlation task
-        status = vsldCorrNewTask1D(&task, mode, nx, ny, nz);
-        check_mkl_status(status, "MKL vsldCorrNewTask1D failed");
-        // Set start index for 'valid' mode
-        status = vslCorrSetStart(task, &start_index);
-        check_mkl_status(status, "MKL vslCorrSetStart failed");
-        // Execute correlation
-        status =
-            vsldCorrExec(task, kernel.data(), &stride_kernel, signal.data(),
-                         &stride_signal, result.data(), &stride_result);
-        check_mkl_status(status, "MKL vsldCorrExec failed");
+      break;
+    }
+    case ConvMode::Valid: {
+      size_t start_index = kernel_len - 1;
+      if (kernel_len > signal_len) return {};
+      if (start_index + output_size <= full_len) {
+        const T* start_ptr = full_result_ptr + start_index;
+        if constexpr (std::is_same_v<T, float>)
+          ippsCopy_32f(reinterpret_cast<const Ipp32f*>(start_ptr),
+                       reinterpret_cast<Ipp32f*>(result_ptr),
+                       static_cast<int>(output_size));
+        else
+          ippsCopy_64f(reinterpret_cast<const Ipp64f*>(start_ptr),
+                       reinterpret_cast<Ipp64f*>(result_ptr),
+                       static_cast<int>(output_size));
+      } else {
+        throw std::runtime_error(
+            "oneMKL convolve1d 'Valid' mode calculation error: bounds "
+            "mismatch.");
       }
+      break;
     }
-
-    // --- Clean up VSL Task ---
-    if (task) {
-      status = vslConvDeleteTask(
-          &task);  // Use vslConvDeleteTask for both conv/corr tasks
-      check_mkl_status(status, "MKL vslConvDeleteTask failed");
-      task = nullptr;  // Prevent double deletion in case of exception below
-    }
-
-    return result;
-
-  } catch (...) {
-    // Ensure task is deleted even if an exception occurs during
-    // checks/execution
-    if (task) {
-      (void)vslConvDeleteTask(&task);  // Ignore status in exception handler
-    }
-    throw;  // Re-throw the original exception
   }
+  return result;
+}
+
+// --- Correlation Implementation (Templated) ---
+template <typename T>
+std::vector<T> correlate1d_onemkl_impl(const T* signal, size_t signal_len,
+                                       const T* kernel, size_t kernel_len,
+                                       ConvMode mode) {
+  if (signal_len == 0 || kernel_len == 0) return {};
+
+  CorrParams params = calculate_corr_params(signal_len, kernel_len, mode);
+  if (params.dstLen == 0) return {};
+
+  std::vector<T> result(params.dstLen);
+  IppStatus status = ippStsNoErr;
+  int bufferSize = 0;
+  IPPBufferPtr pBuffer = nullptr;
+  IppEnum algType = ippAlgAuto;  // Use auto algorithm selection
+
+  if constexpr (std::is_same_v<T, float>) {
+    // Correct call to ippsCrossCorrNormGetBufferSize for float
+    status = ippsCrossCorrNormGetBufferSize(
+        static_cast<int>(signal_len), static_cast<int>(kernel_len),
+        static_cast<int>(params.dstLen), params.lowLag,  // Added lowLag
+        ipp32f,                 // Correct dataType argument
+        algType, &bufferSize);  // Correct algType argument
+    check_ipp_status(status, "ippsCrossCorrNormGetBufferSize (float)");
+
+    if (bufferSize > 0) pBuffer.reset(ippsMalloc_8u(bufferSize));
+    if (bufferSize > 0 && !pBuffer)
+      throw std::runtime_error(
+          "Failed to allocate IPP buffer for CrossCorrNorm.");
+
+    // Call ippsCrossCorrNorm_32f
+    status = ippsCrossCorrNorm_32f(signal, static_cast<int>(signal_len), kernel,
+                                   static_cast<int>(kernel_len), result.data(),
+                                   static_cast<int>(params.dstLen),
+                                   params.lowLag, algType, pBuffer.get());
+    check_ipp_status(status, "ippsCrossCorrNorm_32f");
+
+  } else if constexpr (std::is_same_v<T, double>) {
+    // Correct call to ippsCrossCorrNormGetBufferSize for double
+    status = ippsCrossCorrNormGetBufferSize(
+        static_cast<int>(signal_len), static_cast<int>(kernel_len),
+        static_cast<int>(params.dstLen), params.lowLag,  // Added lowLag
+        ipp64f,                 // Correct dataType argument
+        algType, &bufferSize);  // Correct algType argument
+    check_ipp_status(status, "ippsCrossCorrNormGetBufferSize (double)");
+
+    if (bufferSize > 0) pBuffer.reset(ippsMalloc_8u(bufferSize));
+    if (bufferSize > 0 && !pBuffer)
+      throw std::runtime_error(
+          "Failed to allocate IPP buffer for CrossCorrNorm.");
+
+    // Call ippsCrossCorrNorm_64f
+    status = ippsCrossCorrNorm_64f(signal, static_cast<int>(signal_len), kernel,
+                                   static_cast<int>(kernel_len), result.data(),
+                                   static_cast<int>(params.dstLen),
+                                   params.lowLag, algType, pBuffer.get());
+    check_ipp_status(status, "ippsCrossCorrNorm_64f");
+  } else {
+    throw std::runtime_error("Unsupported data type for oneMKL correlation.");
+  }
+
+  return result;
 }
 
 // --- Explicit Template Instantiations ---
-// Ensures the compiler generates code for both float and double versions.
-template std::vector<float> convolve1d_impl<float>(const std::vector<float> &,
-                                                   const std::vector<float> &,
-                                                   bool);
-template std::vector<double> convolve1d_impl<double>(
-    const std::vector<double> &, const std::vector<double> &, bool);
+template std::vector<float> convolve1d_onemkl_impl<float>(const float*, size_t,
+                                                          const float*, size_t,
+                                                          ConvMode);
+template std::vector<double> convolve1d_onemkl_impl<double>(const double*,
+                                                            size_t,
+                                                            const double*,
+                                                            size_t, ConvMode);
+template std::vector<float> correlate1d_onemkl_impl<float>(const float*, size_t,
+                                                           const float*, size_t,
+                                                           ConvMode);
+template std::vector<double> correlate1d_onemkl_impl<double>(const double*,
+                                                             size_t,
+                                                             const double*,
+                                                             size_t, ConvMode);
 
+}  // namespace oneMKL
 }  // namespace Backend
 }  // namespace OmniDSP
-
-#endif  // USE_ONEMKL

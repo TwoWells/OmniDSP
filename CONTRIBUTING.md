@@ -21,13 +21,14 @@ Thank you for your interest in contributing to OmniDSP! We welcome contributions
   - [Project Structure](#project-structure)
   - [Understanding Backends](#understanding-backends)
   - [Running Tests](#running-tests)
-    - [C++ Tests (GoogleTest)](#c-tests-googletest)
-    - [Python Tests (pytest)](#python-tests-pytest)
-    - [C++ Test Reference Data Details](#c-test-reference-data-details)
-      - [Reference Data Generation](#reference-data-generation)
-      - [Reference Data Loading](#reference-data-loading)
-      - [Build Integration (CMake)](#build-integration-cmake)
-      - [Updating/Adding C++ Reference Data and Tests](#updatingadding-c-reference-data-and-tests)
+    - [Python Tests](#python-tests)
+    - [C++ Tests](#c-tests)
+      - [Selecting Backend for Tests](#selecting-backend-for-tests)
+      - [C++ Testing Framework Overview](#c-testing-framework-overview)
+        - [Directory Structure](#directory-structure)
+        - [Reference Data Files](#reference-data-files)
+        - [Generating/Regenerating Reference Data](#generatingregenerating-reference-data)
+        - [Running C++ Tests](#running-c-tests)
   - [Coding Style](#coding-style)
   - [Commit Message Format (Conventional Commits)](#commit-message-format-conventional-commits)
   - [Submitting Contributions](#submitting-contributions)
@@ -49,7 +50,7 @@ The project uses Conda to manage dependencies. For contributors, we provide a sp
 
 1.  **Create Development Environment:** From the project root directory, create the development environment using the `environment-dev.yml` file:
 
-    ```bash
+    ```
     conda env create -f environment-dev.yml
     ```
 
@@ -57,7 +58,7 @@ The project uses Conda to manage dependencies. For contributors, we provide a sp
 
 2.  **Activate Environment:** Activate the newly created environment:
 
-    ```bash
+    ```
     conda activate omnidsp-dev
     ```
 
@@ -65,7 +66,7 @@ The project uses Conda to manage dependencies. For contributors, we provide a sp
 
 3.  **Install Git Hooks:** After activating the environment for the first time in a new clone, install the `pre-commit` Git hooks:
 
-    ```bash
+    ```
     pre-commit install --hook-type commit-msg --hook-type pre-commit
     ```
 
@@ -101,7 +102,7 @@ You generally don't need to interact directly with `conda-lock`. Simply use the 
 2.  **Modify `environment.yml`:** Add, remove, or update _runtime_ packages or target platforms in `environment.yml` as needed. Remember to use platform selectors (e.g., `# [win]`, `# [linux]`) if a dependency is platform-specific. **Crucially, also make the same additions/removals/updates to the corresponding runtime dependency section in `environment-dev.yml` to keep the development environment consistent.**
 3.  **Regenerate Lock Files:** After modifying `environment.yml`, you **MUST** regenerate the explicit lock files for all supported platforms. From the project root directory (with the `omnidsp-dev` environment activated), run:
 
-    ```bash
+    ```
     # Reads platforms from environment.yml, generates explicit lock files for the 'omnidsp' env
     conda-lock lock -f environment.yml --kind explicit
     ```
@@ -114,14 +115,14 @@ You generally don't need to interact directly with `conda-lock`. Simply use the 
 
 The `omnidsp-dev` Conda environment (created from `environment-dev.yml`) provides essential tools like `pytest`, `ruff`, `pre-commit`, and `conda-lock`. Other tools used for code quality are managed directly by `pre-commit`:
 
-- **`pytest`:** For running the Python test suite (provided by Conda env).
-- **`ruff`:** A fast Python linter and formatter (provided by Conda env, used via `pre-commit`).
-- **`clang-format`:** A C++ code formatter (installed automatically by the `pre-commit` hook `mirrors-clang-format`).
-- **`prettier`:** An opinionated code formatter (installed automatically by the `pre-commit` hook `mirrors-prettier`) for Markdown (`.md`), YAML (`.yaml`/`.yml`), and TOML (`.toml`) files.
-- **`pre-commit`:** A framework for managing Git hooks (provided by Conda env).
-- **`conventional-pre-commit`:** A hook (used via `pre-commit`) to validate commit messages against the Conventional Commits standard.
-- **`conda-lock`:** For regenerating runtime dependency lock files (provided by Conda env).
-- **`nbstripout`:** Removes output cells from Jupyter Notebooks (installed automatically by its `pre-commit` hook).
+- `pytest`: For running the Python test suite (provided by Conda env).
+- `ruff`: A fast Python linter and formatter (provided by Conda env, used via `pre-commit`).
+- `clang-format`: A C++ code formatter (installed automatically by the `pre-commit` hook `mirrors-clang-format`).
+- `prettier`: An opinionated code formatter (installed automatically by the `pre-commit` hook `mirrors-prettier`) for Markdown (`.md`), YAML (`.yaml`/`.yml`), and TOML (`.toml`) files.
+- `pre-commit`: A framework for managing Git hooks (provided by Conda env).
+- `conventional-pre-commit`: A hook (used via `pre-commit`) to validate commit messages against the Conventional Commits standard.
+- `conda-lock`: For regenerating runtime dependency lock files (provided by Conda env).
+- `nbstripout`: Removes output cells from Jupyter Notebooks (installed automatically by its `pre-commit` hook).
 
 ### Using `pre-commit` for Code Quality
 
@@ -146,7 +147,7 @@ The tools used for development might occasionally need updates or additions.
   2.  Commit the changes to `environment-dev.yml`.
   3.  Existing developers will need to update their local `omnidsp-dev` environment by running:
 
-      ```bash
+      ```
       # Ensure no environment is active or activate a different one first
       # conda deactivate
       conda env update --name omnidsp-dev --file environment-dev.yml --prune
@@ -174,13 +175,11 @@ This is the standard way to build if you intend to use or test the Python bindin
 1.  **Activate Conda Environment:** `conda activate omnidsp-dev`
 2.  **Editable Install:** From the project root directory (containing `pyproject.toml`), run:
 
-    ```bash
+    ```
     pip install -e . -v
     ```
 
-    The `-e` flag installs the package in "editable" mode, meaning changes to the Python source code (in `src/omnidsp_py`) are reflected immediately without reinstalling. Changes to C++ code still require rebuilding (which \`pip install -e .\` triggers if needed).
-
-    The `-v` flag provides verbose output, showing the CMake configuration and build process, which is helpful for debugging.
+    The `-e` flag installs the package in "editable" mode, meaning changes to the Python source code (in `src/omnidsp_py`) are reflected immediately without reinstalling. Changes to C++ code still require rebuilding (which \`pip install -e .\` triggers if needed). The `-v` flag provides verbose output, showing the CMake configuration and build process, which is helpful for debugging.
 
 ### C++ Library Only
 
@@ -189,21 +188,21 @@ If you only need the C++ library for use in another C++ project:
 1.  **Activate Conda Environment:** `conda activate omnidsp-dev`
 2.  **Configure with CMake:**
 
-    ```bash
+    ```
     mkdir build && cd build
-    # Configure without Python bindings (default)
-    cmake .. -DCMAKE_INSTALL_PREFIX=../install # Or another install location
+    # Configure without Python bindings (set OFF explicitly)
+    cmake .. -DCMAKE_INSTALL_PREFIX=../install -DBUILD_PYTHON_BINDINGS=OFF # Add other options like CMAKE_PREFIX_PATH
     ```
 
 3.  **Build:**
 
-    ```bash
+    ```
     cmake --build . --config Release --parallel
     ```
 
 4.  **(Optional) Install:**
 
-    ```bash
+    ```
     cmake --install . --config Release
     ```
 
@@ -218,7 +217,7 @@ If you only need the C++ library for use in another C++ project:
   - `stub/`: Stub implementations that throw runtime errors.
 - `src/omnidsp_py/`: Python bindings source code (pybind11 wrappers).
 - `tests/`: Unit tests (primarily for developers).
-  - `cpp/`: C++ tests using GoogleTest.
+  - `cpp/`: C++ tests using GoogleTest. Contains `data/`, `scripts/`, `tests/` subdirs.
   - `python/`: Python tests using pytest.
 - `examples/`: Usage examples.
   - `cpp/`: C++ examples.
@@ -230,7 +229,7 @@ If you only need the C++ library for use in another C++ project:
 - `CMakeLists.txt`: Main CMake build script.
 - `pyproject.toml`: Python packaging configuration (uses `scikit-build-core`).
 - `TODO.md`: Current development tasks.
-- `CONTRIBUTING.md`: Guidelines for contributors.
+- `CONTRIBUTING.md`: Guidelines for contributors (this file).
 
 ## Understanding Backends
 
@@ -246,91 +245,95 @@ CMake automatically detects and selects the backend based on the platform and li
 
 ## Running Tests
 
-_(Assumes `omnidsp-dev` environment is active)_
+Testing is crucial. Please ensure all tests pass before submitting changes.
 
-OmniDSP uses both Python (pytest) and C++ (GoogleTest) tests to ensure correctness and stability.
+### Python Tests
 
-### C++ Tests (GoogleTest)
+Run Python tests using pytest from the root directory of the repository:
 
-The C++ tests are located in the `tests/cpp` directory and utilize the GoogleTest framework. They primarily focus on verifying the numerical output of core DSP functions (like FFT, CQT, windows) against pre-computed reference values.
+```
+pytest tests/python
+```
 
-1.  **Build:** Ensure the project is built (either via `pip install -e .` or CMake directly). The C++ tests are built by default.
-2.  **Run:** Execute tests using CTest from the `build` directory:
+These tests primarily check the Python bindings and API.
 
-    ```bash
-    cd build
-    ctest -C Release --verbose
-    # Or run the executable directly:
-    # ./tests/cpp/Release/omnidsp_tests.exe (Windows)
-    # ./tests/cpp/omnidsp_tests         (Linux/macOS)
-    ```
+### C++ Tests
 
-    Note: The C++ tests require the `test_references.txt` file, which CMake copies to the build directory.
+The C++ tests use GoogleTest and rely on reference data files to verify the core C++ implementation and backend behavior.
 
-### Python Tests (pytest)
+#### Selecting Backend for Tests
 
-1.  **Build/Install:** Ensure the Python package is installed (e.g., `pip install -e .`).
-2.  **Run:** Execute pytest from the project root directory:
+The C++ tests are compiled against the backend selected during the CMake configuration step (`-DBACKEND=...`). When you run the C++ tests, they will exercise the implementation specific to that chosen backend (oneMKL or Accelerate).
 
-    ```bash
-    pytest tests/python
-    ```
+To test a different backend, you need to re-configure CMake with the desired `-DBACKEND` option and rebuild.
 
-### C++ Test Reference Data Details
+#### C++ Testing Framework Overview
 
-#### Reference Data Generation
+The C++ tests compare the output of OmniDSP functions against pre-generated reference data stored in plain text files. This ensures consistency across different backends and platforms.
 
-- Reference data is generated using the Python script `tests/cpp/generate_references.py`.
-- This script uses libraries like NumPy, SciPy, and Librosa to calculate the expected outputs for various functions and parameters.
-- The generated data is stored in the text file `tests/cpp/test_references.txt`.
-- The format of `test_references.txt` is:
-  - Plain text with one value per line (or real/imaginary parts on consecutive lines for complex numbers).
-  - Data sections are delimited by `# START KEY_NAME` and `# END KEY_NAME` markers.
-  - Float values are typically suffixed with 'f'.
-  - 2D complex matrices (like CQT output) include a `# SHAPE: rows cols` line.
-- Currently covers: Window functions (float/double), FFT/IFFT/RFFT/IRFFT (float/double, various norms), CQT (double), Convolution/Correlation (float/double), Filter+Downsample (float/double).
+##### Directory Structure
 
-#### Reference Data Loading
+The relevant directories within `tests/cpp/` are:
 
-- A dedicated C++ utility, defined in `tests/cpp/test_data_utils.h` and `tests/cpp/test_data_utils.cpp`, handles loading and parsing the `test_references.txt` file.
-- The utility loads the data \*once\* per test executable run upon the first request (lazy, thread-safe loading).
-- C++ test files (e.g., `tests/cpp/fft.cpp`, `tests/cpp/window.cpp`) include `test_data_utils.h`.
-- Tests access the reference data using specific getter functions within the `TestDataUtils` namespace, for example:
-  - `TestDataUtils::getExpectedDoubleVec("WINDOW_HANN_N5_D")`
-  - `TestDataUtils::getExpectedFloatVec("WINDOW_HANN_N5_F")`
-  - `TestDataUtils::getExpectedComplexDoubleVec("FFT_EXPECTED_ORTHO_D")`
-  - `TestDataUtils::getExpectedComplexFloatVec("RFFT_EXPECTED_BACKWARD_F")`
-  - `TestDataUtils::getExpectedCQTD()`
+- `tests/`: Contains the C++ test implementation files (e.g., `fft.cpp`, `window.cpp`), organized by module/suite.
+- `data/`: Contains the reference data text files, organized in subdirectories named after the test suite (e.g., `data/fft/`, `data/window/`).
+- `scripts/`: Contains Python scripts used to generate the reference data files found in `data/`. Includes a shared utility `_generate_utils.py`.
+- `TestDataLoader.h/.cpp`: C++ utility code responsible for loading the reference data from the text files during test execution.
+- `CMakeLists.txt`: Configures the C++ test build.
 
-#### Build Integration (CMake)
+##### Reference Data Files
 
-- The `tests/cpp/CMakeLists.txt` file configures the C++ test build.
-- It defines a preprocessor macro `OMNIDSP_TEST_REF_FILE_PATH` containing the full path to where the reference file will be located \*in the build directory\*.
-- A custom post-build command copies `tests/cpp/test_references.txt` from the source tree to the build directory, ensuring the test executable (`omnidsp_tests`) can find it at runtime using the path provided by the macro.
+- **Location:** `tests/cpp/data/<SuiteName>/`
+- **Naming Convention:** `<TestCaseName>_<Purpose>_<TypeSuffix>.txt`
 
-#### Updating/Adding C++ Reference Data and Tests
+  - `<SuiteName>`: Matches the test suite (e.g., `fft`, `window`).
+  - `<TestCaseName>`: Matches the specific GoogleTest name (e.g., `Plan_FFT_Forward_Double`).
+  - `<Purpose>`: Indicates the data's role, usually `input` or `expected`.
+  - `<TypeSuffix>`: Indicates the data type: `d` (double), `f` (float), `cd` (complex double), `cf` (complex float).
 
-1.  **Updating/Adding Reference Data:**
+  Example: `tests/cpp/data/fft/Plan_FFT_Forward_Double_expected_cd.txt`
 
-    - Modify or add calculations within `tests/cpp/generate_references.py` for the desired function or parameters.
-    - Add new NumPy arrays with descriptive keys (using `_D` for double, `_F` for float) to the `data_to_write` dictionary in the script.
-    - Run the Python script to regenerate `tests/cpp/test_references.txt`:
+- **Format:**
+  1.  **Header Line:** The first line indicates dimensions, starting with '#'.
+      - Vectors (1D): `# <rows>` (e.g., `# 1024`)
+      - Matrices (2D): `# <rows>x<columns>` (e.g., `# 84x12`)
+  2.  **Data Lines:** Subsequent lines contain whitespace-separated numerical data.
+      - Real types: One number per element.
+      - Complex types: `real imag` pairs per element.
+- **Important:** These generated data files **should be committed to the repository**.
 
-      ```bash
-      python tests/cpp/generate_references.py
-      ```
+##### Generating/Regenerating Reference Data
 
-    - Commit the updated `test_references.txt` file along with your changes to the Python script.
+Reference data is generated using Python scripts located in `tests/cpp/scripts/`. A master script (`tests/cpp/data.py`) is provided for convenience:
 
-2.  **Updating/Adding C++ Tests:**
-    - If adding tests for existing data keys, simply modify the relevant C++ test file (e.g., `tests/cpp/fft.cpp`) to call the appropriate `TestDataUtils::getExpected...` function with the correct key.
-    - If adding reference data with a \*new structure\* (e.g., a 3D tensor), you will need to:
-      1.  Update the parsing logic in `tests/cpp/test_data_utils.cpp`.
-      2.  Add a new static variable to store the data in `test_data_utils.cpp`.
-      3.  Declare a new getter function in `tests/cpp/test_data_utils.h`.
-      4.  Implement the new getter function in `test_data_utils.cpp`.
-    - If adding a completely new C++ test file, remember to add it to the `add_executable` command in `tests/cpp/CMakeLists.txt`.
-    - Rebuild the project and run the tests using `ctest`.
+- Run `python tests/cpp/data.py --help` to see options.
+- To regenerate **all** reference data (after prompting for confirmation):
+  `python tests/cpp/data.py`
+- To regenerate **all** reference data **without prompting**:
+  `python tests/cpp/data.py --force` (or `-f`)
+- To regenerate data only for **specific suites** (e.g., fft and window):
+  `python tests/cpp/data.py fft window`
+
+**When to Regenerate:** You should run the appropriate regeneration command if you:
+
+- Modify the data generation logic in any `tests/cpp/scripts/*.py` file.
+- Change parameters used for generation (e.g., window size, FFT length).
+- Add new tests that require new reference data.
+
+Remember to commit any changes to the generated `.txt` files in the `tests/cpp/data/` directories.
+
+##### Running C++ Tests
+
+After building the project:
+
+1.  Navigate to the build directory: `cd build`
+2.  Run CTest (which executes the test executable):
+    `ctest -C Debug` (or Release)
+    Add `-V` for verbose output: `ctest -C Debug -V`
+3.  Alternatively, run the executable directly (useful for debugging specific tests with filters):
+    `./tests/cpp/omnidsp_tests` (Linux/macOS)
+    `.\tests\cpp\Debug\omnidsp_tests.exe` (Windows, path might vary)
+    Example with filter: `./tests/cpp/omnidsp_tests --gtest_filter=FFT_Test.*`
 
 ## Coding Style
 
@@ -363,16 +366,17 @@ To ensure a clear and informative Git history, and to enable automated tooling (
 We appreciate contributions! Please follow this general workflow:
 
 1.  **Fork the Repository:** Create your own fork of the OmniDSP repository on GitHub.
-2.  **Create a Branch:** Create a new branch in your fork for your feature or bug fix (e.g., `git checkout -b feat/add-convolution-modes`).
-3.  **Make Changes:** Implement your feature or fix the bug.
-4.  **Add Tests:** Add appropriate unit tests (C++ and/or Python) to cover your changes. Ensure all tests pass (`pytest tests/python`, `ctest` in build dir).
-5.  **Update Dependencies (if needed):**
+2.  **Clone your fork locally.**
+3.  **Create a Branch:** Create a new branch in your fork for your feature or bug fix (e.g., `git checkout -b feature/add-stft` or `bugfix/fix-cqt-scaling`).
+4.  **Make Changes:** Implement your feature or fix the bug.
+5.  **Add Tests:** Add appropriate unit tests (C++ and/or Python) to cover your changes. Ensure all tests pass (`pytest tests/python` and `ctest` in build dir).
+6.  **Update Dependencies (if needed):**
     - If you changed _runtime_ dependencies in `environment.yml`, regenerate and commit the explicit `conda-*.lock` files **and ensure `environment-dev.yml` is also updated** (see Dependency Management section).
     - If you changed _developer_ tools in `environment-dev.yml` or hooks in `.pre-commit-config.yaml`, commit those files.
-6.  **Update Documentation:** If you add new features or change existing ones, update the README, docstrings, and potentially other documentation files (like this one!).
-7.  **Commit Changes:** Commit your changes with clear and concise commit messages adhering to the **Conventional Commits** format. `pre-commit` hooks will run automatically to validate formatting and the commit message.
-8.  **Push to Your Fork:** Push your branch to your GitHub fork.
-9.  **Open a Pull Request:** Create a Pull Request (PR) from your branch to the main OmniDSP repository's `main` (or appropriate development) branch. Provide a clear description of your changes in the PR.
+7.  **Update Documentation:** If you add new features or change existing ones, update the README, docstrings, and potentially other documentation files (like this one!).
+8.  **Commit Changes:** Commit your changes with clear and concise commit messages adhering to the **Conventional Commits** format. `pre-commit` hooks will run automatically to validate formatting and the commit message.
+9.  **Push to Your Fork:** Push your branch to your GitHub fork.
+10. **Open a Pull Request:** Create a Pull Request (PR) from your branch to the main OmniDSP repository's `main` (or appropriate development) branch. Provide a clear description of your changes in the PR. Link to any relevant issues.
 
 ### Pull Request Workflow
 
@@ -391,7 +395,7 @@ Please use the GitHub Issues tracker for the OmniDSP repository to:
 
 ## Where to Contribute
 
-Check the `TODO.md` file for a list of known tasks and desired features. Some key areas include:
+Check the `TODO.md` file (or the TODO list canvas artifact if using this tool) for a list of known tasks and desired features. Some key areas include:
 
 - Tuning the CQT scaling factor.
 - Implementing `double` precision support for resampling in the MKL backend.

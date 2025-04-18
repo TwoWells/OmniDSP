@@ -1,216 +1,117 @@
-/**
- * @file cqt.h
- * @brief Public API header for the CQTPlan class (Recursive Implementation).
- * Precomputes sparse kernels per octave in the constructor. Includes export
- * macros.
- * @version 2.2.2 // Version bump for getter definition separation
- * @date 2025-04-13 // Or current date - updated to reflect changes
- */
-
 #ifndef OMNIDSP_CQT_H
 #define OMNIDSP_CQT_H
 
-// --- Include the generated export header ---
-// Defines OMNIDSP_EXPORT for DLL symbol handling
-#include <OmniDSP/omnidsp_export.h>  // Adjust path/name if EXPORT_FILE_NAME was used in CMake
-
-// --- Include necessary OmniDSP headers ---
-#include <OmniDSP/fft.h>  // <<< Added: Include FFTPlan definition
-
-// --- Include standard library headers ---
+#include "omnidsp.h"  // Basic types and definitions
+// #include "fft.h"  // Full definition might not be needed here, only in .cpp
+// Forward declaration below is sufficient for unique_ptr member.
+// Keep it included though, as other parts might rely on it implicitly.
+#include <cmath>
 #include <complex>
-#include <cstddef>  // For size_t
-#include <functional>
-#include <map>          // For sparse kernel storage
-#include <memory>       // For unique_ptr
-#include <type_traits>  // For std::is_same_v
+#include <memory>     // Needed for std::unique_ptr
+#include <stdexcept>  // For exceptions
 #include <vector>
 
-// Forward declaration of the test fixture class
-// (Allows friend declaration without including the test header here)
-class PrecomputedRecursiveCQTTest;
+#include "fft.h"
 
 namespace OmniDSP {
+
+// --- Forward Declarations ---
+template <typename T>
+class FFTPlan;  // <<< Added Forward Declaration
+
 /**
- * @brief Manages precomputation and execution for the Constant Q Transform
- * (Recursive Method).
+ * @brief Constant-Q Transform (CQT) Plan Class.
  *
- * This class implements the CQT using a recursive, multi-resolution approach.
- * It precomputes sparse spectral kernels during construction for efficient
- * execution. Marked with OMNIDSP_EXPORT for DLL usage.
+ * Handles the calculation of the Constant-Q Transform, which provides
+ * logarithmically spaced frequency bins. This class manages the necessary
+ * FFT plans and filter calculations.
  *
  * @tparam T The floating-point type (float or double).
  */
 template <typename T>
-class OMNIDSP_EXPORT CQTPlan  // <--- OMNIDSP_EXPORT macro added here
-{
-  // Ensure T is either float or double at compile time
-  static_assert(std::is_same_v<T, float> || std::is_same_v<T, double>,
-                "CQTPlan only supports float or double precision.");
-
-  // Default anti-aliasing filter order (must be odd)
-  static constexpr int DEFAULT_RECURSIVE_FIR_ORDER = 101;
-
-  // Grant access to the test fixture for testing private helpers
-  friend class ::PrecomputedRecursiveCQTTest;  // Use global scope ::
-
+class CQTPlan {
  public:
-  // Type alias for the window function signature expected by CQTPlan
-  // It receives the required length and should return a vector of coefficients.
-  using WindowFuncType = std::function<std::vector<T>(size_t required_length)>;
-  // Type alias for sparse kernel representation for one bin (FreqIndex ->
-  // ComplexValue)
-  using SparseKernelBin = std::map<size_t, std::complex<T>>;
-  // Type alias for sparse kernels for one octave (vector of bins)
-  using SparseKernelOctave = std::vector<SparseKernelBin>;
+  /**
+   * @brief Constructs a CQT plan.
+   *
+   * @param sample_rate The sample rate of the input signal in Hz.
+   * @param n_bins The total number of CQT bins to compute.
+   * @param bins_per_octave The number of bins per octave.
+   * @param fmin The minimum frequency for the lowest CQT bin in Hz.
+   * @param sparsity_threshold Threshold for sparsifying the kernel (default
+   * 0.01).
+   * @throws std::invalid_argument if parameters are invalid (e.g., sample_rate
+   * <= 0).
+   */
+  CQTPlan(T sample_rate, int n_bins, int bins_per_octave, T fmin,
+          T sparsity_threshold = static_cast<T>(0.01));
 
   /**
-   * @brief Constructor for the CQTPlan class (recursive, precomputed kernels).
-   *
-   * Initializes CQT parameters and precomputes necessary FFT plans and
-   * sparse spectral kernels for each octave. This involves significant setup
-   * time.
-   *
-   * @param sample_rate Initial sample rate in Hz.
-   * @param hop_length Hop size in samples (must be divisible by
-   * 2^(num_octaves-1)).
-   * @param lowest_freq Lowest frequency in Hz (> 0).
-   * @param highest_freq Highest frequency in Hz (<= sample_rate / 2).
-   * @param bins_per_octave Number of bins per octave (> 0).
-   * @param window_function Function to generate time-domain windows for
-   * kernels.
-   * @param sparsity_threshold Threshold below which kernel values are treated
-   * as zero (e.g., 1e-5).
-   * @param fir_filter_order Order (length) of the FIR anti-aliasing filter used
-   * in recursion (must be positive and odd). Defaults to
-   * DEFAULT_RECURSIVE_FIR_ORDER.
-   * @throws std::invalid_argument If parameters are invalid.
-   * @throws std::runtime_error If precomputation fails (e.g., FFT plan
-   * creation).
+   * @brief Destructor (declared in case definition exists in .cpp).
+   * Default implementation is likely sufficient due to unique_ptr.
    */
-  CQTPlan(double sample_rate, size_t hop_length, double lowest_freq,
-          double highest_freq, int bins_per_octave,
-          WindowFuncType window_function, T sparsity_threshold = 1e-5,
-          int fir_filter_order = DEFAULT_RECURSIVE_FIR_ORDER);
-
-  /** @brief Destructor. Releases internal resources. */
   ~CQTPlan();
 
-  // --- Rule of Five: Move-Only ---
-  CQTPlan(const CQTPlan &) = delete;             // Disable copy constructor
-  CQTPlan &operator=(const CQTPlan &) = delete;  // Disable copy assignment
-  CQTPlan(CQTPlan &&) noexcept;                  // Enable move constructor
-  CQTPlan &operator=(CQTPlan &&) noexcept;       // Enable move assignment
-
   /**
-   * @brief Executes the Constant Q Transform using precomputed resources.
+   * @brief Executes the CQT on an input signal block.
    *
-   * The output format is a vector of vectors (bins x frames).
-   * `output[bin_index][frame_index]` gives the complex CQT coefficient.
+   * Calculates the CQT coefficients for the given input signal.
+   * The output format depends on the internal implementation details
+   * (e.g., could be a flattened vector or require specific interpretation).
    *
-   * @param input The input signal vector (real-valued).
-   * @param output Resulting CQT coefficients [bin][frame]. Resized internally.
-   * @throws std::runtime_error If execution fails.
+   * @param input The input signal (vector of complex numbers).
+   * The size might need to match specific FFT lengths used internally.
+   * @param output The output vector where CQT coefficients will be stored.
+   * The size must be appropriate for the number of bins (n_bins).
    */
-  void execute(const std::vector<T> &input,
-               std::vector<std::vector<std::complex<T>>> &output) const;
-
-  // --- Getters (Declarations ONLY) ---
-  // Definitions moved to cqt.cpp to ensure proper DLL export/import
-  /** @brief Gets the total number of CQT frequency bins calculated by the plan.
-   */
-  size_t getNumBins() const;
-  /** @brief Gets the initial sample rate (in Hz) the plan was configured with.
-   */
-  double getSampleRate() const;
-  /** @brief Gets the hop length (in samples) between CQT frames. */
-  size_t getHopLength() const;
-  /** @brief Gets the lowest frequency (in Hz) represented by the CQT bins. */
-  double getLowestFrequency() const;
-  /** @brief Gets the highest frequency (in Hz) the CQT attempts to cover. */
-  double getHighestFrequency() const;
-  /** @brief Gets the number of CQT bins per octave. */
-  int getBinsPerOctave() const;
-  /** @brief Gets the total number of octaves covered by the CQT plan. */
-  int getNumOctaves() const;
-  /** @brief Gets the threshold used for sparsifying the CQT kernels during
-   * precomputation. */
-  T getSparsityThreshold() const;
-  /** @brief Gets the order (length) of the FIR anti-aliasing filter used. */
-  int getFirFilterOrder() const;
-
- private:  // Keep implementation details private
-  // --- Configuration & Parameters ---
-  double sample_rate_;
-  size_t hop_length_;
-  double lowest_freq_;
-  double highest_freq_;
-  int bins_per_octave_;
-  size_t num_bins_;
-  int num_octaves_;
-  WindowFuncType window_function_;
-  int fir_filter_order_;  // Store the filter order
-  T sparsity_threshold_;
-
-  // --- Precomputed Resources (per octave) ---
-  std::vector<size_t> octave_fft_lens_;  // FFT length for each octave
-  std::vector<size_t>
-      octave_spectrum_lens_;  // Spectrum length (N/2+1) for each octave
-  // FFTPlan is now declared due to the added include above
-  std::vector<std::unique_ptr<FFTPlan<T>>>
-      octave_signal_fft_plans_;  // RFFT plans for signal frames
-  std::vector<std::unique_ptr<FFTPlan<T>>>
-      octave_kernel_fft_plans_;  // C2C plans for kernel FFT gen
-  std::vector<SparseKernelOctave>
-      precomputed_sparse_kernels_;  // Kernels[octave][bin_in_octave]
-
-  // --- Private Helper Function Declarations ---
+  void execute(const std::vector<std::complex<T>>& input,
+               std::vector<std::complex<T>>& output);
 
   /**
-   * @brief Calculates the CQT for a single octave using precomputed FFT plan
-   * and sparse kernels.
-   * @param signal The input signal for this octave (potentially downsampled).
-   * @param current_sample_rate The sample rate corresponding to the input
-   * signal.
-   * @param current_hop_length The hop length corresponding to the input signal.
-   * @param octave_idx The index of the octave to process (used to retrieve
-   * precomputed resources).
-   * @return CQT coefficients for this octave [bin_in_octave][frame].
+   * @brief (Optional) Sets a precomputed filter bank.
+   * Allows providing externally computed CQT filters (e.g., loaded from a
+   * file). The format must match the internal requirements.
+   * @param filter_bank A vector of vectors, where each inner vector is a filter
+   * kernel in the frequency domain.
    */
-  std::vector<std::vector<std::complex<T>>> calculateSingleOctaveCQT(
-      const std::vector<T> &signal, double current_sample_rate,
-      size_t current_hop_length, int octave_idx) const;
+  void setFilterBank(
+      const std::vector<std::vector<std::complex<T>>>& filter_bank);
 
-  /**
-   * @brief Calculates FIR filter coefficients for anti-aliasing using the
-   * windowed-sinc method.
-   * @param current_sample_rate The sample rate for which to design the filter.
-   * @param N The desired filter order (length, must be odd).
-   * @return A vector containing the normalized filter coefficients.
-   */
-  std::vector<T> calculateFirCoefficients(double current_sample_rate,
-                                          int N) const;
+ private:
+  // --- Configuration ---
+  T sr_;                  // Sample rate
+  int n_bins_;            // Total number of bins
+  int bins_per_octave_;   // Bins per octave
+  T f_min_;               // Minimum frequency
+  int n_octaves_;         // Number of octaves
+  T sparsity_threshold_;  // Sparsity threshold for kernel calculation
+  T q_;                   // Quality factor
 
-  /**
-   * @brief Applies the anti-aliasing FIR filter and downsamples the signal by a
-   * factor of 2. Uses the backend implementation selected at compile time.
-   * @param signal The input signal to filter and downsample.
-   * @param current_sample_rate The sample rate of the input signal.
-   * @return The filtered and downsampled signal.
-   */
-  std::vector<T> filterAndDownsampleBy2(const std::vector<T> &signal,
-                                        double current_sample_rate) const;
+  // --- Internal State ---
+  bool filters_calculated_;  // Flag indicating if filters are ready
+  // Store the filter bank (e.g., frequency domain kernels)
+  std::vector<std::vector<std::complex<T>>> filter_bank_;
+
+  // FFT lengths required for different octaves might vary
+  std::vector<int> fft_lengths_;
+
+  // Store FFT plans needed for calculations. Using unique_ptr for ownership.
+  // Forward declaration of FFTPlan allows unique_ptr usage here.
+  std::unique_ptr<FFTPlan<T>> fft_plan_;  // Line ~88
+
+  // --- Private Methods --- (Declarations only)
+  void calculateFilters();
+  void calculateSingleOctaveCQT(
+      const std::vector<std::complex<T>>& input_fft, int octave_num,
+      std::vector<std::complex<T>>& output_cqt_octave);
+  void filterAndDownsampleBy2(const std::vector<T>& input,
+                              std::vector<T>& output,
+                              const std::vector<T>& filter_coeffs);
 };
 
-// --- Explicit Template Instantiations (Declarations) ---
-// These tell the compiler that the full definitions exist elsewhere (in
-// cqt.cpp)
-/** @cond OMNIDSP_INTERNAL */  // Hide from Doxygen index
-extern template class OMNIDSP_EXPORT
-    CQTPlan<float>;  // Add export macro here too
-extern template class OMNIDSP_EXPORT
-    CQTPlan<double>;  // Add export macro here too
-                      /** @endcond */
+// Explicit template instantiation declaration needed if definitions are in .cpp
+extern template class CQTPlan<float>;
+extern template class CQTPlan<double>;
 
 }  // namespace OmniDSP
 

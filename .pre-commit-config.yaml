@@ -16,7 +16,7 @@ repos:
         # exclude: ^(environment\.yml|environment-dev\.yml)$ # Example if selectors cause issues
       # Checks for files that may have been accidentally added (e.g., large binaries)
       - id: check-added-large-files
-        args: ["--maxkb=1024"] # Set max file size in KB (e.g., 1MB)
+        args: ["--maxkb=8192"] # Set max file size in KB (e.g., 1MB)
 
   # === Commit Message Linting (Conventional Commits) ===
   - repo: https://github.com/compilerla/conventional-pre-commit

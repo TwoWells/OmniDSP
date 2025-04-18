@@ -1,72 +1,116 @@
 /**
- * @file src/omnidsp/convolution.cpp
- * @brief Implementation of public convolution/correlation functions,
- * dispatching to backends.
+ * @file convolution.cpp
+ * @brief Implementation file for 1D convolution and correlation functions.
  */
 
-#include <OmniDSP/convolution.h>  // Public API header
+#include "OmniDSP/convolution.h"  // Public API declarations
 
-#include <stdexcept>  // Potentially needed if backend throws, though not directly used here
+#include <algorithm>  // For std::reverse
+#include <stdexcept>  // For std::invalid_argument
+#include <string>     // For exception messages
 #include <vector>
 
-// Include the internal header that declares the backend implementation
-// functions
-#include "backend/backend_impl.h"  // Adjust path if necessary based on final structure
+#include "backend/backend_impl.h"  // Backend dispatcher function declarations
 
 namespace OmniDSP {
-// --- Public API Function Definitions ---
 
-/**
- * @brief Performs 1D linear convolution by calling the backend implementation.
- * The backend implementation handles kernel reversal internally if needed.
- *
- * @tparam T float or double.
- * @param signal The input signal vector.
- * @param kernel The kernel vector (impulse response).
- * @return std::vector<T> The result of the convolution.
- * @throws std::runtime_error If backend execution fails or is unavailable.
- * @throws std::invalid_argument If inputs are invalid based on backend checks.
- */
+//--------------------------------------------------------------------------
+// convolve1d
+//--------------------------------------------------------------------------
 template <typename T>
-std::vector<T> convolve1d(const std::vector<T> &signal,
-                          const std::vector<T> &kernel) {
-  // Call the backend implementation, setting use_correlation to false for
-  // convolution
-  return Backend::convolve1d_impl(signal, kernel, /*use_correlation=*/false);
+std::vector<T> convolve1d(
+    const std::vector<T> &signal, const std::vector<T> &kernel,
+    ConvMode mode /* = ConvMode::Valid */)  // Added mode parameter
+{
+  // --- Input Validation ---
+  if (signal.empty()) {
+    throw std::invalid_argument("convolve1d: Input signal cannot be empty.");
+  }
+  if (kernel.empty()) {
+    throw std::invalid_argument("convolve1d: Kernel cannot be empty.");
+  }
+
+  // Additional validation specific to modes might be done here or in the
+  // backend For example, 'Valid' mode typically requires signal_len >=
+  // kernel_len
+  if (mode == ConvMode::Valid && kernel.size() > signal.size()) {
+    throw std::invalid_argument(
+        "convolve1d: For 'Valid' mode, kernel length (" +
+        std::to_string(kernel.size()) +
+        ") cannot be greater than signal length (" +
+        std::to_string(signal.size()) + ").");
+  }
+
+  // --- Dispatch to Backend ---
+  // The backend implementation handles the actual computation based on the
+  // mode.
+  return Backend::convolve1d_impl<T>(signal.data(), signal.size(),
+                                     kernel.data(), kernel.size(),
+                                     mode);  // Pass mode to backend
 }
 
-/**
- * @brief Performs 1D linear correlation by calling the backend implementation.
- * Suitable for FIR filtering where the kernel represents coefficients directly.
- *
- * @tparam T float or double.
- * @param signal The input signal vector.
- * @param kernel The kernel vector (e.g., FIR coefficients).
- * @return std::vector<T> The result of the correlation.
- * @throws std::runtime_error If backend execution fails or is unavailable.
- * @throws std::invalid_argument If inputs are invalid based on backend checks.
- */
+//--------------------------------------------------------------------------
+// correlate1d
+//--------------------------------------------------------------------------
 template <typename T>
-std::vector<T> correlate1d(const std::vector<T> &signal,
-                           const std::vector<T> &kernel) {
-  // Call the backend implementation, setting use_correlation to true for
-  // correlation
-  return Backend::convolve1d_impl(signal, kernel, /*use_correlation=*/true);
+std::vector<T> correlate1d(
+    const std::vector<T> &signal, const std::vector<T> &kernel,
+    ConvMode mode /* = ConvMode::Valid */)  // Added mode parameter
+{
+  // --- Input Validation ---
+  if (signal.empty()) {
+    throw std::invalid_argument("correlate1d: Input signal cannot be empty.");
+  }
+  if (kernel.empty()) {
+    throw std::invalid_argument("correlate1d: Kernel cannot be empty.");
+  }
+
+  // Validation for 'Valid' mode
+  if (mode == ConvMode::Valid && kernel.size() > signal.size()) {
+    throw std::invalid_argument(
+        "correlate1d: For 'Valid' mode, kernel length (" +
+        std::to_string(kernel.size()) +
+        ") cannot be greater than signal length (" +
+        std::to_string(signal.size()) + ").");
+  }
+
+  // --- Implementation via Convolution ---
+  // Correlation is equivalent to convolution with the time-reversed kernel.
+  // Create a reversed copy of the kernel.
+  std::vector<T> reversed_kernel = kernel;
+  std::reverse(reversed_kernel.begin(), reversed_kernel.end());
+
+  // Dispatch to the convolve1d backend implementation with the reversed kernel
+  // and mode. (Assuming correlate1d_impl is not strictly necessary if this
+  // approach is used)
+  return Backend::convolve1d_impl<T>(signal.data(), signal.size(),
+                                     reversed_kernel.data(),
+                                     reversed_kernel.size(),
+                                     mode);  // Pass mode to backend
+
+  // Alternatively, if Backend::correlate1d_impl exists and is preferred:
+  // return Backend::correlate1d_impl<T>(signal.data(), signal.size(),
+  //                                    kernel.data(), kernel.size(),
+  //                                    mode);
 }
 
-// --- Explicit Template Instantiations (for public API) ---
-// Ensure these match the declarations in convolution.h and are exported if
-// needed. OMNIDSP_EXPORT might be needed if these are instantiated only here
-// for a shared lib. Assuming OMNIDSP_EXPORT is handled via the header
-// declarations for now.
+//--------------------------------------------------------------------------
+// Explicit Template Instantiations
+//--------------------------------------------------------------------------
+// Instantiate for float and double for all public functions.
+
 template std::vector<float> convolve1d<float>(const std::vector<float> &signal,
-                                              const std::vector<float> &kernel);
+                                              const std::vector<float> &kernel,
+                                              ConvMode mode);  // Added mode
 template std::vector<double> convolve1d<double>(
-    const std::vector<double> &signal, const std::vector<double> &kernel);
+    const std::vector<double> &signal, const std::vector<double> &kernel,
+    ConvMode mode);  // Added mode
 
-template std::vector<float> correlate1d<float>(
-    const std::vector<float> &signal, const std::vector<float> &kernel);
+template std::vector<float> correlate1d<float>(const std::vector<float> &signal,
+                                               const std::vector<float> &kernel,
+                                               ConvMode mode);  // Added mode
 template std::vector<double> correlate1d<double>(
-    const std::vector<double> &signal, const std::vector<double> &kernel);
+    const std::vector<double> &signal, const std::vector<double> &kernel,
+    ConvMode mode);  // Added mode
 
 }  // namespace OmniDSP

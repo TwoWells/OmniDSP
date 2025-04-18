@@ -1,197 +1,182 @@
 /**
- * @file src/omnidsp/backend/accelerate/convolution.cpp
- * @brief Apple Accelerate backend implementation for OmniDSP
- * convolution/correlation.
- *
- * Implements the convolve1d_impl function using Apple's Accelerate framework
- * (vDSP), utilizing vDSP_conv/vDSP_convD and vDSP_vrvrs/vDSP_vrvrsD. Compiled
- * only when USE_ACCELERATE is defined.
+ * @file convolution.cpp
+ * @brief Accelerate/vDSP backend implementation for convolution.
  */
+#include <Accelerate/Accelerate.h>  // Main Accelerate framework header
 
-// --- Includes ---
-#include <algorithm>  // For std::copy
-#include <complex>    // Often included with DSP headers
-#include <stdexcept>  // For std::runtime_error, std::invalid_argument, std::logic_error
-#include <string>
-#include <type_traits>  // For std::is_same_v
+#include <algorithm>  // For std::reverse, std::min, std::max
+#include <cmath>      // For std::floor
+#include <stdexcept>  // For std::runtime_error, std::invalid_argument
 #include <vector>
-#include <vector>  // Ensure std::vector is included
 
-#include "../backend_impl.h"  // Internal backend function declarations
-
-// Only compile if USE_ACCELERATE is defined by CMake (typically on macOS)
-#if defined(USE_ACCELERATE)
-
-#include <Accelerate/Accelerate.h>  // Main header for the Accelerate framework (includes vDSP)
+#include "../backend_impl.h"  // For ConvMode enum
 
 namespace OmniDSP {
 namespace Backend {
+namespace Accelerate {
 
-// --- vDSP Helper Structs ---
-
-// Helper for vDSP_conv (Convolution/Cross-Correlation)
-// Selects the correct vDSP function (float/double) at compile time.
-template <typename T>
-struct vDSPConvHelper;
-template <>
-struct vDSPConvHelper<float> {
-  static constexpr auto conv = vDSP_conv;
-};  // vDSP_conv for float
-template <>
-struct vDSPConvHelper<double> {
-  static constexpr auto conv = vDSP_convD;
-};  // vDSP_convD for double
-
-// Helper for vDSP_vrvrs (Vector Reverse)
-// Selects the correct vDSP function (float/double) at compile time.
-template <typename T>
-struct vDSPReverseHelper;
-template <>
-struct vDSPReverseHelper<float> {
-  static constexpr auto vrvrs = vDSP_vrvrs;
-};  // vDSP_vrvrs for float
-template <>
-struct vDSPReverseHelper<double> {
-  static constexpr auto vrvrs = vDSP_vrvrsD;
-};  // vDSP_vrvrsD for double
-
-/**
- * @brief Accelerate backend implementation for 1D convolution or correlation.
- * Uses vDSP_conv/vDSP_convD. For convolution, it reverses the kernel first.
- * For correlation, it uses the kernel directly.
- * Calculates the 'valid' part of the result by extracting it from the 'full'
- * result computed by vDSP_conv.
- *
- * @tparam T float or double.
- * @param signal The input signal vector.
- * @param kernel The kernel vector.
- * @param use_correlation If true, perform correlation; otherwise, perform
- * convolution.
- * @return std::vector<T> The result vector ('valid' mode).
- * @throws std::invalid_argument If inputs are invalid (empty, or kernel >
- * signal).
- * @throws std::logic_error If internal index calculation fails.
- */
-template <typename T>
-std::vector<T> convolve1d_impl(const std::vector<T> &signal,
-                               const std::vector<T> &kernel,
-                               bool use_correlation) {
-  // --- Input Validation ---
-  if (signal.empty() || kernel.empty()) {
-    return {};  // Return empty vector if inputs are empty
+// --- Helper to determine output size based on mode ---
+size_t calculate_output_size(size_t signal_len, size_t kernel_len,
+                             ConvMode mode) {
+  if (signal_len == 0 || kernel_len == 0) return 0;
+  switch (mode) {
+    case ConvMode::Full:
+      return signal_len + kernel_len - 1;
+    case ConvMode::Same:
+      return signal_len;
+    case ConvMode::Valid:
+      if (kernel_len > signal_len)
+        return 0;  // Or throw? Let's return 0 for valid.
+      return signal_len - kernel_len + 1;
+    default:  // Should not happen
+      throw std::invalid_argument("Unknown ConvMode in calculate_output_size");
   }
-
-  // vDSP uses vDSP_Length (unsigned long) for lengths
-  vDSP_Length sig_len = signal.size();
-  vDSP_Length ker_len = kernel.size();
-
-  // Calculate 'valid' output length: N_out = N_signal - N_kernel + 1
-  // Use signed type for intermediate calculation to detect negative result
-  // safely.
-  long long valid_out_len_signed =
-      static_cast<long long>(sig_len) - static_cast<long long>(ker_len) + 1;
-  if (valid_out_len_signed <= 0) {
-    // Signal must be at least as long as kernel for 'valid' output.
-    throw std::invalid_argument(
-        "Accelerate Conv/Corr ('valid' mode): signal length (" +
-        std::to_string(sig_len) + ") must be >= kernel length (" +
-        std::to_string(ker_len) + ").");
-  }
-  vDSP_Length valid_out_len = static_cast<vDSP_Length>(valid_out_len_signed);
-
-  // vDSP_conv calculates the 'full' output: N_full = N_signal + N_kernel - 1
-  vDSP_Length full_out_len = sig_len + ker_len - 1;
-  std::vector<T> full_result(
-      full_out_len);  // Allocate buffer for the full result
-
-  // Make a mutable copy of the kernel because vDSP_vrvrs modifies its input,
-  // and the input kernel parameter is const. Also needed for potential
-  // reversal.
-  std::vector<T> kernel_to_use = kernel;
-
-  // --- Prepare Kernel for vDSP_conv ---
-  // vDSP_conv performs cross-correlation. To get convolution, the *filter*
-  // (kernel) argument needs to be time-reversed.
-  if (!use_correlation)  // CONVOLUTION: Reverse kernel first
-  {
-    if (ker_len > 0)  // Need kernel to reverse
-    {
-      // Use the type-specific helper to call vDSP_vrvrs or vDSP_vrvrsD
-      vDSPReverseHelper<T>::vrvrs(kernel_to_use.data(), /*stride=*/1, ker_len);
-    }
-    // Now kernel_to_use holds the time-reversed kernel.
-  }
-  // else: CORRELATION: Use kernel_to_use directly (it's the original kernel).
-
-  // --- Perform Operation using vDSP_conv/vDSP_convD ---
-  // Note: vDSP_conv arguments:
-  // (InputSignal, SignalStride, FilterKernelReversedForConv, FilterStride,
-  // Output, OutputStride, OutputLength, FilterLength) It computes
-  // cross-correlation. If kernel_to_use is reversed (for convolution), the
-  // result is convolution. If kernel_to_use is original (for correlation), the
-  // result is correlation.
-  vDSPConvHelper<T>::conv(
-      signal.data(),  // Input Signal (C in docs)
-      /*SignalStride=*/1,
-      kernel_to_use.data(),  // Filter (H in docs) - reversed if convolution,
-                             // original if correlation
-      /*FilterStride=*/1,
-      full_result.data(),  // Output Buffer (A in docs) - for full result
-      /*OutputStride=*/1,
-      full_out_len,  // Length of Full Output buffer (N+M-1)
-      ker_len);      // Length of Filter (M)
-
-  // --- Extract 'valid' part ---
-  // The 'valid' part corresponds to the section of the full result where the
-  // kernel fully overlaps the signal. This segment starts at index (ker_len -
-  // 1) in the 'full' result buffer.
-  vDSP_Length valid_start_index = ker_len - 1;
-
-  // Allocate the final result vector with the 'valid' size
-  std::vector<T> valid_result(valid_out_len);
-
-  // Copy the 'valid' segment from the full result buffer to the final result
-  // vector.
-  if (valid_out_len > 0)  // Check if there's anything to copy
-  {
-    // Sanity check: Ensure calculated indices are within the bounds of the
-    // full_result buffer. This should always be true if the initial length
-    // validation passed.
-    if (valid_start_index < full_out_len &&
-        (valid_start_index + valid_out_len) <= full_out_len) {
-      // Use std::copy for efficient copying
-      std::copy(
-          full_result.begin() +
-              valid_start_index,  // Start of 'valid' segment in full_result
-          full_result.begin() + valid_start_index +
-              valid_out_len,      // End of 'valid' segment
-          valid_result.begin());  // Destination: start of the final 'valid'
-                                  // result vector
-    } else {
-      // This case should theoretically not be reached if input validation and
-      // length calculations are correct. Throwing logic_error indicates an
-      // unexpected internal state.
-      throw std::logic_error(
-          "Internal error: Invalid indices calculated for extracting 'valid' "
-          "convolution/correlation result.");
-    }
-  }
-  // If valid_out_len is 0, valid_result is already correctly initialized as an
-  // empty vector.
-
-  return valid_result;  // Return the computed 'valid' part
 }
 
-// --- Explicit Template Instantiations ---
-// Ensures the compiler generates code for both float and double versions,
-// allowing the linker to find them.
-template std::vector<float> convolve1d_impl<float>(const std::vector<float> &,
-                                                   const std::vector<float> &,
-                                                   bool);
-template std::vector<double> convolve1d_impl<double>(
-    const std::vector<double> &, const std::vector<double> &, bool);
+// --- Convolution Implementation ---
 
+std::vector<float> convolve1d_accelerate_impl_float(const float* signal,
+                                                    size_t signal_len,
+                                                    const float* kernel,
+                                                    size_t kernel_len,
+                                                    ConvMode mode) {
+  if (signal_len == 0 || kernel_len == 0) return {};
+
+  // vDSP_conv calculates the 'Full' convolution result.
+  size_t full_len = signal_len + kernel_len - 1;
+  std::vector<float> full_result(full_len);
+
+  // vDSP_conv requires the kernel to be reversed *by the caller*.
+  std::vector<float> reversed_kernel(kernel, kernel + kernel_len);
+  vDSP_vrvrs(reversed_kernel.data(), 1, kernel_len);  // Reverse kernel in-place
+
+  // Perform full convolution using vDSP
+  // vDSP_conv(Signal, SignalStride, ReversedKernel, KernelStride, Output,
+  // OutputStride, OutputLength, KernelLength)
+  vDSP_conv(signal, 1, reversed_kernel.data(), 1, full_result.data(), 1,
+            full_len, kernel_len);
+
+  // --- Extract desired portion based on mode ---
+  size_t output_size = calculate_output_size(signal_len, kernel_len, mode);
+  if (output_size == 0 && mode == ConvMode::Valid)
+    return {};  // Valid mode resulted in 0 size
+
+  std::vector<float> result(output_size);
+
+  switch (mode) {
+    case ConvMode::Full:
+      // Already have the full result
+      result = std::move(full_result);  // Move is efficient
+      break;
+    case ConvMode::Same: {
+      // Extract the central part of size signal_len
+      // Start index calculation (integer division)
+      size_t start_index = (kernel_len - 1) / 2;
+      // Check bounds (should be okay if full_len >= signal_len)
+      if (start_index + output_size <= full_len) {
+        std::copy(full_result.begin() + start_index,
+                  full_result.begin() + start_index + output_size,
+                  result.begin());
+      } else {
+        // This case indicates an issue with size calculations, should not
+        // happen with standard modes
+        throw std::runtime_error(
+            "Accelerate convolve1d 'Same' mode calculation error: bounds "
+            "mismatch.");
+      }
+      break;
+    }
+    case ConvMode::Valid: {
+      // Extract the valid part of size signal_len - kernel_len + 1
+      // Start index calculation
+      size_t start_index = kernel_len - 1;
+      // Check bounds (should be okay if full_len >= output_size and N >= M)
+      if (kernel_len > signal_len) {  // Should have been caught by
+                                      // calculate_output_size returning 0
+        return {};  // Return empty vector if kernel > signal for valid mode
+      }
+      if (start_index + output_size <= full_len) {
+        std::copy(full_result.begin() + start_index,
+                  full_result.begin() + start_index + output_size,
+                  result.begin());
+      } else {
+        throw std::runtime_error(
+            "Accelerate convolve1d 'Valid' mode calculation error: bounds "
+            "mismatch.");
+      }
+      break;
+    }
+  }
+  return result;
+}
+
+std::vector<double> convolve1d_accelerate_impl_double(const double* signal,
+                                                      size_t signal_len,
+                                                      const double* kernel,
+                                                      size_t kernel_len,
+                                                      ConvMode mode) {
+  if (signal_len == 0 || kernel_len == 0) return {};
+
+  size_t full_len = signal_len + kernel_len - 1;
+  std::vector<double> full_result(full_len);
+  std::vector<double> reversed_kernel(kernel, kernel + kernel_len);
+  vDSP_vrvrsD(reversed_kernel.data(), 1,
+              kernel_len);  // Reverse kernel (Double)
+
+  // Perform full convolution using vDSP (Double)
+  vDSP_convD(signal, 1, reversed_kernel.data(), 1, full_result.data(), 1,
+             full_len, kernel_len);
+
+  // --- Extract desired portion based on mode ---
+  size_t output_size = calculate_output_size(signal_len, kernel_len, mode);
+  if (output_size == 0 && mode == ConvMode::Valid) return {};
+
+  std::vector<double> result(output_size);
+
+  switch (mode) {
+    case ConvMode::Full:
+      result = std::move(full_result);
+      break;
+    case ConvMode::Same: {
+      size_t start_index = (kernel_len - 1) / 2;
+      if (start_index + output_size <= full_len) {
+        std::copy(full_result.begin() + start_index,
+                  full_result.begin() + start_index + output_size,
+                  result.begin());
+      } else {
+        throw std::runtime_error(
+            "Accelerate convolve1d 'Same' mode calculation error: bounds "
+            "mismatch.");
+      }
+      break;
+    }
+    case ConvMode::Valid: {
+      size_t start_index = kernel_len - 1;
+      if (kernel_len > signal_len) return {};
+      if (start_index + output_size <= full_len) {
+        std::copy(full_result.begin() + start_index,
+                  full_result.begin() + start_index + output_size,
+                  result.begin());
+      } else {
+        throw std::runtime_error(
+            "Accelerate convolve1d 'Valid' mode calculation error: bounds "
+            "mismatch.");
+      }
+      break;
+    }
+  }
+  return result;
+}
+
+// --- Correlation Implementation ---
+// Correlation is implemented by reversing the *kernel* in the public API call
+// and then calling the convolve1d_impl here. So no separate correlate1d_impl
+// needed here.
+
+// --- Explicit Template Instantiations ---
+// We instantiate the dispatcher functions in backend.cpp, not these specific
+// impls.
+
+}  // namespace Accelerate
 }  // namespace Backend
 }  // namespace OmniDSP
-
-#endif  // USE_ACCELERATE

@@ -1,51 +1,66 @@
 /**
- * @file src/omnidsp/backend/stub/convolution.cpp
- * @brief Stub (Error) backend implementation for OmniDSP
- * convolution/correlation.
- *
- * Provides stub implementations for backend convolution/correlation functions.
- * Compiled only when no real backend (oneMKL or Accelerate) is selected.
- * Any attempt to use these functions will result in a std::runtime_error.
+ * @file convolution.cpp
+ * @brief Stub implementation for convolution backend.
  */
-
-// --- Includes ---
-#include <complex>    // Often included with DSP headers
 #include <stdexcept>  // For std::runtime_error
-#include <string>
+#include <string>     // For error messages
 #include <vector>
 
-#include "../backend_impl.h"  // Internal backend function declarations
-
-// Compile this only if NEITHER Accelerate nor MKL is defined by CMake
-#if !defined(USE_ACCELERATE) && !defined(USE_ONEMKL)
+#include "../backend_impl.h"  // For ConvMode enum
 
 namespace OmniDSP {
 namespace Backend {
+namespace Stub {
+
+// Helper to throw not implemented error
+namespace {
+void throw_stub_error(const std::string& func_name) {
+  throw std::runtime_error("Stub backend: " + func_name +
+                           " is not implemented.");
+}
+}  // anonymous namespace
 
 /**
- * @brief Stub implementation for 1D convolution or correlation. Throws error.
+ * @brief Stub implementation for 1D convolution. Throws error.
  */
 template <typename T>
-std::vector<T> convolve1d_impl(const std::vector<T> &signal,
-                               const std::vector<T> &kernel,
-                               bool use_correlation) {
-  // Throw an error indicating the backend is not available.
-  throw std::runtime_error(
-      "OmniDSP backend (MKL/Accelerate) not selected or available during "
-      "build. Cannot perform convolution/correlation.");
-  // Add return statement to satisfy compiler, although unreachable
+std::vector<T> convolve1d_stub_impl(const T* signal, size_t signal_len,
+                                    const T* kernel, size_t kernel_len,
+                                    ConvMode mode)  // Added mode parameter
+{
+  throw_stub_error("convolve1d");
+  // Unreachable, but prevents compiler warning about no return value
+  return {};
+}
+
+/**
+ * @brief Stub implementation for 1D correlation. Throws error.
+ */
+template <typename T>
+std::vector<T> correlate1d_stub_impl(const T* signal, size_t signal_len,
+                                     const T* kernel, size_t kernel_len,
+                                     ConvMode mode)  // Added mode parameter
+{
+  throw_stub_error("correlate1d");
   return {};
 }
 
 // --- Explicit Template Instantiations ---
-// Instantiate the stub function for both float and double.
-template std::vector<float> convolve1d_impl<float>(const std::vector<float> &,
-                                                   const std::vector<float> &,
-                                                   bool);
-template std::vector<double> convolve1d_impl<double>(
-    const std::vector<double> &, const std::vector<double> &, bool);
+template std::vector<float> convolve1d_stub_impl<float>(const float*, size_t,
+                                                        const float*, size_t,
+                                                        ConvMode);
+template std::vector<double> convolve1d_stub_impl<double>(const double*, size_t,
+                                                          const double*, size_t,
+                                                          ConvMode);
 
+template std::vector<float> correlate1d_stub_impl<float>(const float*, size_t,
+                                                         const float*, size_t,
+                                                         ConvMode);
+template std::vector<double> correlate1d_stub_impl<double>(const double*,
+                                                           size_t,
+                                                           const double*,
+                                                           size_t, ConvMode);
+
+}  // namespace Stub
 }  // namespace Backend
 }  // namespace OmniDSP
-
-#endif  // !USE_ACCELERATE && !USE_ONEMKL

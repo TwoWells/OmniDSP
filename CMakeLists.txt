@@ -245,6 +245,7 @@ add_library(
   src/omnidsp/window.cpp
   src/omnidsp/resample.cpp # Add the new resample API file
   # Backend Implementation Files (List from GLOB)
+  src/omnidsp/backend/backend.cpp
   ${BACKEND_SOURCES})
 # Removed src/omnidsp/omnidsp.cpp
 
