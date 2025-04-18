@@ -1,13 +1,31 @@
 # tests/cpp/generate_references.py
-# Expanded to include Librosa CQT and SciPy Filter+Downsample reference data
+# Expanded to include Librosa CQT, SciPy Filter+Downsample, and SciPy Window reference data
 
 import numpy as np
 from scipy import signal
 
-# --- Added firwin and correlate ---
-from scipy.signal import firwin, correlate
+# --- Added firwin, correlate, and windows --- # <<< Added windows
+from scipy.signal import firwin, correlate, windows
 import librosa
+import os
 import warnings
+
+# --- Define Parameters for Windows ---
+window_n = 5
+window_kaiser_beta = 8.0
+
+# --- Generate Window Coefficients using SciPy ---
+print(f"\nGenerating Window reference data (N={window_n})...")
+# Use dtype=np.float64 for C++ double reference
+hann_coeffs_d = windows.hann(window_n).astype(np.float64)
+hamming_coeffs_d = windows.hamming(window_n).astype(np.float64)
+kaiser_coeffs_d = windows.kaiser(window_n, beta=window_kaiser_beta).astype(np.float64)
+flattop_coeffs_d = windows.flattop(window_n).astype(np.float64)
+print(f"  Hann    (N={window_n}): {hann_coeffs_d}")
+print(f"  Hamming (N={window_n}): {hamming_coeffs_d}")
+print(f"  Kaiser  (N={window_n}, beta={window_kaiser_beta}): {kaiser_coeffs_d}")
+print(f"  Flattop (N={window_n}): {flattop_coeffs_d}")
+
 
 # --- Define Input Signals and Kernels (for Conv/Corr tests) ---
 signal_d = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], dtype=np.float64)
@@ -30,18 +48,6 @@ expected_conv_d = signal.convolve(signal_d, kernel_d_asym, mode="valid")
 expected_conv_f = signal.convolve(signal_f, kernel_f_asym, mode="valid")
 expected_conv_edge_d = signal.convolve(signal_edge, kernel_edge, mode="valid")
 
-# --- REMOVED old desamp calculations - will recalculate below ---
-# factor = 2
-# filtered_d = signal.correlate(signal_d, kernel_d, mode='valid')
-# expected_desamp_d = filtered_d[::factor]
-# filtered_f = signal.correlate(signal_f, kernel_f, mode='valid')
-# expected_desamp_f = filtered_f[::factor]
-# filtered_edge_d = signal.correlate(signal_edge, kernel_edge, mode='valid')
-# expected_desamp_edge_d = filtered_edge_d[::factor]
-#
-# factor3 = 3
-# filtered_d_f3 = signal.correlate(signal_d, kernel_d, mode='valid')
-# expected_desamp_d_f3 = filtered_d_f3[::factor3]
 
 # --- Define Parameters and Signal for CQT Reference ---
 # Match parameters used in C++ tests (PrecomputedRecursiveCQTTest fixture)
@@ -96,20 +102,18 @@ signal_filter_test_d = (
 signal_filter_test_f = signal_filter_test_d.astype(np.float32)
 
 # Design FIR filter coefficients (matches C++ test's windowed-sinc design)
-# Use firwin with scale=True to approximate the DC gain normalization (sum=1)
 coeffs_d = firwin(
     filter_downsample_order,
     cutoff=filter_downsample_cutoff,
     window="hann",
     fs=filter_downsample_sr,
     scale=True,
-)  # scale=True sets gain at DC (0 Hz) to 1.0
+)
 coeffs_f = coeffs_d.astype(np.float32)
 
 print(
     f"  FIR filter designed (Order: {filter_downsample_order}, Cutoff: {filter_downsample_cutoff} Hz, Window: Hann)"
 )
-# print(f"  Filter coefficients sum (double): {np.sum(coeffs_d)}") # Should be close to 1.0
 
 # Perform correlation (matches C++ backend FIR filtering) in 'valid' mode
 filtered_d = correlate(signal_filter_test_d, coeffs_d, mode="valid")
@@ -129,6 +133,11 @@ print(
 
 # --- Data to Write ---
 data_to_write = {
+    # Window data (NEW)
+    "WINDOW_HANN_N5_D": hann_coeffs_d,
+    "WINDOW_HAMMING_N5_D": hamming_coeffs_d,
+    "WINDOW_KAISER_N5_B8_D": kaiser_coeffs_d,
+    "WINDOW_FLATTOP_N5_D": flattop_coeffs_d,
     # Conv/Corr data
     "expected_corr_d": expected_corr_d,
     "expected_corr_f": expected_corr_f,
@@ -136,7 +145,7 @@ data_to_write = {
     "expected_conv_d": expected_conv_d,
     "expected_conv_f": expected_conv_f,
     "expected_conv_edge_d": expected_conv_edge_d,
-    # Filter+Downsample data (NEW)
+    # Filter+Downsample data
     "expected_filter_downsample_d": expected_filter_downsample_d,
     "expected_filter_downsample_f": expected_filter_downsample_f,
     # Librosa CQT data
@@ -144,14 +153,18 @@ data_to_write = {
 }
 
 # --- Write to File ---
-output_filename = "test_references.txt"
+# Determine the directory where the script resides
+script_dir = os.path.dirname(os.path.abspath(__file__))
+output_filename = os.path.join(
+    script_dir, "test_references.txt"
+)  # Output in the same directory
 print(f"\nWriting reference data to {output_filename}...")
 
 try:
     with open(output_filename, "w") as f:
         f.write("# Auto-generated reference data for OmniDSP C++ tests\n")
         f.write(
-            "# Includes Conv/Corr (from SciPy), Filter+Downsample (from SciPy), and CQT (from Librosa)\n\n"
+            "# Includes Window (from SciPy), Conv/Corr (from SciPy), Filter+Downsample (from SciPy), and CQT (from Librosa)\n\n"
         )  # Updated comment
 
         for name, arr in data_to_write.items():

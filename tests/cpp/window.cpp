@@ -1,21 +1,28 @@
 /**
  * @file tests/cpp/window.cpp
  * @brief Unit tests for the OmniDSP Window class.
- * Corrected include path. Added explicit cast for double->float conversion.
+ * Refactored to read reference coefficients from test_references.txt.
  */
 #include <OmniDSP/window.h>  // Use the renamed window header
 #include <gtest/gtest.h>
 
 #include <algorithm>  // For std::copy, std::transform
 #include <cmath>
-#include <limits>   // For std::numeric_limits
-#include <numeric>  // For std::accumulate
+#include <fstream>    // <<< Added for file reading
+#include <limits>     // For std::numeric_limits
+#include <map>        // <<< Added for storing reference data
+#include <numeric>    // For std::accumulate
+#include <sstream>    // <<< Added for file reading
+#include <stdexcept>  // <<< Added for file reading errors
+#include <string>     // <<< Added for file reading
 #include <vector>
 
 // Define M_PI if it's not already defined
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
+
+// --- Test Utilities ---
 
 // Helper to compare vectors
 template <typename T>
@@ -27,6 +34,68 @@ void ExpectVectorNear(const std::vector<T>& expected,
   }
 }
 
+// Helper function to read reference data from the text file
+// NOTE: This is a simplified reader. Adapt if you have a more robust one
+// elsewhere.
+std::map<std::string, std::vector<double>> readReferenceData(
+    const std::string& filename) {
+  std::map<std::string, std::vector<double>> dataMap;
+  std::ifstream infile(filename);
+  if (!infile) {
+    throw std::runtime_error("Could not open reference file: " + filename);
+  }
+
+  std::string line;
+  std::string currentKey;
+  bool readingData = false;
+
+  while (std::getline(infile, line)) {
+    // Trim leading/trailing whitespace
+    line.erase(0, line.find_first_not_of(" \t\n\r"));
+    line.erase(line.find_last_not_of(" \t\n\r") + 1);
+
+    if (line.empty() || line[0] == '#') {
+      if (line.rfind("# START ", 0) ==
+          0) {                        // Check if line starts with "# START "
+        currentKey = line.substr(8);  // Extract key name
+        readingData = true;
+        dataMap[currentKey] =
+            std::vector<double>();  // Initialize vector for the key
+      } else if (line.rfind("# END ", 0) ==
+                 0) {  // Check if line starts with "# END "
+        if (readingData && line.substr(6) == currentKey) {
+          readingData = false;
+          currentKey = "";
+        }
+      }
+      continue;  // Skip comments and empty lines
+    }
+
+    if (readingData && !currentKey.empty()) {
+      std::stringstream ss(line);
+      double value;
+      // Handle potential 'f' suffix for float data if needed, though we read as
+      // double Remove 'f' before conversion
+      size_t f_pos = line.find('f');
+      if (f_pos != std::string::npos) {
+        line.resize(f_pos);  // Remove 'f' and anything after
+      }
+
+      std::stringstream ss_cleaned(line);
+      if (ss_cleaned >> value) {
+        dataMap[currentKey].push_back(value);
+      } else {
+        throw std::runtime_error(
+            "Error parsing value in reference file for key " + currentKey +
+            ": '" + line + "'");
+      }
+    }
+  }
+  return dataMap;
+}
+
+// --- Test Fixture ---
+
 // Test fixture for Window tests
 class WindowTest : public ::testing::Test {
  protected:
@@ -34,71 +103,25 @@ class WindowTest : public ::testing::Test {
   std::vector<float> signal_f = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f};
   std::vector<double> signal_d = {1.0, 2.0, 3.0, 4.0, 5.0};
   size_t N = 5;
+  double kaiser_beta = 8.0;  // Beta used in reference generation
 
   // Tolerance for floating point comparisons
   float tol_f = std::numeric_limits<float>::epsilon() * 100;
   double tol_d = std::numeric_limits<double>::epsilon() * 1000;
 
-  // Manually calculated expected results for N=5
-  // Hann: w[n] = 0.5 - 0.5 * cos(2*pi*n / (N-1))
-  std::vector<double> hann_coeffs_d = {
-      0.5 - 0.5 * cos(2.0 * M_PI * 0 / 4.0),  // 0.0
-      0.5 - 0.5 * cos(2.0 * M_PI * 1 / 4.0),  // 0.5
-      0.5 - 0.5 * cos(2.0 * M_PI * 2 / 4.0),  // 1.0
-      0.5 - 0.5 * cos(2.0 * M_PI * 3 / 4.0),  // 0.5
-      0.5 - 0.5 * cos(2.0 * M_PI * 4 / 4.0)   // 0.0
-  };
-  std::vector<float> hann_coeffs_f = {0.0f, 0.5f, 1.0f, 0.5f, 0.0f};  // Approx
+  // Reference coefficients (loaded from file)
+  std::vector<double> hann_coeffs_d;
+  std::vector<double> hamming_coeffs_d;
+  std::vector<double> kaiser_coeffs_d;
+  std::vector<double> flattop_coeffs_d;
 
-  // Hamming: w[n] = 0.54 - 0.46 * cos(2*pi*n / (N-1))
-  std::vector<double> hamming_coeffs_d = {
-      0.54 - 0.46 * cos(2.0 * M_PI * 0 / 4.0),  // 0.08
-      0.54 - 0.46 * cos(2.0 * M_PI * 1 / 4.0),  // 0.54
-      0.54 - 0.46 * cos(2.0 * M_PI * 2 / 4.0),  // 1.0
-      0.54 - 0.46 * cos(2.0 * M_PI * 3 / 4.0),  // 0.54
-      0.54 - 0.46 * cos(2.0 * M_PI * 4 / 4.0)   // 0.08
-  };
-  std::vector<float> hamming_coeffs_f;  // Calculate from double
+  // Float versions (calculated from double)
+  std::vector<float> hann_coeffs_f;
+  std::vector<float> hamming_coeffs_f;
+  std::vector<float> kaiser_coeffs_f;
+  std::vector<float> flattop_coeffs_f;
 
-  // Kaiser: Requires Bessel function, harder to precompute simply. Test
-  // shape/endpoints. beta = 8.0
-  double kaiser_beta = 8.0;
-  double i0_beta = std::cyl_bessel_i(0.0, kaiser_beta);
-  std::vector<double> kaiser_coeffs_d = {
-      std::cyl_bessel_i(0.0,
-                        kaiser_beta* sqrt(1.0 - pow(2.0 * 0 / 4.0 - 1.0, 2))) /
-          i0_beta,
-      std::cyl_bessel_i(0.0,
-                        kaiser_beta* sqrt(1.0 - pow(2.0 * 1 / 4.0 - 1.0, 2))) /
-          i0_beta,
-      std::cyl_bessel_i(0.0,
-                        kaiser_beta* sqrt(1.0 - pow(2.0 * 2 / 4.0 - 1.0, 2))) /
-          i0_beta,
-      std::cyl_bessel_i(0.0,
-                        kaiser_beta* sqrt(1.0 - pow(2.0 * 3 / 4.0 - 1.0, 2))) /
-          i0_beta,
-      std::cyl_bessel_i(0.0,
-                        kaiser_beta* sqrt(1.0 - pow(2.0 * 4 / 4.0 - 1.0, 2))) /
-          i0_beta};
-  std::vector<float> kaiser_coeffs_f;  // Calculate from double
-
-  // Flattop: Use coefficients a0-a4
-  double ft_a0 = 0.21557895, ft_a1 = 0.41663158, ft_a2 = 0.277263158,
-         ft_a3 = 0.083578947, ft_a4 = 0.006947368;
-  std::vector<double> flattop_coeffs_d = {
-      ft_a0 - ft_a1 * cos(2 * M_PI * 0 / 4.) + ft_a2 * cos(4 * M_PI * 0 / 4.) -
-          ft_a3 * cos(6 * M_PI * 0 / 4.) + ft_a4 * cos(8 * M_PI * 0 / 4.),
-      ft_a0 - ft_a1* cos(2 * M_PI * 1 / 4.) + ft_a2* cos(4 * M_PI * 1 / 4.) -
-          ft_a3* cos(6 * M_PI * 1 / 4.) + ft_a4* cos(8 * M_PI * 1 / 4.),
-      ft_a0 - ft_a1* cos(2 * M_PI * 2 / 4.) + ft_a2* cos(4 * M_PI * 2 / 4.) -
-          ft_a3* cos(6 * M_PI * 2 / 4.) + ft_a4* cos(8 * M_PI * 2 / 4.),
-      ft_a0 - ft_a1* cos(2 * M_PI * 3 / 4.) + ft_a2* cos(4 * M_PI * 3 / 4.) -
-          ft_a3* cos(6 * M_PI * 3 / 4.) + ft_a4* cos(8 * M_PI * 3 / 4.),
-      ft_a0 - ft_a1* cos(2 * M_PI * 4 / 4.) + ft_a2* cos(4 * M_PI * 4 / 4.) -
-          ft_a3* cos(6 * M_PI * 4 / 4.) + ft_a4* cos(8 * M_PI * 4 / 4.)};
-  std::vector<float> flattop_coeffs_f;  // Calculate from double
-
-  // Expected windowed signals
+  // Expected windowed signals (calculated)
   std::vector<float> expected_hann_f;
   std::vector<double> expected_hann_d;
   std::vector<float> expected_hamming_f;
@@ -108,19 +131,70 @@ class WindowTest : public ::testing::Test {
   std::vector<float> expected_flattop_f;
   std::vector<double> expected_flattop_d;
 
-  // Setup to calculate expected values
+  // Map to hold all reference data
+  static std::map<std::string, std::vector<double>> referenceData;
+  static bool dataLoaded;
+
+  // Load data once for all tests in the fixture
+  static void SetUpTestSuite() {
+    if (!dataLoaded) {
+      try {
+// Get reference file path from compile definition set by CMake
+#ifndef OMNIDSP_TEST_REF_FILE_PATH
+#error "OMNIDSP_TEST_REF_FILE_PATH is not defined. Check CMakeLists.txt"
+#endif
+        std::string ref_file_path = OMNIDSP_TEST_REF_FILE_PATH;
+        referenceData = readReferenceData(ref_file_path);
+        dataLoaded = true;
+      } catch (const std::exception& e) {
+        // Fail fast if reference data cannot be loaded
+        FAIL() << "Failed to load reference data: " << e.what();
+      }
+    }
+  }
+
+  // Setup per test case
   void SetUp() override {
-    // Convert double coeffs to float using std::transform with static_cast
+    // Retrieve specific data from the loaded map
+    ASSERT_TRUE(referenceData.count("WINDOW_HANN_N5_D"))
+        << "Hann reference data not found.";
+    hann_coeffs_d =
+        referenceData.at("WINDOW_HANN_N5_D");  // Use .at() for safety
+    ASSERT_EQ(hann_coeffs_d.size(), N) << "Hann reference data has wrong size.";
+
+    ASSERT_TRUE(referenceData.count("WINDOW_HAMMING_N5_D"))
+        << "Hamming reference data not found.";
+    hamming_coeffs_d = referenceData.at("WINDOW_HAMMING_N5_D");
+    ASSERT_EQ(hamming_coeffs_d.size(), N)
+        << "Hamming reference data has wrong size.";
+
+    ASSERT_TRUE(referenceData.count("WINDOW_KAISER_N5_B8_D"))
+        << "Kaiser reference data not found.";
+    kaiser_coeffs_d = referenceData.at("WINDOW_KAISER_N5_B8_D");
+    ASSERT_EQ(kaiser_coeffs_d.size(), N)
+        << "Kaiser reference data has wrong size.";
+
+    ASSERT_TRUE(referenceData.count("WINDOW_FLATTOP_N5_D"))
+        << "Flattop reference data not found.";
+    flattop_coeffs_d = referenceData.at("WINDOW_FLATTOP_N5_D");
+    ASSERT_EQ(flattop_coeffs_d.size(), N)
+        << "Flattop reference data has wrong size.";
+
+    // --- Calculations based on loaded reference coefficients ---
+
+    // Convert double coeffs to float
+    hann_coeffs_f.resize(N);
+    std::transform(hann_coeffs_d.begin(), hann_coeffs_d.end(),
+                   hann_coeffs_f.begin(),
+                   [](double d) { return static_cast<float>(d); });
     hamming_coeffs_f.resize(N);
     std::transform(hamming_coeffs_d.begin(), hamming_coeffs_d.end(),
                    hamming_coeffs_f.begin(),
                    [](double d) { return static_cast<float>(d); });
-
     kaiser_coeffs_f.resize(N);
     std::transform(kaiser_coeffs_d.begin(), kaiser_coeffs_d.end(),
                    kaiser_coeffs_f.begin(),
                    [](double d) { return static_cast<float>(d); });
-
     flattop_coeffs_f.resize(N);
     std::transform(flattop_coeffs_d.begin(), flattop_coeffs_d.end(),
                    flattop_coeffs_f.begin(),
@@ -147,6 +221,12 @@ class WindowTest : public ::testing::Test {
     }
   }
 };
+
+// Initialize static members
+std::map<std::string, std::vector<double>> WindowTest::referenceData;
+bool WindowTest::dataLoaded = false;
+
+// --- Test Cases ---
 
 // Test Hann window
 TEST_F(WindowTest, Hann) {
