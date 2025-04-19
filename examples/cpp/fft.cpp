@@ -25,7 +25,7 @@ int main() {
   using Real = double;
   using Complex = std::complex<Real>;
   const auto CURRENT_PRECISION =
-      OmniDSP::Precision::DOUBLE;  // Assuming Precision::DOUBLE is defined
+      OmniDSP::Precision::Double;  // Assuming Precision::Double is defined
 
   std::cout << "OmniDSP C2C FFT Example (N=" << N << ")" << std::endl;
   std::cout << "-----------------------------------" << std::endl;

@@ -49,7 +49,7 @@ struct FFTPlanImpl {
   // --- Members ---
   size_t length = 0;                         // FFT Length (N)
   Direction direction = Direction::Forward;  // Primary direction plan supports
-  Precision precision = Precision::SINGLE;   // float or double
+  Precision precision = Precision::Single;   // float or double
   FFTNorm norm_mode = FFTNorm::Backward;     // Normalization mode
   DFTI_DESCRIPTOR_HANDLE handle = nullptr;   // MKL DFTI descriptor handle
 
@@ -59,10 +59,10 @@ struct FFTPlanImpl {
     if (len == 0) throw std::invalid_argument("FFT length N cannot be zero.");
     // Verify template type matches precision enum
     if constexpr (std::is_same_v<T, float>) {
-      if (prec != Precision::SINGLE)
+      if (prec != Precision::Single)
         throw std::invalid_argument("Precision mismatch for float FFTPlan.");
     } else if constexpr (std::is_same_v<T, double>) {
-      if (prec != Precision::DOUBLE)
+      if (prec != Precision::Double)
         throw std::invalid_argument("Precision mismatch for double FFTPlan.");
     } else {
       throw std::invalid_argument("Unsupported template type for FFTPlan.");
@@ -108,7 +108,7 @@ struct FFTPlanImpl {
     MKL_LONG status;
     DFTI_CONFIG_VALUE mkl_domain_type = DFTI_COMPLEX;
     DFTI_CONFIG_VALUE mkl_prec_type =
-        (prec == Precision::SINGLE) ? DFTI_SINGLE : DFTI_DOUBLE;
+        (prec == Precision::Single) ? DFTI_SINGLE : DFTI_DOUBLE;
 
     // 1. Create Descriptor
     status = DftiCreateDescriptor(&handle, mkl_prec_type, mkl_domain_type, 1,
@@ -194,7 +194,7 @@ struct RFFTPlanImpl {
   size_t length = 0;          // Real FFT Length (N)
   size_t complex_length = 0;  // Length of complex spectrum (N/2 + 1)
   Direction direction = Direction::Forward;  // Primary direction plan supports
-  Precision precision = Precision::SINGLE;   // float or double
+  Precision precision = Precision::Single;   // float or double
   FFTNorm norm_mode = FFTNorm::Backward;     // Normalization mode
   DFTI_DESCRIPTOR_HANDLE handle = nullptr;   // MKL DFTI descriptor handle
 
@@ -204,10 +204,10 @@ struct RFFTPlanImpl {
     if (len == 0) throw std::invalid_argument("RFFT length N cannot be zero.");
     // Verify template type matches precision enum
     if constexpr (std::is_same_v<T, float>) {
-      if (prec != Precision::SINGLE)
+      if (prec != Precision::Single)
         throw std::invalid_argument("Precision mismatch for float RFFTPlan.");
     } else if constexpr (std::is_same_v<T, double>) {
-      if (prec != Precision::DOUBLE)
+      if (prec != Precision::Double)
         throw std::invalid_argument("Precision mismatch for double RFFTPlan.");
     } else {
       throw std::invalid_argument("Unsupported template type for RFFTPlan.");
@@ -252,7 +252,7 @@ struct RFFTPlanImpl {
     MKL_LONG status;
     DFTI_CONFIG_VALUE mkl_domain_type = DFTI_REAL;  // Real domain for RFFTPlan
     DFTI_CONFIG_VALUE mkl_prec_type =
-        (prec == Precision::SINGLE) ? DFTI_SINGLE : DFTI_DOUBLE;
+        (prec == Precision::Single) ? DFTI_SINGLE : DFTI_DOUBLE;
 
     // 1. Create Descriptor
     status = DftiCreateDescriptor(&handle, mkl_prec_type, mkl_domain_type, 1,

@@ -53,8 +53,8 @@ class FFT_Test : public ::testing::Test {
 
 // --- FFT Tests (Complex to Complex) ---
 
-TEST_F(FFT_Test, Plan_FFT_FORWARD_Double) {
-  std::string test_case_name = "Plan_FFT_FORWARD_Double";
+TEST_F(FFT_Test, Plan_FFT_Forward_Double) {
+  std::string test_case_name = "Plan_FFT_Forward_Double";
   // Load input and expected data using the new loader
   auto input_cd = TestDataLoader::loadVectorData<std::complex<double>>(
       suite_name, test_case_name + "_input_cd.txt");
@@ -66,7 +66,7 @@ TEST_F(FFT_Test, Plan_FFT_FORWARD_Double) {
 
   // Create FFT plan - CORRECTED CONSTRUCTOR CALL
   OmniDSP::FFTPlan<double> plan(
-      input_cd.size(), OmniDSP::Precision::DOUBLE,
+      input_cd.size(), OmniDSP::Precision::Double,
       OmniDSP::Direction::Forward,  // Direction for this plan
       OmniDSP::Domain::Complex,
       OmniDSP::FFTNorm::Forward);  // Norm used for test data generation
@@ -78,8 +78,8 @@ TEST_F(FFT_Test, Plan_FFT_FORWARD_Double) {
   ExpectComplexVectorNear(output_cd, expected_cd, abs_error_d, test_case_name);
 }
 
-TEST_F(FFT_Test, Plan_FFT_FORWARD_Float) {
-  std::string test_case_name = "Plan_FFT_FORWARD_Float";
+TEST_F(FFT_Test, Plan_FFT_Forward_Float) {
+  std::string test_case_name = "Plan_FFT_Forward_Float";
   auto input_cf = TestDataLoader::loadVectorData<std::complex<float>>(
       suite_name, test_case_name + "_input_cf.txt");
   auto expected_cf = TestDataLoader::loadVectorData<std::complex<float>>(
@@ -88,7 +88,7 @@ TEST_F(FFT_Test, Plan_FFT_FORWARD_Float) {
 
   // CORRECTED CONSTRUCTOR CALL
   OmniDSP::FFTPlan<float> plan(
-      input_cf.size(), OmniDSP::Precision::SINGLE, OmniDSP::Direction::Forward,
+      input_cf.size(), OmniDSP::Precision::Single, OmniDSP::Direction::Forward,
       OmniDSP::Domain::Complex,
       OmniDSP::FFTNorm::Forward);  // Match test data norm
 
@@ -96,8 +96,8 @@ TEST_F(FFT_Test, Plan_FFT_FORWARD_Float) {
   ExpectComplexVectorNear(output_cf, expected_cf, abs_error_f, test_case_name);
 }
 
-TEST_F(FFT_Test, Plan_FFT_BACKWARD_Double) {
-  std::string test_case_name = "Plan_FFT_BACKWARD_Double";
+TEST_F(FFT_Test, Plan_FFT_Backward_Double) {
+  std::string test_case_name = "Plan_FFT_Backward_Double";
   auto input_cd = TestDataLoader::loadVectorData<std::complex<double>>(
       suite_name, test_case_name + "_input_cd.txt");
   auto expected_cd = TestDataLoader::loadVectorData<std::complex<double>>(
@@ -106,7 +106,7 @@ TEST_F(FFT_Test, Plan_FFT_BACKWARD_Double) {
 
   // CORRECTED CONSTRUCTOR CALL
   OmniDSP::FFTPlan<double> plan(
-      input_cd.size(), OmniDSP::Precision::DOUBLE,
+      input_cd.size(), OmniDSP::Precision::Double,
       OmniDSP::Direction::Forward,  // Plan direction still Forward
       OmniDSP::Domain::Complex,
       OmniDSP::FFTNorm::Backward);  // Match test data norm
@@ -115,8 +115,8 @@ TEST_F(FFT_Test, Plan_FFT_BACKWARD_Double) {
   ExpectComplexVectorNear(output_cd, expected_cd, abs_error_d, test_case_name);
 }
 
-TEST_F(FFT_Test, Plan_FFT_BACKWARD_Float) {
-  std::string test_case_name = "Plan_FFT_BACKWARD_Float";
+TEST_F(FFT_Test, Plan_FFT_Backward_Float) {
+  std::string test_case_name = "Plan_FFT_Backward_Float";
   auto input_cf = TestDataLoader::loadVectorData<std::complex<float>>(
       suite_name, test_case_name + "_input_cf.txt");
   auto expected_cf = TestDataLoader::loadVectorData<std::complex<float>>(
@@ -125,7 +125,7 @@ TEST_F(FFT_Test, Plan_FFT_BACKWARD_Float) {
 
   // CORRECTED CONSTRUCTOR CALL
   OmniDSP::FFTPlan<float> plan(
-      input_cf.size(), OmniDSP::Precision::SINGLE, OmniDSP::Direction::Forward,
+      input_cf.size(), OmniDSP::Precision::Single, OmniDSP::Direction::Forward,
       OmniDSP::Domain::Complex,
       OmniDSP::FFTNorm::Backward);  // Match test data norm
 
@@ -133,8 +133,8 @@ TEST_F(FFT_Test, Plan_FFT_BACKWARD_Float) {
   ExpectComplexVectorNear(output_cf, expected_cf, abs_error_f, test_case_name);
 }
 
-TEST_F(FFT_Test, Plan_FFT_ORTHO_Double) {
-  std::string test_case_name = "Plan_FFT_ORTHO_Double";
+TEST_F(FFT_Test, Plan_FFT_Ortho_Double) {
+  std::string test_case_name = "Plan_FFT_Ortho_Double";
   auto input_cd = TestDataLoader::loadVectorData<std::complex<double>>(
       suite_name, test_case_name + "_input_cd.txt");
   auto expected_cd = TestDataLoader::loadVectorData<std::complex<double>>(
@@ -143,7 +143,7 @@ TEST_F(FFT_Test, Plan_FFT_ORTHO_Double) {
 
   // CORRECTED CONSTRUCTOR CALL
   OmniDSP::FFTPlan<double> plan(
-      input_cd.size(), OmniDSP::Precision::DOUBLE, OmniDSP::Direction::Forward,
+      input_cd.size(), OmniDSP::Precision::Double, OmniDSP::Direction::Forward,
       OmniDSP::Domain::Complex,
       OmniDSP::FFTNorm::Ortho);  // Match test data norm
 
@@ -151,8 +151,8 @@ TEST_F(FFT_Test, Plan_FFT_ORTHO_Double) {
   ExpectComplexVectorNear(output_cd, expected_cd, abs_error_d, test_case_name);
 }
 
-TEST_F(FFT_Test, Plan_FFT_ORTHO_Float) {
-  std::string test_case_name = "Plan_FFT_ORTHO_Float";
+TEST_F(FFT_Test, Plan_FFT_Ortho_Float) {
+  std::string test_case_name = "Plan_FFT_Ortho_Float";
   auto input_cf = TestDataLoader::loadVectorData<std::complex<float>>(
       suite_name, test_case_name + "_input_cf.txt");
   auto expected_cf = TestDataLoader::loadVectorData<std::complex<float>>(
@@ -161,7 +161,7 @@ TEST_F(FFT_Test, Plan_FFT_ORTHO_Float) {
 
   // CORRECTED CONSTRUCTOR CALL
   OmniDSP::FFTPlan<float> plan(
-      input_cf.size(), OmniDSP::Precision::SINGLE, OmniDSP::Direction::Forward,
+      input_cf.size(), OmniDSP::Precision::Single, OmniDSP::Direction::Forward,
       OmniDSP::Domain::Complex,
       OmniDSP::FFTNorm::Ortho);  // Match test data norm
 
@@ -171,8 +171,8 @@ TEST_F(FFT_Test, Plan_FFT_ORTHO_Float) {
 
 // --- IFFT Tests (Complex to Complex) ---
 
-TEST_F(FFT_Test, Plan_IFFT_FORWARD_Double) {
-  std::string test_case_name = "Plan_IFFT_FORWARD_Double";
+TEST_F(FFT_Test, Plan_IFFT_Forward_Double) {
+  std::string test_case_name = "Plan_IFFT_Forward_Double";
   auto input_cd = TestDataLoader::loadVectorData<std::complex<double>>(
       suite_name, test_case_name + "_input_cd.txt");
   auto expected_cd = TestDataLoader::loadVectorData<std::complex<double>>(
@@ -181,7 +181,7 @@ TEST_F(FFT_Test, Plan_IFFT_FORWARD_Double) {
 
   // CORRECTED CONSTRUCTOR CALL - Create an Inverse plan
   OmniDSP::FFTPlan<double> plan(
-      input_cd.size(), OmniDSP::Precision::DOUBLE,
+      input_cd.size(), OmniDSP::Precision::Double,
       OmniDSP::Direction::Inverse,  // Plan direction is Inverse
       OmniDSP::Domain::Complex,
       OmniDSP::FFTNorm::Forward);  // Match test data norm
@@ -190,8 +190,8 @@ TEST_F(FFT_Test, Plan_IFFT_FORWARD_Double) {
   ExpectComplexVectorNear(output_cd, expected_cd, abs_error_d, test_case_name);
 }
 
-TEST_F(FFT_Test, Plan_IFFT_FORWARD_Float) {
-  std::string test_case_name = "Plan_IFFT_FORWARD_Float";
+TEST_F(FFT_Test, Plan_IFFT_Forward_Float) {
+  std::string test_case_name = "Plan_IFFT_Forward_Float";
   auto input_cf = TestDataLoader::loadVectorData<std::complex<float>>(
       suite_name, test_case_name + "_input_cf.txt");
   auto expected_cf = TestDataLoader::loadVectorData<std::complex<float>>(
@@ -200,7 +200,7 @@ TEST_F(FFT_Test, Plan_IFFT_FORWARD_Float) {
 
   // CORRECTED CONSTRUCTOR CALL
   OmniDSP::FFTPlan<float> plan(
-      input_cf.size(), OmniDSP::Precision::SINGLE, OmniDSP::Direction::Inverse,
+      input_cf.size(), OmniDSP::Precision::Single, OmniDSP::Direction::Inverse,
       OmniDSP::Domain::Complex,
       OmniDSP::FFTNorm::Forward);  // Match test data norm
 
@@ -208,8 +208,8 @@ TEST_F(FFT_Test, Plan_IFFT_FORWARD_Float) {
   ExpectComplexVectorNear(output_cf, expected_cf, abs_error_f, test_case_name);
 }
 
-TEST_F(FFT_Test, Plan_IFFT_BACKWARD_Double) {
-  std::string test_case_name = "Plan_IFFT_BACKWARD_Double";
+TEST_F(FFT_Test, Plan_IFFT_Backward_Double) {
+  std::string test_case_name = "Plan_IFFT_Backward_Double";
   auto input_cd = TestDataLoader::loadVectorData<std::complex<double>>(
       suite_name, test_case_name + "_input_cd.txt");
   auto expected_cd = TestDataLoader::loadVectorData<std::complex<double>>(
@@ -218,7 +218,7 @@ TEST_F(FFT_Test, Plan_IFFT_BACKWARD_Double) {
 
   // CORRECTED CONSTRUCTOR CALL
   OmniDSP::FFTPlan<double> plan(
-      input_cd.size(), OmniDSP::Precision::DOUBLE, OmniDSP::Direction::Inverse,
+      input_cd.size(), OmniDSP::Precision::Double, OmniDSP::Direction::Inverse,
       OmniDSP::Domain::Complex,
       OmniDSP::FFTNorm::Backward);  // Match test data norm
 
@@ -226,8 +226,8 @@ TEST_F(FFT_Test, Plan_IFFT_BACKWARD_Double) {
   ExpectComplexVectorNear(output_cd, expected_cd, abs_error_d, test_case_name);
 }
 
-TEST_F(FFT_Test, Plan_IFFT_BACKWARD_Float) {
-  std::string test_case_name = "Plan_IFFT_BACKWARD_Float";
+TEST_F(FFT_Test, Plan_IFFT_Backward_Float) {
+  std::string test_case_name = "Plan_IFFT_Backward_Float";
   auto input_cf = TestDataLoader::loadVectorData<std::complex<float>>(
       suite_name, test_case_name + "_input_cf.txt");
   auto expected_cf = TestDataLoader::loadVectorData<std::complex<float>>(
@@ -236,7 +236,7 @@ TEST_F(FFT_Test, Plan_IFFT_BACKWARD_Float) {
 
   // CORRECTED CONSTRUCTOR CALL
   OmniDSP::FFTPlan<float> plan(
-      input_cf.size(), OmniDSP::Precision::SINGLE, OmniDSP::Direction::Inverse,
+      input_cf.size(), OmniDSP::Precision::Single, OmniDSP::Direction::Inverse,
       OmniDSP::Domain::Complex,
       OmniDSP::FFTNorm::Backward);  // Match test data norm
 
@@ -244,8 +244,8 @@ TEST_F(FFT_Test, Plan_IFFT_BACKWARD_Float) {
   ExpectComplexVectorNear(output_cf, expected_cf, abs_error_f, test_case_name);
 }
 
-TEST_F(FFT_Test, Plan_IFFT_ORTHO_Double) {
-  std::string test_case_name = "Plan_IFFT_ORTHO_Double";
+TEST_F(FFT_Test, Plan_IFFT_Ortho_Double) {
+  std::string test_case_name = "Plan_IFFT_Ortho_Double";
   auto input_cd = TestDataLoader::loadVectorData<std::complex<double>>(
       suite_name, test_case_name + "_input_cd.txt");
   auto expected_cd = TestDataLoader::loadVectorData<std::complex<double>>(
@@ -254,7 +254,7 @@ TEST_F(FFT_Test, Plan_IFFT_ORTHO_Double) {
 
   // CORRECTED CONSTRUCTOR CALL
   OmniDSP::FFTPlan<double> plan(
-      input_cd.size(), OmniDSP::Precision::DOUBLE, OmniDSP::Direction::Inverse,
+      input_cd.size(), OmniDSP::Precision::Double, OmniDSP::Direction::Inverse,
       OmniDSP::Domain::Complex,
       OmniDSP::FFTNorm::Ortho);  // Match test data norm
 
@@ -262,8 +262,8 @@ TEST_F(FFT_Test, Plan_IFFT_ORTHO_Double) {
   ExpectComplexVectorNear(output_cd, expected_cd, abs_error_d, test_case_name);
 }
 
-TEST_F(FFT_Test, Plan_IFFT_ORTHO_Float) {
-  std::string test_case_name = "Plan_IFFT_ORTHO_Float";
+TEST_F(FFT_Test, Plan_IFFT_Ortho_Float) {
+  std::string test_case_name = "Plan_IFFT_Ortho_Float";
   auto input_cf = TestDataLoader::loadVectorData<std::complex<float>>(
       suite_name, test_case_name + "_input_cf.txt");
   auto expected_cf = TestDataLoader::loadVectorData<std::complex<float>>(
@@ -272,7 +272,7 @@ TEST_F(FFT_Test, Plan_IFFT_ORTHO_Float) {
 
   // CORRECTED CONSTRUCTOR CALL
   OmniDSP::FFTPlan<float> plan(
-      input_cf.size(), OmniDSP::Precision::SINGLE, OmniDSP::Direction::Inverse,
+      input_cf.size(), OmniDSP::Precision::Single, OmniDSP::Direction::Inverse,
       OmniDSP::Domain::Complex,
       OmniDSP::FFTNorm::Ortho);  // Match test data norm
 
@@ -282,8 +282,8 @@ TEST_F(FFT_Test, Plan_IFFT_ORTHO_Float) {
 
 // --- RFFT Tests (Real to Complex) ---
 
-TEST_F(FFT_Test, Plan_RFFT_FORWARD_Double) {
-  std::string test_case_name = "Plan_RFFT_FORWARD_Double";
+TEST_F(FFT_Test, Plan_RFFT_Forward_Double) {
+  std::string test_case_name = "Plan_RFFT_Forward_Double";
   // Input is real double
   auto input_d = TestDataLoader::loadVectorData<double>(
       suite_name, test_case_name + "_input_d.txt");
@@ -297,7 +297,7 @@ TEST_F(FFT_Test, Plan_RFFT_FORWARD_Double) {
 
   // Create RFFT plan (uses input size N) - CORRECTED CONSTRUCTOR CALL
   OmniDSP::RFFTPlan<double> plan(
-      input_d.size(), OmniDSP::Precision::DOUBLE,
+      input_d.size(), OmniDSP::Precision::Double,
       OmniDSP::Direction::Forward,  // Plan direction Forward
       OmniDSP::Domain::Real,
       OmniDSP::FFTNorm::Forward);  // Match test data norm
@@ -309,8 +309,8 @@ TEST_F(FFT_Test, Plan_RFFT_FORWARD_Double) {
   ExpectComplexVectorNear(output_cd, expected_cd, abs_error_d, test_case_name);
 }
 
-TEST_F(FFT_Test, Plan_RFFT_FORWARD_Float) {
-  std::string test_case_name = "Plan_RFFT_FORWARD_Float";
+TEST_F(FFT_Test, Plan_RFFT_Forward_Float) {
+  std::string test_case_name = "Plan_RFFT_Forward_Float";
   auto input_f = TestDataLoader::loadVectorData<float>(
       suite_name, test_case_name + "_input_f.txt");
   auto expected_cf = TestDataLoader::loadVectorData<std::complex<float>>(
@@ -320,7 +320,7 @@ TEST_F(FFT_Test, Plan_RFFT_FORWARD_Float) {
 
   // CORRECTED CONSTRUCTOR CALL
   OmniDSP::RFFTPlan<float> plan(
-      input_f.size(), OmniDSP::Precision::SINGLE, OmniDSP::Direction::Forward,
+      input_f.size(), OmniDSP::Precision::Single, OmniDSP::Direction::Forward,
       OmniDSP::Domain::Real,
       OmniDSP::FFTNorm::Forward);  // Match test data norm
 
@@ -333,8 +333,8 @@ TEST_F(FFT_Test, Plan_RFFT_FORWARD_Float) {
 // --- IRFFT Tests (Complex to Real) ---
 // Note: IRFFT input size is N/2 + 1, output size is N
 
-TEST_F(FFT_Test, Plan_IRFFT_FORWARD_Double) {
-  std::string test_case_name = "Plan_IRFFT_FORWARD_Double";
+TEST_F(FFT_Test, Plan_IRFFT_Forward_Double) {
+  std::string test_case_name = "Plan_IRFFT_Forward_Double";
   // Input is complex double (size N/2 + 1)
   auto input_cd = TestDataLoader::loadVectorData<std::complex<double>>(
       suite_name, test_case_name + "_input_cd.txt");
@@ -351,7 +351,7 @@ TEST_F(FFT_Test, Plan_IRFFT_FORWARD_Double) {
   // Create RFFT plan (uses output size N) - CORRECTED CONSTRUCTOR CALL
   OmniDSP::RFFTPlan<double> plan(
       n,  // Use N for plan length
-      OmniDSP::Precision::DOUBLE,
+      OmniDSP::Precision::Double,
       OmniDSP::Direction::Inverse,  // Plan direction Inverse
       OmniDSP::Domain::Real,
       OmniDSP::FFTNorm::Forward);  // Match test data norm
@@ -363,8 +363,8 @@ TEST_F(FFT_Test, Plan_IRFFT_FORWARD_Double) {
   ExpectRealVectorNear(output_d, expected_d, abs_error_d, test_case_name);
 }
 
-TEST_F(FFT_Test, Plan_IRFFT_FORWARD_Float) {
-  std::string test_case_name = "Plan_IRFFT_FORWARD_Float";
+TEST_F(FFT_Test, Plan_IRFFT_Forward_Float) {
+  std::string test_case_name = "Plan_IRFFT_Forward_Float";
   auto input_cf = TestDataLoader::loadVectorData<std::complex<float>>(
       suite_name, test_case_name + "_input_cf.txt");
   auto expected_f = TestDataLoader::loadVectorData<float>(
@@ -375,7 +375,7 @@ TEST_F(FFT_Test, Plan_IRFFT_FORWARD_Float) {
 
   // CORRECTED CONSTRUCTOR CALL
   OmniDSP::RFFTPlan<float> plan(
-      n, OmniDSP::Precision::SINGLE, OmniDSP::Direction::Inverse,
+      n, OmniDSP::Precision::Single, OmniDSP::Direction::Inverse,
       OmniDSP::Domain::Real,
       OmniDSP::FFTNorm::Forward);  // Match test data norm
 
@@ -383,8 +383,8 @@ TEST_F(FFT_Test, Plan_IRFFT_FORWARD_Float) {
   ExpectRealVectorNear(output_f, expected_f, abs_error_f, test_case_name);
 }
 
-TEST_F(FFT_Test, Plan_IRFFT_BACKWARD_Double) {
-  std::string test_case_name = "Plan_IRFFT_BACKWARD_Double";
+TEST_F(FFT_Test, Plan_IRFFT_Backward_Double) {
+  std::string test_case_name = "Plan_IRFFT_Backward_Double";
   auto input_cd = TestDataLoader::loadVectorData<std::complex<double>>(
       suite_name, test_case_name + "_input_cd.txt");
   auto expected_d = TestDataLoader::loadVectorData<double>(
@@ -395,7 +395,7 @@ TEST_F(FFT_Test, Plan_IRFFT_BACKWARD_Double) {
 
   // CORRECTED CONSTRUCTOR CALL
   OmniDSP::RFFTPlan<double> plan(
-      n, OmniDSP::Precision::DOUBLE, OmniDSP::Direction::Inverse,
+      n, OmniDSP::Precision::Double, OmniDSP::Direction::Inverse,
       OmniDSP::Domain::Real,
       OmniDSP::FFTNorm::Backward);  // Match test data norm
 
@@ -403,8 +403,8 @@ TEST_F(FFT_Test, Plan_IRFFT_BACKWARD_Double) {
   ExpectRealVectorNear(output_d, expected_d, abs_error_d, test_case_name);
 }
 
-TEST_F(FFT_Test, Plan_IRFFT_BACKWARD_Float) {
-  std::string test_case_name = "Plan_IRFFT_BACKWARD_Float";
+TEST_F(FFT_Test, Plan_IRFFT_Backward_Float) {
+  std::string test_case_name = "Plan_IRFFT_Backward_Float";
   auto input_cf = TestDataLoader::loadVectorData<std::complex<float>>(
       suite_name, test_case_name + "_input_cf.txt");
   auto expected_f = TestDataLoader::loadVectorData<float>(
@@ -415,7 +415,7 @@ TEST_F(FFT_Test, Plan_IRFFT_BACKWARD_Float) {
 
   // CORRECTED CONSTRUCTOR CALL
   OmniDSP::RFFTPlan<float> plan(
-      n, OmniDSP::Precision::SINGLE, OmniDSP::Direction::Inverse,
+      n, OmniDSP::Precision::Single, OmniDSP::Direction::Inverse,
       OmniDSP::Domain::Real,
       OmniDSP::FFTNorm::Backward);  // Match test data norm
 
@@ -423,8 +423,8 @@ TEST_F(FFT_Test, Plan_IRFFT_BACKWARD_Float) {
   ExpectRealVectorNear(output_f, expected_f, abs_error_f, test_case_name);
 }
 
-TEST_F(FFT_Test, Plan_IRFFT_ORTHO_Double) {
-  std::string test_case_name = "Plan_IRFFT_ORTHO_Double";
+TEST_F(FFT_Test, Plan_IRFFT_Ortho_Double) {
+  std::string test_case_name = "Plan_IRFFT_Ortho_Double";
   auto input_cd = TestDataLoader::loadVectorData<std::complex<double>>(
       suite_name, test_case_name + "_input_cd.txt");
   auto expected_d = TestDataLoader::loadVectorData<double>(
@@ -435,7 +435,7 @@ TEST_F(FFT_Test, Plan_IRFFT_ORTHO_Double) {
 
   // CORRECTED CONSTRUCTOR CALL
   OmniDSP::RFFTPlan<double> plan(
-      n, OmniDSP::Precision::DOUBLE, OmniDSP::Direction::Inverse,
+      n, OmniDSP::Precision::Double, OmniDSP::Direction::Inverse,
       OmniDSP::Domain::Real,
       OmniDSP::FFTNorm::Ortho);  // Match test data norm
 
@@ -443,8 +443,8 @@ TEST_F(FFT_Test, Plan_IRFFT_ORTHO_Double) {
   ExpectRealVectorNear(output_d, expected_d, abs_error_d, test_case_name);
 }
 
-TEST_F(FFT_Test, Plan_IRFFT_ORTHO_Float) {
-  std::string test_case_name = "Plan_IRFFT_ORTHO_Float";
+TEST_F(FFT_Test, Plan_IRFFT_Ortho_Float) {
+  std::string test_case_name = "Plan_IRFFT_Ortho_Float";
   auto input_cf = TestDataLoader::loadVectorData<std::complex<float>>(
       suite_name, test_case_name + "_input_cf.txt");
   auto expected_f = TestDataLoader::loadVectorData<float>(
@@ -455,7 +455,7 @@ TEST_F(FFT_Test, Plan_IRFFT_ORTHO_Float) {
 
   // CORRECTED CONSTRUCTOR CALL
   OmniDSP::RFFTPlan<float> plan(
-      n, OmniDSP::Precision::SINGLE, OmniDSP::Direction::Inverse,
+      n, OmniDSP::Precision::Single, OmniDSP::Direction::Inverse,
       OmniDSP::Domain::Real,
       OmniDSP::FFTNorm::Ortho);  // Match test data norm
 

@@ -312,7 +312,7 @@ void cqt(const std::vector<std::complex<T>>& input,
   }
   // Determine precision from T
   Precision prec =
-      std::is_same_v<T, float> ? Precision::SINGLE : Precision::DOUBLE;
+      std::is_same_v<T, float> ? Precision::Single : Precision::Double;
 
   try {
     // Create a temporary plan

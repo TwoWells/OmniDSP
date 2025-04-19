@@ -38,7 +38,7 @@ struct FFTPlanImpl {
   size_t complex_length =
       0;  // Length of complex spectrum (N for C2C, N/2+1 for Real)
   Direction direction = Direction::Forward;  // Transform direction
-  Precision precision = Precision::SINGLE;   // float or double
+  Precision precision = Precision::Single;   // float or double
   Domain domain = Domain::Complex;           // Complex or Real
   NormMode norm_mode = NormMode::Backward;   // Normalization mode
   T forward_scale = 1.0;   // Scaling factor applied to forward transform
@@ -136,9 +136,9 @@ struct FFTPlanImpl {
           (dir == Direction::Forward) ? vDSP_DFT_FORWARD : vDSP_DFT_INVERSE;
 
       // Create the appropriate vDSP_DFT setup handle (out-of-place complex)
-      if constexpr (std::is_same_v<T, float>)  // SINGLE precision
+      if constexpr (std::is_same_v<T, float>)  // Single precision
         setup_handle_c2c = vDSP_DFT_zop_CreateSetup(nullptr, length, vdsp_dir);
-      else  // DOUBLE precision
+      else  // Double precision
         setup_handle_c2c = vDSP_DFT_zop_CreateSetupD(nullptr, length, vdsp_dir);
 
       if (!setup_handle_c2c)  // Check if setup creation failed
@@ -188,9 +188,9 @@ struct FFTPlanImpl {
 
       // Get log2(N) and create FFTSetup handle (throws if N not power-of-2)
       vDSP_Length log2n = get_log2n(length);   // Call the const version
-      if constexpr (std::is_same_v<T, float>)  // SINGLE precision
+      if constexpr (std::is_same_v<T, float>)  // Single precision
         setup_handle_real = vDSP_create_fftsetup(log2n, kFFTRadix2);
-      else  // DOUBLE precision
+      else  // Double precision
         setup_handle_real = vDSP_create_fftsetupD(log2n, kFFTRadix2);
 
       if (!setup_handle_real)  // Check if setup creation failed
@@ -239,7 +239,7 @@ struct FFTPlanImpl {
     const size_t Nc = complex_length;
     if (Nc == 0 || N == 0) return;
 
-    if constexpr (std::is_same_v<T, float>)  // SINGLE precision
+    if constexpr (std::is_same_v<T, float>)  // Single precision
     {
       DSPSplitComplex *split =
           reinterpret_cast<DSPSplitComplex *>(split_output_void);
@@ -252,7 +252,7 @@ struct FFTPlanImpl {
         split->realp[k] = complex_input[k].real();
         split->imagp[k] = complex_input[k].imag();
       }
-    } else  // DOUBLE precision
+    } else  // Double precision
     {
       DSPDoubleSplitComplex *split =
           reinterpret_cast<DSPDoubleSplitComplex *>(split_output_void);
@@ -278,7 +278,7 @@ struct FFTPlanImpl {
     const size_t Nc = complex_length;  // Should be N/2 + 1
     if (Nc == 0 || N == 0) return;
 
-    if constexpr (std::is_same_v<T, float>)  // SINGLE precision
+    if constexpr (std::is_same_v<T, float>)  // Single precision
     {
       const DSPSplitComplex *split =
           reinterpret_cast<const DSPSplitComplex *>(split_input_void);
@@ -295,7 +295,7 @@ struct FFTPlanImpl {
       // Nc=(N+1)/2 If N is odd, the loop goes up to k < N/2, e.g. N=5, k<2.5 ->
       // k=1, 2. Nc=3. cce_output[0], cce_output[1], cce_output[2] are filled.
       // Correct.
-    } else  // DOUBLE precision
+    } else  // Double precision
     {
       const DSPDoubleSplitComplex *split =
           reinterpret_cast<const DSPDoubleSplitComplex *>(split_input_void);

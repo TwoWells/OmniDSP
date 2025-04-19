@@ -26,7 +26,7 @@ int main() {
   const size_t N = 16;  // FFT Size (must be power of 2 for Accelerate backend)
   using Real = double;
   using Complex = std::complex<Real>;
-  const auto CURRENT_PRECISION = OmniDSP::Precision::DOUBLE;
+  const auto CURRENT_PRECISION = OmniDSP::Precision::Double;
 
   std::cout << "OmniDSP Real FFT Example (N=" << N << ")" << std::endl;
   std::cout << "----------------------------------" << std::endl;

@@ -61,14 +61,14 @@ int main() {
 
     // Construct the CQTPlan object
     // Using definitions from fft.h (immersive fft_h_updated) and core_types.h:
-    // - Precision is likely an enum class (OmniDSP::Precision::DOUBLE)
+    // - Precision is likely an enum class (OmniDSP::Precision::Double)
     // - FFTNorm is an enum class with member 'Ortho' (OmniDSP::FFTNorm::Ortho)
     OmniDSP::CQTPlan<Real> cqtPlan(
         sr,                          // Sample rate (double)
         fmin,                        // Minimum frequency (double)
         n_bins,                      // Total number of CQT bins (int)
         bins_per_octave,             // Bins per octave (int)
-        OmniDSP::Precision::DOUBLE,  // Precision enum
+        OmniDSP::Precision::Double,  // Precision enum
         OmniDSP::FFTNorm::Ortho      // FFT normalization enum (Using ALL_CAPS
                                      // version from fft.h)
     );

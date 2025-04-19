@@ -72,8 +72,8 @@ class FFTPlan {
   /**
    * @brief Constructs an FFT plan for C2C transforms.
    * @param length The size 'N' of the transform. Must be > 0.
-   * @param precision The desired floating-point precision (Precision::SINGLE or
-   * Precision::DOUBLE).
+   * @param precision The desired floating-point precision (Precision::Single or
+   * Precision::Double).
    * @param direction The primary transform direction (Direction::Forward or
    * Direction::Inverse) this plan is optimized for.
    * @param domain The domain (must be Domain::Complex for FFTPlan).
@@ -156,8 +156,8 @@ class RFFTPlan {
   /**
    * @brief Constructs an FFT plan for Real transforms (R2C/C2R).
    * @param length The size 'N' of the real signal. Must be > 0.
-   * @param precision The desired floating-point precision (Precision::SINGLE or
-   * Precision::DOUBLE).
+   * @param precision The desired floating-point precision (Precision::Single or
+   * Precision::Double).
    * @param direction The primary transform direction (Direction::Forward for
    * RFFT, Direction::Inverse for IRFFT).
    * @param domain The domain (must be Domain::Real for RFFTPlan).

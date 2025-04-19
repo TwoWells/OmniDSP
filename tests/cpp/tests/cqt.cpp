@@ -129,7 +129,7 @@ TEST_F(RecursiveCQTTest, FullRecursiveCQT_Execute_Double) {
       fmin,         // fmin
       n_bins,       // n_bins
       bins_per_octave,
-      OmniDSP::Precision::DOUBLE,  // Added precision
+      OmniDSP::Precision::Double,  // Added precision
       OmniDSP::FFTNorm::Ortho);    // Added norm (e.g., Ortho)
 
   // Prepare output vector
@@ -157,7 +157,7 @@ TEST_F(RecursiveCQTTest, FullRecursiveCQT_Execute_Float) {
       static_cast<float>(fmin),         // fmin
       n_bins,                           // n_bins
       bins_per_octave,
-      OmniDSP::Precision::SINGLE,  // Added precision
+      OmniDSP::Precision::Single,  // Added precision
       OmniDSP::FFTNorm::Ortho);    // Added norm (e.g., Ortho)
 
   std::vector<std::complex<float>> output_cqt_f(expected_cqt_f.size());

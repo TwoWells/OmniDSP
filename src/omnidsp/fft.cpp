@@ -52,7 +52,7 @@ void fft(const std::vector<std::complex<T>>& input,
 
   // Determine precision from type T
   Precision prec =
-      std::is_same_v<T, float> ? Precision::SINGLE : Precision::DOUBLE;
+      std::is_same_v<T, float> ? Precision::Single : Precision::Double;
 
   // Create a temporary plan for forward FFT
   try {
@@ -85,7 +85,7 @@ void ifft(const std::vector<std::complex<T>>& input,
   }
 
   Precision prec =
-      std::is_same_v<T, float> ? Precision::SINGLE : Precision::DOUBLE;
+      std::is_same_v<T, float> ? Precision::Single : Precision::Double;
 
   // Create a temporary plan for inverse FFT
   try {
@@ -118,7 +118,7 @@ void rfft(const std::vector<T>& input, std::vector<std::complex<T>>& output,
   }
 
   Precision prec =
-      std::is_same_v<T, float> ? Precision::SINGLE : Precision::DOUBLE;
+      std::is_same_v<T, float> ? Precision::Single : Precision::Double;
 
   // Create a temporary plan for forward RFFT
   try {
@@ -162,7 +162,7 @@ void irfft(const std::vector<std::complex<T>>& input, std::vector<T>& output,
   }
 
   Precision prec =
-      std::is_same_v<T, float> ? Precision::SINGLE : Precision::DOUBLE;
+      std::is_same_v<T, float> ? Precision::Single : Precision::Double;
 
   // Create a temporary plan for inverse IRFFT
   try {
@@ -184,7 +184,7 @@ void fft(std::vector<std::complex<T>>& data, FFTNorm norm) {
   }
   size_t size = data.size();
   Precision prec =
-      std::is_same_v<T, float> ? Precision::SINGLE : Precision::DOUBLE;
+      std::is_same_v<T, float> ? Precision::Single : Precision::Double;
 
   // Create a temporary plan for forward FFT
   try {
@@ -207,7 +207,7 @@ void ifft(std::vector<std::complex<T>>& data, FFTNorm norm) {
   }
   size_t size = data.size();
   Precision prec =
-      std::is_same_v<T, float> ? Precision::SINGLE : Precision::DOUBLE;
+      std::is_same_v<T, float> ? Precision::Single : Precision::Double;
 
   // Create a temporary plan for inverse FFT
   try {

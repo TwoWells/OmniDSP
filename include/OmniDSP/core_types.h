@@ -31,7 +31,7 @@ const OMNIDSP_STATUS OMNIDSP_BACKEND_ERROR = -3;
 // --- Core Enums (General) ---
 
 /** @brief Specifies the floating-point precision for calculations. */
-enum class Precision { SINGLE, DOUBLE };
+enum class Precision { Single, Double };
 
 }  // namespace OmniDSP
 

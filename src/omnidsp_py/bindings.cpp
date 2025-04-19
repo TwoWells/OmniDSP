@@ -132,9 +132,9 @@ PYBIND11_MODULE(omnidsp_py, m) {
   py::enum_<OmniDSP::Precision>(
       m, "Precision",
       "Specifies the floating-point precision for calculations.")
-      .value("SINGLE", OmniDSP::Precision::SINGLE,
+      .value("Single", OmniDSP::Precision::Single,
              "Use float (32-bit) precision.")
-      .value("DOUBLE", OmniDSP::Precision::DOUBLE,
+      .value("Double", OmniDSP::Precision::Double,
              "Use double (64-bit) precision.")
       .export_values();
 

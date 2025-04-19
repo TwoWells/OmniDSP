@@ -194,7 +194,7 @@ template std::vector<float> filter_and_downsample_impl<float>(
     const std::vector<float> &, const std::vector<float> &, int);
 // template std::vector<double> filter_and_downsample_impl<double>(const
 // std::vector<double> &, const std::vector<double> &, int); // DO NOT
-// INSTANTIATE DOUBLE
+// INSTANTIATE Double
 
 }  // namespace oneMKL
 }  // namespace Backend

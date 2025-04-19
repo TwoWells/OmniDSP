@@ -34,7 +34,7 @@ struct FFTPlanImpl {
   size_t length = 0;
   size_t complex_length = 0;
   Direction direction = Direction::Forward;
-  Precision precision = Precision::SINGLE;
+  Precision precision = Precision::Single;
   Domain domain = Domain::Complex;
   FFTNorm norm_mode = FFTNorm::Backward;
   T forward_scale = 1.0;
