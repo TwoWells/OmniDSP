@@ -1,11 +1,20 @@
+/**
+ * @file TestDataLoader.cpp
+ * @brief Implements utility functions to load test reference data from text
+ * files.
+ *
+ * Uses std::filesystem for robust path handling and throws std::runtime_error
+ * with concise messages on failure, suitable for catching in test cases.
+ */
 #include "TestDataLoader.h"  // Include the header file declaration
 
 #include <complex>
-#include <fstream>    // For std::ifstream
-#include <iostream>   // For std::cerr (error output), std::cout (debug output)
-#include <limits>     // For std::numeric_limits
-#include <sstream>    // For std::stringstream, std::getline
-#include <stdexcept>  // For std::runtime_error
+#include <filesystem>  // For std::filesystem::path
+#include <fstream>     // For std::ifstream
+#include <iostream>    // For std::cerr (error output), std::cout (debug output)
+#include <limits>      // For std::numeric_limits
+#include <sstream>     // For std::stringstream, std::getline
+#include <stdexcept>   // For std::runtime_error
 #include <string>
 #include <system_error>  // For std::errc with from_chars (if used)
 #include <utility>       // For std::pair (though using struct now)
@@ -18,13 +27,8 @@
 
 namespace TestDataLoader {
 
-// Base path defined by CMake - Use a macro to stringify the definition
-#define STRINGIFY(x) #x
-#define TOSTRING(x) STRINGIFY(x)
-// Ensure the macro result is treated as a string literal at compile time
-const std::string test_data_base_path = TOSTRING(OMNIDSP_TEST_DATA_DIR);
-#undef TOSTRING
-#undef STRINGIFY
+// Base path defined by CMake
+const std::filesystem::path test_data_base_path = OMNIDSP_TEST_DATA_DIR;
 
 // --- Helper Struct and Functions ---
 
@@ -45,13 +49,14 @@ std::string trim(const std::string &str) {
 }
 
 // Helper to parse dimension string like "1024" or "84x12"
+// Throws std::runtime_error on invalid format.
 Dimensions parseDimString(const std::string &dim_str_trimmed,
-                          const std::string &full_path) {
+                          const std::string &context_path) {
   Dimensions dims;
   // Check for empty string after potential trimming
   if (dim_str_trimmed.empty()) {
-    throw std::runtime_error("Empty dimension string found in header of " +
-                             full_path);
+    throw std::runtime_error("Empty dimension string found in header of '" +
+                             context_path + "'");
   }
 
   size_t x_pos = dim_str_trimmed.find('x');
@@ -61,19 +66,18 @@ Dimensions parseDimString(const std::string &dim_str_trimmed,
     dims.is_matrix = false;
     dims.cols = 1;  // Treat vector as having 1 column conceptually
     try {
-      // Using stoull for potentially large sizes, requires C++11
       // Check for non-digit characters before converting
       if (dim_str_trimmed.find_first_not_of("0123456789") !=
           std::string::npos) {
         throw std::invalid_argument(
             "Non-digit characters found in vector dimension");
       }
+      // Use stoull for potentially large sizes
       dims.rows = std::stoull(dim_str_trimmed);
-    } catch (
-        const std::exception &e) {  // Catch invalid_argument or out_of_range
-      throw std::runtime_error("Invalid vector dimension format in header of " +
-                               full_path + ": '" + dim_str_trimmed + "' (" +
-                               e.what() + ")");
+    } catch (const std::exception &e) {
+      throw std::runtime_error(
+          "Invalid vector dimension format in header of '" + context_path +
+          "': '" + dim_str_trimmed + "' (" + e.what() + ")");
     }
   } else {
     // Matrix format: "# <rows>x<columns>"
@@ -92,37 +96,45 @@ Dimensions parseDimString(const std::string &dim_str_trimmed,
       dims.rows = std::stoull(rows_str);
       dims.cols = std::stoull(cols_str);
     } catch (const std::exception &e) {
-      throw std::runtime_error("Invalid matrix dimension format in header of " +
-                               full_path + ": '" + dim_str_trimmed + "' (" +
-                               e.what() + ")");
+      throw std::runtime_error(
+          "Invalid matrix dimension format in header of '" + context_path +
+          "': '" + dim_str_trimmed + "' (" + e.what() + ")");
     }
     if (dims.rows == 0 || dims.cols == 0) {
-      throw std::runtime_error(
-          "Matrix dimensions cannot be zero in header of " + full_path);
+      // Allow empty matrix definition if rows or cols is 0
+      if (dims.rows == 0 && dims.cols == 0) {
+        // Both 0 is okay for empty matrix
+      } else if (dims.rows == 0 || dims.cols == 0) {
+        // One is 0, the other isn't - this is ambiguous, treat as error for now
+        throw std::runtime_error(
+            "Matrix dimensions cannot be partially zero (one zero, one "
+            "non-zero) in header of '" +
+            context_path + "'");
+      }
     }
   }
   // Allow empty vector only if explicitly 0 rows were parsed successfully
-  if (dims.rows == 0 && dims.is_matrix) {
-    throw std::runtime_error("Matrix cannot have zero rows in header of " +
-                             full_path);
+  if (dims.rows == 0 && dims.is_matrix && dims.cols != 0) {
+    throw std::runtime_error(
+        "Matrix cannot have zero rows but non-zero columns in header of '" +
+        context_path + "'");
   }
-  // Note: An empty vector (0 rows) is allowed if dims.rows was parsed as 0 and
-  // is_matrix is false.
 
   return dims;
 }
 
 // Helper function to parse the header line and return dimensions
-Dimensions parseHeader(std::ifstream &infile, const std::string &full_path) {
+// Throws std::runtime_error on failure.
+Dimensions parseHeader(std::ifstream &infile, const std::string &context_path) {
   std::string header_line;
   if (!std::getline(infile, header_line)) {
     // Check if the file is completely empty or just couldn't read the line
-    if (infile.eof()) {
-      throw std::runtime_error("Empty file or missing header line in file: " +
-                               full_path);
+    if (infile.eof() && infile.gcount() == 0) {
+      throw std::runtime_error("Empty file or missing header line in file: '" +
+                               context_path + "'");
     } else {
-      throw std::runtime_error("Failed to read header line from file: " +
-                               full_path);
+      throw std::runtime_error("Failed to read header line from file: '" +
+                               context_path + "'");
     }
   }
 
@@ -130,15 +142,17 @@ Dimensions parseHeader(std::ifstream &infile, const std::string &full_path) {
 
   if (trimmed_header.empty() || trimmed_header[0] != '#') {
     throw std::runtime_error(
-        "Invalid or missing header line (must start with '#') in file: " +
-        full_path);
+        "Invalid or missing header line (must start with '#') in file: '" +
+        context_path + "'");
   }
 
   // Remove '#' and trim again
   std::string dim_part = trim(trimmed_header.substr(1));
 
-  return parseDimString(dim_part, full_path);
+  return parseDimString(dim_part, context_path);
 }
+
+// --- Public Functions ---
 
 std::string getTestDataPath(const std::string &suite_name,
                             const std::string &filename) {
@@ -146,20 +160,10 @@ std::string getTestDataPath(const std::string &suite_name,
     throw std::runtime_error(
         "OMNIDSP_TEST_DATA_DIR CMake variable is empty or invalid.");
   }
-  // Basic path joining, assumes '/' is acceptable on target systems (CMake
-  // often normalizes) Consider std::filesystem::path::append or operator/ if
-  // C++17 is available
-  std::string path = test_data_base_path;
-  // Ensure single separator
-  if (path.back() != '/' && path.back() != '\\') {
-    path += '/';
-  }
-  path += suite_name;
-  if (path.back() != '/' && path.back() != '\\') {
-    path += '/';
-  }
-  path += filename;
-  return path;
+  // Use std::filesystem::path's operator/ for joining paths robustly
+  std::filesystem::path full_path = test_data_base_path / suite_name / filename;
+  // Return the path as a standard string
+  return full_path.string();
 }
 
 // --- loadVectorData Specializations ---
@@ -167,25 +171,36 @@ std::string getTestDataPath(const std::string &suite_name,
 template <>
 std::vector<double> loadVectorData<double>(const std::string &suite_name,
                                            const std::string &filename) {
-  std::string full_path = getTestDataPath(suite_name, filename);
-  std::ifstream infile(full_path);
-  if (!infile.is_open())
-    throw std::runtime_error("Failed to open test data file: " + full_path);
+  std::string full_path_str = getTestDataPath(suite_name, filename);
+  std::ifstream infile(full_path_str);
+  if (!infile.is_open()) {
+    // Throw concise error on open failure
+    throw std::runtime_error("Failed to open test data file: '" +
+                             full_path_str + "'");
+  }
 
-  Dimensions dims = parseHeader(infile, full_path);
-  if (dims.is_matrix)
+  Dimensions dims;
+  try {
+    dims = parseHeader(infile, full_path_str);
+  } catch (const std::runtime_error &e) {
+    throw std::runtime_error("Error parsing header in file '" + full_path_str +
+                             "': " + e.what());
+  }
+
+  if (dims.is_matrix) {
     throw std::runtime_error(
         "Expected vector format ('# rows') but found matrix format ('# "
-        "rowsxcols') in header of " +
-        full_path);
+        "rowsxcols') in header of '" +
+        full_path_str + "'");
+  }
 
   std::vector<double> data;
-  if (dims.rows == 0) {  // Handle empty vector case
-    std::cout << "[TestDataLoader] Loaded 0 doubles (empty vector) from "
-              << filename << std::endl;
+  if (dims.rows == 0) {
+    // std::cout << "[TestDataLoader] Loaded 0 doubles (empty vector) from " <<
+    // filename << std::endl;
     return data;  // Return empty vector
   }
-  data.reserve(dims.rows);  // Pre-allocate
+  data.reserve(dims.rows);
   double value;
   size_t count = 0;
   while (count < dims.rows && (infile >> value)) {
@@ -195,46 +210,59 @@ std::vector<double> loadVectorData<double>(const std::string &suite_name,
 
   if (count != dims.rows) {
     std::stringstream ss;
-    ss << "Data size mismatch in " << full_path << ": Header specified "
+    ss << "Data size mismatch in '" << full_path_str << "': Header specified "
        << dims.rows << " rows, but read " << count << ".";
-    if (infile.fail() && !infile.eof())
-      ss << " Read error occurred.";
-    else if (!infile.eof())
-      ss << " Unexpected end of data.";  // Reached count but not EOF?
+    if (infile.fail() && !infile.eof()) {
+      ss << " Read error likely occurred (e.g., non-numeric data).";
+    } else if (!infile.eof()) {
+      ss << " Unexpected extra data found after reading expected rows.";
+    } else {
+      ss << " Reached end of file prematurely.";
+    }
     throw std::runtime_error(ss.str());
   }
-  // Check if there's extra non-whitespace data
+  // Optional: Check for extra non-whitespace data after reading expected count
   std::string remaining;
   if (infile >> remaining && !remaining.empty()) {
-    std::cerr << "[TestDataLoader WARNING] Extra data found ('" << remaining
-              << "') after reading expected " << dims.rows << " doubles from "
-              << full_path << std::endl;
+    std::cerr << "[TestDataLoader WARNING] Extra data ('" << remaining
+              << "...') found after reading expected " << dims.rows
+              << " doubles from '" << full_path_str << "'" << std::endl;
   }
 
-  std::cout << "[TestDataLoader] Loaded " << data.size() << " doubles from "
-            << filename << std::endl;
+  // std::cout << "[TestDataLoader] Loaded " << data.size() << " doubles from "
+  // << filename << std::endl;
   return data;
 }
 
 template <>
 std::vector<float> loadVectorData<float>(const std::string &suite_name,
                                          const std::string &filename) {
-  std::string full_path = getTestDataPath(suite_name, filename);
-  std::ifstream infile(full_path);
-  if (!infile.is_open())
-    throw std::runtime_error("Failed to open test data file: " + full_path);
+  std::string full_path_str = getTestDataPath(suite_name, filename);
+  std::ifstream infile(full_path_str);
+  if (!infile.is_open()) {
+    throw std::runtime_error("Failed to open test data file: '" +
+                             full_path_str + "'");
+  }
 
-  Dimensions dims = parseHeader(infile, full_path);
-  if (dims.is_matrix)
+  Dimensions dims;
+  try {
+    dims = parseHeader(infile, full_path_str);
+  } catch (const std::runtime_error &e) {
+    throw std::runtime_error("Error parsing header in file '" + full_path_str +
+                             "': " + e.what());
+  }
+
+  if (dims.is_matrix) {
     throw std::runtime_error(
         "Expected vector format ('# rows') but found matrix format ('# "
-        "rowsxcols') in header of " +
-        full_path);
+        "rowsxcols') in header of '" +
+        full_path_str + "'");
+  }
 
   std::vector<float> data;
   if (dims.rows == 0) {
-    std::cout << "[TestDataLoader] Loaded 0 floats (empty vector) from "
-              << filename << std::endl;
+    // std::cout << "[TestDataLoader] Loaded 0 floats (empty vector) from " <<
+    // filename << std::endl;
     return data;
   }
   data.reserve(dims.rows);
@@ -247,46 +275,58 @@ std::vector<float> loadVectorData<float>(const std::string &suite_name,
 
   if (count != dims.rows) {
     std::stringstream ss;
-    ss << "Data size mismatch in " << full_path << ": Header specified "
+    ss << "Data size mismatch in '" << full_path_str << "': Header specified "
        << dims.rows << " rows, but read " << count << ".";
-    if (infile.fail() && !infile.eof())
-      ss << " Read error occurred.";
-    else if (!infile.eof())
-      ss << " Unexpected end of data.";
+    if (infile.fail() && !infile.eof()) {
+      ss << " Read error likely occurred (e.g., non-numeric data).";
+    } else if (!infile.eof()) {
+      ss << " Unexpected extra data found after reading expected rows.";
+    } else {
+      ss << " Reached end of file prematurely.";
+    }
     throw std::runtime_error(ss.str());
   }
   std::string remaining;
   if (infile >> remaining && !remaining.empty()) {
-    std::cerr << "[TestDataLoader WARNING] Extra data found ('" << remaining
-              << "') after reading expected " << dims.rows << " floats from "
-              << full_path << std::endl;
+    std::cerr << "[TestDataLoader WARNING] Extra data ('" << remaining
+              << "...') found after reading expected " << dims.rows
+              << " floats from '" << full_path_str << "'" << std::endl;
   }
 
-  std::cout << "[TestDataLoader] Loaded " << data.size() << " floats from "
-            << filename << std::endl;
+  // std::cout << "[TestDataLoader] Loaded " << data.size() << " floats from "
+  // << filename << std::endl;
   return data;
 }
 
 template <>
 std::vector<std::complex<double>> loadVectorData<std::complex<double>>(
     const std::string &suite_name, const std::string &filename) {
-  std::string full_path = getTestDataPath(suite_name, filename);
-  std::ifstream infile(full_path);
-  if (!infile.is_open())
-    throw std::runtime_error("Failed to open test data file: " + full_path);
+  std::string full_path_str = getTestDataPath(suite_name, filename);
+  std::ifstream infile(full_path_str);
+  if (!infile.is_open()) {
+    throw std::runtime_error("Failed to open test data file: '" +
+                             full_path_str + "'");
+  }
 
-  Dimensions dims = parseHeader(infile, full_path);
-  if (dims.is_matrix)
+  Dimensions dims;
+  try {
+    dims = parseHeader(infile, full_path_str);
+  } catch (const std::runtime_error &e) {
+    throw std::runtime_error("Error parsing header in file '" + full_path_str +
+                             "': " + e.what());
+  }
+
+  if (dims.is_matrix) {
     throw std::runtime_error(
         "Expected vector format ('# rows') but found matrix format ('# "
-        "rowsxcols') in header of " +
-        full_path);
+        "rowsxcols') in header of '" +
+        full_path_str + "'");
+  }
 
   std::vector<std::complex<double>> data;
   if (dims.rows == 0) {
-    std::cout
-        << "[TestDataLoader] Loaded 0 complex doubles (empty vector) from "
-        << filename << std::endl;
+    // std::cout << "[TestDataLoader] Loaded 0 complex doubles (empty vector)
+    // from " << filename << std::endl;
     return data;
   }
   data.reserve(dims.rows);
@@ -299,52 +339,64 @@ std::vector<std::complex<double>> loadVectorData<std::complex<double>>(
 
   if (count != dims.rows) {
     std::stringstream ss;
-    ss << "Data size mismatch in " << full_path << ": Header specified "
-       << dims.rows << " rows, but read " << count << ".";
+    ss << "Data size mismatch in '" << full_path_str << "': Header specified "
+       << dims.rows << " complex pairs, but read " << count << ".";
     if (infile.fail() && !infile.eof()) {
       infile.clear();  // Clear fail bit to check for remaining non-whitespace
                        // chars
       std::string remaining;
       if (infile >> remaining && !remaining.empty()) {
-        ss << " Read error occurred (expected pairs).";
-      }  // else likely just whitespace
+        ss << " Read error likely occurred (expected pairs).";
+      }  // else likely just whitespace or EOF
     } else if (!infile.eof()) {
-      ss << " Unexpected end of data (expected pairs).";
+      ss << " Unexpected extra data found after reading expected pairs.";
+    } else {
+      ss << " Reached end of file prematurely (expected pairs).";
     }
     throw std::runtime_error(ss.str());
   }
   // Check for extra data
   std::string remaining;
   if (infile >> remaining && !remaining.empty()) {
-    std::cerr << "[TestDataLoader WARNING] Extra data found ('" << remaining
-              << "') after reading expected " << dims.rows
-              << " complex doubles from " << full_path << std::endl;
+    std::cerr << "[TestDataLoader WARNING] Extra data ('" << remaining
+              << "...') found after reading expected " << dims.rows
+              << " complex doubles from '" << full_path_str << "'" << std::endl;
   }
 
-  std::cout << "[TestDataLoader] Loaded " << data.size()
-            << " complex doubles from " << filename << std::endl;
+  // std::cout << "[TestDataLoader] Loaded " << data.size() << " complex doubles
+  // from " << filename << std::endl;
   return data;
 }
 
 template <>
 std::vector<std::complex<float>> loadVectorData<std::complex<float>>(
     const std::string &suite_name, const std::string &filename) {
-  std::string full_path = getTestDataPath(suite_name, filename);
-  std::ifstream infile(full_path);
-  if (!infile.is_open())
-    throw std::runtime_error("Failed to open test data file: " + full_path);
+  std::string full_path_str = getTestDataPath(suite_name, filename);
+  std::ifstream infile(full_path_str);
+  if (!infile.is_open()) {
+    throw std::runtime_error("Failed to open test data file: '" +
+                             full_path_str + "'");
+  }
 
-  Dimensions dims = parseHeader(infile, full_path);
-  if (dims.is_matrix)
+  Dimensions dims;
+  try {
+    dims = parseHeader(infile, full_path_str);
+  } catch (const std::runtime_error &e) {
+    throw std::runtime_error("Error parsing header in file '" + full_path_str +
+                             "': " + e.what());
+  }
+
+  if (dims.is_matrix) {
     throw std::runtime_error(
         "Expected vector format ('# rows') but found matrix format ('# "
-        "rowsxcols') in header of " +
-        full_path);
+        "rowsxcols') in header of '" +
+        full_path_str + "'");
+  }
 
   std::vector<std::complex<float>> data;
   if (dims.rows == 0) {
-    std::cout << "[TestDataLoader] Loaded 0 complex floats (empty vector) from "
-              << filename << std::endl;
+    // std::cout << "[TestDataLoader] Loaded 0 complex floats (empty vector)
+    // from " << filename << std::endl;
     return data;
   }
   data.reserve(dims.rows);
@@ -357,28 +409,30 @@ std::vector<std::complex<float>> loadVectorData<std::complex<float>>(
 
   if (count != dims.rows) {
     std::stringstream ss;
-    ss << "Data size mismatch in " << full_path << ": Header specified "
-       << dims.rows << " rows, but read " << count << ".";
+    ss << "Data size mismatch in '" << full_path_str << "': Header specified "
+       << dims.rows << " complex pairs, but read " << count << ".";
     if (infile.fail() && !infile.eof()) {
       infile.clear();
       std::string remaining;
       if (infile >> remaining && !remaining.empty()) {
-        ss << " Read error occurred (expected pairs).";
+        ss << " Read error likely occurred (expected pairs).";
       }
     } else if (!infile.eof()) {
-      ss << " Unexpected end of data (expected pairs).";
+      ss << " Unexpected extra data found after reading expected pairs.";
+    } else {
+      ss << " Reached end of file prematurely (expected pairs).";
     }
     throw std::runtime_error(ss.str());
   }
   std::string remaining;
   if (infile >> remaining && !remaining.empty()) {
-    std::cerr << "[TestDataLoader WARNING] Extra data found ('" << remaining
-              << "') after reading expected " << dims.rows
-              << " complex floats from " << full_path << std::endl;
+    std::cerr << "[TestDataLoader WARNING] Extra data ('" << remaining
+              << "...') found after reading expected " << dims.rows
+              << " complex floats from '" << full_path_str << "'" << std::endl;
   }
 
-  std::cout << "[TestDataLoader] Loaded " << data.size()
-            << " complex floats from " << filename << std::endl;
+  // std::cout << "[TestDataLoader] Loaded " << data.size() << " complex floats
+  // from " << filename << std::endl;
   return data;
 }
 
@@ -388,20 +442,35 @@ std::vector<std::complex<float>> loadVectorData<std::complex<float>>(
 template <typename T>
 std::vector<std::vector<std::complex<T>>> loadComplexMatrixDataImpl(
     const std::string &suite_name, const std::string &filename) {
-  std::string full_path = getTestDataPath(suite_name, filename);
-  std::ifstream infile(full_path);
-  if (!infile.is_open())
-    throw std::runtime_error("Failed to open test data file: " + full_path);
+  std::string full_path_str = getTestDataPath(suite_name, filename);
+  std::ifstream infile(full_path_str);
+  if (!infile.is_open()) {
+    throw std::runtime_error("Failed to open test data file: '" +
+                             full_path_str + "'");
+  }
 
-  Dimensions dims = parseHeader(infile, full_path);
-  if (!dims.is_matrix)
+  Dimensions dims;
+  try {
+    dims = parseHeader(infile, full_path_str);
+  } catch (const std::runtime_error &e) {
+    throw std::runtime_error("Error parsing header in file '" + full_path_str +
+                             "': " + e.what());
+  }
+
+  if (!dims.is_matrix) {
     throw std::runtime_error(
         "Expected matrix format ('# rowsxcols') but found vector format ('# "
-        "rows') in header of " +
-        full_path);
-  // Note: dims.rows and dims.cols are guaranteed > 0 here by parseHeader logic
+        "rows') in header of '" +
+        full_path_str + "'");
+  }
 
   std::vector<std::vector<std::complex<T>>> matrix_data;
+  // Handle empty matrix case defined by header "# 0x0" or "# 0xN" or "# Nx0"
+  if (dims.rows == 0 || dims.cols == 0) {
+    // std::cout << "[TestDataLoader] Loaded 0x0 complex matrix (empty) from "
+    // << filename << std::endl;
+    return matrix_data;  // Return empty matrix
+  }
   matrix_data.reserve(dims.rows);
 
   std::vector<std::complex<T>> linear_data;  // Load linearly first
@@ -420,25 +489,27 @@ std::vector<std::vector<std::complex<T>>> loadComplexMatrixDataImpl(
   // Validation after reading
   if (count != total_elements) {
     std::stringstream ss;
-    ss << "Data size mismatch in " << full_path << ": Header specified "
+    ss << "Data size mismatch in '" << full_path_str << "': Header specified "
        << dims.rows << "x" << dims.cols << " (" << total_elements
-       << " elements), but read " << count << ".";
+       << " complex elements), but read " << count << ".";
     if (infile.fail() && !infile.eof()) {
       infile.clear();
       std::string remaining;
       if (infile >> remaining && !remaining.empty()) {
-        ss << " Read error occurred (expected pairs).";
+        ss << " Read error likely occurred (expected pairs).";
       }
     } else if (!infile.eof()) {
-      ss << " Unexpected end of data (expected pairs).";
+      ss << " Unexpected extra data found after reading expected pairs.";
+    } else {
+      ss << " Reached end of file prematurely (expected pairs).";
     }
     throw std::runtime_error(ss.str());
   }
   std::string remaining;
   if (infile >> remaining && !remaining.empty()) {
-    std::cerr << "[TestDataLoader WARNING] Extra data found ('" << remaining
-              << "') after reading expected " << total_elements
-              << " complex numbers from " << full_path << std::endl;
+    std::cerr << "[TestDataLoader WARNING] Extra data ('" << remaining
+              << "...') found after reading expected " << total_elements
+              << " complex numbers from '" << full_path_str << "'" << std::endl;
   }
 
   // Reshape the linear data into the matrix
@@ -446,16 +517,15 @@ std::vector<std::vector<std::complex<T>>> loadComplexMatrixDataImpl(
   for (size_t r = 0; r < dims.rows; ++r) {
     std::vector<std::complex<T>> row;
     row.reserve(dims.cols);
-    // Use iterators for potentially better performance/clarity
     auto start_iter = linear_data.begin() + r * dims.cols;
     auto end_iter = start_iter + dims.cols;
-    row.assign(start_iter, end_iter);  // Assign the range to the row vector
-    matrix_data.push_back(std::move(row));  // Move row vector
+    row.assign(start_iter, end_iter);
+    matrix_data.push_back(std::move(row));
   }
 
-  std::cout << "[TestDataLoader] Loaded " << matrix_data.size() << "x"
-            << (matrix_data.empty() ? 0 : matrix_data[0].size())
-            << " complex matrix from " << filename << std::endl;
+  // std::cout << "[TestDataLoader] Loaded " << matrix_data.size() << "x"
+  //           << (matrix_data.empty() ? 0 : matrix_data[0].size())
+  //           << " complex matrix from " << filename << std::endl;
   return matrix_data;
 }
 

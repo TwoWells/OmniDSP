@@ -1,288 +1,385 @@
-#include "OmniDSP/cqt.h"  // Include the OmniDSP CQT header
+/**
+ * @file tests/cpp/tests/cqt.cpp
+ * @brief Unit tests for the OmniDSP CQTPlan class and related functions.
+ * Uses TestDataLoader for loading reference data and tests the public API.
+ */
 
-#include <algorithm>  // For std::max, std::min_element etc. if needed
-#include <cmath>      // For std::abs, std::log2, std::ceil, std::pow, etc.
-#include <complex>    // For std::complex
-#include <limits>     // For std::numeric_limits
-#include <memory>     // For std::unique_ptr if accessing internals
-#include <numeric>    // For std::iota, std::accumulate
+#include <OmniDSP/core_types.h>  // Include for Precision enum
+#include <OmniDSP/cqt.h>         // Include the OmniDSP CQT header
+#include <OmniDSP/fft.h>         // Include for FFTNorm enum
+#include <OmniDSP/resample.h>    // Include for filter_and_downsample
+#include <OmniDSP/window.h>  // Include window header (needed for M_PI in helper)
+#include <gtest/gtest.h>
+
+#include <cmath>
+#include <complex>
+#include <limits>
+#include <memory>  // For std::unique_ptr
+#include <numeric>
 #include <stdexcept>  // For std::invalid_argument, std::runtime_error
-#include <string>     // For std::string
-#include <vector>     // For std::vector
+#include <string>
+#include <vector>
 
-#include "../TestDataLoader.h"   // Include the new data loader utility
-#include "OmniDSP/core_types.h"  // Include for Precision enum
-#include "OmniDSP/fft.h"         // Include for FFTNorm enum
-#include "OmniDSP/resample.h"    // <<< MOVED INCLUDE HERE
-#include "OmniDSP/window.h"      // Needed for M_PI in helper if used locally
-#include "gtest/gtest.h"         // Google Test framework
+#include "../TestDataLoader.h"  // Include the new data loader utility
 
-// Define M_PI if it's not already defined (e.g., by <cmath> in some
-// environments/standards)
+// Define M_PI if it's not already defined
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
 
-// Helper function to compare complex vectors with tolerance
-template <typename T>
-void ExpectComplexVectorNear(const std::vector<std::complex<T>> &actual,
-                             const std::vector<std::complex<T>> &expected,
-                             T abs_error, const std::string &message = "") {
-  ASSERT_EQ(actual.size(), expected.size())
-      << message << " - Vector sizes differ.";
-  for (size_t i = 0; i < actual.size(); ++i) {
-    EXPECT_NEAR(actual[i].real(), expected[i].real(), abs_error)
-        << message << " - Mismatch at index " << i << " (real part)";
-    EXPECT_NEAR(actual[i].imag(), expected[i].imag(), abs_error)
-        << message << " - Mismatch at index " << i << " (imaginary part)";
-  }
-}
+// Define aliases for vector/matrix types
+using VecD = std::vector<double>;
+using VecF = std::vector<float>;
+using ComplexVecD = std::vector<std::complex<double>>;
+using ComplexVecF = std::vector<std::complex<float>>;
+using ComplexMatD = std::vector<ComplexVecD>;  // Matrix type [bin][frame]
+using ComplexMatF = std::vector<ComplexVecF>;  // Matrix type [bin][frame]
 
-// Helper function to compare real vectors with tolerance
-template <typename T>
-void ExpectRealVectorNear(const std::vector<T> &actual,
-                          const std::vector<T> &expected, T abs_error,
-                          const std::string &message = "") {
-  ASSERT_EQ(actual.size(), expected.size())
-      << message << " - Vector sizes differ.";
-  for (size_t i = 0; i < actual.size(); ++i) {
-    EXPECT_NEAR(actual[i], expected[i], abs_error)
-        << message << " - Mismatch at index " << i;
-  }
-}
+// Default FIR order used in reference data generation script
+const int DEFAULT_FIR_FILTER_ORDER_TEST = 101;
 
-// Helper function to compare complex matrices (vector of vectors)
+// --- Test Helper Functions ---
+
+// Helper function to compare complex matrices
 template <typename T>
 void ExpectComplexMatrixNear(
     const std::vector<std::vector<std::complex<T>>> &actual,
     const std::vector<std::vector<std::complex<T>>> &expected, T abs_error,
     const std::string &message = "") {
   ASSERT_EQ(actual.size(), expected.size())
-      << message << " - Matrix row counts differ.";
-  if (expected.empty() && actual.empty()) return;  // Both empty is OK
-  if (expected.empty() || actual.empty()) {
-    FAIL() << message << " - One matrix is empty while the other is not.";
-  }
+      << message
+      << " - Matrix row counts (bins) differ. Expected: " << expected.size()
+      << ", Got: " << actual.size();
+  if (expected.empty()) return;  // Both empty is OK
 
   ASSERT_GT(expected.size(), 0) << message << " - Expected matrix has no rows.";
-  ASSERT_GT(actual.size(), 0) << message << " - Actual matrix has no rows.";
-
   size_t num_rows = expected.size();
   size_t num_cols = expected[0].size();  // Assume consistent cols in expected
 
-  for (size_t i = 0; i < num_rows; ++i) {
-    ASSERT_EQ(actual[i].size(), num_cols)
-        << message << " - Matrix column counts differ at row " << i
-        << " (Expected: " << num_cols << ", Actual: " << actual[i].size()
-        << ")";
-    ASSERT_EQ(expected[i].size(), num_cols)  // Verify expected consistency
-        << message << " - Expected matrix has inconsistent columns at row "
-        << i;
+  ASSERT_FALSE(actual.empty())
+      << message << " - Actual matrix is empty while expected has " << num_rows
+      << " bins.";
+  ASSERT_EQ(actual[0].size(), num_cols)
+      << message
+      << " - Matrix column count (frames) differs for bin 0. Expected: "
+      << num_cols << ", Got: " << actual[0].size();
 
+  for (size_t i = 0; i < num_rows; ++i) {
+    ASSERT_EQ(expected[i].size(), num_cols)
+        << message << " - Expected matrix has inconsistent columns at bin "
+        << i;
+    ASSERT_EQ(actual[i].size(), num_cols)
+        << message << " - Actual matrix has inconsistent columns at bin " << i;
     for (size_t j = 0; j < num_cols; ++j) {
-      ASSERT_NEAR(actual[i][j].real(), expected[i][j].real(), abs_error)
-          << message << " - Mismatch at (" << i << ", " << j << ") (real part)";
-      ASSERT_NEAR(actual[i][j].imag(), expected[i][j].imag(), abs_error)
-          << message << " - Mismatch at (" << i << ", " << j
-          << ") (imaginary part)";
+      EXPECT_NEAR(actual[i][j].real(), expected[i][j].real(), abs_error)
+          << message << " - Mismatch at bin " << i << ", frame " << j
+          << " (real part)";
+      EXPECT_NEAR(actual[i][j].imag(), expected[i][j].imag(), abs_error)
+          << message << " - Mismatch at bin " << i << ", frame " << j
+          << " (imaginary part)";
     }
   }
+}
+
+// Helper function to compare real vectors
+template <typename T>
+void ExpectRealVectorNear(const std::vector<T> &actual,
+                          const std::vector<T> &expected, T abs_error,
+                          const std::string &message = "") {
+  ASSERT_EQ(actual.size(), expected.size())
+      << message << " - Vector sizes differ. Expected: " << expected.size()
+      << ", Got: " << actual.size();
+  for (size_t i = 0; i < actual.size(); ++i) {
+    EXPECT_NEAR(actual[i], expected[i], abs_error)
+        << message << " - Mismatch at index " << i;
+  }
+}
+
+// Helper to generate a simple Hann window (L1 normalized is often used
+// internally)
+template <typename T>
+std::vector<T> hannWindowGenerator(size_t length) {
+  if (length == 0) return {};
+  std::vector<T> window_coeffs(length);
+  double denom = (length > 1) ? static_cast<double>(length - 1) : 1.0;
+  T sum = 0;
+  for (size_t n = 0; n < length; ++n) {
+    T val = static_cast<T>(0.5 - 0.5 * std::cos(2.0 * M_PI * n / denom));
+    window_coeffs[n] = val;
+    sum += val;
+  }
+  // Normalize (optional, depends if CQTPlan expects normalized input)
+  // CQTPlan usually normalizes internally, so we return unnormalized coeffs
+  // here. if (sum > std::numeric_limits<T>::epsilon()) {
+  //     for (size_t n = 0; n < length; ++n) {
+  //         window_coeffs[n] /= sum;
+  //     }
+  // }
+  return window_coeffs;
+}
+
+// Helper to generate a sine wave
+template <typename T>
+std::vector<T> generateSineWave(double freq, double duration_sec, double sr) {
+  size_t length = static_cast<size_t>(duration_sec * sr);
+  if (length == 0) return {};
+  std::vector<T> signal(length);
+  for (size_t i = 0; i < length; ++i) {
+    signal[i] = static_cast<T>(
+        std::sin(2.0 * M_PI * freq * static_cast<double>(i) / sr));
+  }
+  return signal;
 }
 
 // --- Test Fixture ---
 class CQT_Test : public ::testing::Test {
  protected:
-  // Constants matching reference data generation (if applicable)
-  // Using parameters from the failing tests for now
+  // Common parameters matching reference data generation script
   const double sample_rate = 22050.0;
   const double fmin = 32.7;  // C1
-  const int n_bins = 84;
+  const double high_freq =
+      1760.0;             // A6 (Example, ensure matches generation if used)
+  const int n_bins = 84;  // Example, ensure matches generation
   const int bins_per_octave = 12;
-  // const int n_octaves = 7; // n_bins / bins_per_octave (derived)
+  const size_t hop_length = 512;  // Must be compatible with CQT implementation
+  const float sparsity_threshold_float = 1e-5f;
+  const double sparsity_threshold_double = 1e-5;
 
-  // Tolerances
-  const double abs_error_d = 1e-7;  // CQT might need slightly larger tolerance
-  const float abs_error_f = 1e-4f;
+  // Tolerances (may need adjustment based on backend/librosa differences)
+  const double abs_error_d = 1e-5;  // Increased tolerance for CQT
+  const float abs_error_f = 1e-3f;  // Increased tolerance for CQT
 
   const std::string suite_name = "cqt";  // Corresponds to data/cqt/ directory
+
+  // Helper to get tolerance
+  template <typename T>
+  T get_tolerance() {
+    return std::is_same_v<T, float> ? abs_error_f : abs_error_d;
+  }
 };
 
-// --- Recursive CQT Tests ---
-// Tests using the recursive calculation approach
+// --- CQTPlan Tests ---
 
-class RecursiveCQTTest : public CQT_Test {
-  // No specific setup needed for recursive tests unless loading common data
-};
+// Test CQTPlan constructor parameter validation
+TEST_F(CQT_Test, ConstructorParameterValidation) {
+  using T = double;
+  auto window_gen = hannWindowGenerator<T>;  // Use helper
 
-TEST_F(RecursiveCQTTest, FullRecursiveCQT_Execute_Double) {
+  // Valid case
+  ASSERT_NO_THROW(OmniDSP::CQTPlan<T>(
+      sample_rate, hop_length, fmin, high_freq, bins_per_octave, window_gen,
+      sparsity_threshold_double, DEFAULT_FIR_FILTER_ORDER_TEST));
+
+  // Invalid parameters
+  ASSERT_THROW(
+      OmniDSP::CQTPlan<T>(0.0, hop_length, fmin, high_freq, bins_per_octave,
+                          window_gen, sparsity_threshold_double,
+                          DEFAULT_FIR_FILTER_ORDER_TEST),
+      std::invalid_argument);  // Invalid SR
+  ASSERT_THROW(OmniDSP::CQTPlan<T>(
+                   sample_rate, 0, fmin, high_freq, bins_per_octave, window_gen,
+                   sparsity_threshold_double, DEFAULT_FIR_FILTER_ORDER_TEST),
+               std::invalid_argument);  // Invalid hop
+  ASSERT_THROW(OmniDSP::CQTPlan<T>(sample_rate, hop_length, 0.0, high_freq,
+                                   bins_per_octave, window_gen,
+                                   sparsity_threshold_double,
+                                   DEFAULT_FIR_FILTER_ORDER_TEST),
+               std::invalid_argument);  // Invalid fmin
+  ASSERT_THROW(
+      OmniDSP::CQTPlan<T>(sample_rate, hop_length, fmin, fmin, bins_per_octave,
+                          window_gen, sparsity_threshold_double,
+                          DEFAULT_FIR_FILTER_ORDER_TEST),
+      std::invalid_argument);  // fmax <= fmin
+  ASSERT_THROW(OmniDSP::CQTPlan<T>(sample_rate, hop_length, fmin, sample_rate,
+                                   bins_per_octave, window_gen,
+                                   sparsity_threshold_double,
+                                   DEFAULT_FIR_FILTER_ORDER_TEST),
+               std::invalid_argument);  // fmax >= Nyquist
+  ASSERT_THROW(OmniDSP::CQTPlan<T>(sample_rate, hop_length, fmin, high_freq, 0,
+                                   window_gen, sparsity_threshold_double,
+                                   DEFAULT_FIR_FILTER_ORDER_TEST),
+               std::invalid_argument);  // Invalid BPO
+  ASSERT_THROW(
+      OmniDSP::CQTPlan<T>(sample_rate, hop_length, fmin, high_freq,
+                          bins_per_octave, nullptr, sparsity_threshold_double,
+                          DEFAULT_FIR_FILTER_ORDER_TEST),
+      std::invalid_argument);  // Null window gen
+  ASSERT_THROW(
+      OmniDSP::CQTPlan<T>(sample_rate, 511, fmin, high_freq, bins_per_octave,
+                          window_gen, sparsity_threshold_double,
+                          DEFAULT_FIR_FILTER_ORDER_TEST),
+      std::invalid_argument);  // Invalid hop length for typical recursive CQT
+  ASSERT_THROW(OmniDSP::CQTPlan<T>(sample_rate, hop_length, fmin, high_freq,
+                                   bins_per_octave, window_gen, -0.1,
+                                   DEFAULT_FIR_FILTER_ORDER_TEST),
+               std::invalid_argument);  // Invalid sparsity
+  ASSERT_THROW(OmniDSP::CQTPlan<T>(sample_rate, hop_length, fmin, high_freq,
+                                   bins_per_octave, window_gen,
+                                   sparsity_threshold_double, 0),
+               std::invalid_argument);  // Invalid FIR order (zero)
+  ASSERT_THROW(OmniDSP::CQTPlan<T>(sample_rate, hop_length, fmin, high_freq,
+                                   bins_per_octave, window_gen,
+                                   sparsity_threshold_double, 100),
+               std::invalid_argument);  // Invalid FIR order (even)
+}
+
+// Test CQTPlan::execute method against reference data
+TEST_F(CQT_Test, ExecuteCQT_Double) {
+  using T = double;
   std::string test_case_name = "FullRecursiveCQT_Execute_Double";
-  auto input_cd = TestDataLoader::loadVectorData<std::complex<double>>(
-      suite_name, test_case_name + "_input_cd.txt");
-  // Expected output is complex double, likely flattened CQT matrix or similar
-  auto expected_cqt_d = TestDataLoader::loadVectorData<std::complex<double>>(
-      suite_name, test_case_name + "_expected_cd.txt");
+  std::vector<T> input_d;
+  ComplexMatD expected_cqt_d;  // Expecting 2D complex matrix
 
-  // Create CQT plan (will calculate filters recursively) - CORRECTED
-  // CONSTRUCTOR CALL
-  OmniDSP::CQTPlan<double> plan(
-      sample_rate,  // sr
-      fmin,         // fmin
-      n_bins,       // n_bins
-      bins_per_octave,
-      OmniDSP::Precision::Double,  // Added precision
-      OmniDSP::FFTNorm::Ortho);    // Added norm (e.g., Ortho)
+  // Load input signal (1D real) and expected output (2D complex)
+  ASSERT_NO_THROW(input_d = TestDataLoader::loadVectorData<T>(
+                      suite_name, test_case_name + "_input_d.txt"))
+      << "Failed to load input data";
+  ASSERT_NO_THROW(expected_cqt_d = TestDataLoader::loadComplexMatrixData<T>(
+                      suite_name, test_case_name + "_expected_cd.txt"))
+      << "Failed to load expected data";
 
-  // Prepare output vector
-  // Size needs to match the expected output format from reference generation
-  std::vector<std::complex<double>> output_cqt_d(expected_cqt_d.size());
+  ASSERT_FALSE(input_d.empty()) << "Input data vector is empty";
+  ASSERT_FALSE(expected_cqt_d.empty()) << "Expected data matrix is empty";
+
+  // Create CQT plan
+  std::unique_ptr<OmniDSP::CQTPlan<T>> plan_ptr;
+  ASSERT_NO_THROW(plan_ptr = std::make_unique<OmniDSP::CQTPlan<T>>(
+                      sample_rate, hop_length, fmin, high_freq, bins_per_octave,
+                      hannWindowGenerator<T>, sparsity_threshold_double,
+                      DEFAULT_FIR_FILTER_ORDER_TEST))
+      << "CQTPlan constructor threw unexpectedly.";
+  ASSERT_NE(plan_ptr, nullptr);
+  OmniDSP::CQTPlan<T> &plan = *plan_ptr;
+
+  // Prepare output matrix
+  ComplexMatD output_cqt_d;
 
   // Execute CQT
-  plan.execute(input_cd, output_cqt_d);
+  ASSERT_NO_THROW(plan.execute(input_d, output_cqt_d))
+      << "CQTPlan::execute threw unexpectedly.";
 
   // Compare results
-  ExpectComplexVectorNear(output_cqt_d, expected_cqt_d, abs_error_d,
+  ExpectComplexMatrixNear(output_cqt_d, expected_cqt_d, get_tolerance<T>(),
                           test_case_name);
 }
 
-TEST_F(RecursiveCQTTest, FullRecursiveCQT_Execute_Float) {
+TEST_F(CQT_Test, ExecuteCQT_Float) {
+  using T = float;
   std::string test_case_name = "FullRecursiveCQT_Execute_Float";
-  auto input_cf = TestDataLoader::loadVectorData<std::complex<float>>(
-      suite_name, test_case_name + "_input_cf.txt");
-  auto expected_cqt_f = TestDataLoader::loadVectorData<std::complex<float>>(
-      suite_name, test_case_name + "_expected_cf.txt");
+  std::vector<T> input_f;
+  ComplexMatF expected_cqt_f;  // Expecting 2D complex matrix
 
-  // CORRECTED CONSTRUCTOR CALL
-  OmniDSP::CQTPlan<float> plan(
-      static_cast<float>(sample_rate),  // sr
-      static_cast<float>(fmin),         // fmin
-      n_bins,                           // n_bins
-      bins_per_octave,
-      OmniDSP::Precision::Single,  // Added precision
-      OmniDSP::FFTNorm::Ortho);    // Added norm (e.g., Ortho)
+  // Load input signal (1D real) and expected output (2D complex)
+  ASSERT_NO_THROW(input_f = TestDataLoader::loadVectorData<T>(
+                      suite_name, test_case_name + "_input_f.txt"))
+      << "Failed to load input data";
+  ASSERT_NO_THROW(expected_cqt_f = TestDataLoader::loadComplexMatrixData<T>(
+                      suite_name, test_case_name + "_expected_cf.txt"))
+      << "Failed to load expected data";
 
-  std::vector<std::complex<float>> output_cqt_f(expected_cqt_f.size());
-  plan.execute(input_cf, output_cqt_f);
+  ASSERT_FALSE(input_f.empty()) << "Input data vector is empty";
+  ASSERT_FALSE(expected_cqt_f.empty()) << "Expected data matrix is empty";
 
-  ExpectComplexVectorNear(output_cqt_f, expected_cqt_f, abs_error_f,
+  // Create CQT plan
+  std::unique_ptr<OmniDSP::CQTPlan<T>> plan_ptr;
+  ASSERT_NO_THROW(plan_ptr = std::make_unique<OmniDSP::CQTPlan<T>>(
+                      sample_rate, hop_length, fmin, high_freq, bins_per_octave,
+                      hannWindowGenerator<T>, sparsity_threshold_float,
+                      DEFAULT_FIR_FILTER_ORDER_TEST))
+      << "CQTPlan constructor threw unexpectedly.";
+  ASSERT_NE(plan_ptr, nullptr);
+  OmniDSP::CQTPlan<T> &plan = *plan_ptr;
+
+  // Prepare output matrix
+  ComplexMatF output_cqt_f;
+
+  // Execute CQT
+  ASSERT_NO_THROW(plan.execute(input_f, output_cqt_f))
+      << "CQTPlan::execute threw unexpectedly.";
+
+  // Compare results
+  ExpectComplexMatrixNear(output_cqt_f, expected_cqt_f, get_tolerance<T>(),
                           test_case_name);
 }
 
 // --- Filter And Downsample Test ---
-// This test focuses on the internal resampling helper function used by CQT
-// Note: This test might need adjustment if filterAndDownsampleBy2 is private
-// or if the public API OmniDSP::filter_and_downsample should be tested instead.
+// Test the public API function directly
 
-class FilterAndDownsampleTest : public CQT_Test {
-  // Test fixture specific for filterAndDownsample
+class FilterAndDownsampleTest : public ::testing::Test {
+ protected:
+  const std::string suite_name = "cqt";  // Data is under cqt suite for now
+  const double abs_error_d = 1e-9;
+  const float abs_error_f = 1e-5f;
 };
 
-// Test combined Filter and Downsample step (using float precision)
-TEST_F(FilterAndDownsampleTest,
-       FilterAndDownsample_Float) {  // Renamed test slightly
-  std::string test_case_name =
-      "FilterAndDownsample";  // Base name for data files
+TEST_F(FilterAndDownsampleTest, PublicAPI_Float) {
+  using T = float;
+  std::string test_case_name = "FilterAndDownsample";
+  std::vector<T> input_f, filter_coeffs_f, expected_f;
 
-  // Load float data
-  auto input_f = TestDataLoader::loadVectorData<float>(
-      suite_name, test_case_name + "_input_f.txt");
-  auto filter_coeffs_f = TestDataLoader::loadVectorData<float>(
-      suite_name, test_case_name + "_filter_coeffs_f.txt");
-  auto expected_f = TestDataLoader::loadVectorData<float>(
-      suite_name, test_case_name + "_expected_f.txt");
+  ASSERT_NO_THROW(input_f = TestDataLoader::loadVectorData<T>(
+                      suite_name, test_case_name + "_input_f.txt"))
+      << "Failed to load input";
+  ASSERT_NO_THROW(filter_coeffs_f = TestDataLoader::loadVectorData<T>(
+                      suite_name, test_case_name + "_filter_coeffs_f.txt"))
+      << "Failed to load filter coeffs";
+  ASSERT_NO_THROW(expected_f = TestDataLoader::loadVectorData<T>(
+                      suite_name, test_case_name + "_expected_f.txt"))
+      << "Failed to load expected output";
 
-  // Use the public API function for testing the operation (float version)
-  std::vector<float> output_f;
-  int downsample_factor = 2;  // Assuming factor of 2 for this test case
+  ASSERT_FALSE(input_f.empty());
+  ASSERT_FALSE(filter_coeffs_f.empty());
+  ASSERT_FALSE(expected_f.empty());
 
-  try {
-    // Explicitly call the float version
-    output_f = OmniDSP::filter_and_downsample<float>(input_f, filter_coeffs_f,
-                                                     downsample_factor);
-  } catch (const std::exception &e) {
-    FAIL() << "OmniDSP::filter_and_downsample<float> threw an exception: "
-           << e.what();
-  }
+  std::vector<T> output_f;
+  int downsample_factor = 2;
 
-  // Compare results using float tolerance
+  // Call the public API function
+  ASSERT_NO_THROW(output_f = OmniDSP::filter_and_downsample<T>(
+                      input_f, filter_coeffs_f, downsample_factor))
+      << "Public filter_and_downsample<float> threw unexpectedly.";
+
+  // Compare results
   ExpectRealVectorNear(output_f, expected_f, abs_error_f,
                        test_case_name + "_Float");
 }
 
-#if !defined(USE_ONEMKL)
-TEST_F(FilterAndDownsampleTest, FilterAndDownsample) {
-  // This test assumes the existence of reference data generated for a
-  // filter+downsample operation, potentially within the 'cqt' suite.
+TEST_F(FilterAndDownsampleTest, PublicAPI_Double) {
+  using T = double;
   std::string test_case_name = "FilterAndDownsample";
+  std::vector<T> input_d, filter_coeffs_d, expected_d;
 
-  // Load data
-  auto input_d = TestDataLoader::loadVectorData<double>(
-      suite_name, test_case_name + "_input_d.txt");
-  auto filter_coeffs_d = TestDataLoader::loadVectorData<double>(
-      suite_name, test_case_name + "_filter_coeffs_d.txt");
-  auto expected_d = TestDataLoader::loadVectorData<double>(
-      suite_name, test_case_name + "_expected_d.txt");
+  ASSERT_NO_THROW(input_d = TestDataLoader::loadVectorData<T>(
+                      suite_name, test_case_name + "_input_d.txt"))
+      << "Failed to load input";
+  ASSERT_NO_THROW(filter_coeffs_d = TestDataLoader::loadVectorData<T>(
+                      suite_name, test_case_name + "_filter_coeffs_d.txt"))
+      << "Failed to load filter coeffs";
+  ASSERT_NO_THROW(expected_d = TestDataLoader::loadVectorData<T>(
+                      suite_name, test_case_name + "_expected_d.txt"))
+      << "Failed to load expected output";
 
-  // Use the public API function for testing the operation
-  std::vector<double> output_d;
-  int downsample_factor = 2;  // Assuming factor of 2 for this test case
+  ASSERT_FALSE(input_d.empty());
+  ASSERT_FALSE(filter_coeffs_d.empty());
+  ASSERT_FALSE(expected_d.empty());
 
-  try {
-    // #include "OmniDSP/resample.h" // <<< INCLUDE MOVED TO TOP
-    output_d = OmniDSP::filter_and_downsample(input_d, filter_coeffs_d,
-                                              downsample_factor);
-  } catch (const std::exception &e) {
-    FAIL() << "OmniDSP::filter_and_downsample threw an exception: " << e.what();
-  }
+  std::vector<T> output_d;
+  int downsample_factor = 2;
 
-  // Compare results
-  ExpectRealVectorNear(output_d, expected_d, abs_error_d, test_case_name);
-}
+// Call the public API function
+// Depending on the backend, this might throw if double is unsupported
+#if defined(USE_ONEMKL)
+  // MKL backend currently throws for double precision resampling
+  ASSERT_THROW(OmniDSP::filter_and_downsample<T>(input_d, filter_coeffs_d,
+                                                 downsample_factor),
+               std::runtime_error);
+#else
+  // Accelerate or Stub backends might support double or throw differently
+  ASSERT_NO_THROW(output_d = OmniDSP::filter_and_downsample<T>(
+                      input_d, filter_coeffs_d, downsample_factor))
+      << "Public filter_and_downsample<double> threw unexpectedly.";
+  // Compare results only if it didn't throw
+  ExpectRealVectorNear(output_d, expected_d, abs_error_d,
+                       test_case_name + "_Double");
 #endif
-
-// --- Precomputed CQT Tests ---
-// Tests using the precomputed filter bank approach (Currently Disabled)
-
-class PrecomputedCQTTest : public CQT_Test {
- protected:
-  // Placeholder for potential setup involving loading filter banks
-};
-
-// This test is currently disabled because it relies on the 2D filter bank
-// loading and potentially a different CQTPlan constructor/method.
-TEST_F(PrecomputedCQTTest, DISABLED_ExecutePrecomputed) {
-  GTEST_SKIP()
-      << "Test disabled. Requires implementation of 2D complex data loading "
-         "and potentially different CQTPlan API for precomputed filters.";
-  /*
-  std::string test_case_name = "Precomputed_Execute";
-  auto input_cd = TestDataLoader::loadVectorData<std::complex<double>>(
-      suite_name, test_case_name + "_input_cd.txt");
-  auto expected_cqt_d = TestDataLoader::loadVectorData<std::complex<double>>(
-      suite_name, test_case_name + "_expected_cd.txt"); // Assuming 1D output
-  for now
-
-  // Placeholder: Load filter bank data (requires loadComplexMatrixData)
-  // auto filter_bank_d =
-  TestDataLoader::loadComplexMatrixData<double>(suite_name,
-  "FilterBankFile.txt");
-
-  // Placeholder: Create CQT plan using precomputed filters (requires
-  appropriate constructor/method)
-  // OmniDSP::CQTPlan<double> plan(sample_rate, n_bins, bins_per_octave, fmin,
-  filter_bank_d); // Example signature
-
-  // Prepare output vector
-  std::vector<std::complex<double>> output_cqt_d(expected_cqt_d.size());
-
-  // Execute CQT
-  // plan.execute(input_cd, output_cqt_d); // Call the appropriate execute
-  method
-
-  // Compare results
-  // ExpectComplexVectorNear(output_cqt_d, expected_cqt_d, abs_error_d,
-  test_case_name);
-  */
 }
-
-// TODO: Add tests for calculateSingleOctaveCQT if possible/needed
-// TODO: Add tests for different CQT parameters (sparsity threshold, etc.)

@@ -1,3 +1,8 @@
+/**
+ * @file tests/cpp/tests/window.cpp
+ * @brief Unit tests for the OmniDSP::Window class static methods.
+ * Uses TestDataLoader for loading reference data and tests the public API.
+ */
 #include "OmniDSP/window.h"  // Include the OmniDSP window header
 
 #include <cmath>      // For std::abs
@@ -8,6 +13,20 @@
 
 #include "../TestDataLoader.h"  // Include the new data loader utility
 #include "gtest/gtest.h"        // Google Test framework
+
+// Helper function to compare real vectors with tolerance
+template <typename T>
+void ExpectRealVectorNear(const std::vector<T> &actual,
+                          const std::vector<T> &expected, T abs_error,
+                          const std::string &message = "") {
+  ASSERT_EQ(actual.size(), expected.size())
+      << message << " - Vector sizes differ. Expected: " << expected.size()
+      << ", Got: " << actual.size();
+  for (size_t i = 0; i < actual.size(); ++i) {
+    EXPECT_NEAR(actual[i], expected[i], abs_error)
+        << message << " - Mismatch at index " << i;
+  }
+}
 
 // Define the test fixture
 class WindowTest : public ::testing::Test {
@@ -22,198 +41,228 @@ class WindowTest : public ::testing::Test {
 
   // Window size used for generating reference data
   // Make sure this matches the size used in the Python generation script
-  const int window_size = 1024;
+  const int window_size = 1024;  // Must match generate_window_data.py
 
-  // Helper function to compare real vectors with tolerance
+  // Beta parameter used for Kaiser window reference data
+  const double kaiser_beta = 8.0;  // Must match generate_window_data.py
+
+  // Helper to get tolerance based on type
   template <typename T>
-  void ExpectVectorNear(const std::vector<T> &actual,
-                        const std::vector<T> &expected, T abs_error,
-                        const std::string &message = "") {
-    ASSERT_EQ(actual.size(), expected.size())
-        << message << " - Vector sizes differ.";
-    for (size_t i = 0; i < actual.size(); ++i) {
-      EXPECT_NEAR(actual[i], expected[i], abs_error)
-          << message << " - Mismatch at index " << i;
-    }
+  T get_tolerance() {
+    return std::is_same_v<T, float> ? abs_error_f : abs_error_d;
   }
 };
 
 // --- Window Function Tests ---
 
 TEST_F(WindowTest, Hann_D) {
+  using T = double;
   std::string test_case_name = "Hann_D";  // Base name for data file
-  // Load expected data using the new loader
-  auto expected_d = TestDataLoader::loadVectorData<double>(
-      suite_name, test_case_name + "_expected_d.txt");
-  ASSERT_EQ(expected_d.size(), window_size) << "Reference data size mismatch";
+  std::vector<T> expected_d;
 
-  // Generate the window using the library function - CORRECTED CALL
-  std::vector<double> actual_d =
-      OmniDSP::Window::get_hann_coeffs<double>(window_size);
+  // Load expected data using the new loader
+  ASSERT_NO_THROW(expected_d = TestDataLoader::loadVectorData<T>(
+                      suite_name, test_case_name + "_expected_d.txt"))
+      << "Failed to load expected data";
+  ASSERT_EQ(expected_d.size(), window_size) << "Reference data size mismatch";
+  ASSERT_FALSE(expected_d.empty());
+
+  // Generate the window using the library function
+  std::vector<T> actual_d;
+  ASSERT_NO_THROW(actual_d = OmniDSP::Window::get_hann_coeffs<T>(window_size))
+      << "get_hann_coeffs threw unexpectedly";
 
   // Compare results
-  ExpectVectorNear(actual_d, expected_d, abs_error_d, test_case_name);
+  ExpectRealVectorNear(actual_d, expected_d, get_tolerance<T>(),
+                       test_case_name);
 }
 
 TEST_F(WindowTest, Hann_F) {
+  using T = float;
   std::string test_case_name = "Hann_F";
-  auto expected_f = TestDataLoader::loadVectorData<float>(
-      suite_name, test_case_name + "_expected_f.txt");
+  std::vector<T> expected_f;
+
+  ASSERT_NO_THROW(expected_f = TestDataLoader::loadVectorData<T>(
+                      suite_name, test_case_name + "_expected_f.txt"))
+      << "Failed to load expected data";
   ASSERT_EQ(expected_f.size(), window_size) << "Reference data size mismatch";
+  ASSERT_FALSE(expected_f.empty());
 
-  // CORRECTED CALL
-  std::vector<float> actual_f =
-      OmniDSP::Window::get_hann_coeffs<float>(window_size);
+  std::vector<T> actual_f;
+  ASSERT_NO_THROW(actual_f = OmniDSP::Window::get_hann_coeffs<T>(window_size))
+      << "get_hann_coeffs threw unexpectedly";
 
-  ExpectVectorNear(actual_f, expected_f, abs_error_f, test_case_name);
+  ExpectRealVectorNear(actual_f, expected_f, get_tolerance<T>(),
+                       test_case_name);
 }
 
 TEST_F(WindowTest, Hamming_D) {
+  using T = double;
   std::string test_case_name = "Hamming_D";
-  auto expected_d = TestDataLoader::loadVectorData<double>(
-      suite_name, test_case_name + "_expected_d.txt");
+  std::vector<T> expected_d;
+
+  ASSERT_NO_THROW(expected_d = TestDataLoader::loadVectorData<T>(
+                      suite_name, test_case_name + "_expected_d.txt"))
+      << "Failed to load expected data";
   ASSERT_EQ(expected_d.size(), window_size) << "Reference data size mismatch";
+  ASSERT_FALSE(expected_d.empty());
 
-  // CORRECTED CALL
-  std::vector<double> actual_d =
-      OmniDSP::Window::get_hamming_coeffs<double>(window_size);
+  std::vector<T> actual_d;
+  ASSERT_NO_THROW(actual_d =
+                      OmniDSP::Window::get_hamming_coeffs<T>(window_size))
+      << "get_hamming_coeffs threw unexpectedly";
 
-  ExpectVectorNear(actual_d, expected_d, abs_error_d, test_case_name);
+  ExpectRealVectorNear(actual_d, expected_d, get_tolerance<T>(),
+                       test_case_name);
 }
 
 TEST_F(WindowTest, Hamming_F) {
+  using T = float;
   std::string test_case_name = "Hamming_F";
-  auto expected_f = TestDataLoader::loadVectorData<float>(
-      suite_name, test_case_name + "_expected_f.txt");
+  std::vector<T> expected_f;
+
+  ASSERT_NO_THROW(expected_f = TestDataLoader::loadVectorData<T>(
+                      suite_name, test_case_name + "_expected_f.txt"))
+      << "Failed to load expected data";
   ASSERT_EQ(expected_f.size(), window_size) << "Reference data size mismatch";
+  ASSERT_FALSE(expected_f.empty());
 
-  // CORRECTED CALL
-  std::vector<float> actual_f =
-      OmniDSP::Window::get_hamming_coeffs<float>(window_size);
+  std::vector<T> actual_f;
+  ASSERT_NO_THROW(actual_f =
+                      OmniDSP::Window::get_hamming_coeffs<T>(window_size))
+      << "get_hamming_coeffs threw unexpectedly";
 
-  ExpectVectorNear(actual_f, expected_f, abs_error_f, test_case_name);
+  ExpectRealVectorNear(actual_f, expected_f, get_tolerance<T>(),
+                       test_case_name);
 }
 
-// TEST_F(WindowTest, Blackman_D) {
-//   // This test will fail until Blackman window is added to OmniDSP::Window
-//   std::string test_case_name = "Blackman_D";
-//   auto expected_d = TestDataLoader::loadVectorData<double>(
-//       suite_name, test_case_name + "_expected_d.txt");
-//   ASSERT_EQ(expected_d.size(), window_size) << "Reference data size
-//   mismatch";
-//
-//   // std::vector<double> actual_d =
-//   OmniDSP::Window::get_blackman_coeffs<double>(window_size); // Needs
-//   implementation std::vector<double> actual_d(window_size); // Placeholder
-//
-//   ExpectVectorNear(actual_d, expected_d, abs_error_d, test_case_name);
-// }
-
-// TEST_F(WindowTest, Blackman_F) {
-//    // This test will fail until Blackman window is added to OmniDSP::Window
-//   std::string test_case_name = "Blackman_F";
-//   auto expected_f = TestDataLoader::loadVectorData<float>(
-//       suite_name, test_case_name + "_expected_f.txt");
-//   ASSERT_EQ(expected_f.size(), window_size) << "Reference data size
-//   mismatch";
-//
-//   // std::vector<float> actual_f =
-//   OmniDSP::Window::get_blackman_coeffs<float>(window_size); // Needs
-//   implementation std::vector<float> actual_f(window_size); // Placeholder
-//
-//   ExpectVectorNear(actual_f, expected_f, abs_error_f, test_case_name);
-// }
-
-// Note: Kaiser window needs a beta parameter.
-// The reference data generation script must use the same beta value.
-// We'll assume beta=8.0 for this example, adjust if needed.
-const double kaiser_beta = 8.0;
+// Note: Flattop reference data was not generated by the provided script.
+// Add tests if Flattop is implemented and reference data is generated.
+// TEST_F(WindowTest, Flattop_D) { ... }
+// TEST_F(WindowTest, Flattop_F) { ... }
 
 TEST_F(WindowTest, Kaiser_D) {
+  using T = double;
   std::string test_case_name =
       "Kaiser_D";  // Assuming beta=8.0 in filename/generation
-  auto expected_d = TestDataLoader::loadVectorData<double>(
-      suite_name, test_case_name + "_expected_d.txt");
-  ASSERT_EQ(expected_d.size(), window_size) << "Reference data size mismatch";
+  std::vector<T> expected_d;
 
-  // CORRECTED CALL
-  std::vector<double> actual_d =
-      OmniDSP::Window::get_kaiser_coeffs<double>(window_size, kaiser_beta);
+  ASSERT_NO_THROW(expected_d = TestDataLoader::loadVectorData<T>(
+                      suite_name, test_case_name + "_expected_d.txt"))
+      << "Failed to load expected data";
+  ASSERT_EQ(expected_d.size(), window_size) << "Reference data size mismatch";
+  ASSERT_FALSE(expected_d.empty());
+
+  std::vector<T> actual_d;
+  ASSERT_NO_THROW(actual_d = OmniDSP::Window::get_kaiser_coeffs<T>(window_size,
+                                                                   kaiser_beta))
+      << "get_kaiser_coeffs threw unexpectedly";
 
   // May need slightly larger tolerance for Kaiser depending on calculation
-  // method
-  ExpectVectorNear(actual_d, expected_d, abs_error_d * 10, test_case_name);
+  // method/backend
+  ExpectRealVectorNear(actual_d, expected_d, get_tolerance<T>() * 10,
+                       test_case_name);
 }
 
 TEST_F(WindowTest, Kaiser_F) {
+  using T = float;
   std::string test_case_name =
       "Kaiser_F";  // Assuming beta=8.0 in filename/generation
-  auto expected_f = TestDataLoader::loadVectorData<float>(
-      suite_name, test_case_name + "_expected_f.txt");
+  std::vector<T> expected_f;
+
+  ASSERT_NO_THROW(expected_f = TestDataLoader::loadVectorData<T>(
+                      suite_name, test_case_name + "_expected_f.txt"))
+      << "Failed to load expected data";
   ASSERT_EQ(expected_f.size(), window_size) << "Reference data size mismatch";
+  ASSERT_FALSE(expected_f.empty());
 
-  // CORRECTED CALL
-  std::vector<float> actual_f = OmniDSP::Window::get_kaiser_coeffs<float>(
-      window_size, static_cast<float>(kaiser_beta));
+  std::vector<T> actual_f;
+  ASSERT_NO_THROW(actual_f = OmniDSP::Window::get_kaiser_coeffs<T>(
+                      window_size, static_cast<T>(kaiser_beta)))
+      << "get_kaiser_coeffs threw unexpectedly";
 
-  // May need slightly larger tolerance for Kaiser depending on calculation
-  // method
-  ExpectVectorNear(actual_f, expected_f, abs_error_f * 10, test_case_name);
+  // May need slightly larger tolerance for Kaiser
+  ExpectRealVectorNear(actual_f, expected_f, get_tolerance<T>() * 10,
+                       test_case_name);
 }
 
 // --- Edge Case Tests ---
 
 TEST_F(WindowTest, EdgeCases) {
-  // Test with size 1.
+  // Test with size 1. Window should be just [1.0]
   const int size_one = 1;
   std::vector<double> expected_d1 = {1.0};
   std::vector<float> expected_f1 = {1.0f};
 
-  // CORRECTED CALLS
-  std::vector<double> actual_d1_hann =
-      OmniDSP::Window::get_hann_coeffs<double>(size_one);
-  ExpectVectorNear(actual_d1_hann, expected_d1, abs_error_d, "Hann_D size 1");
-  std::vector<float> actual_f1_hann =
-      OmniDSP::Window::get_hann_coeffs<float>(size_one);
-  ExpectVectorNear(actual_f1_hann, expected_f1, abs_error_f, "Hann_F size 1");
+  // Double Precision Size 1
+  std::vector<double> actual_d1_hann;
+  ASSERT_NO_THROW(actual_d1_hann =
+                      OmniDSP::Window::get_hann_coeffs<double>(size_one));
+  ExpectRealVectorNear(actual_d1_hann, expected_d1, get_tolerance<double>(),
+                       "Hann_D size 1");
 
-  std::vector<double> actual_d1_hamming =
-      OmniDSP::Window::get_hamming_coeffs<double>(size_one);
-  ExpectVectorNear(actual_d1_hamming, expected_d1, abs_error_d,
-                   "Hamming_D size 1");
-  std::vector<float> actual_f1_hamming =
-      OmniDSP::Window::get_hamming_coeffs<float>(size_one);
-  ExpectVectorNear(actual_f1_hamming, expected_f1, abs_error_f,
-                   "Hamming_F size 1");
+  std::vector<double> actual_d1_hamming;
+  ASSERT_NO_THROW(actual_d1_hamming =
+                      OmniDSP::Window::get_hamming_coeffs<double>(size_one));
+  ExpectRealVectorNear(actual_d1_hamming, expected_d1, get_tolerance<double>(),
+                       "Hamming_D size 1");
 
-  // std::vector<double> actual_d1_blackman =
-  // OmniDSP::Window::get_blackman_coeffs<double>(size_one); // Needs
-  // implementation ExpectVectorNear(actual_d1_blackman, expected_d1,
-  // abs_error_d, "Blackman_D size 1"); std::vector<float> actual_f1_blackman =
-  // OmniDSP::Window::get_blackman_coeffs<float>(size_one); // Needs
-  // implementation ExpectVectorNear(actual_f1_blackman, expected_f1,
-  // abs_error_f, "Blackman_F size 1");
+  std::vector<double> actual_d1_kaiser;
+  ASSERT_NO_THROW(actual_d1_kaiser = OmniDSP::Window::get_kaiser_coeffs<double>(
+                      size_one, kaiser_beta));
+  ExpectRealVectorNear(actual_d1_kaiser, expected_d1, get_tolerance<double>(),
+                       "Kaiser_D size 1");
 
-  std::vector<double> actual_d1_kaiser =
-      OmniDSP::Window::get_kaiser_coeffs<double>(size_one, kaiser_beta);
-  ExpectVectorNear(actual_d1_kaiser, expected_d1, abs_error_d,
-                   "Kaiser_D size 1");
-  std::vector<float> actual_f1_kaiser =
-      OmniDSP::Window::get_kaiser_coeffs<float>(
-          size_one, static_cast<float>(kaiser_beta));
-  ExpectVectorNear(actual_f1_kaiser, expected_f1, abs_error_f,
-                   "Kaiser_F size 1");
+  // Add Flattop size 1 test if implemented
+  // std::vector<double> actual_d1_flattop;
+  // ASSERT_NO_THROW(actual_d1_flattop =
+  // OmniDSP::Window::get_flattop_coeffs<double>(size_one));
+  // ExpectRealVectorNear(actual_d1_flattop, expected_d1,
+  // get_tolerance<double>(), "Flattop_D size 1");
 
-  // Test size 0 - should return empty vector
+  // Float Precision Size 1
+  std::vector<float> actual_f1_hann;
+  ASSERT_NO_THROW(actual_f1_hann =
+                      OmniDSP::Window::get_hann_coeffs<float>(size_one));
+  ExpectRealVectorNear(actual_f1_hann, expected_f1, get_tolerance<float>(),
+                       "Hann_F size 1");
+
+  std::vector<float> actual_f1_hamming;
+  ASSERT_NO_THROW(actual_f1_hamming =
+                      OmniDSP::Window::get_hamming_coeffs<float>(size_one));
+  ExpectRealVectorNear(actual_f1_hamming, expected_f1, get_tolerance<float>(),
+                       "Hamming_F size 1");
+
+  std::vector<float> actual_f1_kaiser;
+  ASSERT_NO_THROW(actual_f1_kaiser = OmniDSP::Window::get_kaiser_coeffs<float>(
+                      size_one, static_cast<float>(kaiser_beta)));
+  ExpectRealVectorNear(actual_f1_kaiser, expected_f1, get_tolerance<float>(),
+                       "Kaiser_F size 1");
+
+  // Add Flattop size 1 test if implemented
+  // std::vector<float> actual_f1_flattop;
+  // ASSERT_NO_THROW(actual_f1_flattop =
+  // OmniDSP::Window::get_flattop_coeffs<float>(size_one));
+  // ExpectRealVectorNear(actual_f1_flattop, expected_f1,
+  // get_tolerance<float>(), "Flattop_F size 1");
+
+  // Test size 0 - should return empty vector without throwing
   EXPECT_TRUE(OmniDSP::Window::get_hann_coeffs<double>(0).empty());
-  EXPECT_TRUE(OmniDSP::Window::get_kaiser_coeffs<float>(0, 1.0f).empty());
+  EXPECT_TRUE(OmniDSP::Window::get_hamming_coeffs<float>(0).empty());
+  EXPECT_TRUE(
+      OmniDSP::Window::get_kaiser_coeffs<double>(0, kaiser_beta).empty());
+  // EXPECT_TRUE(OmniDSP::Window::get_flattop_coeffs<float>(0).empty()); // If
+  // implemented
 
-  // Test invalid arguments if applicable
+  // Test invalid arguments
   // Testing invalid beta for Kaiser:
   EXPECT_THROW(OmniDSP::Window::get_kaiser_coeffs<double>(10, -1.0),
                std::invalid_argument);
+  EXPECT_THROW(OmniDSP::Window::get_kaiser_coeffs<float>(10, -1.0f),
+               std::invalid_argument);
 }
 
-// TODO: Add tests for Bartlett window if implemented
-// TODO: Add tests for other windows if implemented (Flattop, etc.)
-// TODO: Implement Blackman window or remove Blackman tests
+// Note: Blackman window tests are commented out as they were not implemented
+// in the provided code or generation script. Add them if the feature is added.
+// Note: Flattop window tests are commented out as reference data was not
+// generated.
