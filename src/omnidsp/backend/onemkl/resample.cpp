@@ -33,6 +33,7 @@
 
 namespace OmniDSP {
 namespace Backend {
+namespace oneMKL {
 
 // --- Intel IPP Helper ---
 // Checks the status code returned by IPP functions and throws an error if it's
@@ -195,6 +196,7 @@ template std::vector<float> filter_and_downsample_impl<float>(
 // std::vector<double> &, const std::vector<double> &, int); // DO NOT
 // INSTANTIATE DOUBLE
 
+}  // namespace oneMKL
 }  // namespace Backend
 }  // namespace OmniDSP
 

@@ -299,9 +299,11 @@ template std::vector<double> correlate1d_impl<double>(const double*, size_t,
 template std::vector<float> filter_and_downsample_impl<float>(
     const std::vector<float>& signal, const std::vector<float>& kernel,
     int factor);
+#if !defined(USE_ONEMKL)
 template std::vector<double> filter_and_downsample_impl<double>(
     const std::vector<double>& signal, const std::vector<double>& kernel,
     int factor);
+#endif
 
 }  // namespace Backend
 }  // namespace OmniDSP

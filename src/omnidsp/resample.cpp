@@ -78,8 +78,11 @@ std::vector<T> filter_and_downsample(const std::vector<T> &signal,
 template std::vector<float> filter_and_downsample<float>(
     const std::vector<float> &signal, const std::vector<float> &kernel,
     int factor);
+
+#if !defined(USE_ONEMKL)
 template std::vector<double> filter_and_downsample<double>(
     const std::vector<double> &signal, const std::vector<double> &kernel,
     int factor);
+#endif
 
 }  // namespace OmniDSP

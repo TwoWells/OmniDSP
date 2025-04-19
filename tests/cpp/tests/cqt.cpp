@@ -176,6 +176,39 @@ class FilterAndDownsampleTest : public CQT_Test {
   // Test fixture specific for filterAndDownsample
 };
 
+// Test combined Filter and Downsample step (using float precision)
+TEST_F(FilterAndDownsampleTest,
+       FilterAndDownsample_Float) {  // Renamed test slightly
+  std::string test_case_name =
+      "FilterAndDownsample";  // Base name for data files
+
+  // Load float data
+  auto input_f = TestDataLoader::loadVectorData<float>(
+      suite_name, test_case_name + "_input_f.txt");
+  auto filter_coeffs_f = TestDataLoader::loadVectorData<float>(
+      suite_name, test_case_name + "_filter_coeffs_f.txt");
+  auto expected_f = TestDataLoader::loadVectorData<float>(
+      suite_name, test_case_name + "_expected_f.txt");
+
+  // Use the public API function for testing the operation (float version)
+  std::vector<float> output_f;
+  int downsample_factor = 2;  // Assuming factor of 2 for this test case
+
+  try {
+    // Explicitly call the float version
+    output_f = OmniDSP::filter_and_downsample<float>(input_f, filter_coeffs_f,
+                                                     downsample_factor);
+  } catch (const std::exception &e) {
+    FAIL() << "OmniDSP::filter_and_downsample<float> threw an exception: "
+           << e.what();
+  }
+
+  // Compare results using float tolerance
+  ExpectRealVectorNear(output_f, expected_f, abs_error_f,
+                       test_case_name + "_Float");
+}
+
+#if !defined(USE_ONEMKL)
 TEST_F(FilterAndDownsampleTest, FilterAndDownsample) {
   // This test assumes the existence of reference data generated for a
   // filter+downsample operation, potentially within the 'cqt' suite.
@@ -203,9 +236,8 @@ TEST_F(FilterAndDownsampleTest, FilterAndDownsample) {
 
   // Compare results
   ExpectRealVectorNear(output_d, expected_d, abs_error_d, test_case_name);
-
-  // TODO: Add float version of this test if needed and reference data exists
 }
+#endif
 
 // --- Precomputed CQT Tests ---
 // Tests using the precomputed filter bank approach (Currently Disabled)

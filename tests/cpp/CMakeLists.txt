@@ -86,8 +86,17 @@ endif()
 
 # Pass the data directory path definition to the C++ code
 target_compile_definitions(
-  omnidsp_tests PRIVATE OMNIDSP_TEST_DATA_DIR="${TEST_DATA_SRC_DIR_ESC}"
-)# Define the base data dir
+  omnidsp_tests PRIVATE OMNIDSP_TEST_DATA_DIR="${TEST_DATA_SRC_DIR_ESC}")
+
+# Conditionally add the backend definition if it's set
+if(BACKEND_DEFINITION)
+  target_compile_definitions(omnidsp_tests PRIVATE ${BACKEND_DEFINITION})
+  message(
+    STATUS
+      "tests/cpp: Added backend definition ${BACKEND_DEFINITION} to omnidsp_tests"
+  )
+endif()
+
 get_target_property(TEST_DEFS omnidsp_tests COMPILE_DEFINITIONS)
 message(
   STATUS "tests/cpp: Final COMPILE_DEFINITIONS for omnidsp_tests: ${TEST_DEFS}")
