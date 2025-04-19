@@ -37,10 +37,10 @@ struct FFTPlanImpl {
   size_t length = 0;  // FFT Length (N)
   size_t complex_length =
       0;  // Length of complex spectrum (N for C2C, N/2+1 for Real)
-  Direction direction = Direction::FORWARD;  // Transform direction
+  Direction direction = Direction::Forward;  // Transform direction
   Precision precision = Precision::SINGLE;   // float or double
-  Domain domain = Domain::COMPLEX;           // COMPLEX or REAL
-  NormMode norm_mode = NormMode::BACKWARD;   // Normalization mode
+  Domain domain = Domain::Complex;           // Complex or Real
+  NormMode norm_mode = NormMode::Backward;   // Normalization mode
   T forward_scale = 1.0;   // Scaling factor applied to forward transform
   T backward_scale = 1.0;  // Scaling factor applied to inverse transform
 
@@ -58,7 +58,7 @@ struct FFTPlanImpl {
 
   // --- Helper: Calculate log2(N) for FFTSetup ---
   // vDSP FFTSetup requires the length N as log2(N).
-  // It also currently requires N to be a power of 2 for REAL domain FFTs using
+  // It also currently requires N to be a power of 2 for Real domain FFTs using
   // vDSP_fft_zrip. Marked const because it does not modify the object state.
   vDSP_Length get_log2n(size_t n) const  // <<< Added const here
   {
@@ -67,19 +67,19 @@ struct FFTPlanImpl {
     bool is_power_of_two = (n > 0) && ((n & (n - 1)) == 0);
     if (!is_power_of_two) {
       // vDSP_DFT (C2C) handles non-power-of-2 lengths.
-      if (domain == Domain::REAL) {
+      if (domain == Domain::Real) {
         // vDSP_fft_zrip (Real FFT) requires power-of-2.
         throw std::runtime_error(
-            "Accelerate FFTSetup (for REAL domain) currently requires "
+            "Accelerate FFTSetup (for Real domain) currently requires "
             "power-of-2 length. Got N=" +
             std::to_string(n));
       }
       // For C2C, no log2n needed for vDSP_DFT setup, return 0.
       return 0;
     }
-    // Only calculate and return log2n if needed (for REAL domain power-of-2
+    // Only calculate and return log2n if needed (for Real domain power-of-2
     // lengths) Use cast to vDSP_Length which is typically unsigned long
-    return (domain == Domain::REAL && n != 0)
+    return (domain == Domain::Real && n != 0)
                ? static_cast<vDSP_Length>(std::log2(static_cast<double>(n)))
                : 0;
   }
@@ -105,27 +105,27 @@ struct FFTPlanImpl {
       throw std::runtime_error("ScaleN is zero, length N must be > 0");
     }
     if (scaleSqrtN == static_cast<T>(0.0) &&
-        norm_mode == NormMode::ORTHO)  // Check for N=0 if using ORTHO
+        norm_mode == NormMode::Ortho)  // Check for N=0 if using Ortho
     {
       throw std::runtime_error(
-          "ScaleSqrtN is zero for ORTHO, length N must be > 0");
+          "ScaleSqrtN is zero for Ortho, length N must be > 0");
     }
 
     // --- Complex Domain Setup (using vDSP_DFT) ---
-    if (dom == Domain::COMPLEX) {
+    if (dom == Domain::Complex) {
       complex_length = length;  // Input and output size N
       // Determine scaling factors based on mode (vDSP_DFT does NOT scale
       // internally)
       switch (norm_mode) {
-        case NormMode::BACKWARD:  // Default: IFFT scaled by 1/N
+        case NormMode::Backward:  // Default: IFFT scaled by 1/N
           forward_scale = 1.0;
           backward_scale = 1.0 / scaleN;
           break;
-        case NormMode::ORTHO:  // Unitary: FFT and IFFT scaled by 1/sqrt(N)
+        case NormMode::Ortho:  // Unitary: FFT and IFFT scaled by 1/sqrt(N)
           forward_scale = 1.0 / scaleSqrtN;
           backward_scale = 1.0 / scaleSqrtN;
           break;
-        case NormMode::FORWARD:  // FFT scaled by 1/N
+        case NormMode::Forward:  // FFT scaled by 1/N
           forward_scale = 1.0 / scaleN;
           backward_scale = 1.0;
           break;
@@ -133,7 +133,7 @@ struct FFTPlanImpl {
 
       // Determine vDSP direction enum
       vDSP_DFT_Direction vdsp_dir =
-          (dir == Direction::FORWARD) ? vDSP_DFT_FORWARD : vDSP_DFT_INVERSE;
+          (dir == Direction::Forward) ? vDSP_DFT_FORWARD : vDSP_DFT_INVERSE;
 
       // Create the appropriate vDSP_DFT setup handle (out-of-place complex)
       if constexpr (std::is_same_v<T, float>)  // SINGLE precision
@@ -147,7 +147,7 @@ struct FFTPlanImpl {
             "length/parameters.");
     }
     // --- Real Domain Setup (using vDSP_fft_zrip) ---
-    else  // Domain::REAL
+    else  // Domain::Real
     {
       complex_length = length / 2 + 1;  // Real FFT output size (CCE format)
       // vDSP Real FFT (vDSP_fft_zrip) implicitly scales the IFFT by 2/N.
@@ -159,28 +159,28 @@ struct FFTPlanImpl {
                                       // get unscaled
       T factorSqrt = std::sqrt(factor);
 
-      if (factorSqrt == static_cast<T>(0.0) && norm_mode == NormMode::ORTHO &&
+      if (factorSqrt == static_cast<T>(0.0) && norm_mode == NormMode::Ortho &&
           scaleN > 0)  // Defensive check
       {
         throw std::runtime_error(
-            "FactorSqrt is zero for ORTHO (REAL), length N must be > 0");
+            "FactorSqrt is zero for Ortho (Real), length N must be > 0");
       }
 
       // Determine scaling factors based on mode
       switch (norm_mode) {
-        case NormMode::BACKWARD:   // RFFT unscaled(1.0), IRFFT scaled by 1/N
+        case NormMode::Backward:   // RFFT unscaled(1.0), IRFFT scaled by 1/N
           forward_scale = factor;  // Apply N/2 to get unscaled forward
           backward_scale =
               (1.0 / scaleN) *
               factor;  // Apply (1/N) * (N/2) = 1/2 to get 1/N overall inverse
           break;
-        case NormMode::ORTHO:  // RFFT & IRFFT scaled by 1/sqrt(N)
+        case NormMode::Ortho:  // RFFT & IRFFT scaled by 1/sqrt(N)
           forward_scale =
               (1.0 / scaleSqrtN) * factor;  // Apply (1/sqrtN) * (N/2)
           backward_scale =
               (1.0 / scaleSqrtN) * factor;  // Apply (1/sqrtN) * (N/2)
           break;
-        case NormMode::FORWARD:  // RFFT scaled by 1/N, IRFFT unscaled(1.0)
+        case NormMode::Forward:  // RFFT scaled by 1/N, IRFFT unscaled(1.0)
           forward_scale = (1.0 / scaleN) * factor;  // Apply (1/N) * (N/2) = 1/2
           backward_scale = factor;  // Apply N/2 to get unscaled inverse
           break;
@@ -195,7 +195,7 @@ struct FFTPlanImpl {
 
       if (!setup_handle_real)  // Check if setup creation failed
         throw std::runtime_error(
-            "Failed to create Accelerate FFTSetup (REAL) setup. Is length a "
+            "Failed to create Accelerate FFTSetup (Real) setup. Is length a "
             "power of 2?");
 
       // Allocate temporary buffers needed for split complex format used by
@@ -338,7 +338,7 @@ struct FFTPlanImpl {
               1);  // Imag part of output (stride 2)
       // Apply external scaling if necessary (vDSP_DFT does not scale)
       T scale_factor =
-          (direction == Direction::FORWARD) ? forward_scale : backward_scale;
+          (direction == Direction::Forward) ? forward_scale : backward_scale;
       if (std::abs(scale_factor - 1.0f) >
           std::numeric_limits<float>::epsilon()) {
         // Scale the interleaved complex output (length * 2 floats)
@@ -355,7 +355,7 @@ struct FFTPlanImpl {
           reinterpret_cast<double *>(output) + 1);  // Stride 2
       // Apply external scaling
       T scale_factor =
-          (direction == Direction::FORWARD) ? forward_scale : backward_scale;
+          (direction == Direction::Forward) ? forward_scale : backward_scale;
       if (std::abs(scale_factor - 1.0) >
           std::numeric_limits<double>::epsilon()) {
         // Scale the interleaved complex output (length * 2 doubles)
@@ -384,9 +384,9 @@ struct FFTPlanImpl {
                         std::complex<T> *complex_output) const {
     if (!setup_handle_real)
       throw std::runtime_error("Real FFT plan not initialized.");
-    if (domain != Domain::REAL || direction != Direction::FORWARD) {
+    if (domain != Domain::Real || direction != Direction::Forward) {
       throw std::runtime_error(
-          "execute_rfft called on incorrect plan type (must be REAL/FORWARD).");
+          "execute_rfft called on incorrect plan type (must be Real/Forward).");
     }
 
     // vDSP_fft_zrip operates in-place on a split complex buffer.
@@ -439,10 +439,10 @@ struct FFTPlanImpl {
                          T *real_output) const {
     if (!setup_handle_real)
       throw std::runtime_error("Real FFT plan not initialized.");
-    if (domain != Domain::REAL || direction != Direction::INVERSE) {
+    if (domain != Domain::Real || direction != Direction::Inverse) {
       throw std::runtime_error(
           "execute_irfft called on incorrect plan type (must be "
-          "REAL/INVERSE).");
+          "Real/Inverse).");
     }
 
     // Need mutable access to internal buffers. Use const_cast carefully.

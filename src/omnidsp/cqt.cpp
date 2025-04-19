@@ -127,12 +127,12 @@ struct CQTPlanImpl {
 
     // --- Create FFT Plan ---
     // Create a single plan for the maximum FFT length needed.
-    // The plan direction should be FORWARD for applying kernels.
+    // The plan direction should be Forward for applying kernels.
     // The normalization mode is passed from the CQT constructor.
     try {
       fft_plan_ = std::make_unique<FFTPlan<T>>(max_fft_length_, precision_,
-                                               Direction::FORWARD,
-                                               Domain::COMPLEX, norm_);
+                                               Direction::Forward,
+                                               Domain::Complex, norm_);
     } catch (const std::exception& e) {
       throw std::runtime_error("Failed to create underlying FFTPlan for CQT: " +
                                std::string(e.what()));
@@ -178,7 +178,7 @@ struct CQTPlanImpl {
 
       // 3. Compute FFT of the zero-padded kernel using the plan
       // Ensure the plan's internal direction matches the required operation
-      // (FORWARD) The plan was created with FORWARD direction.
+      // (Forward) The plan was created with Forward direction.
       fft_plan_->fft(temp_kernel_time,
                      temp_kernel_fft);  // Pass only 2 arguments
 
@@ -220,7 +220,7 @@ struct CQTPlanImpl {
     }
 
     std::vector<std::complex<T>> input_fft(max_fft_length_);
-    // Use the fft_plan_ (created with FORWARD direction and desired norm)
+    // Use the fft_plan_ (created with Forward direction and desired norm)
     fft_plan_->fft(input_padded, input_fft);  // Pass only 2 arguments
 
     // 2. Multiply input FFT by precomputed conjugate kernel FFTs

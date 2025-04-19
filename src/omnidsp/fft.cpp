@@ -57,7 +57,7 @@ void fft(const std::vector<std::complex<T>>& input,
   // Create a temporary plan for forward FFT
   try {
     // Use the multi-parameter constructor declared in fft.h
-    FFTPlan<T> plan(size, prec, Direction::FORWARD, Domain::COMPLEX, norm);
+    FFTPlan<T> plan(size, prec, Direction::Forward, Domain::Complex, norm);
     plan.fft(input, output);  // Call the plan's method
   } catch (const std::exception& e) {
     // Catch potential errors during plan creation or execution
@@ -90,7 +90,7 @@ void ifft(const std::vector<std::complex<T>>& input,
   // Create a temporary plan for inverse FFT
   try {
     // Use the multi-parameter constructor declared in fft.h
-    FFTPlan<T> plan(size, prec, Direction::INVERSE, Domain::COMPLEX, norm);
+    FFTPlan<T> plan(size, prec, Direction::Inverse, Domain::Complex, norm);
     plan.ifft(input, output);  // Call the plan's method
   } catch (const std::exception& e) {
     throw std::runtime_error("Convenience ifft (oop) failed: " +
@@ -123,7 +123,7 @@ void rfft(const std::vector<T>& input, std::vector<std::complex<T>>& output,
   // Create a temporary plan for forward RFFT
   try {
     // Use the multi-parameter constructor declared in fft.h
-    RFFTPlan<T> plan(size, prec, Direction::FORWARD, Domain::REAL, norm);
+    RFFTPlan<T> plan(size, prec, Direction::Forward, Domain::Real, norm);
     plan.rfft(input, output);  // Call the plan's method
   } catch (const std::exception& e) {
     throw std::runtime_error("Convenience rfft failed: " +
@@ -167,7 +167,7 @@ void irfft(const std::vector<std::complex<T>>& input, std::vector<T>& output,
   // Create a temporary plan for inverse IRFFT
   try {
     // Use the multi-parameter constructor declared in fft.h
-    RFFTPlan<T> plan(N, prec, Direction::INVERSE, Domain::REAL, norm);
+    RFFTPlan<T> plan(N, prec, Direction::Inverse, Domain::Real, norm);
     plan.irfft(input, output);  // Call the plan's method
   } catch (const std::exception& e) {
     throw std::runtime_error("Convenience irfft failed: " +
@@ -189,7 +189,7 @@ void fft(std::vector<std::complex<T>>& data, FFTNorm norm) {
   // Create a temporary plan for forward FFT
   try {
     // Simulate in-place using the out-of-place plan method
-    FFTPlan<T> plan(size, prec, Direction::FORWARD, Domain::COMPLEX, norm);
+    FFTPlan<T> plan(size, prec, Direction::Forward, Domain::Complex, norm);
     // Create a temporary copy for the input to the OOP call
     std::vector<std::complex<T>> temp_input = data;
     plan.fft(temp_input, data);  // Execute OOP, writing result back into 'data'
@@ -212,7 +212,7 @@ void ifft(std::vector<std::complex<T>>& data, FFTNorm norm) {
   // Create a temporary plan for inverse FFT
   try {
     // Simulate in-place using the out-of-place plan method
-    FFTPlan<T> plan(size, prec, Direction::INVERSE, Domain::COMPLEX, norm);
+    FFTPlan<T> plan(size, prec, Direction::Inverse, Domain::Complex, norm);
     // Create a temporary copy for the input to the OOP call
     std::vector<std::complex<T>> temp_input = data;
     plan.ifft(temp_input,

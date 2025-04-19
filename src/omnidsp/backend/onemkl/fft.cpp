@@ -48,9 +48,9 @@ template <typename T>
 struct FFTPlanImpl {
   // --- Members ---
   size_t length = 0;                         // FFT Length (N)
-  Direction direction = Direction::FORWARD;  // Primary direction plan supports
+  Direction direction = Direction::Forward;  // Primary direction plan supports
   Precision precision = Precision::SINGLE;   // float or double
-  FFTNorm norm_mode = FFTNorm::BACKWARD;     // Normalization mode
+  FFTNorm norm_mode = FFTNorm::Backward;     // Normalization mode
   DFTI_DESCRIPTOR_HANDLE handle = nullptr;   // MKL DFTI descriptor handle
 
   // --- Constructor ---
@@ -67,9 +67,9 @@ struct FFTPlanImpl {
     } else {
       throw std::invalid_argument("Unsupported template type for FFTPlan.");
     }
-    // Verify domain is COMPLEX for FFTPlan
-    if (dom != Domain::COMPLEX) {
-      throw std::invalid_argument("FFTPlan requires Domain::COMPLEX.");
+    // Verify domain is Complex for FFTPlan
+    if (dom != Domain::Complex) {
+      throw std::invalid_argument("FFTPlan requires Domain::Complex.");
     }
 
     length = len;
@@ -86,19 +86,19 @@ struct FFTPlanImpl {
     // MKL applies the scale factor during computation.
     // We set DFTI_FORWARD_SCALE and DFTI_BACKWARD_SCALE accordingly.
     switch (norm_mode) {
-      case FFTNorm::BACKWARD:  // Forward unscaled, Inverse scaled by 1/N
+      case FFTNorm::Backward:  // Forward unscaled, Inverse scaled by 1/N
         forward_scale = 1.0;
         backward_scale = (scaleN > 0) ? (1.0 / scaleN) : 1.0;
         break;
-      case FFTNorm::ORTHO:  // Forward and Inverse scaled by 1/sqrt(N)
+      case FFTNorm::Ortho:  // Forward and Inverse scaled by 1/sqrt(N)
         if (scaleSqrtN <= static_cast<T>(0.0))
-          throw std::runtime_error("Cannot use ORTHO norm with length 0 or 1.");
+          throw std::runtime_error("Cannot use Ortho norm with length 0 or 1.");
         forward_scale = 1.0 / scaleSqrtN;
         backward_scale = 1.0 / scaleSqrtN;
         break;
-      case FFTNorm::FORWARD:  // Forward scaled by 1/N, Inverse unscaled
+      case FFTNorm::Forward:  // Forward scaled by 1/N, Inverse unscaled
         if (scaleN <= static_cast<T>(0.0))
-          throw std::runtime_error("Cannot use FORWARD norm with length 0.");
+          throw std::runtime_error("Cannot use Forward norm with length 0.");
         forward_scale = 1.0 / scaleN;
         backward_scale = 1.0;
         break;
@@ -193,9 +193,9 @@ struct RFFTPlanImpl {
   // --- Members ---
   size_t length = 0;          // Real FFT Length (N)
   size_t complex_length = 0;  // Length of complex spectrum (N/2 + 1)
-  Direction direction = Direction::FORWARD;  // Primary direction plan supports
+  Direction direction = Direction::Forward;  // Primary direction plan supports
   Precision precision = Precision::SINGLE;   // float or double
-  FFTNorm norm_mode = FFTNorm::BACKWARD;     // Normalization mode
+  FFTNorm norm_mode = FFTNorm::Backward;     // Normalization mode
   DFTI_DESCRIPTOR_HANDLE handle = nullptr;   // MKL DFTI descriptor handle
 
   // --- Constructor ---
@@ -212,9 +212,9 @@ struct RFFTPlanImpl {
     } else {
       throw std::invalid_argument("Unsupported template type for RFFTPlan.");
     }
-    // Verify domain is REAL for RFFTPlan
-    if (dom != Domain::REAL) {
-      throw std::invalid_argument("RFFTPlan requires Domain::REAL.");
+    // Verify domain is Real for RFFTPlan
+    if (dom != Domain::Real) {
+      throw std::invalid_argument("RFFTPlan requires Domain::Real.");
     }
 
     length = len;
@@ -230,19 +230,19 @@ struct RFFTPlanImpl {
     T backward_scale = 1.0;
 
     switch (norm_mode) {
-      case FFTNorm::BACKWARD:
+      case FFTNorm::Backward:
         forward_scale = 1.0;
         backward_scale = (scaleN > 0) ? (1.0 / scaleN) : 1.0;
         break;
-      case FFTNorm::ORTHO:
+      case FFTNorm::Ortho:
         if (scaleSqrtN <= static_cast<T>(0.0))
-          throw std::runtime_error("Cannot use ORTHO norm with length 0 or 1.");
+          throw std::runtime_error("Cannot use Ortho norm with length 0 or 1.");
         forward_scale = 1.0 / scaleSqrtN;
         backward_scale = 1.0 / scaleSqrtN;
         break;
-      case FFTNorm::FORWARD:
+      case FFTNorm::Forward:
         if (scaleN <= static_cast<T>(0.0))
-          throw std::runtime_error("Cannot use FORWARD norm with length 0.");
+          throw std::runtime_error("Cannot use Forward norm with length 0.");
         forward_scale = 1.0 / scaleN;
         backward_scale = 1.0;
         break;
@@ -250,7 +250,7 @@ struct RFFTPlanImpl {
 
     // --- MKL DFTI Descriptor Creation and Configuration ---
     MKL_LONG status;
-    DFTI_CONFIG_VALUE mkl_domain_type = DFTI_REAL;  // REAL domain for RFFTPlan
+    DFTI_CONFIG_VALUE mkl_domain_type = DFTI_REAL;  // Real domain for RFFTPlan
     DFTI_CONFIG_VALUE mkl_prec_type =
         (prec == Precision::SINGLE) ? DFTI_SINGLE : DFTI_DOUBLE;
 
@@ -359,9 +359,9 @@ void FFTPlan<T>::fft(const std::vector<std::complex<T>> &input,
   if (!pimpl_)
     throw std::runtime_error("Invalid FFTPlan (moved-from or uninitialized).");
   // Check if the plan was created for the correct direction
-  if (pimpl_->direction != Direction::FORWARD) {
+  if (pimpl_->direction != Direction::Forward) {
     throw std::runtime_error(
-        "fft() called on a plan not created with Direction::FORWARD.");
+        "fft() called on a plan not created with Direction::Forward.");
   }
   // Check input size
   if (input.size() != pimpl_->length) {
@@ -390,9 +390,9 @@ void FFTPlan<T>::ifft(const std::vector<std::complex<T>> &input,
   if (!pimpl_)
     throw std::runtime_error("Invalid FFTPlan (moved-from or uninitialized).");
   // Check if the plan was created for the correct direction
-  if (pimpl_->direction != Direction::INVERSE) {
+  if (pimpl_->direction != Direction::Inverse) {
     throw std::runtime_error(
-        "ifft() called on a plan not created with Direction::INVERSE.");
+        "ifft() called on a plan not created with Direction::Inverse.");
   }
   // Check input size
   if (input.size() != pimpl_->length) {
@@ -442,9 +442,9 @@ void RFFTPlan<T>::rfft(const std::vector<T> &input,
   if (!pimpl_)
     throw std::runtime_error("Invalid RFFTPlan (moved-from or uninitialized).");
   // Check direction
-  if (pimpl_->direction != Direction::FORWARD) {
+  if (pimpl_->direction != Direction::Forward) {
     throw std::runtime_error(
-        "rfft() called on a plan not created with Direction::FORWARD.");
+        "rfft() called on a plan not created with Direction::Forward.");
   }
   // Check input size
   if (input.size() != pimpl_->length) {
@@ -473,9 +473,9 @@ void RFFTPlan<T>::irfft(const std::vector<std::complex<T>> &input,
   if (!pimpl_)
     throw std::runtime_error("Invalid RFFTPlan (moved-from or uninitialized).");
   // Check direction
-  if (pimpl_->direction != Direction::INVERSE) {
+  if (pimpl_->direction != Direction::Inverse) {
     throw std::runtime_error(
-        "irfft() called on a plan not created with Direction::INVERSE.");
+        "irfft() called on a plan not created with Direction::Inverse.");
   }
   // Check input size (N/2 + 1)
   if (input.size() != pimpl_->complex_length) {

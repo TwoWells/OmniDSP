@@ -3,7 +3,7 @@
  * @brief Example usage of OmniDSP for Complex-to-Complex FFTs.
  *
  * Demonstrates C2C transforms using the FFTPlan class (OOP and IP)
- * and convenience functions (OOP and IP). Uses BACKWARD normalization.
+ * and convenience functions (OOP and IP). Uses Backward normalization.
  */
 
 #include <OmniDSP/omnidsp.h>  // Includes necessary headers like fft.h, core_types.h
@@ -53,13 +53,13 @@ int main() {
     // ==========================================================
     std::cout << "--- Method 1: Using FFTPlan (C2C OOP) ---" << std::endl;
     OmniDSP::FFTPlan<Real> forward_plan_c2c(
-        N, CURRENT_PRECISION, OmniDSP::Direction::FORWARD,
-        OmniDSP::Domain::COMPLEX,
-        OmniDSP::FFTNorm::BACKWARD);  // Using BACKWARD norm as specified
+        N, CURRENT_PRECISION, OmniDSP::Direction::Forward,
+        OmniDSP::Domain::Complex,
+        OmniDSP::FFTNorm::Backward);  // Using Backward norm as specified
     OmniDSP::FFTPlan<Real> inverse_plan_c2c(
-        N, CURRENT_PRECISION, OmniDSP::Direction::INVERSE,
-        OmniDSP::Domain::COMPLEX,
-        OmniDSP::FFTNorm::BACKWARD);  // Using BACKWARD norm as specified
+        N, CURRENT_PRECISION, OmniDSP::Direction::Inverse,
+        OmniDSP::Domain::Complex,
+        OmniDSP::FFTNorm::Backward);  // Using Backward norm as specified
 
     std::vector<Complex> spectrum_c2c_plan(N);
     std::vector<Complex> reconstructed_c2c_plan(N);
@@ -107,9 +107,9 @@ int main() {
     // Assuming convenience functions take vector references and handle norm
     // correctly
     OmniDSP::fft(input_signal_c2c, spectrum_conv_c2c,
-                 OmniDSP::FFTNorm::BACKWARD);  // Specify norm if needed
+                 OmniDSP::FFTNorm::Backward);  // Specify norm if needed
     OmniDSP::ifft(spectrum_conv_c2c, reconstructed_conv_c2c,
-                  OmniDSP::FFTNorm::BACKWARD);  // Specify norm if needed
+                  OmniDSP::FFTNorm::Backward);  // Specify norm if needed
 
     std::cout << "Spectrum (Convenience Func):" << std::endl;
     for (size_t i = 0; i < std::min((size_t)5, N); ++i)
@@ -136,7 +136,7 @@ int main() {
     // specify it. Add normalization argument if required by the function
     // signature.
     OmniDSP::fft(
-        data_inplace_c2c /*, OmniDSP::FFTNorm::BACKWARD */);  // Add norm if
+        data_inplace_c2c /*, OmniDSP::FFTNorm::Backward */);  // Add norm if
                                                               // needed
     std::cout << "Spectrum (In-place Forward):" << std::endl;
     for (size_t i = 0; i < std::min((size_t)5, N); ++i)
@@ -145,7 +145,7 @@ int main() {
     std::cout << std::endl;
 
     OmniDSP::ifft(
-        data_inplace_c2c /*, OmniDSP::FFTNorm::BACKWARD */);  // Add norm if
+        data_inplace_c2c /*, OmniDSP::FFTNorm::Backward */);  // Add norm if
                                                               // needed
     std::cout << "\nReconstructed (In-place Inverse):" << std::endl;
     for (size_t i = 0; i < std::min((size_t)5, N); ++i)

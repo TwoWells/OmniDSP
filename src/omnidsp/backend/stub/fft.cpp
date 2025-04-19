@@ -33,10 +33,10 @@ struct FFTPlanImpl {
   // --- Members (Stored but not functionally used) ---
   size_t length = 0;
   size_t complex_length = 0;
-  Direction direction = Direction::FORWARD;
+  Direction direction = Direction::Forward;
   Precision precision = Precision::SINGLE;
-  Domain domain = Domain::COMPLEX;
-  FFTNorm norm_mode = FFTNorm::BACKWARD;
+  Domain domain = Domain::Complex;
+  FFTNorm norm_mode = FFTNorm::Backward;
   T forward_scale = 1.0;
   T backward_scale = 1.0;
 
@@ -54,7 +54,7 @@ struct FFTPlanImpl {
     // Initialize members to silence potential compiler warnings, although
     // the exception above means this code will never actually execute.
     length = len;
-    complex_length = (dom == Domain::REAL) ? len / 2 + 1 : len;
+    complex_length = (dom == Domain::Real) ? len / 2 + 1 : len;
     direction = dir;
     precision = prec;
     domain = dom;
@@ -63,15 +63,15 @@ struct FFTPlanImpl {
     T scaleN = static_cast<T>(length);
     T scaleSqrtN = std::sqrt(scaleN);
     switch (norm_mode) {
-      case FFTNorm::BACKWARD:
+      case FFTNorm::Backward:
         forward_scale = 1.0;
         backward_scale = 1.0 / scaleN;
         break;
-      case FFTNorm::ORTHO:
+      case FFTNorm::Ortho:
         forward_scale = 1.0 / scaleSqrtN;
         backward_scale = 1.0 / scaleSqrtN;
         break;
-      case FFTNorm::FORWARD:
+      case FFTNorm::Forward:
         forward_scale = 1.0 / scaleN;
         backward_scale = 1.0;
         break;

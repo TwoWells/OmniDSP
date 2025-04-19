@@ -123,9 +123,9 @@ PYBIND11_MODULE(omnidsp_py, m) {
   // directly.
   py::enum_<OmniDSP::Direction>(
       m, "Direction", "Specifies the direction of the Fourier Transform.")
-      .value("FORWARD", OmniDSP::Direction::FORWARD,
+      .value("Forward", OmniDSP::Direction::Forward,
              "Forward Transform (e.g., time to frequency).")
-      .value("INVERSE", OmniDSP::Direction::INVERSE,
+      .value("Inverse", OmniDSP::Direction::Inverse,
              "Inverse Transform (e.g., frequency to time).")
       .export_values();
 
@@ -140,19 +140,19 @@ PYBIND11_MODULE(omnidsp_py, m) {
 
   py::enum_<OmniDSP::Domain>(
       m, "Domain", "Specifies the domain of the input/output signals.")
-      .value("COMPLEX", OmniDSP::Domain::COMPLEX,
+      .value("Complex", OmniDSP::Domain::Complex,
              "Complex-to-Complex (C2C) transform.")
-      .value("REAL", OmniDSP::Domain::REAL, "Real-valued transform (R2C/C2R).")
+      .value("Real", OmniDSP::Domain::Real, "Real-valued transform (R2C/C2R).")
       .export_values();
 
   py::enum_<OmniDSP::NormMode>(
       m, "NormMode",
       R"pbdoc(Specifies the normalization/scaling mode applied to the transforms.)pbdoc")
-      .value("BACKWARD", OmniDSP::NormMode::BACKWARD,
+      .value("Backward", OmniDSP::NormMode::Backward,
              "Forward unscaled, Inverse scaled by 1/N. (Default).")
-      .value("ORTHO", OmniDSP::NormMode::ORTHO,
+      .value("Ortho", OmniDSP::NormMode::Ortho,
              "Forward and Inverse scaled by 1/sqrt(N). Unitary.")
-      .value("FORWARD", OmniDSP::NormMode::FORWARD,
+      .value("Forward", OmniDSP::NormMode::Forward,
              "Forward scaled by 1/N, Inverse unscaled.")
       .export_values();
 
@@ -171,11 +171,11 @@ PYBIND11_MODULE(omnidsp_py, m) {
            R"pbdoc(Constructs float FFT plan.)pbdoc", py::arg("length"),
            py::arg("precision"), py::arg("direction"), py::arg("domain"),
            py::arg("norm") =
-               OmniDSP::NormMode::BACKWARD)  // Default normalization mode
+               OmniDSP::NormMode::Backward)  // Default normalization mode
       // Bind getter methods
       .def("getLength", &FFTPlanFloat::getLength, "Gets the length 'N'.")
       .def("getComplexLength", &FFTPlanFloat::getComplexLength,
-           "Gets complex spectrum length (N/2+1 for REAL, N for COMPLEX).")
+           "Gets complex spectrum length (N/2+1 for Real, N for Complex).")
       .def("getDirection", &FFTPlanFloat::getDirection,
            "Gets transform direction.")
       .def("getPrecision", &FFTPlanFloat::getPrecision, "Gets precision.")
@@ -191,11 +191,11 @@ PYBIND11_MODULE(omnidsp_py, m) {
            R"pbdoc(Constructs double FFT plan.)pbdoc", py::arg("length"),
            py::arg("precision"), py::arg("direction"), py::arg("domain"),
            py::arg("norm") =
-               OmniDSP::NormMode::BACKWARD)  // Default normalization mode
+               OmniDSP::NormMode::Backward)  // Default normalization mode
       // Bind getter methods
       .def("getLength", &FFTPlanDouble::getLength, "Gets the length 'N'.")
       .def("getComplexLength", &FFTPlanDouble::getComplexLength,
-           "Gets complex spectrum length (N/2+1 for REAL, N for COMPLEX).")
+           "Gets complex spectrum length (N/2+1 for Real, N for Complex).")
       .def("getDirection", &FFTPlanDouble::getDirection,
            "Gets transform direction.")
       .def("getPrecision", &FFTPlanDouble::getPrecision, "Gets precision.")
@@ -582,7 +582,7 @@ PYBIND11_MODULE(omnidsp_py, m) {
       },
       py::arg("input"),
       "Performs C2C forward FFT (complex64 input/output, "
-      "NormMode.BACKWARD).");  // Overload 1: float
+      "NormMode.Backward).");  // Overload 1: float
 
   m.def(
       "fft",
@@ -602,7 +602,7 @@ PYBIND11_MODULE(omnidsp_py, m) {
       },
       py::arg("input"),
       "Performs C2C forward FFT (complex128 input/output, "
-      "NormMode.BACKWARD).");  // Overload 2: double
+      "NormMode.Backward).");  // Overload 2: double
 
   // --- IFFT (C2C Inverse) --- (Similar binding pattern)
   m.def(
@@ -619,7 +619,7 @@ PYBIND11_MODULE(omnidsp_py, m) {
         return vector_to_numpy_1d(output_vec);
       },
       py::arg("input"),
-      "Performs C2C inverse FFT (complex64 input/output, NormMode.BACKWARD).");
+      "Performs C2C inverse FFT (complex64 input/output, NormMode.Backward).");
 
   m.def(
       "ifft",
@@ -636,7 +636,7 @@ PYBIND11_MODULE(omnidsp_py, m) {
         return vector_to_numpy_1d(output_vec);
       },
       py::arg("input"),
-      "Performs C2C inverse FFT (complex128 input/output, NormMode.BACKWARD).");
+      "Performs C2C inverse FFT (complex128 input/output, NormMode.Backward).");
 
   // --- RFFT (R2C Forward) ---
   m.def(
@@ -653,7 +653,7 @@ PYBIND11_MODULE(omnidsp_py, m) {
       },
       py::arg("real_input"),
       "Performs R2C forward FFT (float32 input -> complex64 output, "
-      "NormMode.BACKWARD). Returns N/2+1 complex points.");
+      "NormMode.Backward). Returns N/2+1 complex points.");
 
   m.def(
       "rfft",
@@ -670,7 +670,7 @@ PYBIND11_MODULE(omnidsp_py, m) {
       },
       py::arg("real_input"),
       "Performs R2C forward FFT (float64 input -> complex128 output, "
-      "NormMode.BACKWARD). Returns N/2+1 complex points.");
+      "NormMode.Backward). Returns N/2+1 complex points.");
 
   // --- IRFFT (C2R Inverse) ---
   m.def(
@@ -689,7 +689,7 @@ PYBIND11_MODULE(omnidsp_py, m) {
       },
       py::arg("complex_input"),
       "Performs C2R inverse FFT (complex64 input -> float32 output, "
-      "NormMode.BACKWARD). Input must have Hermitian symmetry.");
+      "NormMode.Backward). Input must have Hermitian symmetry.");
 
   m.def(
       "irfft",
@@ -707,7 +707,7 @@ PYBIND11_MODULE(omnidsp_py, m) {
       },
       py::arg("complex_input"),
       "Performs C2R inverse FFT (complex128 input -> float64 output, "
-      "NormMode.BACKWARD). Input must have Hermitian symmetry.");
+      "NormMode.Backward). Input must have Hermitian symmetry.");
 
   // --- Version Info ---
   // Embed version information into the module if defined during compilation
