@@ -1,84 +1,83 @@
 # OmniDSP TODO List
 
-## Highest Priority / Next Up
+## High Priority / Blocking Tasks
 
-- [ ] **Refactor C++ Test Reference Data Handling:** Replace the current \`TestDataUtils\` parser with a modular system using plain text files per test case. (Highest Priority - Blocker for backend verification & other test debugging)
-  - [x] Create new directory structure: `tests/cpp/data/<Suite>/`, `tests/cpp/scripts/`, `tests/cpp/tests/`.
-  - [x] Organize data files under `data/<Suite>/<TestCase>_<Purpose>_<Type>.txt` (where `<TestCase>` matches the GoogleTest name).
-    - `<Purpose>`: Indicates if data is `input` or `expected` for the test.
-    - `<Type>`: Specifies data type/precision (e.g., `d`\=double, `f`\=float, `cd`\=complex-double, `cf`\=complex-float).
-  - [x] Place Python generation scripts under `scripts/<Suite>.py`.
-  - [x] Place C++ test files under `tests/<Suite>.cpp`.
-  - [x] Update Python scripts (`scripts/*.py`) to generate data in the new structure/format.
-  - [x] Update `tests/cpp/CMakeLists.txt`: Define `OMNIDSP_TEST_DATA_DIR`, adjust sources for `tests/` subdir, ensure Python scripts run before tests.
-  - [x] Implement new C++ `TestDataLoader.h/.cpp` utility.
-  - [x] Update all C++ tests (`tests/*.cpp`) to use `TestDataLoader`.
-  - [x] Remove old `TestDataUtils.h/.cpp` and `test_references.txt`.
-  - [x] Update `CONTRIBUTING.md` to reflect new testing suite.
-- [ ] **Tune Final Scaling Factor (CQT):** Adjust CQT coefficient scaling in `cqt.cpp` (float path) to match Librosa. (High Priority - after test refactor)
+- [x] **Refactor C++ Test Reference Data Handling:** Complete the transition to the new text-file based system (ensure all tests use `TestDataLoader` and old system is removed). (Highest Priority - Blocker for backend verification & other test debugging)
+- [ ] **Debug C++ Tests (Post-Refactor):** Fix all remaining test failures observed after the refactoring is complete (FFT, CQT, Window tests). (High Priority)
+- [ ] **Tune CQT Scaling Factor:** Adjust CQT coefficient scaling in `cqt.cpp` (float path) to potentially match Librosa or achieve desired normalization. (High Priority - depends on passing CQT tests)
+- [ ] **Verify Accelerate Backend via CI:** Confirm Accelerate build passes _and C++ tests pass_ on macOS CI runner. Verify `vDSP_desamp` behavior vs reference data. (High Priority)
 
-## I. Core Implementation Tasks (in `src/omnidsp/`)
+## Core Implementation & Backend Tasks
 
-- **`accelerate/resample.cpp`**:
-  - (Blocked by Test Refactor & CI Verification) **Verify Behavior:** Use CI runs to confirm `vDSP_desamp` output size/behavior vs reference generation logic.
-- **`onemkl/resample.cpp`**:
-  - (Blocked by Accelerate Verification) **Decide Resampling Strategy:** Choose Option A (conform to IPP) or B (IPP alternative) based on verified Accelerate behavior.
-  - (Blocked by Strategy Decision) **Implement MKL Resampling:** Code the chosen strategy.
-  - (Blocked by Implementation) **Implement `double` Precision:** Add double-precision support.
-  - (If Option A) **Tune IPP Parameters:** Tune `ippsResamplePolyphaseFixed` parameters if used.
-- **`convolution.cpp` / `backend/...`**:
-  - [ ] **Add 'same'/'full' Modes:** Implement for `convolve1d`/`correlate1d`. (Medium Priority)
-- **Error Handling:**
+- **Resampling (`onemkl/resample.cpp`, `accelerate/resample.cpp`)**
+  - [ ] **Decide MKL Resampling Strategy:** (Blocked by Accelerate Verification) Based on verified Accelerate behavior, choose Option A (conform to IPP) or B (IPP alternative) for MKL `float` resampling. (Medium Priority)
+  - [ ] **Implement MKL Resampling:** (Blocked by Strategy Decision) Code the chosen strategy for `float`. (Medium Priority)
+  - [ ] **Address MKL `filter_and_downsample<double>`:** Implement `double` precision support. (Low Priority)
+    - Consider implementing a custom (non-IPP) `double` precision routine if direct IPP support remains unavailable or undesirable.
+- **CQT (`cqt.cpp`)**
+  - [ ] **Refactor CQT Downsampling:** Modify the recursive CQT implementation to use the public `OmniDSP::filter_and_downsample` function for internal downsampling steps. (Medium Priority)
+    - Note: This links the CQT's `double` precision support directly to the availability of `filter_and_downsample<double>`.
+  - [ ] **CQT Implementation Optimization:** Investigate `Nk` precalculation, analyze memory usage. (Low Priority)
+- **Convolution (`convolution.cpp`, `backend/...`)**
+  - [ ] **Implement 'same' Mode:** Add `'same'` mode support for `convolve1d`/`correlate1d`. (Medium Priority)
+  - [ ] **Implement 'full' Mode:** Add `'full'` mode support for `convolve1d`/`correlate1d`. (Medium Priority)
+  - [ ] **Investigate MKL IPP Convolution Alternative:** Explore other IPP convolution/correlation functions if `ippsConvolve` has limitations. (Low Priority)
+- **Windowing (`accelerate/window.cpp`)**
+  - [ ] **Implement Accelerate Kaiser Window:** Add `kaiser_window_impl` using Accelerate/vDSP if possible. (Low Priority - may allow removing Boost dep)
+  - [ ] **Implement Accelerate Flattop Window:** Add `flattop_window_impl` using Accelerate/vDSP if possible. (Low Priority)
+- **Filter Design (`filter.h`, `filter.cpp`)**
+  - [ ] **Implement FIR Filter Design:** e.g., `designLowpassFIR` using window method. (Low Priority)
+  - [ ] **Implement IIR Filter Design:** e.g., `designButterworth`. Create `src/omnidsp/filter.cpp`. (Low Priority)
+- **Error Handling & API**
   - [ ] **Improve Error Propagation:** Enhance error reporting from C++ backends to Python. (Medium Priority)
-- **Filter Design Functions:**
-  - [ ] Implement functions declared in `include/OmniDSP/filter.h`. Create `src/omnidsp/filter.cpp`. (Low Priority)
+  - [ ] **Backend Query API:** Add function to query the active backend at runtime. (Low Priority)
+- **New Algorithms**
+  - [ ] **STFT Implementation:** Consider adding Short-Time Fourier Transform (STFT) functionality. (Low Priority)
 
-## II. Unit Testing Tasks (in `tests/cpp/`)
+## Testing Tasks (`tests/...`)
 
-- **Investigate Test Failures (Blocked by Test Refactor):**
-  - [ ] **`FFT_Test` Failures:** Debug FFT test failures after refactoring is complete.
-  - [ ] **`FilterAndDownsample` Test:** Verify output _values_ against new reference data once resampling strategy (Task I) is finalized.
-  - [ ] **`FullRecursiveCQT_Execute` Test:** Debug float execution errors or mismatches vs Librosa reference, especially after CQT scaling (Task I) is tuned.
-  - [ ] **`WindowTest.Kaiser` Test:** Re-check after refactor. Determine cause (IPP vs manual calc). Adjust tolerance if needed.
-  - [ ] **`WindowTest.EdgeCases` Test:** Re-check after refactor. Determine which edge case failed and debug.
-- [ ] **Add Conv/Corr Mode Tests:** Add C++ tests for 'same'/'full' modes once implemented (Task I). (Medium Priority)
+- **C++ Tests (`tests/cpp`)**
+  - [ ] **Add Conv/Corr Mode Tests:** Add C++ tests for 'same'/'full' modes once implemented. (Medium Priority)
+  - [ ] **Increase Parameter Coverage:** Add tests for FFT/CQT/Window using different parameters (sizes, betas, bins, etc.). (Medium Priority)
+  - [ ] **Backend-Specific Tests:** Add tests targeting edge cases or known differences between MKL and Accelerate backends. (Medium Priority)
+  - [ ] **Resampling Value Verification:** Verify `FilterAndDownsample` output _values_ (not just shape/type) against reference data once resampling strategy is finalized. (Medium Priority)
+  - [ ] **Add More CQT Signals:** Test CQT with different input signals (e.g., noise, multiple sinusoids). (Low Priority)
+- **Python Tests (`tests/python`)**
+  - [ ] **Add Python CQT Tests:** Add tests comparing `omnidsp_py.create_cqt_plan().execute()` against Librosa reference more rigorously. (Medium Priority)
+  - [ ] **Add Python FFT Tests:** Add tests comparing `omnidsp_py.fft`, `rfft`, etc. against `scipy.fft`. (Medium Priority)
+  - [ ] **Add Python Window Tests:** Add tests comparing `omnidsp_py.Window` methods against `scipy.signal.get_window`. (Medium Priority)
+- **Benchmarking**
+  - [ ] **Formalize Benchmarking Suite:** Develop and integrate performance benchmarks comparing backends for key operations (FFT, CQT). (Medium Priority)
 
-## III. Build System & Integration
+## Python Bindings (`src/omnidsp_py`)
+
+- [ ] **Add Conv/Corr Wrappers:** Create Python wrappers in `api.py` for `convolve1d`/`correlate1d`, handling modes. (Medium Priority)
+- [ ] **Memory View Support:** Investigate using `py::buffer_protocol` to allow zero-copy operations on NumPy arrays where feasible. (Low Priority)
+- [ ] **Expose Plan Execution API:** Decide if Python API should expose `plan.fft()`, `plan.ifft()`, etc., directly in addition to factory/convenience functions. (Low Priority)
+- [ ] **Expose More Plan Parameters:** Add getters for more internal plan parameters if useful for debugging/introspection. (Low Priority)
+- [ ] **Pre-allocated Output Option:** Allow passing pre-allocated NumPy arrays to functions like `fft` to avoid internal allocation. (Low Priority)
+
+## Build System & CI (`CMakeLists.txt`, `.github/workflows`)
 
 - **Continuous Integration (CI):**
-  - **Current Status:** CI build PASSES, but C++ tests FAIL (Accelerate backend). (Blocked by Test Refactor)
-  - **Future:** Add Linux/Windows runners once macOS build passes _and tests pass_ post-refactor.
+  - [ ] **Add Linux Runner:** Add Ubuntu CI runner once macOS build & tests pass. (Medium Priority)
+  - [ ] **Add Windows Runner:** Add Windows CI runner once macOS build & tests pass. (Medium Priority)
+- **Build System (`CMakeLists.txt`)**
+  - [ ] **Static Linking Investigation:** Explore options and add CMake flag for building OmniDSP as a static library. (Low Priority)
+  - [ ] **Add More CMake Options:** Consider options for disabling CQT, forcing MKL linking mode, etc. (Low Priority)
 
-## IV. Tuning and Verification (Post-Implementation Fixes)
+## Documentation & Examples
 
-- [ ] **Parameter Tuning:** Revisit CQT `sparsity_threshold_` and scaling factor. (Medium Priority)
-- [ ] **Reference Comparison:** Thoroughly compare CQT (float) against Librosa after scaling is corrected. (Medium Priority)
-- [ ] **Formalize Benchmarking Suite:** Develop benchmarks. (Medium Priority)
-
-## V. Python Bindings (`src/omnidsp_py`)
-
-- [ ] **Add Conv/Corr Wrappers:** Create Python wrappers in `api.py`. (Medium Priority)
-- [ ] **Expose More Plan Parameters:** (Low Priority)
-- [ ] **Python CQT Tests:** Add Python tests comparing vs Librosa. (Low Priority)
-- [ ] **Pre-allocated Output Option:** (Low Priority)
-
-## VI. Additional Recommendations (Lower Priority)
-
-- [ ] Handle Kaiser/Flattop Windows in Accelerate Backend. (Low Priority)
-- [ ] Build System (`CMakeLists.txt`): Static linking investigation.
-- [ ] CQT Implementation (`src/omnidsp/cqt.cpp`): Optimization (Nk precalc), Memory analysis.
-- [ ] Backend (`src/omnidsp/backend/onemkl.cpp`): IPP Convolution alternative.
-- [ ] Testing (`tests/cpp/cqt.cpp`): More CQT signals.
-- [ ] API Query: Backend query function.
-- **Documentation:**
-  - [ ] Add backend details, CQT details, API docs.
+- [ ] **API Documentation:** Generate Doxygen (C++) & Sphinx (Python) documentation. (Medium Priority)
+- [ ] **Tutorials/Examples:** Add more comprehensive examples (C++/Python) for common use cases. (Medium Priority)
+- [ ] **Backend Documentation:** Improve README/docs with details on backend differences, performance notes, and limitations (e.g., MKL double resampling). (Medium Priority)
 
 ## Summary of Next Steps (Prioritized):
 
-1.  **REFACTOR C++ TEST DATA HANDLING:** Implement the new text-file based system.
-2.  **DEBUG C++ TESTS (Post-Refactor):** Fix failures observed after the refactor is complete (FFT, CQT, Window, Resample tests).
-3.  **VERIFY ACCELERATE VIA CI:** Confirm Accelerate build passes _and tests pass_ on macOS CI runner. Verify `vDSP_desamp` behavior.
-4.  **DECIDE MKL RESAMPLING STRATEGY:** Based on verified Accelerate behavior, choose Option A or B for MKL.
-5.  **IMPLEMENT MKL RESAMPLING:** Code the chosen strategy.
+1.  **REFACTOR C++ TEST DATA HANDLING:** Complete implementation and ensure all tests use it.
+2.  **DEBUG C++ TESTS (Post-Refactor):** Fix remaining C++ test failures.
+3.  **VERIFY ACCELERATE VIA CI:** Confirm macOS CI build and tests pass. Verify resampling behavior.
+4.  **DECIDE MKL RESAMPLING STRATEGY:** Choose approach for `float`.
+5.  **IMPLEMENT MKL RESAMPLING:** Code the chosen `float` strategy.
 6.  **ADDRESS CQT SCALING:** Tune the scaling factor in `cqt.cpp`.
 7.  Proceed with other medium/low priority tasks.
