@@ -19,7 +19,7 @@
 // Include Boost header for Bessel functions
 #include <boost/math/special_functions/bessel.hpp>
 
-#include "../backend_impl.h"  // Internal backend function declarations
+#include "../backend.h"  // Internal backend function declarations
 
 // Only compile if USE_ACCELERATE is defined by CMake (typically on macOS)
 #if defined(USE_ACCELERATE)

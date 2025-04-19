@@ -18,7 +18,7 @@
 #include <string>     // For std::string
 #include <vector>
 
-#include "backend/backend_impl.h"  // Backend function declarations
+#include "backend/backend.h"  // Backend function declarations
 
 namespace OmniDSP {
 

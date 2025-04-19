@@ -10,7 +10,7 @@
 #include <string>     // For exception messages
 #include <vector>
 
-#include "backend/backend_impl.h"  // Backend dispatcher function declarations
+#include "backend/backend.h"  // Backend dispatcher function declarations
 
 namespace OmniDSP {
 

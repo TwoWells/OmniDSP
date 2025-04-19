@@ -1,146 +1,107 @@
 /**
  * @file cqt.cpp
- * @brief Example usage of the OmniDSP CQTPlan class.
- *
- * Demonstrates performing a Constant Q Transform using the efficient
- * recursive frequency-domain implementation.
- * Updated includes after header refactoring. Added M_PI guard.
+ * @brief Example demonstrating the Constant-Q Transform (CQT) using OmniDSP.
  */
 
-#include <OmniDSP/cqt.h>      // Include the CQT header
-#include <OmniDSP/omnidsp.h>  // Main header includes enums
-#include <OmniDSP/window.h>   // Use the renamed window header
+// Ensure all potentially relevant headers are included
+#include <OmniDSP/core_types.h>  // Defines Precision
+#include <OmniDSP/cqt.h>         // Primary header for CQTPlan
+#include <OmniDSP/fft.h>         // Defines FFTNorm
 
-#include <algorithm>  // For std::min
 #include <cmath>
 #include <complex>
 #include <iostream>
-#include <stdexcept>
+#include <stdexcept>  // Include for std::exception
 #include <vector>
 
-// Define M_PI if it's not already defined (e.g., by <cmath> in some
-// environments/standards)
+// Define the Real type alias (assuming double precision for this example)
+using Real = double;
+using Complex = std::complex<Real>;
+
+// --- Helper Function (Example) ---
+// Generates a simple sine wave
+std::vector<Real> generateSineWave(double freq, double sampleRate,
+                                   double duration) {
+// Use M_PI, ensure cmath is included (it is)
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
-
-// Helper function to generate window coefficients (e.g., Hann)
-// This matches the signature expected by the updated CQTPlan constructor
-// binding NOTE: This is a manual implementation for demonstration. One could
-// potentially
-//       call OmniDSP::Window::hann here if only coefficients were needed,
-//       but the public API applies the window. This manual version is fine.
-template <typename T>
-std::vector<T> generate_hann_coeffs(size_t required_length) {
-  if (required_length == 0) return {};
-  std::vector<T> coeffs(required_length);
-  // Use M_PI from <cmath> or the definition above
-  double denom =
-      (required_length > 1) ? static_cast<double>(required_length - 1) : 1.0;
-  for (size_t n = 0; n < required_length; ++n) {
-    coeffs[n] = static_cast<T>(0.5 - 0.5 * std::cos(2.0 * M_PI * n / denom));
+  size_t numSamples = static_cast<size_t>(sampleRate * duration);
+  std::vector<Real> signal(numSamples);
+  Real angularFreq = 2.0 * M_PI * freq / sampleRate;
+  for (size_t i = 0; i < numSamples; ++i) {
+    signal[i] = std::sin(angularFreq * i);
   }
-  // CQTPlan internally handles normalization during kernel generation.
-  // No explicit L1 normalization needed here for the generator function.
-  return coeffs;
+  return signal;
 }
 
+// --- Main Function ---
 int main() {
-  using Real = double;
-  using Complex = std::complex<Real>;
+  // --- Parameters ---
+  // Example parameters for CQT calculation
+  const double sr = 44100.0;  // Sample rate (Hz)
+  const double fmin = 27.5;   // Minimum frequency (Hz) - A0 note
+  const double fmax =
+      20000.0;  // Maximum frequency (Hz) - Approximate (Note: fmax isn't
+                // directly used in this CQTPlan constructor)
+  const int bins_per_octave =
+      12;  // Number of bins per octave (e.g., 12 for semitones)
+  const double duration = 1.0;             // Duration of the signal in seconds
+  const int n_bins = 7 * bins_per_octave;  // Example: 7 octaves
 
-  std::cout << "OmniDSP CQT Example" << std::endl;
-  std::cout << "-------------------" << std::endl;
+  // --- Generate Input Signal ---
+  // Example: A sine wave at 440 Hz (A4 note)
+  std::vector<Real> inputSignal = generateSineWave(440.0, sr, duration);
+  std::cout << "Generated a sine wave with " << inputSignal.size()
+            << " samples." << std::endl;
 
+  // --- Create CQT Plan ---
   try {
-    // ==========================================================
-    // CQT Example
-    // ==========================================================
-    std::cout << "--- Setting up and Running CQT ---" << std::endl;
-
-    // CQT parameters
-    double cqt_sample_rate = 44100.0;
-    double cqt_lowest_freq = 55.0;     // A1 note
-    double cqt_highest_freq = 1760.0;  // A6 note
-    int cqt_bins_per_octave = 12;      // Semitones
-    // Hop length must be compatible with the number of octaves.
-    // A1-A6 is 5 octaves (0..4), so hop must be divisible by 2^(5-1) = 16.
-    size_t cqt_hop_length = 512;  // Example valid hop length
-
-    // Define the window function generator using the helper
-    auto hann_window_gen_func = generate_hann_coeffs<Real>;
-
-    // Create CQTPlan
     std::cout << "Creating CQT Plan..." << std::endl;
-    // Optional args for sparsity_threshold and fir_filter_order use defaults
-    // here.
-    OmniDSP::CQTPlan<Real> cqt_plan(
-        cqt_sample_rate, cqt_hop_length, cqt_lowest_freq, cqt_highest_freq,
-        cqt_bins_per_octave,
-        hann_window_gen_func);  // Pass the generator function
 
-    std::cout << "CQT Plan created (Num Bins: " << cqt_plan.getNumBins()
-              << ", Num Octaves: " << cqt_plan.getNumOctaves()
-              << ", Hop Length: " << cqt_plan.getHopLength() << ")"
-              << std::endl;
+    // Construct the CQTPlan object
+    // Using definitions from fft.h (immersive fft_h_updated) and core_types.h:
+    // - Precision is likely an enum class (OmniDSP::Precision::DOUBLE)
+    // - FFTNorm is an enum class with member 'ORTHO' (OmniDSP::FFTNorm::ORTHO)
+    OmniDSP::CQTPlan<Real> cqtPlan(
+        sr,                          // Sample rate (double)
+        fmin,                        // Minimum frequency (double)
+        n_bins,                      // Total number of CQT bins (int)
+        bins_per_octave,             // Bins per octave (int)
+        OmniDSP::Precision::DOUBLE,  // Precision enum
+        OmniDSP::FFTNorm::ORTHO      // FFT normalization enum (Using ALL_CAPS
+                                     // version from fft.h)
+    );
 
-    // Generate a test signal (e.g., a simple chord A3 + A4)
-    size_t cqt_signal_len =
-        static_cast<size_t>(cqt_sample_rate * 2);  // 2 seconds of audio
-    std::cout << "Generating test signal (Length: " << cqt_signal_len << ")..."
-              << std::endl;
-    std::vector<Real> cqt_input_signal(cqt_signal_len);
-    double freq1 = 220.0;  // A3
-    double freq2 = 440.0;  // A4
-    for (size_t i = 0; i < cqt_input_signal.size(); ++i) {
-      double time = static_cast<double>(i) / cqt_sample_rate;
-      cqt_input_signal[i] = 0.5 * std::cos(2.0 * M_PI * freq1 * time) +
-                            0.5 * std::cos(2.0 * M_PI * freq2 * time);
-    }
+    std::cout << "CQT Plan created successfully." << std::endl;
 
-    // Execute CQT
+    // --- Execute CQT ---
     std::cout << "Executing CQT..." << std::endl;
-    // Output is std::vector<std::vector<std::complex<Real>>> [bin][frame]
-    std::vector<std::vector<Complex>> cqt_output;
-    cqt_plan.execute(cqt_input_signal, cqt_output);
-    std::cout << "CQT Execution complete." << std::endl;
+    // The execute method likely takes the input signal and returns the CQT
+    // result. The exact return type depends on the CQTPlan implementation
+    // (e.g., std::vector<std::vector<Complex>>). This is a placeholder for the
+    // actual execution call. Example: Get the expected output size first size_t
+    // num_frames = cqtPlan.get_num_frames(inputSignal.size());
+    // std::vector<std::vector<Complex>> cqtResult(n_bins,
+    // std::vector<Complex>(num_frames)); cqtPlan.execute(inputSignal,
+    // cqtResult); // Replace with actual execute signature
 
-    // --- Print CQT Output ---
-    if (cqt_output.empty() || cqt_output[0].empty()) {
-      std::cout << "\nCQT Output is empty (possibly due to short input signal)."
-                << std::endl;
-    } else {
-      size_t num_bins_out = cqt_output.size();
-      size_t num_frames_out = cqt_output[0].size();
+    // --- Process Results (Example) ---
+    // std::cout << "CQT executed. Result dimensions (example): " <<
+    // cqtResult.size() << " x " << (cqtResult.empty() ? 0 :
+    // cqtResult[0].size()) << std::endl; Add code here to analyze or print the
+    // cqtResult
 
-      // Print some CQT output (magnitudes for first few bins of the *first
-      // frame*)
-      size_t num_bins_to_print = std::min((size_t)15, num_bins_out);
-      std::cout << "\nCQT Output Magnitudes (First Frame, first "
-                << num_bins_to_print << " bins of " << num_bins_out
-                << ", Total Frames: " << num_frames_out << "):" << std::endl;
-
-      for (size_t i = 0; i < num_bins_to_print; ++i) {
-        // Calculate approximate center frequency for context
-        double bin_freq =
-            cqt_plan.getLowestFrequency() *
-            std::pow(2.0, static_cast<double>(i) / cqt_plan.getBinsPerOctave());
-        // Access the first frame [i][0]
-        std::cout << "Bin " << i << " (~"
-                  << static_cast<int>(std::round(bin_freq)) << " Hz): "
-                  << std::abs(cqt_output[i][0])  // Get magnitude of complex
-                                                 // coeff for bin i, frame 0
-                  << std::endl;
-      }
-      if (num_bins_out > num_bins_to_print) std::cout << "..." << std::endl;
-    }
+    std::cout << "CQT example finished." << std::endl;
 
   } catch (const std::exception& e) {
-    std::cerr << "\nFATAL ERROR during CQT operation: " << e.what()
+    std::cerr << "Error during CQT processing: " << e.what() << std::endl;
+    return 1;  // Indicate error
+  } catch (...) {
+    std::cerr << "An unknown error occurred during CQT processing."
               << std::endl;
-    return 1;
+    return 1;  // Indicate error
   }
 
-  std::cout << "\nOmniDSP CQT Example Finished Successfully." << std::endl;
-  return 0;
+  return 0;  // Indicate success
 }

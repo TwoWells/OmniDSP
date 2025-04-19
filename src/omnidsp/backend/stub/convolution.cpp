@@ -6,7 +6,7 @@
 #include <string>     // For error messages
 #include <vector>
 
-#include "../backend_impl.h"  // For ConvMode enum
+#include "../backend.h"  // For ConvMode enum
 
 namespace OmniDSP {
 namespace Backend {

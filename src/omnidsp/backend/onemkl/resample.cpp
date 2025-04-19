@@ -19,7 +19,7 @@
 #include <type_traits>  // For std::is_same_v
 #include <vector>
 
-#include "../backend_impl.h"  // Internal backend function declarations
+#include "../backend.h"  // Internal backend function declarations
 
 // Only compile if USE_ONEMKL is defined by CMake
 #if defined(USE_ONEMKL)

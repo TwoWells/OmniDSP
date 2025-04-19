@@ -9,7 +9,7 @@
 #include <stdexcept>  // For std::runtime_error, std::invalid_argument
 #include <vector>
 
-#include "../backend_impl.h"  // For ConvMode enum
+#include "../backend.h"  // For ConvMode enum
 
 namespace OmniDSP {
 namespace Backend {

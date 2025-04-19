@@ -1,246 +1,316 @@
 /**
  * @file fft.h
  * @brief Public API header for FFT and related transforms (IFFT, RFFT, IRFFT).
- * Defines plan classes, convenience functions, and related enums.
+ * Defines plan classes, convenience functions (including in-place overloads),
+ * and related enums within the OmniDSP namespace.
+ * @version 2.1.0 (Added in-place overloads for fft/ifft)
+ * @date 2025-04-18
  */
 #ifndef OMNIDSP_FFT_H
 #define OMNIDSP_FFT_H
 
+// --- Standard Includes ---
 #include <complex>
 #include <cstddef>    // For size_t
-#include <memory>     // For std::unique_ptr (used in PIMPL)
+#include <memory>     // For std::unique_ptr
 #include <stdexcept>  // For std::invalid_argument in docs
 #include <vector>
 
-#include "omnidsp.h"  // Basic types (like OMNIDSP_STATUS) and namespace definition
+// --- Project Includes ---
+#include "core_types.h"  // Include core types (Precision) - NOT omnidsp.h
 
-namespace OmniDSP {
+namespace OmniDSP {  // <<< Namespace opened for this header's content
 
 // --- FFT-Specific Enums ---
 
 /** @brief Specifies the direction of the Fourier Transform. */
-enum class Direction { FORWARD, INVERSE };
+enum class Direction {
+  FORWARD, /**< Forward Transform (e.g., time to frequency). */
+  INVERSE  /**< Inverse Transform (e.g., frequency to time). */
+};
 
-/** @brief Specifies the domain of the input/output signals for FFT. */
-enum class Domain { COMPLEX, REAL };
+/** @brief Specifies the domain of the input/output signals. */
+enum class Domain {
+  COMPLEX, /**< Complex-to-Complex (C2C) transform. */
+  REAL     /**< Real-valued transform (R2C/C2R). */
+};
 
-/**
- * @brief Specifies the normalization/scaling mode applied to FFTs.
+/** @brief Specifies the normalization/scaling mode applied to the transforms.
  */
 enum class FFTNorm {
-  Backward,  ///< No scaling on forward FFT, 1/N scaling on inverse FFT.
-  Forward,   ///< 1/N scaling on forward FFT, no scaling on inverse FFT.
-  Ortho      ///< 1/sqrt(N) scaling on both forward and inverse FFT.
+  /** @brief Forward unscaled, Inverse scaled by 1/N. */
+  BACKWARD,
+  /** @brief Forward scaled by 1/N, Inverse unscaled. */
+  FORWARD,
+  /** @brief Forward and Inverse scaled by 1/sqrt(N). Unitary. */
+  ORTHO
 };
 
 // --- Forward declaration of implementation classes (PIMPL pattern) ---
+// These are internal details hidden from the public API user.
 template <typename T>
-class FFTPlanImpl;
+struct FFTPlanImpl;
 template <typename T>
-class RFFTPlanImpl;
+struct RFFTPlanImpl;
+
+// --- FFTPlan Class (Complex-to-Complex) ---
 
 /**
- * @brief Plan class for Complex-to-Complex FFT and IFFT.
+ * @brief Manages a pre-calculated plan for efficient Complex-to-Complex (C2C)
+ * FFT execution.
  *
- * Pre-calculates factors and allocates resources for efficient FFT computation
- * on signals of a fixed size. Uses the PIMPL idiom to hide backend details.
+ * Use this class when performing multiple FFTs or IFFTs of the same size,
+ * precision, direction, domain, and normalization. Creating the plan involves
+ * setup overhead, but subsequent executions using the plan are faster than
+ * using the stateless convenience functions.
  *
- * @tparam T Floating-point type (float or double).
+ * @tparam T The floating-point type (float or double).
  */
 template <typename T>
 class FFTPlan {
  public:
   /**
-   * @brief Constructs an FFT plan for a given signal size.
-   * @param size The length N of the complex signal (number of complex samples).
-   * Must be > 0.
-   * @throws std::runtime_error If plan creation fails in the backend.
-   * @throws std::invalid_argument If size is 0.
+   * @brief Constructs an FFT plan for C2C transforms.
+   * @param length The size 'N' of the transform. Must be > 0.
+   * @param precision The desired floating-point precision (Precision::SINGLE or
+   * Precision::DOUBLE).
+   * @param direction The primary transform direction (Direction::FORWARD or
+   * Direction::INVERSE) this plan is optimized for.
+   * @param domain The domain (must be Domain::COMPLEX for FFTPlan).
+   * @param norm The normalization mode (FFTNorm::BACKWARD, FFTNorm::FORWARD, or
+   * FFTNorm::ORTHO).
+   * @throws std::invalid_argument If length is 0, precision/domain mismatch, or
+   * invalid enum values.
+   * @throws std::runtime_error If the backend fails to create the plan (e.g.,
+   * unsupported length, memory allocation failure).
    */
-  explicit FFTPlan(size_t size);
+  FFTPlan(size_t length, Precision precision, Direction direction,
+          Domain domain, FFTNorm norm);
 
-  /** @brief Destructor (handles implementation object cleanup). */
+  /** @brief Destructor, releases backend resources. */
   ~FFTPlan();
 
-  // Disable copy operations
-  FFTPlan(const FFTPlan&) = delete;
-  FFTPlan& operator=(const FFTPlan&) = delete;
-  // Enable move operations (needed for unique_ptr member)
-  FFTPlan(FFTPlan&&) noexcept;
-  FFTPlan& operator=(FFTPlan&&) noexcept;
+  // --- Rule of 5/3: Move-only ---
+  /** @brief Move constructor. */
+  FFTPlan(FFTPlan &&) noexcept;
+  /** @brief Move assignment operator. */
+  FFTPlan &operator=(FFTPlan &&) noexcept;
+  /** @brief Deleted copy constructor. */
+  FFTPlan(const FFTPlan &) = delete;
+  /** @brief Deleted copy assignment operator. */
+  FFTPlan &operator=(const FFTPlan &) = delete;
 
   /**
-   * @brief Computes the forward Fast Fourier Transform (FFT).
-   * Transforms a complex signal from the time domain to the frequency domain.
-   * @param input Complex input vector (size must match plan size).
-   * @param output Complex output vector (size must match plan size).
-   * @param norm Normalization mode to apply. Defaults to Forward.
-   * @throws std::runtime_error If execution fails in the backend or plan is
-   * invalid.
-   * @throws std::invalid_argument If input/output sizes don't match plan size.
+   * @brief Executes the forward FFT (out-of-place) using the plan.
+   * Requires the plan to be created with Direction::FORWARD.
+   * @param input The input complex signal vector (size must match plan length).
+   * @param output The output complex spectrum vector (will be resized if
+   * necessary, size must match plan length).
+   * @throws std::runtime_error If called on a plan not created for FORWARD
+   * direction, or if backend execution fails.
+   * @throws std::invalid_argument If input size doesn't match plan length.
+   * @throws std::bad_alloc If resizing output fails.
    */
-  void fft(const std::vector<std::complex<T>>& input,
-           std::vector<std::complex<T>>& output,
-           FFTNorm norm = FFTNorm::Forward);
+  void fft(const std::vector<std::complex<T>> &input,
+           std::vector<std::complex<T>> &output);
 
   /**
-   * @brief Computes the inverse Fast Fourier Transform (IFFT).
-   * Transforms a complex signal from the frequency domain to the time domain.
-   * @param input Complex input vector (size must match plan size).
-   * @param output Complex output vector (size must match plan size).
-   * @param norm Normalization mode to apply. Defaults to Backward.
-   * @throws std::runtime_error If execution fails in the backend or plan is
-   * invalid.
-   * @throws std::invalid_argument If input/output sizes don't match plan size.
+   * @brief Executes the inverse FFT (out-of-place) using the plan.
+   * Requires the plan to be created with Direction::INVERSE.
+   * @param input The input complex spectrum vector (size must match plan
+   * length).
+   * @param output The output complex signal vector (will be resized if
+   * necessary, size must match plan length).
+   * @throws std::runtime_error If called on a plan not created for INVERSE
+   * direction, or if backend execution fails.
+   * @throws std::invalid_argument If input size doesn't match plan length.
+   * @throws std::bad_alloc If resizing output fails.
    */
-  void ifft(const std::vector<std::complex<T>>& input,
-            std::vector<std::complex<T>>& output,
-            FFTNorm norm = FFTNorm::Backward);
+  void ifft(const std::vector<std::complex<T>> &input,
+            std::vector<std::complex<T>> &output);
 
-  /**
-   * @brief Gets the size (FFT length N) this plan was created for.
-   * @return size_t The size of the transform (number of complex samples).
-   */
+  // --- Getters ---
+  /** @brief Gets the length 'N' of the transform this plan was created for. */
   size_t getSize() const;
+  // Add other getters if needed (getDirection, getPrecision, getDomain,
+  // getNormMode)
 
  private:
-  size_t size_;  // Stores the size N the plan was created for
-  std::unique_ptr<FFTPlanImpl<T>> pimpl_;  // Pointer to implementation
+  /** @brief Pointer to the internal implementation details (PIMPL pattern). */
+  std::unique_ptr<FFTPlanImpl<T>> pimpl_;
 };
 
+// --- RFFTPlan Class (Real-to-Complex / Complex-to-Real) ---
+
 /**
- * @brief Plan class for Real-to-Complex (RFFT) and Complex-to-Real (IRFFT).
+ * @brief Manages a pre-calculated plan for efficient Real FFT execution
+ * (RFFT/IRFFT).
  *
- * Pre-calculates factors and allocates resources for efficient RFFT/IRFFT
- * computation on real signals of a fixed size N. The complex output/input
- * size is N/2 + 1. Uses the PIMPL idiom.
+ * Use this class for transforms involving real signals (R2C or C2R).
  *
- * @tparam T Floating-point type (float or double).
+ * @tparam T The floating-point type (float or double).
  */
 template <typename T>
 class RFFTPlan {
  public:
   /**
-   * @brief Constructs an RFFT/IRFFT plan for a given REAL signal size.
-   * @param size The length N of the real signal (number of real samples). Must
-   * be > 0. The corresponding complex spectrum size will be N/2 + 1.
-   * @throws std::runtime_error If plan creation fails in the backend.
-   * @throws std::invalid_argument If size is 0.
+   * @brief Constructs an FFT plan for Real transforms (R2C/C2R).
+   * @param length The size 'N' of the real signal. Must be > 0.
+   * @param precision The desired floating-point precision (Precision::SINGLE or
+   * Precision::DOUBLE).
+   * @param direction The primary transform direction (Direction::FORWARD for
+   * RFFT, Direction::INVERSE for IRFFT).
+   * @param domain The domain (must be Domain::REAL for RFFTPlan).
+   * @param norm The normalization mode (FFTNorm::BACKWARD, FFTNorm::FORWARD, or
+   * FFTNorm::ORTHO).
+   * @throws std::invalid_argument If length is 0, precision/domain mismatch, or
+   * invalid enum values.
+   * @throws std::runtime_error If the backend fails to create the plan (e.g.,
+   * unsupported length, memory allocation failure).
    */
-  explicit RFFTPlan(size_t size);
+  RFFTPlan(size_t length, Precision precision, Direction direction,
+           Domain domain, FFTNorm norm);
 
-  /** @brief Destructor (handles implementation object cleanup). */
+  /** @brief Destructor, releases backend resources. */
   ~RFFTPlan();
 
-  // Disable copy operations
-  RFFTPlan(const RFFTPlan&) = delete;
-  RFFTPlan& operator=(const RFFTPlan&) = delete;
-  // Enable move operations
-  RFFTPlan(RFFTPlan&&) noexcept;
-  RFFTPlan& operator=(RFFTPlan&&) noexcept;
+  // --- Rule of 5/3: Move-only ---
+  /** @brief Move constructor. */
+  RFFTPlan(RFFTPlan &&) noexcept;
+  /** @brief Move assignment operator. */
+  RFFTPlan &operator=(RFFTPlan &&) noexcept;
+  /** @brief Deleted copy constructor. */
+  RFFTPlan(const RFFTPlan &) = delete;
+  /** @brief Deleted copy assignment operator. */
+  RFFTPlan &operator=(const RFFTPlan &) = delete;
 
   /**
-   * @brief Computes the forward Real-to-Complex FFT (RFFT).
-   * Transforms a real signal from the time domain to the complex frequency
-   * domain. Output contains only the non-redundant part of the spectrum (size
-   * N/2 + 1).
-   * @param input Real input vector (size N must match plan size).
-   * @param output Complex output vector (size must be N/2 + 1).
-   * @param norm Normalization mode to apply. Defaults to Forward.
-   * @throws std::runtime_error If execution fails in the backend or plan is
-   * invalid.
-   * @throws std::invalid_argument If input/output sizes are incorrect.
+   * @brief Executes the forward Real-to-Complex FFT (RFFT) using the plan.
+   * Requires the plan to be created with Direction::FORWARD.
+   * @param input The input real signal vector (size N, must match plan length).
+   * @param output The output complex spectrum vector (will be resized if
+   * necessary, size N/2 + 1).
+   * @throws std::runtime_error If called on a plan not created for FORWARD
+   * direction, or if backend execution fails.
+   * @throws std::invalid_argument If input size doesn't match plan length.
+   * @throws std::bad_alloc If resizing output fails.
    */
-  void rfft(const std::vector<T>& input, std::vector<std::complex<T>>& output,
-            FFTNorm norm = FFTNorm::Forward);
+  void rfft(const std::vector<T> &input, std::vector<std::complex<T>> &output);
 
   /**
-   * @brief Computes the inverse Complex-to-Real FFT (IRFFT).
-   * Transforms a complex frequency spectrum (non-redundant part, size N/2 + 1)
-   * to a real time domain signal (size N).
-   * @param input Complex input vector (size must be N/2 + 1, where N is the
-   * plan size).
-   * @param output Real output vector (size must be N, the plan size).
-   * @param norm Normalization mode to apply. Defaults to Backward.
-   * @throws std::runtime_error If execution fails in the backend or plan is
-   * invalid.
-   * @throws std::invalid_argument If input/output sizes are incorrect.
+   * @brief Executes the inverse Complex-to-Real FFT (IRFFT) using the plan.
+   * Requires the plan to be created with Direction::INVERSE.
+   * Input spectrum must possess Hermitian symmetry for the output to be purely
+   * real.
+   * @param input The input complex spectrum vector (size N/2 + 1, where N is
+   * the plan length).
+   * @param output The output real signal vector (will be resized if necessary,
+   * size N).
+   * @throws std::runtime_error If called on a plan not created for INVERSE
+   * direction, or if backend execution fails.
+   * @throws std::invalid_argument If input size is incorrect for plan length N.
+   * @throws std::bad_alloc If resizing output fails.
    */
-  void irfft(const std::vector<std::complex<T>>& input, std::vector<T>& output,
-             FFTNorm norm = FFTNorm::Backward);
+  void irfft(const std::vector<std::complex<T>> &input, std::vector<T> &output);
 
-  /**
-   * @brief Gets the real signal size N this plan was created for.
-   * @return size_t The size N of the real transform.
+  // --- Getters ---
+  /** @brief Gets the length 'N' of the real signal this plan was created for.
    */
   size_t getSize() const;
+  // Add other getters if needed
 
  private:
-  size_t size_;  // Stores the real size N the plan was created for
-  std::unique_ptr<RFFTPlanImpl<T>> pimpl_;  // Pointer to implementation
+  /** @brief Pointer to the internal implementation details (PIMPL pattern). */
+  std::unique_ptr<RFFTPlanImpl<T>> pimpl_;
 };
 
 // --- Convenience Functions (Stateless) ---
+// These functions create temporary plans internally. Use Plan objects for
+// repeated transforms.
 
+// -- Out-of-Place Complex FFT/IFFT --
 /**
- * @brief Computes FFT using a temporary plan (less efficient for repeated
- * calls). Uses Forward normalization by default. Output vector is resized if
- * necessary.
- * @param input Complex input vector.
- * @param output Complex output vector.
- * @param norm Normalization mode.
- * @throws std::runtime_error If temporary plan creation or execution fails.
- * @throws std::invalid_argument If input is empty.
+ * @brief Performs an out-of-place complex-to-complex forward FFT.
+ * Creates a temporary plan internally.
+ * @tparam T float or double.
+ * @param input Input complex signal vector.
+ * @param output Output complex spectrum vector (resized if necessary).
+ * @param norm Normalization mode (default: FORWARD).
+ * @throws std::runtime_error If plan creation or execution fails.
  */
 template <typename T>
-void fft(const std::vector<std::complex<T>>& input,
-         std::vector<std::complex<T>>& output, FFTNorm norm = FFTNorm::Forward);
+void fft(const std::vector<std::complex<T>> &input,
+         std::vector<std::complex<T>> &output, FFTNorm norm = FFTNorm::FORWARD);
 
 /**
- * @brief Computes IFFT using a temporary plan.
- * Uses Backward normalization by default. Output vector is resized if
- * necessary.
- * @param input Complex input vector.
- * @param output Complex output vector.
- * @param norm Normalization mode.
- * @throws std::runtime_error If temporary plan creation or execution fails.
- * @throws std::invalid_argument If input is empty.
+ * @brief Performs an out-of-place complex-to-complex inverse FFT.
+ * Creates a temporary plan internally.
+ * @tparam T float or double.
+ * @param input Input complex spectrum vector.
+ * @param output Output complex signal vector (resized if necessary).
+ * @param norm Normalization mode (default: BACKWARD).
+ * @throws std::runtime_error If plan creation or execution fails.
  */
 template <typename T>
-void ifft(const std::vector<std::complex<T>>& input,
-          std::vector<std::complex<T>>& output,
-          FFTNorm norm = FFTNorm::Backward);
+void ifft(const std::vector<std::complex<T>> &input,
+          std::vector<std::complex<T>> &output,
+          FFTNorm norm = FFTNorm::BACKWARD);
+
+// -- In-Place Complex FFT/IFFT (Overloads) --
+/**
+ * @brief Performs an in-place complex-to-complex forward FFT.
+ * Creates a temporary plan internally. Modifies the input vector directly.
+ * @tparam T float or double.
+ * @param data Input/output vector containing the complex signal. Modified in
+ * place.
+ * @param norm Normalization mode (default: FORWARD).
+ * @throws std::runtime_error If plan creation or execution fails.
+ */
+template <typename T>
+void fft(std::vector<std::complex<T>> &data, FFTNorm norm = FFTNorm::FORWARD);
 
 /**
- * @brief Computes RFFT using a temporary plan.
- * Uses Forward normalization by default. Output size must be input.size()/2
- * + 1. Output vector is resized if necessary.
- * @param input Real input vector.
- * @param output Complex output vector.
- * @param norm Normalization mode.
- * @throws std::runtime_error If temporary plan creation or execution fails.
- * @throws std::invalid_argument If input is empty.
+ * @brief Performs an in-place complex-to-complex inverse FFT.
+ * Creates a temporary plan internally. Modifies the input vector directly.
+ * @tparam T float or double.
+ * @param data Input/output vector containing the complex spectrum. Modified in
+ * place.
+ * @param norm Normalization mode (default: BACKWARD).
+ * @throws std::runtime_error If plan creation or execution fails.
  */
 template <typename T>
-void rfft(const std::vector<T>& input, std::vector<std::complex<T>>& output,
-          FFTNorm norm = FFTNorm::Forward);
+void ifft(std::vector<std::complex<T>> &data, FFTNorm norm = FFTNorm::BACKWARD);
+
+// -- Out-of-Place Real FFT/IFFT --
+/**
+ * @brief Performs an out-of-place real-to-complex forward FFT (RFFT).
+ * Creates a temporary plan internally. Output size is N/2 + 1.
+ * @tparam T float or double.
+ * @param input Input real signal vector (size N).
+ * @param output Output complex spectrum vector (resized if necessary, size N/2
+ * + 1).
+ * @param norm Normalization mode (default: FORWARD).
+ * @throws std::runtime_error If plan creation or execution fails.
+ */
+template <typename T>
+void rfft(const std::vector<T> &input, std::vector<std::complex<T>> &output,
+          FFTNorm norm = FFTNorm::FORWARD);
 
 /**
- * @brief Computes IRFFT using a temporary plan.
- * Uses Backward normalization by default. Output size N must be specified.
- * Input size must be N/2 + 1. Output vector is resized if necessary.
- * @param input Complex input vector (size N/2 + 1).
- * @param output Real output vector (will be resized to N).
- * @param N The desired length of the real output signal. Must be > 0.
- * @param norm Normalization mode.
- * @throws std::runtime_error If temporary plan creation or execution fails.
- * @throws std::invalid_argument If input size is incorrect for output size N,
- * or if N=0.
+ * @brief Performs an out-of-place complex-to-real inverse FFT (IRFFT).
+ * Creates a temporary plan internally. Input size must be N/2 + 1.
+ * @tparam T float or double.
+ * @param input Input complex spectrum vector (size N/2 + 1). Must have
+ * Hermitian symmetry.
+ * @param output Output real signal vector (resized if necessary, size N).
+ * @param N The desired length of the output real signal.
+ * @param norm Normalization mode (default: BACKWARD).
+ * @throws std::runtime_error If plan creation or execution fails.
+ * @throws std::invalid_argument If input size doesn't match N/2 + 1.
  */
 template <typename T>
-void irfft(const std::vector<std::complex<T>>& input, std::vector<T>& output,
-           size_t N,  // Must provide original real signal length N
-           FFTNorm norm = FFTNorm::Backward);
+void irfft(const std::vector<std::complex<T>> &input, std::vector<T> &output,
+           size_t N, FFTNorm norm = FFTNorm::BACKWARD);
 
 }  // namespace OmniDSP
 

@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-#include "../backend_impl.h"  // Internal backend function declarations
+#include "../backend.h"  // Internal backend function declarations
 
 // Compile this only if NEITHER Accelerate nor MKL is defined by CMake
 #if !defined(USE_ACCELERATE) && !defined(USE_ONEMKL)

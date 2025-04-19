@@ -20,7 +20,7 @@
 #include <type_traits>  // For std::is_same_v, std::conditional
 #include <vector>
 
-#include "../backend_impl.h"  // Internal backend function declarations (though not directly used here)
+#include "../backend.h"  // Internal backend function declarations (though not directly used here)
 
 // Only compile if USE_ACCELERATE is defined by CMake (typically on macOS)
 #if defined(USE_ACCELERATE)

@@ -18,7 +18,7 @@
 #include <type_traits>  // For std::is_same_v
 #include <vector>
 
-#include "../backend_impl.h"  // Internal backend function declarations (not directly used here)
+#include "../backend.h"  // Internal backend function declarations (not directly used here)
 
 // Compile this only if NEITHER Accelerate nor MKL is defined by CMake
 #if !defined(USE_ACCELERATE) && !defined(USE_ONEMKL)
@@ -36,13 +36,13 @@ struct FFTPlanImpl {
   Direction direction = Direction::FORWARD;
   Precision precision = Precision::SINGLE;
   Domain domain = Domain::COMPLEX;
-  NormMode norm_mode = NormMode::BACKWARD;
+  FFTNorm norm_mode = FFTNorm::BACKWARD;
   T forward_scale = 1.0;
   T backward_scale = 1.0;
 
   // --- Constructor (Throws Error) ---
   FFTPlanImpl(size_t len, Precision prec, Direction dir, Domain dom,
-              NormMode norm) {
+              FFTNorm norm) {
     // Immediately throw an error upon attempted creation.
     std::string error_msg =
         "OmniDSP backend (MKL/Accelerate) not selected or available during "
@@ -63,15 +63,15 @@ struct FFTPlanImpl {
     T scaleN = static_cast<T>(length);
     T scaleSqrtN = std::sqrt(scaleN);
     switch (norm_mode) {
-      case NormMode::BACKWARD:
+      case FFTNorm::BACKWARD:
         forward_scale = 1.0;
         backward_scale = 1.0 / scaleN;
         break;
-      case NormMode::ORTHO:
+      case FFTNorm::ORTHO:
         forward_scale = 1.0 / scaleSqrtN;
         backward_scale = 1.0 / scaleSqrtN;
         break;
-      case NormMode::FORWARD:
+      case FFTNorm::FORWARD:
         forward_scale = 1.0 / scaleN;
         backward_scale = 1.0;
         break;
@@ -118,7 +118,7 @@ template struct FFTPlanImpl<double>;
 // constructor.
 
 template <typename T>
-FFTPlan<T>::FFTPlan(size_t l, Precision p, Direction d, Domain dom, NormMode n)
+FFTPlan<T>::FFTPlan(size_t l, Precision p, Direction d, Domain dom, FFTNorm n)
     : pimpl_(std::make_unique<FFTPlanImpl<T>>(l, p, d, dom, n)) {
 }  // This line throws
 
@@ -188,7 +188,7 @@ Domain FFTPlan<T>::getDomain() const {
   return pimpl_->domain;
 }
 template <typename T>
-NormMode FFTPlan<T>::getNormMode() const {
+FFTNorm FFTPlan<T>::getFFTNorm() const {
   if (!pimpl_)
     throw std::runtime_error("Invalid FFTPlan (stub - moved-from?).");
   return pimpl_->norm_mode;
