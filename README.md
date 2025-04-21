@@ -2,7 +2,7 @@
 
 OmniDSP is a C++ library designed for high-performance Digital Signal Processing tasks, with Python bindings provided via pybind11. It aims to offer efficient implementations of common DSP algorithms by abstracting optimized backend libraries like Intel oneMKL (including IPP) and Apple Accelerate.
 
-**Core Design Philosophy:** OmniDSP centralizes backend management. Users create an `OmniDSP` object, which selects and initializes the appropriate backend (MKL or Accelerate) based on the build environment. This instance then serves as the primary interface for accessing all DSP functionalities, ensuring consistency and managing backend resources.
+**Core Design Philosophy:** OmniDSP centralizes backend management. Users create an `OmniDSP` object, which selects and initializes the appropriate backend (MKL or Accelerate) based on the build environment. This instance then serves as the primary interface for accessing all DSP functionalities. This approach makes the link between backend configuration and function execution explicit, ensuring clarity and control, rather than using standalone functions that might obscure their dependence on the backend state or setup. It also provides a foundation for flexibility, such as allowing multiple backend instances or _potential_ runtime switching in the _future_.
 
 ## Table of Contents
 
@@ -21,17 +21,17 @@ OmniDSP is a C++ library designed for high-performance Digital Signal Processing
 
 ## Features
 
-- **Centralized Backend Management:** The main `OmniDSP` class handles backend selection (Intel oneMKL/IPP or Apple Accelerate) and initialization.
-- **Plan-Based Operations:** Uses efficient, stateful `Plan` objects for operations requiring setup (FFT, CQT, Resampling). Plans are created via factory methods on an `OmniDSP` instance.
+- **Centralized Backend Management:** The main `OmniDSP` class handles backend selection (Intel oneMKL/IPP or Apple Accelerate), initialization, and serves as the explicit context for all operations.
+- **Plan-Based Operations:** Uses efficient, stateful `Plan` objects for operations requiring setup (FFT, CQT, Resampling). Plans are created via factory methods on an `OmniDSP` instance, ensuring they operate within the correct backend context.
   - **Fast Fourier Transforms (FFT):** `FFTPlan` and `RFFTPlan` for Complex-to-Complex, Real-to-Complex, and Complex-to-Real transforms with configurable normalization.
   - **Constant-Q Transform (CQT):** `CQTPlan` for efficient recursive CQT computation with configurable parameters.
   - **Resampling:** `ResamplePlan` for configurable FIR filtering and downsampling/upsampling.
-- **Stateless Operations:** Common DSP operations accessed directly via methods on an `OmniDSP` instance.
+- **Stateless Operations:** Common DSP operations accessed directly via methods on an `OmniDSP` instance, making their execution context clear.
   - **Convolution / Correlation:** 1D linear convolution and correlation (`valid` mode currently implemented).
   - **Window Coefficient Generation:** Methods to generate coefficients for standard windows (Hann, Hamming, Kaiser, Flattop).
 - **Optimized Backends:** Leverages MKL/IPP or Accelerate/vDSP for performance, selected automatically at build time. Includes a stub backend for compatibility.
 - **PIMPL Idiom:** Uses the Pointer-to-Implementation pattern extensively to hide backend details, ensure ABI stability, and improve compile times.
-- **Python Bindings:** Easy-to-use Python API mirroring the C++ structure via pybind11.
+- **Python Bindings:** Easy-to-use Python API mirroring the C++ structure via pybind11, requiring an `OmniDSP` instance.
 
 ## Dependencies
 
@@ -49,15 +49,15 @@ OmniDSP requires the following to build and run:
 ## Project Status
 
 - Core FFT, CQT (recursive), Convolution/Correlation (valid mode), and Windowing functionalities are implemented within the new architecture.
-- **Recent Refactoring:** The library structure has been refactored around a central `OmniDSP` class that manages the backend and acts as a factory for `Plan` objects (`FFTPlan`, `CQTPlan`, `ResamplePlan`). Standalone functions and the static `Window` class have been removed from the public API.
+- **Recent Refactoring:** The library structure has been refactored around a central `OmniDSP` class that manages the backend and acts as a factory for `Plan` objects (`FFTPlan`, `CQTPlan`, `ResamplePlan`). Standalone functions and the static `Window` class have been removed from the public API to promote clarity about the backend execution context.
 - **Current Work:** Implementing `ResamplePlan`, updating CQT to use it, adding convolution modes, resolving any remaining test failures post-refactor, tuning CQT scaling, and setting up CI. See `TODO.md`.
 
 ## Project Structure
 
 - `include/OmniDSP/`: Public C++ headers defining the API (`omnidsp.h`, `fft.h`, `cqt.h`, `resample.h`, `core_types.h`).
-- `src/omnidsp/`: Core C++ library implementation files (`omnidsp.cpp`, `fft.cpp`, `cqt.cpp`, `resample.cpp`). Note: `convolution.cpp` and `window.cpp` implementations are now likely integrated into `omnidsp.cpp` or backend implementations.
+- `src/omnidsp/`: Core C++ library implementation files (`omnidsp.cpp`, `fft.cpp`, `cqt.cpp`, `resample.cpp`). These implement the public API classes and forward calls to the backend implementations via PIMPL.
 - `src/omnidsp/backend/`: Contains backend-specific implementations and the internal interface header.
-  - `backend.h`: Internal header defining implementation class interfaces/signatures (within `OmniDSP::backend` namespace).
+  - `backend.h`: Internal header defining implementation class interfaces/signatures (within `OmniDSP::backend` namespace). **Not part of the public API.**
   - `onemkl/`: Implementations using Intel oneMKL/IPP (namespace `OmniDSP::backend::oneMKL`).
   - `accelerate/`: Implementations using Apple Accelerate/vDSP (namespace `OmniDSP::backend::Accelerate`).
   - `stub/`: Stub implementations that throw runtime errors (namespace `OmniDSP::backend::Stub`).
@@ -121,22 +121,19 @@ t = np.arange(fs) / fs
 signal_in_real = np.sin(2 * np.pi * 50 * t) + 0.5 * np.sin(2 * np.pi * 120 * t)
 signal_in_real = signal_in_real.astype(np.float32)
 
-# Create an RFFT plan using the factory method
+# Create an RFFT plan using the factory method on the dsp instance
 try:
-    # Specify length, precision, direction, domain via factory
+    # Specify length, precision via factory
     rfft_plan = dsp.create_rfft_plan(
         length=len(signal_in_real),
-        precision=ods.Precision.SINGLE,
-        # Direction is implicit for create_rfft_plan/create_irfft_plan if added
-        # Or pass explicitly: direction=ods.Direction.FORWARD,
-        # domain=ods.Domain.REAL # Domain is implicit for rfft
+        precision=ods.Precision.SINGLE
     )
     # Execute the plan
     complex_spectrum = rfft_plan.execute(signal_in_real)
     print(f"RFFT Output shape: {complex_spectrum.shape}") # Should be N/2 + 1
 
     # Create an IRFFT plan
-    irfft_plan = dsp.create_irfft_plan( # Assuming create_irfft_plan exists
+    irfft_plan = dsp.create_irfft_plan(
         length=len(signal_in_real), # Target output length N
         precision=ods.Precision.SINGLE
     )
@@ -151,19 +148,19 @@ except AttributeError as e:
 
 # --- CQT Example ---
 try:
-    # CQT requires compatible hop length based on octaves
     # Window function example using numpy
     def numpy_hann_window(arr):
         return np.hanning(len(arr)).astype(arr.dtype)
 
+    # Create CQT plan using the factory method on the dsp instance
     cqt_plan = dsp.create_cqt_plan(
         sample_rate=44100.0,
-        hop_length=512, # Divisible by 16 for A1-A6 range
-        lowest_freq=55.0, # A1
-        highest_freq=1760.0, # A6
+        hop_length=512,
+        lowest_freq=55.0,
+        highest_freq=1760.0,
         bins_per_octave=12,
         window_function=numpy_hann_window,
-        precision=ods.Precision.SINGLE # Specify precision
+        precision=ods.Precision.SINGLE
     )
     # Generate a test signal
     sr = 44100.0
@@ -181,6 +178,7 @@ signal = np.array([1, 2, 3, 4, 5, 6, 7, 8], dtype=np.float32)
 kernel = np.array([0.5, 1.0, 0.5], dtype=np.float32)
 # Correlate (e.g., for FIR filtering)
 try:
+    # Call method on the dsp instance
     correlation_result = dsp.correlate1d(signal, kernel) # Default mode is 'valid'
     print(f"Correlation result: {correlation_result}")
     # Convolve
@@ -191,10 +189,10 @@ except AttributeError as e:
 
 # --- Windowing Example (Stateless method on dsp object) ---
 try:
-    # Get Hann window coefficients
+    # Call method on the dsp instance to get coefficients
     hann_coeffs = dsp.get_hann_coeffs(len(signal), ods.Precision.SINGLE)
     print(f"Hann coeffs: {hann_coeffs}")
-    # Apply manually (or add apply_* methods to OmniDSP class if desired)
+    # Apply manually
     windowed_signal = signal * hann_coeffs
     print(f"Hann windowed signal: {windowed_signal}")
 except AttributeError as e:
@@ -224,18 +222,17 @@ int main() {
     std::vector<std::complex<float>> spectrum(real_signal.size() / 2 + 1); // Pre-allocate
 
     try {
-        // Create plan using factory method
+        // Create plan using factory method on the dsp instance
         auto rfft_plan = dsp.create_rfft_plan<float>(
             real_signal.size(),
             OmniDSP::Precision::SINGLE
-            // Optional: OmniDSP::NormMode::Backward (default)
         );
 
         // Execute the plan
         rfft_plan->execute(real_signal, spectrum); // Use -> for unique_ptr
         std::cout << "Spectrum size: " << spectrum.size() << std::endl;
 
-        // Example: Get Hann coefficients
+        // Example: Get Hann coefficients using method on dsp instance
         auto hann_coeffs = dsp.get_hann_coeffs<float>(1024);
         std::cout << "Generated Hann coeffs size: " << hann_coeffs.size() << std::endl;
 
@@ -245,9 +242,9 @@ int main() {
     }
 
     // Example: CQT Plan (requires a window generator function)
-    // See examples/cpp/cqt.cpp for details on the generator function
     // auto my_window_gen = [](size_t len) { /* ... return std::vector<float>(len) ... */ };
     // try {
+    //     // Create plan using factory method on the dsp instance
     //     auto cqt_plan = dsp.create_cqt_plan<float>(
     //         44100.0, 512, 55.0, 1760.0, 12, my_window_gen, OmniDSP::Precision::SINGLE
     //     );

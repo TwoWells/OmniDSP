@@ -24,6 +24,7 @@ Thank you for your interest in contributing to OmniDSP! We welcome contributions
     - [`Plan` Objects](#plan-objects)
     - [Backend Abstraction (PIMPL)](#backend-abstraction-pimpl)
     - [Internal Namespace](#internal-namespace)
+    - [Design Rationale](#design-rationale)
   - [Running Tests](#running-tests)
     - [Python Tests](#python-tests)
     - [C++ Tests](#c-tests)
@@ -78,7 +79,6 @@ The project uses Conda to manage dependencies. For contributors, we provide a sp
 
 ### Dependency Rationale: Boost
 
-(Content unchanged - explains Boost dependency for Kaiser window)
 The Boost C++ libraries were added as a dependency primarily for `Boost.Math`. Specifically, the library requires the 0th order modified Bessel function of the first kind (`I₀`) to generate Kaiser windows coefficients accurately and consistently. While C++17 includes mathematical special functions like `std::cyl_bessel_i`, its implementation is missing in certain standard library versions (notably libc++ on macOS). Using `boost::math::cyl_bessel_i` ensures a reliable implementation across all supported platforms. Boost is automatically installed via the Conda environment file.
 
 ## Dependency Management with Conda Lock
@@ -230,7 +230,7 @@ OmniDSP employs a specific architecture to provide a consistent API while levera
 - The primary entry point for users is the `OmniDSP` class (defined in `omnidsp.h`).
 - You **must** create an instance of this class first (e.g., `OmniDSP::OmniDSP dsp;` in C++ or `dsp = omnidsp_py.OmniDSP()` in Python).
 - The `OmniDSP` constructor automatically selects and initializes the appropriate backend based on the build configuration (MKL or Accelerate).
-- This instance manages the backend context.
+- This instance manages the backend context and any associated global state (e.g., potential MKL thread settings).
 - It provides methods for **stateless** DSP operations (e.g., `dsp.convolve1d(...)`, `dsp.get_hann_coeffs(...)`).
 - It acts as a **factory** for creating stateful `Plan` objects.
 
@@ -238,7 +238,7 @@ OmniDSP employs a specific architecture to provide a consistent API while levera
 
 - For operations requiring significant setup or maintaining state (like FFTs, CQT, Resampling), OmniDSP uses dedicated `Plan` classes (`FFTPlan`, `RFFTPlan`, `CQTPlan`, `ResamplePlan`).
 - These `Plan` objects are **created** using factory methods on an existing `OmniDSP` instance (e.g., `auto fft_plan = dsp.create_fft_plan<float>(...);`). You do not construct `Plan` objects directly.
-- Each `Plan` object encapsulates the specific configuration and optimized state for its operation on a particular backend.
+- Each `Plan` object encapsulates the specific configuration and optimized state for its operation, consistent with the backend context managed by the `OmniDSP` instance that created it.
 - Once created, you use the `Plan` object's `execute(...)` method to perform the DSP operation efficiently multiple times.
 
 ### Backend Abstraction (PIMPL)
@@ -254,12 +254,25 @@ OmniDSP employs a specific architecture to provide a consistent API while levera
 - Backend-specific implementation code resides in the `OmniDSP::backend` C++ namespace and its sub-namespaces (`OmniDSP::backend::oneMKL`, `OmniDSP::backend::Accelerate`, `OmniDSP::backend::Stub`).
 - Files and classes within this namespace are considered internal implementation details and are subject to change without notice. Users should only interact with the public API defined in the `include/OmniDSP/` headers and the main `OmniDSP` namespace.
 
+### Design Rationale
+
+_(New subsection explaining the philosophy)_
+The decision to center the API around an `OmniDSP` instance (which manages the backend and acts as a factory) rather than using standalone functions was made to:
+
+- **Increase Clarity:** Explicitly creating an `OmniDSP` object makes the user aware they are interacting with a specific backend instance and its configuration. Standalone functions can obscure this dependency.
+- **Ensure Consistency:** Centralizing backend setup within the `OmniDSP` constructor ensures that all operations (stateless methods and created Plans) execute within a consistent backend context (e.g., regarding threading settings).
+- **Improve Control:** Users gain clearer control over the backend configuration by managing the `OmniDSP` instance. This could potentially allow for multiple instances with different configurations in the future.
+- **Enhance Flexibility:** This architecture provides a natural point for future extensions, such as runtime backend switching, without requiring major changes to the user-facing API of the Plans or stateless methods.
+
+While this approach requires users to instantiate an `OmniDSP` object first, the benefits in terms of transparency, consistency, control, and future maintainability were deemed to outweigh the simplicity of standalone functions.
+
 ## Running Tests
 
 Testing is crucial. Please ensure all tests pass before submitting changes.
 
 ### Python Tests
 
+_(Updated)_
 Run Python tests using pytest from the root directory:
 
 ```
@@ -270,6 +283,7 @@ These tests check the Python bindings and API. Tests should now instantiate an `
 
 ### C++ Tests
 
+_(Updated)_
 The C++ tests use GoogleTest and rely on reference data files.
 
 #### Selecting Backend for Tests
@@ -408,7 +422,7 @@ Please use the GitHub Issues tracker for the OmniDSP repository to:
 
 ## Where to Contribute
 
-Check the `TODO.md` file (or the TODO list canvas artifact if using this tool) for a list of known tasks and desired features. Some key areas include:
+Check the `TODO.md` file (or the TODO list canvas artifact if using this tool) for a list of known tasks and desired features. Key areas include:
 
 - Implementing remaining features outlined in the `TODO.md` (e.g., convolution modes, filter design).
 - Expanding test coverage for the new architecture.
