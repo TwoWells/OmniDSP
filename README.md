@@ -1,6 +1,8 @@
 # OmniDSP
 
-OmniDSP is a C++ library designed for high-performance Digital Signal Processing tasks, with Python bindings provided via pybind11. It aims to offer efficient implementations of common DSP algorithms, leveraging optimized backend libraries like Intel oneMKL (including IPP) and Apple Accelerate where available.
+OmniDSP is a C++ library designed for high-performance Digital Signal Processing tasks, with Python bindings provided via pybind11. It aims to offer efficient implementations of common DSP algorithms by abstracting optimized backend libraries like Intel oneMKL (including IPP) and Apple Accelerate.
+
+**Core Design Philosophy:** OmniDSP centralizes backend management. Users create an `OmniDSP` object, which selects and initializes the appropriate backend (MKL or Accelerate) based on the build environment. This instance then serves as the primary interface for accessing all DSP functionalities, ensuring consistency and managing backend resources.
 
 ## Table of Contents
 
@@ -19,25 +21,17 @@ OmniDSP is a C++ library designed for high-performance Digital Signal Processing
 
 ## Features
 
-- **Fast Fourier Transforms (FFT):**
-  - Complex-to-Complex (C2C) FFT and IFFT.
-  - Real-to-Complex (RFFT) and Complex-to-Real (IRFFT).
-  - Configurable normalization modes (`BACKWARD`, `ORTHO`, `FORWARD`).
-  - Uses `FFTPlan` objects for efficient repeated transforms.
-- **Constant-Q Transform (CQT):**
-  - Efficient recursive implementation based on FFTs and downsampling.
-  - Precomputed sparse kernels for reduced runtime computation.
-  - Configurable parameters (sample rate, hop length, frequency range, bins per octave, window function, sparsity).
-- **Convolution / Correlation:**
-  - 1D linear convolution and correlation (`valid` mode currently implemented).
-- **Window Functions:**
-  - Application of standard windows (Hann, Hamming, Kaiser, Flattop) via `OmniDSP::Window` class.
-- **Resampling:**
-  - Combined FIR filtering and downsampling (currently used internally by CQT).
-- **Backend System:**
-  - Automatically selects optimized backends (Intel oneMKL/IPP, Apple Accelerate) at build time based on platform and availability within the Conda environment.
-  - Provides a stub backend (throws runtime errors) if no optimized backend is found.
-- **Python Bindings:** Easy-to-use Python API mirroring the C++ functionality.
+- **Centralized Backend Management:** The main `OmniDSP` class handles backend selection (Intel oneMKL/IPP or Apple Accelerate) and initialization.
+- **Plan-Based Operations:** Uses efficient, stateful `Plan` objects for operations requiring setup (FFT, CQT, Resampling). Plans are created via factory methods on an `OmniDSP` instance.
+  - **Fast Fourier Transforms (FFT):** `FFTPlan` and `RFFTPlan` for Complex-to-Complex, Real-to-Complex, and Complex-to-Real transforms with configurable normalization.
+  - **Constant-Q Transform (CQT):** `CQTPlan` for efficient recursive CQT computation with configurable parameters.
+  - **Resampling:** `ResamplePlan` for configurable FIR filtering and downsampling/upsampling.
+- **Stateless Operations:** Common DSP operations accessed directly via methods on an `OmniDSP` instance.
+  - **Convolution / Correlation:** 1D linear convolution and correlation (`valid` mode currently implemented).
+  - **Window Coefficient Generation:** Methods to generate coefficients for standard windows (Hann, Hamming, Kaiser, Flattop).
+- **Optimized Backends:** Leverages MKL/IPP or Accelerate/vDSP for performance, selected automatically at build time. Includes a stub backend for compatibility.
+- **PIMPL Idiom:** Uses the Pointer-to-Implementation pattern extensively to hide backend details, ensure ABI stability, and improve compile times.
+- **Python Bindings:** Easy-to-use Python API mirroring the C++ structure via pybind11.
 
 ## Dependencies
 
@@ -54,79 +48,57 @@ OmniDSP requires the following to build and run:
 
 ## Project Status
 
-- Core FFT, CQT (recursive), Convolution/Correlation (valid mode), and Windowing functionalities are implemented.
-- Backend system refactored for better organization and parity (MKL, Accelerate, Stub).
-- Build system uses CMake and Conda for managing dependencies.
-- **Current Work:** Addressing remaining test failures (see `TODO.md`), implementing additional convolution modes, resolving IPP resampling details (filter coefficient usage, double precision), tuning CQT scaling, and setting up CI.
+- Core FFT, CQT (recursive), Convolution/Correlation (valid mode), and Windowing functionalities are implemented within the new architecture.
+- **Recent Refactoring:** The library structure has been refactored around a central `OmniDSP` class that manages the backend and acts as a factory for `Plan` objects (`FFTPlan`, `CQTPlan`, `ResamplePlan`). Standalone functions and the static `Window` class have been removed from the public API.
+- **Current Work:** Implementing `ResamplePlan`, updating CQT to use it, adding convolution modes, resolving any remaining test failures post-refactor, tuning CQT scaling, and setting up CI. See `TODO.md`.
 
 ## Project Structure
 
-- `include/OmniDSP/`: Public C++ headers defining the API (`fft.h`, `cqt.h`, `convolution.h`, `window.h`, `resample.h`, `omnidsp.h`).
-- `src/omnidsp/`: Core C++ library implementation files defining the public API wrappers (`fft.cpp`, `cqt.cpp`, `convolution.cpp`, `window.cpp`, `resample.cpp`).
-- `src/omnidsp/backend/`: Contains backend-specific implementations.
-  - `backend_impl.h`: Declares the interface required by all backends.
-  - `onemkl/`: Implementations using Intel oneMKL/IPP.
-  - `accelerate/`: Implementations using Apple Accelerate/vDSP.
-  - `stub/`: Stub implementations that throw runtime errors.
+- `include/OmniDSP/`: Public C++ headers defining the API (`omnidsp.h`, `fft.h`, `cqt.h`, `resample.h`, `core_types.h`).
+- `src/omnidsp/`: Core C++ library implementation files (`omnidsp.cpp`, `fft.cpp`, `cqt.cpp`, `resample.cpp`). Note: `convolution.cpp` and `window.cpp` implementations are now likely integrated into `omnidsp.cpp` or backend implementations.
+- `src/omnidsp/backend/`: Contains backend-specific implementations and the internal interface header.
+  - `backend.h`: Internal header defining implementation class interfaces/signatures (within `OmniDSP::backend` namespace).
+  - `onemkl/`: Implementations using Intel oneMKL/IPP (namespace `OmniDSP::backend::oneMKL`).
+  - `accelerate/`: Implementations using Apple Accelerate/vDSP (namespace `OmniDSP::backend::Accelerate`).
+  - `stub/`: Stub implementations that throw runtime errors (namespace `OmniDSP::backend::Stub`).
 - `src/omnidsp_py/`: Python bindings source code (pybind11 wrappers).
-- `tests/`: Unit tests (primarily for developers).
+- `tests/`: Unit tests.
   - `cpp/`: C++ tests using GoogleTest.
   - `python/`: Python tests using pytest.
 - `examples/`: Usage examples.
   - `cpp/`: C++ examples.
   - `notebooks/`: Python examples using Jupyter notebooks.
-- `environment.yml`: Conda environment definition source (for the `omnidsp` runtime environment).
-- `environment-dev.yml`: Conda environment definition source (for the `omnidsp-dev` developer environment).
-- `conda-*.lock`: Explicit, platform-specific Conda lock files for reproducible installation of the `omnidsp` runtime environment.
-- `.pre-commit-config.yaml`: Configuration for developer Git hooks (see `CONTRIBUTING.md`).
+- `environment.yml`, `environment-dev.yml`, `conda-*.lock`: Conda environment files.
+- `.pre-commit-config.yaml`: Configuration for developer Git hooks.
 - `CMakeLists.txt`: Main CMake build script.
-- `pyproject.toml`: Python packaging configuration (uses `scikit-build-core`).
+- `pyproject.toml`: Python packaging configuration.
 - `TODO.md`: Current development tasks.
 - `CONTRIBUTING.md`: Guidelines for contributors.
 
 ## Getting Started and Installation
 
-Using OmniDSP (especially the Python bindings) requires **Conda** to manage dependencies (Compiler, CMake, MKL, IPP, Python libs).
+Using OmniDSP requires **Conda** to manage dependencies.
 
 1.  **Set up Conda Environment:**
 
-    - Clone the repository:
-
-      ```
-      git clone https://github.com/your-username/OmniDSP.git # Replace with actual URL
-      cd OmniDSP
-      ```
-
-    - Create and activate the environment using the provided lock files for reproducibility. Choose the file matching your platform (e.g., `linux-64`, `osx-arm64`, `win-64`):
-
-      ```
+    - Clone the repository.
+    - Create and activate the environment using the provided lock files (recommended) or `environment.yml`. Choose the file matching your platform (e.g., `linux-64`, `osx-arm64`, `win-64`):
+      ```bash
       # Example for Linux:
       conda create --name omnidsp --file conda-linux-64.lock
-      # Example for macOS (Apple Silicon):
-      # conda create --name omnidsp --file conda-osx-arm64.lock
-      # Example for Windows:
-      # conda create --name omnidsp --file conda-win-64.lock
-
       conda activate omnidsp
       ```
-
-      _(Alternatively, for the latest definitions but less reproducibility, you could use `conda env create -f environment.yml` and then `conda activate omnidsp`)_
-
     - **Important:** Always ensure the `omnidsp` Conda environment is activated before building or using the library.
 
 2.  **Install OmniDSP Python Package:**
 
     - Once the `omnidsp` environment is activated, install the package from the project root directory:
-
-      ```
+      ```bash
       pip install . -v
       ```
+    - This compiles the C++ library and Python bindings and installs them into your active Conda environment.
 
-    - This command uses `scikit-build-core` and CMake to compile the C++ library and Python bindings, installing them into your active `omnidsp` environment. The `-v` flag provides verbose output.
-    - _(Note: For development, using `pip install -e . -v` enables an "editable" install. See `CONTRIBUTING.md`)_
-
-3.  **(Optional) Build C++ Library Only:**
-    - If you only need the C++ library for use in another C++ project, please refer to the developer guidelines in `CONTRIBUTING.md` for instructions using CMake directly.
+3.  **(Optional) Build C++ Library Only:** Refer to `CONTRIBUTING.md` for instructions using CMake directly.
 
 ## Basic Usage
 
@@ -134,73 +106,158 @@ Using OmniDSP (especially the Python bindings) requires **Conda** to manage depe
 
 ```python
 import numpy as np
-import omnidsp_py as ods # Assuming this is the import name after installation
+import omnidsp_py as ods # Assuming this is the import name
+
+# 1. Create an OmniDSP instance (manages the backend)
+try:
+    dsp = ods.OmniDSP()
+except RuntimeError as e:
+    print(f"Error creating OmniDSP instance (backend issue?): {e}")
+    exit()
 
 # --- FFT Example ---
 fs = 1000
 t = np.arange(fs) / fs
-signal_in = np.sin(2 * np.pi * 50 * t) + 0.5 * np.sin(2 * np.pi * 120 * t)
-complex_spectrum = ods.rfft(signal_in.astype(np.float32)) # Use rfft for real input
-print(f"RFFT Output shape: {complex_spectrum.shape}")
-signal_out = ods.irfft(complex_spectrum)
-print(f"IRFFT Output shape: {signal_out.shape}")
+signal_in_real = np.sin(2 * np.pi * 50 * t) + 0.5 * np.sin(2 * np.pi * 120 * t)
+signal_in_real = signal_in_real.astype(np.float32)
+
+# Create an RFFT plan using the factory method
+try:
+    # Specify length, precision, direction, domain via factory
+    rfft_plan = dsp.create_rfft_plan(
+        length=len(signal_in_real),
+        precision=ods.Precision.SINGLE,
+        # Direction is implicit for create_rfft_plan/create_irfft_plan if added
+        # Or pass explicitly: direction=ods.Direction.FORWARD,
+        # domain=ods.Domain.REAL # Domain is implicit for rfft
+    )
+    # Execute the plan
+    complex_spectrum = rfft_plan.execute(signal_in_real)
+    print(f"RFFT Output shape: {complex_spectrum.shape}") # Should be N/2 + 1
+
+    # Create an IRFFT plan
+    irfft_plan = dsp.create_irfft_plan( # Assuming create_irfft_plan exists
+        length=len(signal_in_real), # Target output length N
+        precision=ods.Precision.SINGLE
+    )
+    signal_out_real = irfft_plan.execute(complex_spectrum)
+    print(f"IRFFT Output shape: {signal_out_real.shape}") # Should be N
+
+except RuntimeError as e:
+    print(f"FFT Plan Error: {e}")
+except AttributeError as e:
+    print(f"API Error: Method might not exist yet ({e})")
+
 
 # --- CQT Example ---
 try:
     # CQT requires compatible hop length based on octaves
-    cqt_plan = ods.create_cqt_plan(sample_rate=44100.0,
-                                   hop_length=512, # Divisible by 16 for A1-A6 range
-                                   lowest_freq=55.0, # A1
-                                   highest_freq=1760.0, # A6
-                                   bins_per_octave=12)
-    # Generate a test signal (e.g., 1 second sine wave at 440Hz)
+    # Window function example using numpy
+    def numpy_hann_window(arr):
+        return np.hanning(len(arr)).astype(arr.dtype)
+
+    cqt_plan = dsp.create_cqt_plan(
+        sample_rate=44100.0,
+        hop_length=512, # Divisible by 16 for A1-A6 range
+        lowest_freq=55.0, # A1
+        highest_freq=1760.0, # A6
+        bins_per_octave=12,
+        window_function=numpy_hann_window,
+        precision=ods.Precision.SINGLE # Specify precision
+    )
+    # Generate a test signal
     sr = 44100.0
     test_signal = np.sin(2 * np.pi * 440.0 * np.arange(int(sr)) / sr).astype(np.float32)
-    cqt_result = cqt_plan.execute(test_signal)
+    cqt_result = cqt_plan.execute(test_signal) # Input is real for CQT
     print(f"CQT Output shape: {cqt_result.shape} (Bins, Frames)")
 except RuntimeError as e:
     print(f"CQT Error (check backend/params): {e}")
+except AttributeError as e:
+    print(f"API Error: Method might not exist yet ({e})")
 
 
-# --- Convolution Example ---
+# --- Convolution Example (Stateless method on dsp object) ---
 signal = np.array([1, 2, 3, 4, 5, 6, 7, 8], dtype=np.float32)
 kernel = np.array([0.5, 1.0, 0.5], dtype=np.float32)
 # Correlate (e.g., for FIR filtering)
-correlation_result = ods.correlate1d(signal, kernel)
-print(f"Correlation result: {correlation_result}")
-# Convolve
-convolution_result = ods.convolve1d(signal, kernel)
-print(f"Convolution result: {convolution_result}")
+try:
+    correlation_result = dsp.correlate1d(signal, kernel) # Default mode is 'valid'
+    print(f"Correlation result: {correlation_result}")
+    # Convolve
+    convolution_result = dsp.convolve1d(signal, kernel) # Default mode is 'valid'
+    print(f"Convolution result: {convolution_result}")
+except AttributeError as e:
+    print(f"API Error: Method might not exist yet ({e})")
 
-# --- Windowing Example ---
-windowed_signal = ods.Window.hann(signal)
-print(f"Hann windowed signal: {windowed_signal}")
+# --- Windowing Example (Stateless method on dsp object) ---
+try:
+    # Get Hann window coefficients
+    hann_coeffs = dsp.get_hann_coeffs(len(signal), ods.Precision.SINGLE)
+    print(f"Hann coeffs: {hann_coeffs}")
+    # Apply manually (or add apply_* methods to OmniDSP class if desired)
+    windowed_signal = signal * hann_coeffs
+    print(f"Hann windowed signal: {windowed_signal}")
+except AttributeError as e:
+    print(f"API Error: Method might not exist yet ({e})")
+
 ```
 
 ### C++
 
-Include necessary headers (e.g., `<OmniDSP/omnidsp.h>`, `<OmniDSP/cqt.h>`) and link against the built library. See `examples/cpp/` for detailed usage.
+Include necessary headers (e.g., `<OmniDSP/omnidsp.h>`, `<OmniDSP/fft.h>`) and link against the built library.
 
 ```cpp
 #include <OmniDSP/omnidsp.h>
+#include <OmniDSP/fft.h> // Include Plan headers
 #include <OmniDSP/cqt.h>
 #include <vector>
 #include <complex>
 #include <iostream>
+#include <memory> // For std::unique_ptr
 
 int main() {
+    // 1. Create an OmniDSP instance
+    OmniDSP::OmniDSP dsp; // Constructor selects and initializes backend
+
     // Example: FFT
     std::vector<float> real_signal = { /* ... data ... */ };
-    std::vector<std::complex<float>> spectrum;
-    OmniDSP::rfft(real_signal, spectrum);
-    std::cout << "Spectrum size: " << spectrum.size() << std::endl;
+    std::vector<std::complex<float>> spectrum(real_signal.size() / 2 + 1); // Pre-allocate
+
+    try {
+        // Create plan using factory method
+        auto rfft_plan = dsp.create_rfft_plan<float>(
+            real_signal.size(),
+            OmniDSP::Precision::SINGLE
+            // Optional: OmniDSP::NormMode::Backward (default)
+        );
+
+        // Execute the plan
+        rfft_plan->execute(real_signal, spectrum); // Use -> for unique_ptr
+        std::cout << "Spectrum size: " << spectrum.size() << std::endl;
+
+        // Example: Get Hann coefficients
+        auto hann_coeffs = dsp.get_hann_coeffs<float>(1024);
+        std::cout << "Generated Hann coeffs size: " << hann_coeffs.size() << std::endl;
+
+    } catch (const std::exception& e) {
+        std::cerr << "OmniDSP Error: " << e.what() << std::endl;
+        return 1;
+    }
 
     // Example: CQT Plan (requires a window generator function)
     // See examples/cpp/cqt.cpp for details on the generator function
     // auto my_window_gen = [](size_t len) { /* ... return std::vector<float>(len) ... */ };
-    // OmniDSP::CQTPlan<float> cqt_plan(44100.0, 512, 55.0, 1760.0, 12, my_window_gen);
-    // std::vector<std::vector<std::complex<float>>> cqt_output;
-    // cqt_plan.execute(real_signal, cqt_output);
+    // try {
+    //     auto cqt_plan = dsp.create_cqt_plan<float>(
+    //         44100.0, 512, 55.0, 1760.0, 12, my_window_gen, OmniDSP::Precision::SINGLE
+    //     );
+    //     std::vector<std::vector<std::complex<float>>> cqt_output;
+    //     cqt_plan->execute(real_signal, cqt_output);
+    //     std::cout << "CQT Output bins: " << cqt_output.size() << std::endl;
+    // } catch (const std::exception& e) {
+    //     std::cerr << "CQT Error: " << e.what() << std::endl;
+    // }
+
 
     return 0;
 }

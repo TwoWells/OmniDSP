@@ -19,7 +19,11 @@ Thank you for your interest in contributing to OmniDSP! We welcome contributions
     - [Python Package (Recommended)](#python-package-recommended)
     - [C++ Library Only](#c-library-only)
   - [Project Structure](#project-structure)
-  - [Understanding Backends](#understanding-backends)
+  - [Understanding the Architecture](#understanding-the-architecture)
+    - [Core `OmniDSP` Class](#core-omnidsp-class)
+    - [`Plan` Objects](#plan-objects)
+    - [Backend Abstraction (PIMPL)](#backend-abstraction-pimpl)
+    - [Internal Namespace](#internal-namespace)
   - [Running Tests](#running-tests)
     - [Python Tests](#python-tests)
     - [C++ Tests](#c-tests)
@@ -54,7 +58,7 @@ The project uses Conda to manage dependencies. For contributors, we provide a sp
     conda env create -f environment-dev.yml
     ```
 
-    This command creates a Conda environment named `omnidsp-dev` (defined within the file). This environment contains all packages from `environment.yml` plus developer-specific tools like `pytest`, `ruff`, `pre-commit`, and `conda-lock`. Note that formatters like `clang-format` and `prettier` are installed automatically by `pre-commit` itself.
+    This command creates a Conda environment named `omnidsp-dev` (defined within the file).
 
 2.  **Activate Environment:** Activate the newly created environment:
 
@@ -62,7 +66,7 @@ The project uses Conda to manage dependencies. For contributors, we provide a sp
     conda activate omnidsp-dev
     ```
 
-    **Important:** Always ensure this environment is activated before building, running tests, using the library, or running developer tools like `pre-commit` or `conda-lock`. Although some tools like `clang-format` are installed by `pre-commit`, activating the environment ensures `pre-commit` itself and other dependencies are found correctly.
+    **Important:** Always ensure this environment is activated before building, running tests, using the library, or running developer tools like `pre-commit` or `conda-lock`.
 
 3.  **Install Git Hooks:** After activating the environment for the first time in a new clone, install the `pre-commit` Git hooks:
 
@@ -72,15 +76,10 @@ The project uses Conda to manage dependencies. For contributors, we provide a sp
 
     This sets up automatic code quality checks (formatting, linting) and commit message validation that run before each commit. See the "Developer Tools and Workflow" section for more details.
 
-_(Note: While end-users or CI might use the platform-specific `conda-*.lock` files derived from `environment.yml` for maximum reproducibility of the runtime environment (which will be named `omnidsp`), developers typically work with the slightly more flexible `environment-dev.yml` which creates the `omnidsp-dev` environment.)_
-
 ### Dependency Rationale: Boost
 
-The Boost C++ libraries were added as a dependency primarily for `Boost.Math`. Specifically, the library requires the 0th order modified Bessel function of the first kind (`I₀`) to generate Kaiser windows coefficients accurately and consistently.
-
-While C++17 includes mathematical special functions like `std::cyl_bessel_i` in the `<cmath>` header, its implementation is missing in certain standard library versions, most notably libc++ (used by default with Clang on macOS and some Linux distributions). This lack of universal availability caused cross-platform build failures.
-
-Using `boost::math::cyl_bessel_i` ensures that OmniDSP has access to a reliable and high-quality implementation of this function across all supported compilers and platforms, guaranteeing consistent Kaiser window generation. Boost is automatically installed via the Conda environment file (`environment.yml` and `environment-dev.yml`).
+(Content unchanged - explains Boost dependency for Kaiser window)
+The Boost C++ libraries were added as a dependency primarily for `Boost.Math`. Specifically, the library requires the 0th order modified Bessel function of the first kind (`I₀`) to generate Kaiser windows coefficients accurately and consistently. While C++17 includes mathematical special functions like `std::cyl_bessel_i`, its implementation is missing in certain standard library versions (notably libc++ on macOS). Using `boost::math::cyl_bessel_i` ensures a reliable implementation across all supported platforms. Boost is automatically installed via the Conda environment file.
 
 ## Dependency Management with Conda Lock
 
@@ -179,7 +178,7 @@ This is the standard way to build if you intend to use or test the Python bindin
     pip install -e . -v
     ```
 
-    The `-e` flag installs the package in "editable" mode, meaning changes to the Python source code (in `src/omnidsp_py`) are reflected immediately without reinstalling. Changes to C++ code still require rebuilding (which \`pip install -e .\` triggers if needed). The `-v` flag provides verbose output, showing the CMake configuration and build process, which is helpful for debugging.
+    The `-e` flag installs the package in "editable" mode. Changes to C++ code require rebuilding (which `pip install -e .` triggers if needed). The `-v` flag provides verbose output.
 
 ### C++ Library Only
 
@@ -191,57 +190,69 @@ If you only need the C++ library for use in another C++ project:
     ```
     mkdir build && cd build
     # Configure without Python bindings (set OFF explicitly)
-    cmake .. -DCMAKE_INSTALL_PREFIX=../install -DBUILD_PYTHON_BINDINGS=OFF # Add other options like CMAKE_PREFIX_PATH
+    cmake .. -DCMAKE_INSTALL_PREFIX=../install -DOMNIDSP_BUILD_PYTHON_BINDINGS=OFF # Add other options
     ```
 
-3.  **Build:**
-
-    ```
-    cmake --build . --config Release --parallel
-    ```
-
-4.  **(Optional) Install:**
-
-    ```
-    cmake --install . --config Release
-    ```
+3.  **Build:** `cmake --build . --config Release --parallel`
+4.  **(Optional) Install:** `cmake --install . --config Release`
 
 ## Project Structure
 
-- `include/OmniDSP/`: Public C++ headers defining the API (`fft.h`, `cqt.h`, `convolution.h`, `window.h`, `resample.h`, `omnidsp.h`).
-- `src/omnidsp/`: Core C++ library implementation files defining the public API wrappers (`fft.cpp`, `cqt.cpp`, `convolution.cpp`, `window.cpp`, `resample.cpp`).
-- `src/omnidsp/backend/`: Contains backend-specific implementations.
-  - `backend_impl.h`: Declares the interface required by all backends.
-  - `onemkl/`: Implementations using Intel oneMKL/IPP.
-  - `accelerate/`: Implementations using Apple Accelerate/vDSP.
-  - `stub/`: Stub implementations that throw runtime errors.
-- `src/omnidsp_py/`: Python bindings source code (pybind11 wrappers).
-- `tests/`: Unit tests (primarily for developers).
-  - `cpp/`: C++ tests using GoogleTest. Contains `data/`, `scripts/`, `tests/` subdirs.
+_(Updated to reflect new structure)_
+
+- `include/OmniDSP/`: Public C++ headers defining the API (`omnidsp.h`, `fft.h`, `cqt.h`, `resample.h`, `core_types.h`).
+- `src/omnidsp/`: Core C++ library implementation files (`omnidsp.cpp`, `fft.cpp`, `cqt.cpp`, `resample.cpp`). These implement the public API classes and forward calls to the backend implementations via PIMPL.
+- `src/omnidsp/backend/`: Contains backend-specific implementations and the internal interface header.
+  - `backend.h`: Internal header defining implementation class interfaces/signatures (within `OmniDSP::backend` namespace). **Not part of the public API.**
+  - `onemkl/`: Implementations using Intel oneMKL/IPP (namespace `OmniDSP::backend::oneMKL`).
+  - `accelerate/`: Implementations using Apple Accelerate/vDSP (namespace `OmniDSP::backend::Accelerate`).
+  - `stub/`: Stub implementations that throw runtime errors (namespace `OmniDSP::backend::Stub`).
+- `src/omnidsp_py/`: Python bindings source code (`bindings.cpp`, `api.py`, `__init__.py`).
+- `tests/`: Unit tests.
+  - `cpp/`: C++ tests using GoogleTest.
   - `python/`: Python tests using pytest.
 - `examples/`: Usage examples.
   - `cpp/`: C++ examples.
   - `notebooks/`: Python examples using Jupyter notebooks.
-- `environment.yml`: Conda environment definition source (for **runtime** env named `omnidsp`).
-- `environment-dev.yml`: Conda environment definition source (for **developers** env named `omnidsp-dev`).
-- `conda-*.lock`: Explicit, platform-specific Conda lock files (generated by `conda-lock` from `environment.yml`).
+- `environment.yml`, `environment-dev.yml`, `conda-*.lock`: Conda environment files.
 - `.pre-commit-config.yaml`: Configuration for pre-commit Git hooks.
 - `CMakeLists.txt`: Main CMake build script.
-- `pyproject.toml`: Python packaging configuration (uses `scikit-build-core`).
+- `pyproject.toml`: Python packaging configuration.
 - `TODO.md`: Current development tasks.
 - `CONTRIBUTING.md`: Guidelines for contributors (this file).
 
-## Understanding Backends
+## Understanding the Architecture
 
-OmniDSP uses different backends for performance:
+OmniDSP employs a specific architecture to provide a consistent API while leveraging different high-performance backends (Intel MKL/IPP or Apple Accelerate).
 
-- **oneMKL:** Uses Intel MKL and IPP. Preferred on non-Apple platforms if found by Conda. Requires `USE_ONEMKL` preprocessor definition (set by CMake).
-- **Accelerate:** Uses Apple's Accelerate framework. Preferred on macOS unless MKL is explicitly preferred. Requires `USE_ACCELERATE` definition.
-- **Stub:** A fallback implementation that throws runtime errors if no optimized backend is found/selected.
+### Core `OmniDSP` Class
 
-CMake automatically detects and selects the backend based on the platform and libraries available within the **active Conda environment** during configuration.
+- The primary entry point for users is the `OmniDSP` class (defined in `omnidsp.h`).
+- You **must** create an instance of this class first (e.g., `OmniDSP::OmniDSP dsp;` in C++ or `dsp = omnidsp_py.OmniDSP()` in Python).
+- The `OmniDSP` constructor automatically selects and initializes the appropriate backend based on the build configuration (MKL or Accelerate).
+- This instance manages the backend context.
+- It provides methods for **stateless** DSP operations (e.g., `dsp.convolve1d(...)`, `dsp.get_hann_coeffs(...)`).
+- It acts as a **factory** for creating stateful `Plan` objects.
 
-**Handling Backend Differences:** While functional parity between backends is a primary goal, sometimes the underlying libraries (e.g., MKL/IPP vs. Accelerate/vDSP) have different capabilities, interfaces, or constraints for the same conceptual operation (like resampling with filtering). When such discrepancies arise, the general strategy is often to **conform the internal C++ implementation to the more restrictive backend interface first** (e.g., adapting to IPP's requirements for resampling filter parameters). Once that backend is working correctly, we then determine the best approach for the other backend(s) to achieve similar functionality, potentially adapting the C++ interface or using alternative functions within that backend's library if necessary.
+### `Plan` Objects
+
+- For operations requiring significant setup or maintaining state (like FFTs, CQT, Resampling), OmniDSP uses dedicated `Plan` classes (`FFTPlan`, `RFFTPlan`, `CQTPlan`, `ResamplePlan`).
+- These `Plan` objects are **created** using factory methods on an existing `OmniDSP` instance (e.g., `auto fft_plan = dsp.create_fft_plan<float>(...);`). You do not construct `Plan` objects directly.
+- Each `Plan` object encapsulates the specific configuration and optimized state for its operation on a particular backend.
+- Once created, you use the `Plan` object's `execute(...)` method to perform the DSP operation efficiently multiple times.
+
+### Backend Abstraction (PIMPL)
+
+- The library heavily uses the **Pointer to Implementation (PIMPL)** idiom.
+- Both the main `OmniDSP` class and the individual `Plan` classes use PIMPL internally.
+- This means the public headers (`include/OmniDSP/`) do not expose any backend-specific details (like MKL or Accelerate headers).
+- The actual backend logic resides in internal implementation classes (e.g., `OmniDSP::backend::OmniDSPImpl`, `OmniDSP::backend::FFTPlanImpl`).
+- This approach provides strong **ABI stability** (allowing library updates without forcing users to recompile) and **decoupling** (users don't need backend SDKs to compile against OmniDSP).
+
+### Internal Namespace
+
+- Backend-specific implementation code resides in the `OmniDSP::backend` C++ namespace and its sub-namespaces (`OmniDSP::backend::oneMKL`, `OmniDSP::backend::Accelerate`, `OmniDSP::backend::Stub`).
+- Files and classes within this namespace are considered internal implementation details and are subject to change without notice. Users should only interact with the public API defined in the `include/OmniDSP/` headers and the main `OmniDSP` namespace.
 
 ## Running Tests
 
@@ -249,17 +260,17 @@ Testing is crucial. Please ensure all tests pass before submitting changes.
 
 ### Python Tests
 
-Run Python tests using pytest from the root directory of the repository:
+Run Python tests using pytest from the root directory:
 
 ```
 pytest tests/python
 ```
 
-These tests primarily check the Python bindings and API.
+These tests check the Python bindings and API. Tests should now instantiate an `omnidsp_py.OmniDSP` object and use its methods to create plans and perform operations.
 
 ### C++ Tests
 
-The C++ tests use GoogleTest and rely on reference data files to verify the core C++ implementation and backend behavior.
+The C++ tests use GoogleTest and rely on reference data files.
 
 #### Selecting Backend for Tests
 
@@ -326,14 +337,16 @@ Remember to commit any changes to the generated `.txt` files in the `tests/cpp/d
 
 After building the project:
 
-1.  Navigate to the build directory: `cd build`
-2.  Run CTest (which executes the test executable):
-    `ctest -C Debug` (or Release)
-    Add `-V` for verbose output: `ctest -C Debug -V`
-3.  Alternatively, run the executable directly (useful for debugging specific tests with filters):
-    `./tests/cpp/omnidsp_tests` (Linux/macOS)
-    `.\tests\cpp\Debug\omnidsp_tests.exe` (Windows, path might vary)
-    Example with filter: `./tests/cpp/omnidsp_tests --gtest_filter=FFT_Test.*`
+1. Navigate to the build directory: `cd build`
+2. Run CTest (which executes the test executable):
+   `ctest -C Debug` (or Release)
+   Add `-V` for verbose output: `ctest -C Debug -V`
+3. Alternatively, run the executable directly (useful for debugging specific tests with filters):
+   `./tests/cpp/omnidsp_tests` (Linux/macOS)
+   `.\tests\cpp\Debug\omnidsp_tests.exe` (Windows, path might vary)
+   Example with filter: `./tests/cpp/omnidsp_tests --gtest_filter=FFT_Test.*`
+
+**Note:** C++ tests need to be updated to instantiate `OmniDSP::OmniDSP` and use its factory methods (`create_*_plan`) to obtain `Plan` objects for testing stateful operations. Stateless operations should be tested via methods on the `OmniDSP` instance.
 
 ## Coding Style
 
@@ -397,11 +410,10 @@ Please use the GitHub Issues tracker for the OmniDSP repository to:
 
 Check the `TODO.md` file (or the TODO list canvas artifact if using this tool) for a list of known tasks and desired features. Some key areas include:
 
-- Tuning the CQT scaling factor.
-- Implementing `double` precision support for resampling in the MKL backend.
-- Adding 'same'/'full' convolution modes.
-- Expanding CI coverage.
-- Adding more tests and examples.
-- Improving documentation.
+- Implementing remaining features outlined in the `TODO.md` (e.g., convolution modes, filter design).
+- Expanding test coverage for the new architecture.
+- Improving documentation and examples for the new API.
+- Adding CI for different platforms.
+- Performance benchmarking.
 
 Thank you for contributing!

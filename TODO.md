@@ -1,112 +1,146 @@
-# OmniDSP TODO List (Restructured)
+# OmniDSP TODO List (Refactored for New Architecture)
 
-## High Priority / Blocking Tasks
+_High-level goals: Flatten public namespaces, introduce OmniDSP class (using PIMPL) as the main interface and factory for Plans, use PIMPL for Plan classes, add ResamplePlan. Python API will mirror C++, requiring an OmniDSP instance._
 
-- [ ] **Implement Core Resampling Refactor:** Execute the main steps outlined in the "Generic Internal CQT Resampling" plan. This is a **BLOCKER** for CQT functionality and potentially other resampling-dependent features. _(New - High Priority)_
-  - [ ] **Remove Old Resample API:** Delete old `resample.h`, `resample.cpp` (core and backend), remove includes, and update/remove related bindings for `filter_and_downsample`.
-  - [ ] **Define WindowSpec API (Header):**
-    - [ ] Add `WindowType` enum to `core_types.h` or `window.h`.
-    - [ ] Add `WindowSpec` struct (without defaults) to `window.h`.
-  - [ ] **Implement Window Utilities (Source):**
-    - [ ] Implement `get_window_coeffs` utility function in `window.cpp`.
-    - [ ] Add necessary template instantiations for `get_window_coeffs`.
-  - [ ] **Define ResamplePlan API & Convenience Funcs (Header):**
-    - [ ] Create/Modify `resample.h`.
-    - [ ] Declare concrete `ResamplePlan<T>` class (constructor taking factor, coefficients, precision; `resample` method).
-    - [ ] Declare overloaded `resample<T>` convenience functions (taking coefficients or `WindowSpec`+length).
-  - [ ] **Implement ResamplePlan & Convenience Funcs (Source):**
-    - [ ] Create/Modify `resample.cpp`.
-    - [ ] Define `ResamplePlan<T>` public methods.
-    - [ ] Define overloaded `resample<T>` convenience functions.
-    - [ ] Add explicit template instantiations for `ResamplePlan` and `resample`.
-  - [ ] **Implement Backend ResamplePlanImpl:**
-    - [ ] Declare backend-specific `ResamplePlanImpl` forward declarations in `backend.h`.
-    - [ ] Implement `onemkl/ResamplePlanImpl<float/double>` using `ippsFIRMR` in `onemkl/resample.cpp`.
-    - [ ] Implement `accelerate/ResamplePlanImpl<float/double>` using `vDSP_desamp` in `accelerate/resample.cpp`.
-    - [ ] Implement `stub/ResamplePlanImpl<float/double>` (constructor stores coefficients, execute throws) in `stub/resample.cpp`.
-- [ ] **Modify CQTPlan Implementation:** Update CQT to use the new `ResamplePlan` and `WindowSpec`. _(Modified - High Priority, depends on Core Resampling Refactor)_
-  - [ ] Update `cqt.h`: Constructors accept optional `WindowSpec(s)`, add `FFTPlan`/`ResamplePlan` members, rename `execute` to `cqt`.
-  - [ ] Update `cqt.cpp`: Implement constructors (apply default `WindowSpec` if needed), update `initializePlan` to generate coeffs and create plans, rename method, modify internal downsampling call.
-  - [ ] Update `cqt` convenience function (header/source) to handle optional/default `WindowSpec`.
-- [ ] **Update Python Bindings & API:** Reflect resampling and CQT changes in Python layer. _(Modified - High Priority, depends on Core Resampling Refactor & CQTPlan Modification)_
-  - [ ] Update `bindings.cpp`: Bind `WindowType`, `WindowSpec`; update `CQTPlan` bindings (constructor, rename method); add `ResamplePlan`/`resample` bindings; remove old symbols.
-  - [ ] Update `api.py`: Update `create_cqt_plan` (handle default `WindowSpec`), `cqt` wrapper; add `create_resample_plan`, `resample` wrappers; remove old wrappers.
-- [ ] **Update & Add Unit Tests:** Adapt existing tests and add new ones for the refactored components. _(Modified - High Priority, depends on implementation tasks)_
-  - [ ] Modify C++ CQT tests (`tests/cpp/tests/cqt.cpp`) for new constructor, test default/explicit `WindowSpec`, update method calls (`plan->cqt()`).
-  - [ ] Add C++ tests for `ResamplePlan` and `resample` convenience functions (coefficient and `WindowSpec` based).
-  - [ ] Verify MKL double CQT behavior with the new resampling.
-  - [ ] Adjust/regenerate CQT reference data if necessary due to filter changes.
-  - [ ] Modify Python tests (`tests/python`) for CQT and add tests for new resampling API. _(Implied by binding changes)_
-- [ ] **Debug C++ Tests (Post-Refactor & Resampling Changes):** Fix all remaining test failures observed after the refactoring _and_ resampling/CQT changes are complete. _(Modified - High Priority)_
-- [ ] **Tune CQT Scaling Factor:** Adjust CQT coefficient scaling in `cqt.cpp` (float path) to potentially match Librosa or achieve desired normalization. _(Original - High Priority - depends on passing CQT tests)_
-- [ ] **Verify Accelerate Backend via CI:** Confirm Accelerate build passes _and C++ tests pass_ on macOS CI runner. Verify `vDSP_desamp` behavior via `ResamplePlanImpl` tests. _(Modified - High Priority)_
+## Core Refactoring Tasks (High Priority / Blocking)
 
-## Core Implementation & Backend Tasks
+- [ ] **Define Core API Headers (New Structure):**
+  - [ ] **`core_types.h`:** Review and finalize core enums (`Precision`, `Direction`, `Domain`, `FFTNorm`, `ConvMode`, `WindowType`). Ensure no nested namespaces.
+  - [ ] **`omnidsp.h`:**
+    - Define the main `OmniDSP` class (forward-declare `OmniDSPImpl` in `OmniDSP::backend` namespace).
+    - Declare `OmniDSP` constructor and destructor (defined in `.cpp`).
+    - Declare move constructor/assignment (defaulted or defined in `.cpp`). Delete copy constructor/assignment.
+    - Declare methods for stateless operations: `convolve1d`, `correlate1d`, `get_hann_coeffs`, `get_hamming_coeffs`, `get_kaiser_coeffs`, `get_flattop_coeffs`.
+    - Declare factory methods for creating Plans: `create_fft_plan`, `create_rfft_plan`, `create_cqt_plan`, `create_resample_plan`. These should return `std::unique_ptr<FFTPlan<T>>`, etc., and take the necessary configuration parameters (length, precision, sample_rate, etc.).
+    - Remove old standalone function declarations.
+    - Include necessary Plan headers (`fft.h`, `cqt.h`, `resample.h`).
+  - [ ] **`fft.h`:**
+    - Define `FFTPlan` and `RFFTPlan` classes within the `OmniDSP` namespace.
+    - Forward-declare `FFTPlanImpl` and `RFFTPlanImpl` (in `OmniDSP::backend`).
+    - Make constructors **private** or **protected**. Add `OmniDSP` as a friend class OR provide an internal constructor taking backend context from the factory.
+    - Declare destructor, move operations (potentially delete copy ops), and execution methods (`fft`, `ifft`, `rfft`, `irfft`).
+    - Remove old standalone convenience function declarations.
+  - [ ] **`cqt.h`:**
+    - Define `CQTPlan` class within the `OmniDSP` namespace.
+    - Forward-declare `CQTPlanImpl` (in `OmniDSP::backend`).
+    - Make constructor **private** or **protected**. Add `OmniDSP` as a friend class OR provide internal constructor. Update signature (e.g., accept `WindowSpec`).
+    - Declare destructor, move operations, `execute` method.
+    - Remove old standalone `cqt` convenience function declaration.
+  - [ ] **`convolution.h`:**
+    - Remove standalone `convolve1d`/`correlate1d` declarations.
+    - Keep `ConvMode` enum if defined here (or move to `core_types.h`).
+  - [ ] **`window.h`:**
+    - Remove `Window` class declaration.
+    - Define `WindowType` enum and `WindowSpec` struct.
+  - [ ] **`resample.h`:**
+    - Define `ResamplePlan` class (within `OmniDSP` namespace).
+    - Forward-declare `ResamplePlanImpl` (in `OmniDSP::backend`).
+    - Make constructor **private** or **protected**. Add `OmniDSP` as a friend class OR provide internal constructor.
+    - Declare destructor, move operations, and `execute` method.
+    - Remove old standalone `filter_and_downsample` declaration.
+- [ ] **Implement Core API Source Files:**
+  - [ ] **`omnidsp.cpp`:**
+    - Implement `OmniDSP` constructor: Create the correct `backend::OmniDSPImpl` based on CMake flags (`USE_ONEMKL`, `USE_ACCELERATE`). Perform any one-time backend setup (e.g., MKL threading).
+    - Implement `OmniDSP` destructor.
+    - Implement `OmniDSP` move operations.
+    - Implement `OmniDSP` stateless methods (`convolve1d`, etc.) by forwarding calls to `pimpl_->method(...)`.
+    - Implement `OmniDSP` factory methods (`create_*_plan`): Use `pimpl_` to access backend context/factory logic, create the appropriate `backend::*PlanImpl`, and construct/return the `std::unique_ptr<PlanType>`.
+    - Add necessary explicit template instantiations for `OmniDSP` methods.
+  - [ ] **`fft.cpp`:**
+    - Implement internal `FFTPlan`/`RFFTPlan` constructors (taking backend context).
+    - Implement `FFTPlan`/`RFFTPlan` destructor, move operations, execute methods (forward to `pimpl_`).
+    - Add explicit template instantiations.
+    - Remove old convenience function implementations.
+  - [ ] **`cqt.cpp`:**
+    - Implement internal `CQTPlan` constructor (taking backend context). Update internal logic to use `ResamplePlan`.
+    - Implement `CQTPlan` destructor, move operations, execute method (forward to `pimpl_`).
+    - Add explicit template instantiations.
+    - Remove old convenience function implementation.
+  - [ ] **`window.cpp`:**
+    - Implement `get_window_coeffs` utility function (potentially internal to `backend::OmniDSPImpl`).
+    - Remove old `Window` class implementations.
+    - Add necessary template instantiations for any remaining helpers.
+  - [ ] **`resample.cpp`:**
+    - Implement internal `ResamplePlan` constructor (taking backend context).
+    - Implement `ResamplePlan` destructor, move operations, execute method (forward to `pimpl_`).
+    - Add explicit template instantiations.
+    - Remove old `filter_and_downsample` implementation.
+  - [ ] **`convolution.cpp`:**
+    - Remove old standalone function implementations.
+- [ ] **Refactor Backend Interface and Implementations:**
+  - [ ] **`backend.h` (Internal Header):**
+    - Define `OmniDSP::backend` namespace.
+    - Declare backend implementation classes (`OmniDSPImpl`, `FFTPlanImpl`, `CQTPlanImpl`, `ResamplePlanImpl`). These might inherit from internal base classes or be defined directly.
+    - Define any necessary internal base classes/interfaces within `OmniDSP::backend`.
+    - Remove forward declarations for old standalone backend functions.
+  - [ ] **`backend.cpp`:** Remove this file.
+  - [ ] **Backend Files (`src/omnidsp/backend/[name]/*.cpp`):**
+    - Update namespaces to `OmniDSP::backend::[name]`.
+    - Implement the backend-specific `OmniDSPImpl`, `FFTPlanImpl`, `CQTPlanImpl`, `ResamplePlanImpl` classes.
+    - `OmniDSPImpl` constructor handles backend setup.
+    - `*PlanImpl` constructors likely take context/handles from the `OmniDSPImpl` that created them.
+    - Ensure these classes contain the actual backend API calls (MKL, Accelerate, or stub logic).
+    - Handle PIMPL implementation details (constructors, destructors managing backend resources).
+    - Remove implementations for old standalone backend functions.
+- [ ] **Update Build System (`CMakeLists.txt`):**
+  - Update source file lists for `omnidsp` library target.
+  - Update backend source file lists (`OMNIDSP_BACKEND_SOURCES`).
+  - Ensure correct include paths are set (public API vs. internal backend).
+  - Adjust installation rules if header structure changes significantly.
+- [ ] **Update Python Bindings & API:**
+  - [ ] **`bindings.cpp`:**
+    - Bind the `OmniDSP` class, its constructor, and its methods (stateless ops + factory methods).
+    - Bind the `FFTPlan`, `CQTPlan`, `ResamplePlan` classes (only execution methods and getters should be public; constructors are effectively hidden).
+    - Remove bindings for old standalone functions/`Window` class.
+  - [ ] **`api.py`:**
+    - **Strategy:** Python users will instantiate `OmniDSP` (e.g., `dsp = ods.OmniDSP()`).
+    - Implement wrappers/functions that take an `OmniDSP` instance as an argument OR require users to call methods directly (e.g., `dsp.convolve1d(...)`, `plan = dsp.create_fft_plan(...)`). Define clear usage patterns.
+    - Remove wrappers for old standalone functions/`Window` class.
+  - [ ] **`__init__.py`:** Update `__all__` to export `OmniDSP` and the Plan classes (and potentially helper wrappers from `api.py`).
+- [ ] **Update & Add Unit Tests:**
+  - [ ] Adapt existing C++ tests (`tests/cpp`) for new class structure (create `OmniDSP` object, use factory methods to get Plans).
+  - [ ] Add C++ tests for `ResamplePlan`.
+  - [ ] Adapt existing Python tests (`tests/python`) for new API (create `OmniDSP` instance, use factory methods).
+  - [ ] Add Python tests for `OmniDSP` methods and `ResamplePlan`.
+- [ ] **Debug & Verify:** Fix any compilation errors and test failures introduced by the refactor.
 
-- **CQT (`cqt.cpp`)**
-  - [ ] **CQT Implementation Optimization:** Investigate `Nk` precalculation, analyze memory usage. _(Original - Low Priority)_
-- **Convolution (`convolution.cpp`, `backend/...`)**
-  - [ ] **Implement 'same' Mode:** Add `'same'` mode support for `convolve1d`/`correlate1d`. _(Original - Medium Priority)_
-  - [ ] **Implement 'full' Mode:** Add `'full'` mode support for `convolve1d`/`correlate1d`. _(Original - Medium Priority)_
-  - [ ] **Investigate MKL IPP Convolution Alternative:** Explore other IPP convolution/correlation functions if `ippsConvolve` has limitations. _(Original - Low Priority)_
-- **Windowing (`accelerate/window.cpp`)**
-  - [ ] **Implement Accelerate Kaiser Window:** Add `kaiser_window_impl` using Accelerate/vDSP if possible. _(Original - Low Priority - may allow removing Boost dep)_
-  - [ ] **Implement Accelerate Flattop Window:** Add `flattop_window_impl` using Accelerate/vDSP if possible. _(Original - Low Priority)_
-- **Filter Design (`filter.h`, `filter.cpp`)**
-  - [ ] **Implement FIR Filter Design:** e.g., `designLowpassFIR` using window method. _(Original - Low Priority)_
-  - [ ] **Implement IIR Filter Design:** e.g., `designButterworth`. Create `src/omnidsp/filter.cpp`. _(Original - Low Priority)_
-- **Error Handling & API**
-  - [ ] **Improve Error Propagation:** Enhance error reporting from C++ backends to Python. _(Original - Medium Priority)_
-  - [ ] **Backend Query API:** Add function to query the active backend at runtime. _(Original - Low Priority)_
-- **New Algorithms**
-  - [ ] **STFT Implementation:** Consider adding Short-Time Fourier Transform (STFT) functionality. _(Original - Low Priority)_
+## Dependent / Follow-Up Tasks (Medium/Low Priority - Re-evaluate after core refactor)
 
-## Testing Tasks (`tests/...`)
-
-- **C++ Tests (`tests/cpp`)**
-  - [ ] **Add Conv/Corr Mode Tests:** Add C++ tests for 'same'/'full' modes once implemented. _(Becomes Medium Priority once modes implemented)_
-  - [ ] **Increase Parameter Coverage:** Add tests for FFT/CQT/Window using different parameters (sizes, betas, bins, etc.). _(Original - Medium Priority)_
-  - [ ] **Backend-Specific Tests:** Add tests targeting edge cases or known differences between MKL and Accelerate backends (beyond resampling handled by `ResamplePlanImpl` tests). _(Original - Medium Priority)_
-  - [ ] **Add More CQT Signals:** Test CQT with different input signals (e.g., noise, multiple sinusoids) after refactor. _(Original - Low Priority)_
-- **Python Tests (`tests/python`)**
-  - [ ] **Add Python CQT Tests:** Add tests comparing `omnidsp_py.create_cqt_plan().cqt()` against Librosa reference more rigorously. _(Modified naming, still Medium Priority post-refactor)_
-  - [ ] **Add Python FFT Tests:** Add tests comparing `omnidsp_py.fft`, `rfft`, etc. against `scipy.fft`. _(Original - Medium Priority)_
-  - [ ] **Add Python Window Tests:** Add tests comparing `omnidsp_py.Window` methods against `scipy.signal.get_window`. _(Original - Medium Priority)_
-- **Benchmarking**
-  - [ ] **Formalize Benchmarking Suite:** Develop and integrate performance benchmarks comparing backends for key operations (FFT, CQT, Resample). _(Modified - Medium Priority)_
-
-## Python Bindings (`src/omnidsp_py`)
-
-- [ ] **Add Conv/Corr Wrappers:** Create Python wrappers in `api.py` for `convolve1d`/`correlate1d`, handling modes. _(Original - Medium Priority)_
-- [ ] **Memory View Support:** Investigate using `py::buffer_protocol` to allow zero-copy operations on NumPy arrays where feasible. _(Original - Low Priority)_
-- [ ] **Expose Plan Execution API:** Decide if Python API should expose `plan.fft()`, `plan.ifft()`, `plan.resample()`, etc., directly in addition to factory/convenience functions. _(Modified - Low Priority)_
-- [ ] **Expose More Plan Parameters:** Add getters for more internal plan parameters (`CQTPlan`, `FFTPlan`, `ResamplePlan`) if useful for debugging/introspection. _(Modified - Low Priority)_
-- [ ] **Pre-allocated Output Option:** Allow passing pre-allocated NumPy arrays to functions like `fft`, `resample` to avoid internal allocation. _(Modified - Low Priority)_
-
-## Build System & CI (`CMakeLists.txt`, `.github/workflows`)
-
-- **Continuous Integration (CI):**
-  - [ ] **Add Linux Runner:** Add Ubuntu CI runner once macOS build & tests pass. _(Original - Medium Priority)_
-  - [ ] **Add Windows Runner:** Add Windows CI runner once macOS build & tests pass. _(Original - Medium Priority)_
-- **Build System (`CMakeLists.txt`)**
-  - [ ] **Update Build System for Refactor:** Ensure new/modified files (resample.h/cpp, backend resample.cpp, etc.) are correctly included in CMakeLists.txt files. _(New - Medium Priority, part of refactor)_
-  - [ ] **Static Linking Investigation:** Explore options and add CMake flag for building OmniDSP as a static library. _(Original - Low Priority)_
-  - [ ] **Add More CMake Options:** Consider options for disabling CQT, forcing MKL linking mode, etc. _(Original - Low Priority)_
-
-## Documentation & Examples
-
-- [ ] **API Documentation:** Generate Doxygen (C++) & Sphinx (Python) documentation, updating for new APIs (`WindowSpec`, `ResamplePlan`, modified `CQTPlan`, etc.). _(Modified - Medium Priority)_
-- [ ] **Tutorials/Examples:** Add/update comprehensive examples (C++/Python) for common use cases, including new resampling and CQT configuration. _(Modified - Medium Priority)_
-- [ ] **Backend Documentation:** Improve README/docs with details on backend differences (e.g., `ippsFIRMR` vs `vDSP_desamp` notes), performance notes, and limitations. _(Modified - Medium Priority)_
-- [ ] **Resampling/WindowSpec Documentation:** Specifically document the `WindowSpec` usage, available window types, the `ResamplePlan` API, and the `resample` convenience functions. _(New - Medium Priority)_
+- **Tasks from Previous TODO (Integrate/Adapt):**
+  - [ ] **CQT Resampling:** Ensure the CQT implementation now correctly uses the new `ResamplePlan`. _(Part of core refactor)_
+  - [ ] **CQT Scaling Factor:** Tune CQT scaling factor. _(Depends on passing CQT tests)_
+  - [ ] **Convolution Modes:** Implement 'same'/'full' modes for `OmniDSP::convolve1d`/`correlate1d`.
+  - [ ] **Filter Design:** Implement FIR/IIR filter design functions (likely methods on `OmniDSP`).
+  - [ ] **Error Handling:** Improve error propagation from `backend::*Impl` classes through `OmniDSP`/`Plan` classes to Python.
+  - [ ] **Backend Query:** Add `OmniDSP::getActiveBackend()` method.
+  - [ ] **STFT Implementation:** Consider adding `OmniDSP::create_stft_plan()`.
+  - [ ] **Accelerate Window Implementations:** Implement Kaiser/Flattop in `backend::Accelerate::OmniDSPImpl` if possible.
+- **Testing:**
+  - [ ] Add Conv/Corr Mode Tests (C++/Python).
+  - [ ] Increase parameter coverage.
+  - [ ] Add backend-specific tests.
+  - [ ] Formalize benchmarking suite.
+- **Python Bindings:**
+  - ~~Define Python API strategy (convenience funcs vs explicit `OmniDSP` instance).~~ _(Decision made: Explicit OmniDSP instance)_
+  - [ ] Investigate memory view / zero-copy support.
+  - [ ] Expose more Plan parameters via getters.
+  - [ ] Allow pre-allocated output arrays.
+- **Build System & CI:**
+  - [ ] Add Linux/Windows CI runners.
+  - [ ] Investigate static linking.
+- **Documentation & Examples:**
+  - [ ] Update/Generate Doxygen/Sphinx docs for the new API (`OmniDSP` class, factory methods, Plans).
+  - [ ] Update C++/Python examples for the new API (showing `OmniDSP` instantiation and usage).
+  - [ ] Update README and backend documentation.
 
 ## Summary of Next Steps (Prioritized):
 
-1.  **IMPLEMENT CORE RESAMPLING REFACTOR:** Remove old API, define/implement `WindowSpec`, `get_window_coeffs`, `ResamplePlan`, backend `ResamplePlanImpl`.
-2.  **MODIFY CQTPLAN IMPLEMENTATION:** Adapt CQT to use the new resampling mechanism and `WindowSpec`.
-3.  **UPDATE PYTHON BINDINGS & API:** Expose the changes to Python.
-4.  **UPDATE & ADD UNIT TESTS:** Ensure CQT and Resampling are tested correctly.
-5.  **DEBUG C++ TESTS (Post-Refactor & Resampling Changes):** Fix any failures after the major changes.
-6.  **VERIFY ACCELERATE VIA CI:** Confirm macOS CI build and tests pass with the refactored code.
-7.  **TUNE CQT SCALING:** Adjust scaling factor now that CQT tests should be passing.
-8.  Proceed with other medium/low priority tasks (Convolution modes, other backends, documentation, etc.).
+1.  **DEFINE CORE API HEADERS:** Update `.h` files for `OmniDSP`, Plans, `core_types`. Adjust constructors/factories. Remove old declarations.
+2.  **REFACTOR BACKEND INTERFACE:** Define internal `backend::*Impl` classes/interfaces in `backend.h`.
+3.  **IMPLEMENT CORE API SOURCE:** Implement `.cpp` files for `OmniDSP` (including factory methods) and Plans (internal constructors, forwarding methods).
+4.  **IMPLEMENT BACKEND DETAILS:** Implement the `backend::*Impl` classes in `backend/[name]/*.cpp`.
+5.  **UPDATE BUILD SYSTEM:** Adjust `CMakeLists.txt`.
+6.  **UPDATE PYTHON BINDINGS/API:** Modify `bindings.cpp`, `api.py`, `__init__.py` to reflect the explicit `OmniDSP` instance strategy.
+7.  **UPDATE TESTS:** Adapt C++ and Python tests. Add tests for `ResamplePlan`.
+8.  **DEBUG & VERIFY:** Build, run tests, fix issues.
+9.  Proceed with dependent tasks.
