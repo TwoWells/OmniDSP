@@ -1,725 +1,741 @@
 /**
  * @file bindings.cpp
- * @brief Python bindings for the OmniDSP library using pybind11.
- *
- * This file defines the Python module 'omnidsp_py' which exposes the core
- * functionality of the OmniDSP C++ library (FFTPlan, CQTPlan, convenience
- * functions, window functions, enums) to Python, enabling its use with NumPy
- * arrays. Uses pybind11 function overloading to provide single function names
- * (e.g., fft, Window.hann) for different C++ template specializations
- * (float/double). Handles CQTPlan window function adaptation and 2D output
- * conversion.
+ * @brief pybind11 bindings for the OmniDSP C++ library.
+ * @details Exposes the OmniDSP class, Plan objects, and core functionalities to
+ * Python.
  */
 
-#include <pybind11/complex.h>     // For automatic std::complex conversion
-#include <pybind11/functional.h>  // For std::function (needed for CQTPlan window)
-#include <pybind11/numpy.h>       // For NumPy array integration
+#include <pybind11/complex.h>     // For std::complex support
+#include <pybind11/functional.h>  // For std::function wrapping if needed
+#include <pybind11/numpy.h>       // For NumPy array support
 #include <pybind11/pybind11.h>
-#include <pybind11/stl.h>  // For automatic std::vector conversion
+#include <pybind11/smart_ptr.h>  // For std::unique_ptr support
+#include <pybind11/stl.h>  // For automatic std::vector <-> list/tuple conversion
 
-#include <complex>     // Explicitly include for std::complex
-#include <cstring>     // For std::memcpy
-#include <functional>  // Explicitly include for std::function
-#include <stdexcept>   // For throwing exceptions
-#include <vector>      // Explicitly include for std::vector
+#include "OmniDSP/convolution.h"
+#include "OmniDSP/core_types.h"
+#include "OmniDSP/cqt.h"
+#include "OmniDSP/fft.h"
+#include "OmniDSP/omnidsp.h"  // Main C++ API header
+#include "OmniDSP/resample.h"
+#include "OmniDSP/window.h"
+// #include "OmniDSP/filter.h" // Include when available
 
-// Include the OmniDSP headers to be bound
-#include <OmniDSP/cqt.h>      // For CQTPlan
-#include <OmniDSP/omnidsp.h>  // For FFTPlan, Enums, etc.
-#include <OmniDSP/windows.h>  // For Window functions
+#include <span>  // Requires C++20
+#include <stdexcept>
+#include <string>
 
 namespace py = pybind11;
+using namespace OmniDSP;
 
-// --- Helper Functions ---
+// Define types for template instantiations
+using float_r = RealT<float>;
+using double_r = RealT<double>;
+using float_c = ComplexT<float>;
+using double_c = ComplexT<double>;
 
-/**
- * @brief Converts a 1D std::vector<T> to a 1D NumPy array.
- * The NumPy array takes ownership of the data (a copy is made).
- * @tparam T The data type (e.g., float, double, std::complex<float>).
- * @param vec The input std::vector.
- * @return py::array_t<T> The resulting NumPy array.
- */
+// Custom Exception Class for OmniDSP Errors
+// Allows Python code to catch specific library errors
+class OmniDSPPyError : public std::runtime_error {
+ public:
+  OmniDSPPyError(Status s, const std::string& message)
+      : std::runtime_error(message), status_(s) {}
+
+  Status get_status() const { return status_; }
+
+ private:
+  Status status_;
+};
+
+// Helper to check OmniExpected<T> and throw OmniDSPPyError on failure
 template <typename T>
-py::array_t<T> vector_to_numpy_1d(const std::vector<T> &vec) {
-  // Create a NumPy array of the same size as the vector.
-  py::array_t<T> result = py::array_t<T>(vec.size());
-  // Request buffer access to the NumPy array's memory.
-  py::buffer_info buf = result.request();
-  // Get a raw pointer to the NumPy array's data buffer.
-  T *ptr = static_cast<T *>(buf.ptr);
-  // Copy the data from the std::vector to the NumPy array's buffer.
-  std::memcpy(ptr, vec.data(), vec.size() * sizeof(T));
-  return result;  // Return the NumPy array.
+T check_expected(OmniExpected<T>&& result,
+                 const std::string& func_name = "OmniDSP function") {
+  if (result.has_value()) {
+    return std::move(result.value());
+  } else {
+    Status s = result.error();
+    std::string error_msg =
+        func_name + " failed with status: " + get_status_string(s);
+    throw OmniDSPPyError(s, error_msg);
+  }
 }
 
-/**
- * @brief Converts a 2D std::vector<std::vector<T>> to a 2D NumPy array.
- * The NumPy array takes ownership of the data (a copy is made).
- * Assumes the inner vectors (frames) all have the same size.
- * @tparam T The data type (e.g., std::complex<float>, std::complex<double>).
- * @param vec The input 2D std::vector (bins x frames).
- * @return py::array_t<T> The resulting 2D NumPy array.
- */
-template <typename T>
-py::array_t<T> vector_vector_to_numpy_2d(
-    const std::vector<std::vector<T>> &vec) {
-  if (vec.empty()) {
-    // Return an empty 2D array if the input vector is empty.
-    return py::array_t<T>({0, 0});
+// Overload for OmniExpected<void>
+void check_expected_void(OmniExpected<void>&& result,
+                         const std::string& func_name = "OmniDSP function") {
+  if (!result.has_value()) {
+    Status s = result.error();
+    std::string error_msg =
+        func_name + " failed with status: " + get_status_string(s);
+    throw OmniDSPPyError(s, error_msg);
   }
-  size_t rows = vec.size();     // Number of bins
-  size_t cols = vec[0].size();  // Number of frames (assuming consistent size)
+}
 
-  // Create a 2D NumPy array with the determined shape.
-  py::array_t<T> result = py::array_t<T>({rows, cols});
-  // Request buffer access.
-  py::buffer_info buf = result.request();
-  // Get a raw pointer to the NumPy array's data buffer.
-  T *ptr = static_cast<T *>(buf.ptr);
+// Helper to check Status return values (for Plan execute methods)
+void check_status(Status status,
+                  const std::string& func_name = "OmniDSP Plan execute") {
+  if (status != Status::Success) {
+    std::string error_msg =
+        func_name + " failed with status: " + get_status_string(status);
+    throw OmniDSPPyError(status, error_msg);
+  }
+}
 
-  // Iterate through the rows (bins) of the input vector.
-  for (size_t i = 0; i < rows; ++i) {
-    // Sanity check: Ensure inner vector has the expected number of columns.
-    if (vec[i].size() != cols) {
-      throw std::runtime_error(
-          "Cannot convert vector<vector> to NumPy array: inner vectors have "
-          "inconsistent sizes.");
+// Helper to convert NumPy array to std::span (const version)
+// Performs dtype and contiguity checks.
+template <typename T>
+std::span<const T> numpy_to_span_const(const py::buffer& buf) {
+  py::buffer_info info = buf.request();  // Request buffer information
+
+  // Check dimensions (expect 1D)
+  if (info.ndim != 1) {
+    throw std::runtime_error("Input array must be 1-dimensional.");
+  }
+
+  // Check data type
+  if (!py::isinstance<py::array_t<T>>(buf)) {
+    // More specific error message based on expected type T?
+    throw std::runtime_error("Input array has incorrect data type.");
+  }
+
+  // Check contiguity (optional but recommended for direct span usage)
+  // if (!(info.strides[0] == sizeof(T))) { // Check for C-contiguity
+  //     throw std::runtime_error("Input array must be C-contiguous.");
+  // }
+
+  return std::span<const T>(static_cast<const T*>(info.ptr), info.shape[0]);
+}
+
+// Helper to convert NumPy array to std::span (non-const version)
+// Performs dtype and contiguity checks.
+template <typename T>
+std::span<T> numpy_to_span_writable(py::buffer buf) {
+  py::buffer_info info = buf.request(true);  // Request writable buffer
+
+  if (info.ndim != 1) {
+    throw std::runtime_error("Output array must be 1-dimensional.");
+  }
+  if (!py::isinstance<py::array_t<T>>(buf)) {
+    throw std::runtime_error("Output array has incorrect data type.");
+  }
+  // if (!(info.strides[0] == sizeof(T))) {
+  //     throw std::runtime_error("Output array must be C-contiguous.");
+  // }
+
+  return std::span<T>(static_cast<T*>(info.ptr), info.shape[0]);
+}
+
+PYBIND11_MODULE(_omnidsp_cpp, m) {  // Matches the target name in CMakeLists.txt
+  m.doc() = "Python bindings for the OmniDSP C++ library";
+
+  // --- Custom Exception ---
+  // Register the custom exception class with pybind11
+  static py::exception<OmniDSPPyError> omni_dsp_py_error(m, "OmniDSPError",
+                                                         PyExc_RuntimeError);
+  py::register_exception_translator([](std::exception_ptr p) {
+    try {
+      if (p) std::rethrow_exception(p);
+    } catch (const OmniDSPPyError& e) {
+      // Set the Python error object with the message from the C++ exception
+      // Include the status code if desired
+      std::string msg = std::string(e.what()) + " (Status Code: " +
+                        std::to_string(static_cast<int>(e.get_status())) + ")";
+      PyErr_SetString(omni_dsp_py_error.ptr(), msg.c_str());
     }
-    // Copy data from the current inner vector (vec[i]) to the corresponding row
-    // in the NumPy array. The destination pointer (ptr + i * cols) calculates
-    // the start of the i-th row in the NumPy buffer.
-    std::memcpy(ptr + i * cols, vec[i].data(), cols * sizeof(T));
-  }
-  return result;  // Return the 2D NumPy array.
-}
+    // Add catch blocks for other C++ exceptions if needed
+  });
 
-// Define the Python module 'omnidsp_py'
-// The first argument to PYBIND11_MODULE must match the target name in CMake
-// (omnidsp_py)
-PYBIND11_MODULE(omnidsp_py, m) {
-  m.doc() = R"pbdoc(
-         OmniDSP Python Bindings (with Overloaded Functions)
-         ---------------------------------------------------
-         .. currentmodule:: omnidsp_py
-         .. autosummary::
-            :toctree: _generate
-            Direction
-            Precision
-            Domain
-            NormMode
-            FFTPlanFloat
-            FFTPlanDouble
-            CQTPlanFloat
-            CQTPlanDouble
-            Window
-            fft
-            ifft
-            rfft
-            irfft
-     )pbdoc";
-
-  // --- Bind Enums ---
-  // Expose C++ enums to Python. export_values() makes enum members accessible
-  // directly.
-  py::enum_<OmniDSP::Direction>(
-      m, "Direction", "Specifies the direction of the Fourier Transform.")
-      .value("Forward", OmniDSP::Direction::Forward,
-             "Forward Transform (e.g., time to frequency).")
-      .value("Inverse", OmniDSP::Direction::Inverse,
-             "Inverse Transform (e.g., frequency to time).")
+  // --- Enums ---
+  py::enum_<Backend>(m, "Backend")
+      .value("Stub", Backend::Stub)
+      .value("Accelerate", Backend::Accelerate)
+      .value("OneMKL", Backend::OneMKL)
       .export_values();
 
-  py::enum_<OmniDSP::Precision>(
-      m, "Precision",
-      "Specifies the floating-point precision for calculations.")
-      .value("Single", OmniDSP::Precision::Single,
-             "Use float (32-bit) precision.")
-      .value("Double", OmniDSP::Precision::Double,
-             "Use double (64-bit) precision.")
+  py::enum_<Status>(m, "Status")
+      .value("Success", Status::Success)
+      .value("Failure", Status::Failure)
+      .value("InvalidArgument", Status::InvalidArgument)
+      .value("InvalidOperation", Status::InvalidOperation)
+      .value("AllocationError", Status::AllocationError)
+      .value("BackendError", Status::BackendError)
+      .value("UnsupportedFeature", Status::UnsupportedFeature)
+      .value("SizeMismatch", Status::SizeMismatch)
+      .value("OutOfBounds", Status::OutOfBounds)
       .export_values();
 
-  py::enum_<OmniDSP::Domain>(
-      m, "Domain", "Specifies the domain of the input/output signals.")
-      .value("Complex", OmniDSP::Domain::Complex,
-             "Complex-to-Complex (C2C) transform.")
-      .value("Real", OmniDSP::Domain::Real, "Real-valued transform (R2C/C2R).")
+  py::enum_<DataType>(m, "DataType")
+      .value("Real", DataType::Real)
+      .value("Complex", DataType::Complex)
       .export_values();
 
-  py::enum_<OmniDSP::NormMode>(
-      m, "NormMode",
-      R"pbdoc(Specifies the normalization/scaling mode applied to the transforms.)pbdoc")
-      .value("Backward", OmniDSP::NormMode::Backward,
-             "Forward unscaled, Inverse scaled by 1/N. (Default).")
-      .value("Ortho", OmniDSP::NormMode::Ortho,
-             "Forward and Inverse scaled by 1/sqrt(N). Unitary.")
-      .value("Forward", OmniDSP::NormMode::Forward,
-             "Forward scaled by 1/N, Inverse unscaled.")
+  py::enum_<Domain>(m, "Domain")
+      .value("Time", Domain::Time)
+      .value("Frequency", Domain::Frequency)
+      .value("Quefrency", Domain::Quefrency)
       .export_values();
 
-  // --- Bind FFTPlan Class ---
-  // Expose the FFTPlan class template for float and double precision
-  // separately. We bind the constructor and getter methods. Execution is
-  // typically done via convenience functions.
-  using FFTPlanFloat = OmniDSP::FFTPlan<float>;
-  using FFTPlanDouble = OmniDSP::FFTPlan<double>;
+  py::enum_<Window>(m, "WindowType")  // Use WindowType in Python for clarity?
+      .value("Bartlett", Window::Bartlett)
+      .value("Blackman", Window::Blackman)
+      .value("Flattop", Window::Flattop)
+      .value("Gaussian", Window::Gaussian)
+      .value("Hamming", Window::Hamming)
+      .value("Hann", Window::Hann)
+      .value("Kaiser", Window::Kaiser)
+      .value("Rectangular", Window::Rectangular)
+      .value("Triangular", Window::Triangular)
+      .export_values();
 
-  py::class_<FFTPlanFloat>(
-      m, "FFTPlanFloat",
-      R"pbdoc(Manages a pre-calculated plan for efficient FFT execution (float precision).)pbdoc")
-      .def(py::init<size_t, OmniDSP::Precision, OmniDSP::Direction,
-                    OmniDSP::Domain, OmniDSP::NormMode>(),
-           R"pbdoc(Constructs float FFT plan.)pbdoc", py::arg("length"),
-           py::arg("precision"), py::arg("direction"), py::arg("domain"),
-           py::arg("norm") =
-               OmniDSP::NormMode::Backward)  // Default normalization mode
-      // Bind getter methods
-      .def("getLength", &FFTPlanFloat::getLength, "Gets the length 'N'.")
-      .def("getComplexLength", &FFTPlanFloat::getComplexLength,
-           "Gets complex spectrum length (N/2+1 for Real, N for Complex).")
-      .def("getDirection", &FFTPlanFloat::getDirection,
-           "Gets transform direction.")
-      .def("getPrecision", &FFTPlanFloat::getPrecision, "Gets precision.")
-      .def("getDomain", &FFTPlanFloat::getDomain, "Gets transform domain.")
-      .def("getNormMode", &FFTPlanFloat::getNormMode,
-           "Gets normalization mode.");
+  py::enum_<ConvolutionMode>(m, "ConvolutionMode")
+      .value("Full", ConvolutionMode::Full)
+      .value("Same", ConvolutionMode::Same)
+      .value("Valid", ConvolutionMode::Valid)
+      .export_values();
 
-  py::class_<FFTPlanDouble>(
-      m, "FFTPlanDouble",
-      R"pbdoc(Manages a pre-calculated plan for efficient FFT execution (double precision).)pbdoc")
-      .def(py::init<size_t, OmniDSP::Precision, OmniDSP::Direction,
-                    OmniDSP::Domain, OmniDSP::NormMode>(),
-           R"pbdoc(Constructs double FFT plan.)pbdoc", py::arg("length"),
-           py::arg("precision"), py::arg("direction"), py::arg("domain"),
-           py::arg("norm") =
-               OmniDSP::NormMode::Backward)  // Default normalization mode
-      // Bind getter methods
-      .def("getLength", &FFTPlanDouble::getLength, "Gets the length 'N'.")
-      .def("getComplexLength", &FFTPlanDouble::getComplexLength,
-           "Gets complex spectrum length (N/2+1 for Real, N for Complex).")
-      .def("getDirection", &FFTPlanDouble::getDirection,
-           "Gets transform direction.")
-      .def("getPrecision", &FFTPlanDouble::getPrecision, "Gets precision.")
-      .def("getDomain", &FFTPlanDouble::getDomain, "Gets transform domain.")
-      .def("getNormMode", &FFTPlanDouble::getNormMode,
-           "Gets normalization mode.");
+  // --- WindowSpec ---
+  // Need to bind template specializations
+  py::class_<WindowSpec<float>>(m, "WindowSpecFloat")
+      .def(py::init<>())  // Default (Hann)
+      .def(py::init<Window>(), py::arg("type"))
+      .def(py::init<Window, float>(), py::arg("type"), py::arg("param"))
+      .def("get_type", &WindowSpec<float>::get_type)
+      .def("get_beta", &WindowSpec<float>::get_beta)
+      .def("get_stddev", &WindowSpec<float>::get_stddev)
+      // Add __repr__ for better printing?
+      ;
 
-  // --- Bind CQTPlan Class ---
-  // Bind the CQTPlan class template for float and double precision.
-  using CQTPlanFloat = OmniDSP::CQTPlan<float>;
-  using CQTPlanDouble = OmniDSP::CQTPlan<double>;
-  // Alias for the C++ std::function signature expected by CQTPlan constructor.
-  using CppWindowFuncFloat = std::function<std::vector<float>(size_t)>;
-  using CppWindowFuncDouble = std::function<std::vector<double>(size_t)>;
-  // Default values from C++ header (must match cqt.h)
-  const float DEFAULT_SPARSITY_FLOAT = 1e-5f;
-  const double DEFAULT_SPARSITY_DOUBLE = 1e-5;
-  const int DEFAULT_FIR_ORDER =
-      101;  // Matches DEFAULT_RECURSIVE_FIR_ORDER in cqt.h
+  py::class_<WindowSpec<double>>(m, "WindowSpecDouble")
+      .def(py::init<>())  // Default (Hann)
+      .def(py::init<Window>(), py::arg("type"))
+      .def(py::init<Window, double>(), py::arg("type"), py::arg("param"))
+      .def("get_type", &WindowSpec<double>::get_type)
+      .def("get_beta", &WindowSpec<double>::get_beta)
+      .def("get_stddev", &WindowSpec<double>::get_stddev);
 
-  py::class_<CQTPlanFloat>(
-      m, "CQTPlanFloat",
-      R"pbdoc(Manages a pre-calculated plan for efficient recursive CQT execution (float precision).)pbdoc")
-      // Bind constructor using a lambda function to handle Python callable
-      // adaptation
+  // --- Plan Classes (Bind Interfaces) ---
+  // FFTPlan (Complex)
+  py::class_<FFTPlan<float_c>, std::unique_ptr<FFTPlan<float_c>>>(
+      m, "FFTPlanFloatComplex")
+      // No constructor exposed
       .def(
-          py::init([](double sample_rate, size_t hop_length, double lowest_freq,
-                      double highest_freq, int bins_per_octave,
-                      py::object py_window_func, float sparsity_threshold,
-                      int fir_filter_order) {  // Accept Python object and new
-                                               // args
-            // Ensure the provided Python object is callable
-            if (!py::isinstance<py::function>(py_window_func)) {
-              throw py::type_error("window_function must be a Python callable");
-            }
-            // Create a C++ std::function wrapper that calls the Python
-            // function. This lambda captures the Python function object.
-            CppWindowFuncFloat cpp_func =
-                [py_func = std::move(py_window_func)](
-                    size_t length) -> std::vector<float> {
-              // The C++ CQTPlan calls this lambda with the required window
-              // length. We need to call the *original* Python function. Since
-              // the Python function likely expects a NumPy array (e.g., like
-              // np.hanning), we create a dummy NumPy array of the correct size
-              // and dtype to pass to it.
-              py::array_t<float> dummy_arg(
-                  length);  // Dummy argument with correct size
-              py::object result =
-                  py_func(dummy_arg);  // Call the Python function
+          "fft",
+          [](const FFTPlan<float_c>& self,
+             py::array_t<float_c, py::array::c_style | py::array::forcecast>
+                 input,
+             py::array_t<float_c, py::array::c_style | py::array::forcecast>
+                 output) {
+            auto input_span = numpy_to_span_const<float_c>(input);
+            auto output_span = numpy_to_span_writable<float_c>(output);
+            check_status(self.fft(input_span, output_span), "FFTPlan.fft");
+          },
+          py::arg("input"), py::arg("output"), "Execute forward complex FFT.")
+      .def(
+          "ifft",
+          [](const FFTPlan<float_c>& self,
+             py::array_t<float_c, py::array::c_style | py::array::forcecast>
+                 input,
+             py::array_t<float_c, py::array::c_style | py::array::forcecast>
+                 output) {
+            auto input_span = numpy_to_span_const<float_c>(input);
+            auto output_span = numpy_to_span_writable<float_c>(output);
+            check_status(self.ifft(input_span, output_span), "FFTPlan.ifft");
+            // Note: No automatic 1/N scaling applied here, matches C++ Plan
+          },
+          py::arg("input"), py::arg("output"),
+          "Execute inverse complex FFT (unscaled).")
+      .def("get_length", &FFTPlan<float_c>::get_length);
 
-              // Convert the Python function's result (expected to be a NumPy
-              // array or compatible) back to a std::vector<float> for C++.
-              try {
-                py::array_t<float> result_arr =
-                    py::cast<py::array_t<float>>(result);
-                py::buffer_info info = result_arr.request();
-                if (info.ndim != 1)
-                  throw std::runtime_error(
-                      "Window function must return a 1D array/list");
-                // Check if the returned array has the expected length.
-                if (static_cast<size_t>(info.shape[0]) != length) {
-                  throw std::runtime_error(
-                      "Window function returned array of wrong size (got " +
-                      std::to_string(info.shape[0]) + ", expected " +
-                      std::to_string(length) + ")");
-                }
-                float *ptr = static_cast<float *>(info.ptr);
-                return std::vector<float>(
-                    ptr, ptr + info.shape[0]);  // Create vector from buffer
-              } catch (const py::cast_error &e) {
-                throw std::runtime_error(
-                    "Failed to cast window function result to NumPy float32 "
-                    "array: " +
-                    std::string(e.what()));
-              } catch (
-                  const std::exception &e) {  // Catch other potential errors
-                throw std::runtime_error(
-                    "Error processing window function result: " +
-                    std::string(e.what()));
-              }
-            };  // End of C++ lambda wrapper definition
+  py::class_<FFTPlan<double_c>, std::unique_ptr<FFTPlan<double_c>>>(
+      m, "FFTPlanDoubleComplex")
+      .def(
+          "fft",
+          [](const FFTPlan<double_c>& self,
+             py::array_t<double_c, py::array::c_style | py::array::forcecast>
+                 input,
+             py::array_t<double_c, py::array::c_style | py::array::forcecast>
+                 output) {
+            check_status(self.fft(numpy_to_span_const<double_c>(input),
+                                  numpy_to_span_writable<double_c>(output)),
+                         "FFTPlan.fft");
+          },
+          py::arg("input"), py::arg("output"), "Execute forward complex FFT.")
+      .def(
+          "ifft",
+          [](const FFTPlan<double_c>& self,
+             py::array_t<double_c, py::array::c_style | py::array::forcecast>
+                 input,
+             py::array_t<double_c, py::array::c_style | py::array::forcecast>
+                 output) {
+            check_status(self.ifft(numpy_to_span_const<double_c>(input),
+                                   numpy_to_span_writable<double_c>(output)),
+                         "FFTPlan.ifft");
+          },
+          py::arg("input"), py::arg("output"),
+          "Execute inverse complex FFT (unscaled).")
+      .def("get_length", &FFTPlan<double_c>::get_length);
 
-            // Construct the CQTPlanFloat instance, passing the C++ lambda
-            // wrapper and other arguments.
-            return std::make_unique<CQTPlanFloat>(
-                sample_rate, hop_length, lowest_freq, highest_freq,
-                bins_per_octave,
-                cpp_func,  // Pass the C++ lambda wrapper
-                sparsity_threshold, fir_filter_order);
-          }),
-          "Constructs float CQT plan.",  // Docstring for constructor
-          // Define arguments for Python users, including new ones with defaults
-          py::arg("sample_rate"), py::arg("hop_length"), py::arg("lowest_freq"),
-          py::arg("highest_freq"), py::arg("bins_per_octave"),
-          py::arg("window_function"),
-          py::arg_v(
-              "sparsity_threshold", DEFAULT_SPARSITY_FLOAT,
-              "Sparsity threshold for kernels (default: 1e-5)"),  // Optional
-                                                                  // arg
-          py::arg_v(
-              "fir_filter_order", DEFAULT_FIR_ORDER,
-              "Order of FIR anti-aliasing filter (default: 101)")  // Optional
-                                                                   // arg
-          )
-      // Bind execute method - Updated for 2D output
+  // RFFTPlan (Real)
+  py::class_<RFFTPlan<float>, std::unique_ptr<RFFTPlan<float>>>(m,
+                                                                "RFFTPlanFloat")
+      .def(
+          "rfft",
+          [](const RFFTPlan<float>& self,
+             py::array_t<float_r, py::array::c_style | py::array::forcecast>
+                 input,
+             py::array_t<float_c, py::array::c_style | py::array::forcecast>
+                 output) {
+            check_status(self.rfft(numpy_to_span_const<float_r>(input),
+                                   numpy_to_span_writable<float_c>(output)),
+                         "RFFTPlan.rfft");
+          },
+          py::arg("input"), py::arg("output"),
+          "Execute forward real-to-complex FFT.")
+      .def(
+          "irfft",
+          [](const RFFTPlan<float>& self,
+             py::array_t<float_c, py::array::c_style | py::array::forcecast>
+                 input,
+             py::array_t<float_r, py::array::c_style | py::array::forcecast>
+                 output) {
+            check_status(self.irfft(numpy_to_span_const<float_c>(input),
+                                    numpy_to_span_writable<float_r>(output)),
+                         "RFFTPlan.irfft");
+            // Note: No automatic 1/N scaling applied here
+          },
+          py::arg("input"), py::arg("output"),
+          "Execute inverse complex-to-real FFT (unscaled).")
+      .def("get_length", &RFFTPlan<float>::get_length);
+
+  py::class_<RFFTPlan<double>, std::unique_ptr<RFFTPlan<double>>>(
+      m, "RFFTPlanDouble")
+      .def(
+          "rfft",
+          [](const RFFTPlan<double>& self,
+             py::array_t<double_r, py::array::c_style | py::array::forcecast>
+                 input,
+             py::array_t<double_c, py::array::c_style | py::array::forcecast>
+                 output) {
+            check_status(self.rfft(numpy_to_span_const<double_r>(input),
+                                   numpy_to_span_writable<double_c>(output)),
+                         "RFFTPlan.rfft");
+          },
+          py::arg("input"), py::arg("output"),
+          "Execute forward real-to-complex FFT.")
+      .def(
+          "irfft",
+          [](const RFFTPlan<double>& self,
+             py::array_t<double_c, py::array::c_style | py::array::forcecast>
+                 input,
+             py::array_t<double_r, py::array::c_style | py::array::forcecast>
+                 output) {
+            check_status(self.irfft(numpy_to_span_const<double_c>(input),
+                                    numpy_to_span_writable<double_r>(output)),
+                         "RFFTPlan.irfft");
+          },
+          py::arg("input"), py::arg("output"),
+          "Execute inverse complex-to-real FFT (unscaled).")
+      .def("get_length", &RFFTPlan<double>::get_length);
+
+  // CQTPlan
+  py::class_<CQTPlan<float>, std::unique_ptr<CQTPlan<float>>>(m, "CQTPlanFloat")
       .def(
           "execute",
-          [](const CQTPlanFloat &plan,
+          [](const CQTPlan<float>& self,
+             py::array_t<float_r, py::array::c_style | py::array::forcecast>
+                 input,
+             py::array_t<float_c, py::array::c_style | py::array::forcecast>
+                 output) {
+            check_status(self.execute(numpy_to_span_const<float_r>(input),
+                                      numpy_to_span_writable<float_c>(output)),
+                         "CQTPlan.execute");
+          },
+          py::arg("input"), py::arg("output"), "Execute Constant-Q Transform.")
+      .def("get_num_bins", &CQTPlan<float>::get_num_bins)
+      .def("get_num_output_frames", &CQTPlan<float>::get_num_output_frames,
+           py::arg("input_length"))
+      .def("get_hop_length", &CQTPlan<float>::get_hop_length);
+
+  py::class_<CQTPlan<double>, std::unique_ptr<CQTPlan<double>>>(m,
+                                                                "CQTPlanDouble")
+      .def(
+          "execute",
+          [](const CQTPlan<double>& self,
+             py::array_t<double_r, py::array::c_style | py::array::forcecast>
+                 input,
+             py::array_t<double_c, py::array::c_style | py::array::forcecast>
+                 output) {
+            check_status(self.execute(numpy_to_span_const<double_r>(input),
+                                      numpy_to_span_writable<double_c>(output)),
+                         "CQTPlan.execute");
+          },
+          py::arg("input"), py::arg("output"), "Execute Constant-Q Transform.")
+      .def("get_num_bins", &CQTPlan<double>::get_num_bins)
+      .def("get_num_output_frames", &CQTPlan<double>::get_num_output_frames,
+           py::arg("input_length"))
+      .def("get_hop_length", &CQTPlan<double>::get_hop_length);
+
+  // ConvolutionPlan
+  py::class_<ConvolutionPlan<float>, std::unique_ptr<ConvolutionPlan<float>>>(
+      m, "ConvolutionPlanFloat")
+      .def(
+          "execute",
+          [](const ConvolutionPlan<float>& self,
              py::array_t<float, py::array::c_style | py::array::forcecast>
-                 np_input) -> py::array_t<std::complex<float>> {
-            // Input validation: Ensure input is a 1D NumPy array.
-            if (np_input.ndim() != 1)
-              throw std::runtime_error("Input must be a 1D NumPy array.");
-            // Convert NumPy input array to std::vector<float>.
-            std::vector<float> input_vec(np_input.data(),
-                                         np_input.data() + np_input.size());
-            // Declare the 2D vector that the C++ execute method will populate.
-            std::vector<std::vector<std::complex<float>>> output_vec;
-            // Call the C++ execute method.
-            plan.execute(input_vec, output_vec);
-            // Convert the resulting 2D std::vector to a 2D NumPy array.
-            return vector_vector_to_numpy_2d(output_vec);
+                 input,
+             py::array_t<float, py::array::c_style | py::array::forcecast>
+                 output) {
+            check_status(self.execute(numpy_to_span_const<float>(input),
+                                      numpy_to_span_writable<float>(output)),
+                         "ConvolutionPlan.execute");
           },
-          py::arg("input"),
-          R"pbdoc(Executes float CQT transform. Returns a 2D NumPy array (bins x frames).)pbdoc")
-      // Bind getters (including newly added ones)
-      .def("getNumBins", &CQTPlanFloat::getNumBins,
-           "Gets the total number of CQT frequency bins.")
-      .def("getSampleRate", &CQTPlanFloat::getSampleRate,
-           "Gets the initial sample rate used (Hz).")
-      .def("getHopLength", &CQTPlanFloat::getHopLength,
-           "Gets the initial hop length used (samples).")
-      .def("getLowestFrequency", &CQTPlanFloat::getLowestFrequency,
-           "Gets the lowest frequency (Hz).")
-      .def("getHighestFrequency", &CQTPlanFloat::getHighestFrequency,
-           "Gets the highest frequency (Hz).")
-      .def("getBinsPerOctave", &CQTPlanFloat::getBinsPerOctave,
-           "Gets the number of bins per octave.")
-      .def("getNumOctaves", &CQTPlanFloat::getNumOctaves,
-           "Gets the number of octaves processed.")
-      .def("getSparsityThreshold", &CQTPlanFloat::getSparsityThreshold,
-           "Gets the sparsity threshold used for kernels.")
-      .def("getFirFilterOrder", &CQTPlanFloat::getFirFilterOrder,
-           "Gets the FIR anti-aliasing filter order.");
-  // .def("getOctaveFFTLengths", &CQTPlanFloat::getOctaveFFTLengths, "Gets FFT
-  // lengths per octave.") // Example if getter was added
+          py::arg("input"), py::arg("output"),
+          "Execute pre-planned convolution.")
+      .def("get_kernel_length", &ConvolutionPlan<float>::get_kernel_length)
+      .def("get_mode", &ConvolutionPlan<float>::get_mode)
+      .def("get_output_length", &ConvolutionPlan<float>::get_output_length,
+           py::arg("input_length"));
+  // Add double, complex float, complex double specializations...
 
-  py::class_<CQTPlanDouble>(
-      m, "CQTPlanDouble",
-      R"pbdoc(Manages a pre-calculated plan for efficient recursive CQT execution (double precision).)pbdoc")
-      // Bind constructor using a lambda function - Updated for new arguments
-      .def(
-          py::init(
-              [](double sample_rate, size_t hop_length, double lowest_freq,
-                 double highest_freq, int bins_per_octave,
-                 py::object py_window_func, double sparsity_threshold,
-                 int fir_filter_order) {  // Accept Python object and new args
-                if (!py::isinstance<py::function>(py_window_func)) {
-                  throw py::type_error(
-                      "window_function must be a Python callable");
-                }
-                // Create the C++ std::function wrapper.
-                CppWindowFuncDouble cpp_func =
-                    [py_func = std::move(py_window_func)](
-                        size_t length) -> std::vector<double> {
-                  py::array_t<double> dummy_arg(length);  // Dummy argument
-                  py::object result =
-                      py_func(dummy_arg);  // Call Python function
-                  try {
-                    // Convert result back to std::vector<double>.
-                    py::array_t<double> result_arr =
-                        py::cast<py::array_t<double>>(result);
-                    py::buffer_info info = result_arr.request();
-                    if (info.ndim != 1)
-                      throw std::runtime_error(
-                          "Window function must return a 1D array/list");
-                    if (static_cast<size_t>(info.shape[0]) !=
-                        length) {  // Check size consistency
-                      throw std::runtime_error(
-                          "Window function returned array of wrong size (got " +
-                          std::to_string(info.shape[0]) + ", expected " +
-                          std::to_string(length) + ")");
-                    }
-                    double *ptr = static_cast<double *>(info.ptr);
-                    return std::vector<double>(ptr, ptr + info.shape[0]);
-                  } catch (const py::cast_error &e) {
-                    throw std::runtime_error(
-                        "Failed to cast window function result to NumPy "
-                        "float64 array: " +
-                        std::string(e.what()));
-                  } catch (const std::exception &e) {
-                    throw std::runtime_error(
-                        "Error processing window function result: " +
-                        std::string(e.what()));
-                  }
-                };  // End of C++ lambda wrapper definition
-                // Construct the CQTPlanDouble instance.
-                return std::make_unique<CQTPlanDouble>(
-                    sample_rate, hop_length, lowest_freq, highest_freq,
-                    bins_per_octave,
-                    cpp_func,  // Pass the C++ lambda wrapper
-                    sparsity_threshold, fir_filter_order);
-              }),
-          "Constructs double CQT plan.",  // Docstring for constructor
-          // Define arguments for Python users, including new ones with defaults
-          py::arg("sample_rate"), py::arg("hop_length"), py::arg("lowest_freq"),
-          py::arg("highest_freq"), py::arg("bins_per_octave"),
-          py::arg("window_function"),
-          py::arg_v(
-              "sparsity_threshold", DEFAULT_SPARSITY_DOUBLE,
-              "Sparsity threshold for kernels (default: 1e-5)"),  // Optional
-                                                                  // arg
-          py::arg_v(
-              "fir_filter_order", DEFAULT_FIR_ORDER,
-              "Order of FIR anti-aliasing filter (default: 101)")  // Optional
-                                                                   // arg
-          )
-      // Bind execute method - Updated for 2D output
+  // CorrelationPlan
+  py::class_<CorrelationPlan<float>, std::unique_ptr<CorrelationPlan<float>>>(
+      m, "CorrelationPlanFloat")
       .def(
           "execute",
-          [](const CQTPlanDouble &plan,
-             py::array_t<double, py::array::c_style | py::array::forcecast>
-                 np_input) -> py::array_t<std::complex<double>> {
-            // Input validation and conversion.
-            if (np_input.ndim() != 1)
-              throw std::runtime_error("Input must be a 1D NumPy array.");
-            std::vector<double> input_vec(np_input.data(),
-                                          np_input.data() + np_input.size());
-            // Declare 2D output vector.
-            std::vector<std::vector<std::complex<double>>> output_vec;
-            // Call C++ execute.
-            plan.execute(input_vec, output_vec);
-            // Convert 2D vector to 2D NumPy array.
-            return vector_vector_to_numpy_2d(output_vec);
+          [](const CorrelationPlan<float>& self,
+             py::array_t<float, py::array::c_style | py::array::forcecast>
+                 input,
+             py::array_t<float, py::array::c_style | py::array::forcecast>
+                 output) {
+            check_status(self.execute(numpy_to_span_const<float>(input),
+                                      numpy_to_span_writable<float>(output)),
+                         "CorrelationPlan.execute");
+          },
+          py::arg("input"), py::arg("output"),
+          "Execute pre-planned correlation.")
+      .def("get_template_length", &CorrelationPlan<float>::get_template_length)
+      .def("get_mode", &CorrelationPlan<float>::get_mode)
+      .def("get_output_length", &CorrelationPlan<float>::get_output_length,
+           py::arg("input_length"));
+  // Add double, complex float, complex double specializations...
+
+  // ResamplePlan
+  py::class_<ResamplePlan<float>, std::unique_ptr<ResamplePlan<float>>>(
+      m, "ResamplePlanFloat")
+      .def(
+          "execute",
+          [](const ResamplePlan<float>& self,
+             py::array_t<float, py::array::c_style | py::array::forcecast>
+                 input,
+             py::array_t<float, py::array::c_style | py::array::forcecast>
+                 output) {
+            check_status(self.execute(numpy_to_span_const<float>(input),
+                                      numpy_to_span_writable<float>(output)),
+                         "ResamplePlan.execute");
+          },
+          py::arg("input"), py::arg("output"),
+          "Execute pre-planned resampling.")
+      .def("get_input_rate", &ResamplePlan<float>::get_input_rate)
+      .def("get_output_rate", &ResamplePlan<float>::get_output_rate)
+      .def("get_output_length", &ResamplePlan<float>::get_output_length,
+           py::arg("input_length"));
+  // Add double specialization...
+
+  // --- OmniDSP Class ---
+  py::class_<OmniDSP>(m, "OmniDSP")
+      // Do not expose constructor directly
+      .def_static(
+          "create",
+          [](Backend backend = Backend::Stub) {
+            // Use helper to handle expected and potential exception
+            return check_expected(OmniDSP::create(backend), "OmniDSP.create");
+          },
+          py::arg("backend") = Backend::Stub,
+          "Static factory method to create an OmniDSP instance.")
+
+      .def("get_backend", &OmniDSP::get_backend)
+
+      // Bind member functions (DSP Ops, Window Gens, Plan Factories)
+      // Need to instantiate templates for float/double and complex types
+
+      // Convolution (Real)
+      .def(
+          "convolve",
+          [](const OmniDSP& self, py::array_t<float_r> input,
+             py::array_t<float_r> kernel, ConvolutionMode mode) {
+            auto input_vec = input.cast<std::vector<float_r>>();
+            auto kernel_vec = kernel.cast<std::vector<float_r>>();
+            return check_expected(
+                self.convolve<float>(input_vec, kernel_vec, mode));
+          },
+          py::arg("input"), py::arg("kernel"), py::arg("mode"),
+          "Perform 1D real convolution (float).")
+      .def(
+          "convolve",
+          [](const OmniDSP& self, py::array_t<double_r> input,
+             py::array_t<double_r> kernel, ConvolutionMode mode) {
+            auto input_vec = input.cast<std::vector<double_r>>();
+            auto kernel_vec = kernel.cast<std::vector<double_r>>();
+            return check_expected(
+                self.convolve<double>(input_vec, kernel_vec, mode));
+          },
+          py::arg("input"), py::arg("kernel"), py::arg("mode"),
+          "Perform 1D real convolution (double).")
+
+      // Convolution (Complex)
+      .def(
+          "convolve",
+          [](const OmniDSP& self, py::array_t<float_c> input,
+             py::array_t<float_c> kernel, ConvolutionMode mode) {
+            auto input_vec = input.cast<std::vector<float_c>>();
+            auto kernel_vec = kernel.cast<std::vector<float_c>>();
+            return check_expected(
+                self.convolve<float_c>(input_vec, kernel_vec, mode));
+          },
+          py::arg("input"), py::arg("kernel"), py::arg("mode"),
+          "Perform 1D complex convolution (float).")
+      .def(
+          "convolve",
+          [](const OmniDSP& self, py::array_t<double_c> input,
+             py::array_t<double_c> kernel, ConvolutionMode mode) {
+            auto input_vec = input.cast<std::vector<double_c>>();
+            auto kernel_vec = kernel.cast<std::vector<double_c>>();
+            return check_expected(
+                self.convolve<double_c>(input_vec, kernel_vec, mode));
+          },
+          py::arg("input"), py::arg("kernel"), py::arg("mode"),
+          "Perform 1D complex convolution (double).")
+
+      // Correlation (Real)
+      .def(
+          "correlate",
+          [](const OmniDSP& self, py::array_t<float_r> input,
+             py::array_t<float_r> kernel, ConvolutionMode mode) {
+            return check_expected(self.correlate<float>(
+                input.cast<std::vector<float_r>>(),
+                kernel.cast<std::vector<float_r>>(), mode));
+          },
+          py::arg("input"), py::arg("kernel"), py::arg("mode"),
+          "Perform 1D real correlation (float).")
+      .def(
+          "correlate",
+          [](const OmniDSP& self, py::array_t<double_r> input,
+             py::array_t<double_r> kernel, ConvolutionMode mode) {
+            return check_expected(self.correlate<double>(
+                input.cast<std::vector<double_r>>(),
+                kernel.cast<std::vector<double_r>>(), mode));
+          },
+          py::arg("input"), py::arg("kernel"), py::arg("mode"),
+          "Perform 1D real correlation (double).")
+
+      // Correlation (Complex)
+      .def(
+          "correlate",
+          [](const OmniDSP& self, py::array_t<float_c> input,
+             py::array_t<float_c> kernel, ConvolutionMode mode) {
+            return check_expected(self.correlate<float_c>(
+                input.cast<std::vector<float_c>>(),
+                kernel.cast<std::vector<float_c>>(), mode));
+          },
+          py::arg("input"), py::arg("kernel"), py::arg("mode"),
+          "Perform 1D complex correlation (float).")
+      .def(
+          "correlate",
+          [](const OmniDSP& self, py::array_t<double_c> input,
+             py::array_t<double_c> kernel, ConvolutionMode mode) {
+            return check_expected(self.correlate<double_c>(
+                input.cast<std::vector<double_c>>(),
+                kernel.cast<std::vector<double_c>>(), mode));
+          },
+          py::arg("input"), py::arg("kernel"), py::arg("mode"),
+          "Perform 1D complex correlation (double).")
+
+      // One-off FFTs
+      .def(
+          "fft",
+          [](const OmniDSP& self, py::array_t<float_c> input) {
+            return check_expected(
+                self.fft<float_c>(input.cast<std::vector<float_c>>()));
+          },
+          py::arg("input"), "Compute one-off complex FFT (float).")
+      .def(
+          "fft",
+          [](const OmniDSP& self, py::array_t<double_c> input) {
+            return check_expected(
+                self.fft<double_c>(input.cast<std::vector<double_c>>()));
+          },
+          py::arg("input"), "Compute one-off complex FFT (double).")
+      .def(
+          "ifft",
+          [](const OmniDSP& self, py::array_t<float_c> input) {
+            return check_expected(
+                self.ifft<float_c>(input.cast<std::vector<float_c>>()));
           },
           py::arg("input"),
-          R"pbdoc(Executes double CQT transform. Returns a 2D NumPy array (bins x frames).)pbdoc")
-      // Bind getters (including newly added ones)
-      .def("getNumBins", &CQTPlanDouble::getNumBins,
-           "Gets the total number of CQT frequency bins.")
-      .def("getSampleRate", &CQTPlanDouble::getSampleRate,
-           "Gets the initial sample rate used (Hz).")
-      .def("getHopLength", &CQTPlanDouble::getHopLength,
-           "Gets the initial hop length used (samples).")
-      .def("getLowestFrequency", &CQTPlanDouble::getLowestFrequency,
-           "Gets the lowest frequency (Hz).")
-      .def("getHighestFrequency", &CQTPlanDouble::getHighestFrequency,
-           "Gets the highest frequency (Hz).")
-      .def("getBinsPerOctave", &CQTPlanDouble::getBinsPerOctave,
-           "Gets the number of bins per octave.")
-      .def("getNumOctaves", &CQTPlanDouble::getNumOctaves,
-           "Gets the number of octaves processed.")
-      .def("getSparsityThreshold", &CQTPlanDouble::getSparsityThreshold,
-           "Gets the sparsity threshold used for kernels.")
-      .def("getFirFilterOrder", &CQTPlanDouble::getFirFilterOrder,
-           "Gets the FIR anti-aliasing filter order.");
-  // .def("getOctaveFFTLengths", &CQTPlanDouble::getOctaveFFTLengths, "Gets FFT
-  // lengths per octave.") // Example if getter was added
-
-  // --- Bind Window Functions ---
-  // Bind the static methods of the C++ Window class.
-  // Use pybind11's function overloading feature to expose a single Python
-  // function (e.g., Window.hann) that calls the correct C++ template
-  // specialization based on input type.
-  py::class_<OmniDSP::Window>(
-      m, "Window", "Provides common window functions for signal processing.")
-      // --- Hann Window ---
-      // Bind float version
-      .def_static(
-          "hann",
-          [](py::array_t<float, py::array::c_style | py::array::forcecast>
-                 np_input) -> py::array_t<float> {
-            std::vector<float> input_vec(np_input.data(),
-                                         np_input.data() + np_input.size());
-            // Call the C++ static method OmniDSP::Window::hann<float>
-            std::vector<float> result_vec = OmniDSP::Window::hann(input_vec);
-            // Convert result back to NumPy array
-            return vector_to_numpy_1d(result_vec);
+          "Compute one-off complex IFFT (float, scaled by 1/N).")  // Note
+                                                                   // scaling
+                                                                   // difference
+                                                                   // vs Plan
+      .def(
+          "ifft",
+          [](const OmniDSP& self, py::array_t<double_c> input) {
+            return check_expected(
+                self.ifft<double_c>(input.cast<std::vector<double_c>>()));
           },
           py::arg("input"),
-          "Applies Hann window (float32 input/output).")  // Overload 1: float
-      // Bind double version
-      .def_static(
-          "hann",
-          [](py::array_t<double, py::array::c_style | py::array::forcecast>
-                 np_input) -> py::array_t<double> {
-            std::vector<double> input_vec(np_input.data(),
-                                          np_input.data() + np_input.size());
-            // Call the C++ static method OmniDSP::Window::hann<double>
-            std::vector<double> result_vec = OmniDSP::Window::hann(input_vec);
-            // Convert result back to NumPy array
-            return vector_to_numpy_1d(result_vec);
+          "Compute one-off complex IFFT (double, scaled by 1/N).")
+      .def(
+          "rfft",
+          [](const OmniDSP& self, py::array_t<float_r> input) {
+            return check_expected(
+                self.rfft<float>(input.cast<std::vector<float_r>>()));
           },
-          py::arg("input"),
-          "Applies Hann window (float64 input/output).")  // Overload 2: double
-
-      // --- Hamming Window --- (Similar binding pattern for other windows)
-      .def_static(
-          "hamming",
-          [](py::array_t<float, py::array::c_style | py::array::forcecast>
-                 np_input) -> py::array_t<float> {
-            std::vector<float> input_vec(np_input.data(),
-                                         np_input.data() + np_input.size());
-            return vector_to_numpy_1d(OmniDSP::Window::hamming(input_vec));
+          py::arg("input"), "Compute one-off real RFFT (float).")
+      .def(
+          "rfft",
+          [](const OmniDSP& self, py::array_t<double_r> input) {
+            return check_expected(
+                self.rfft<double>(input.cast<std::vector<double_r>>()));
           },
-          py::arg("input"), "Applies Hamming window (float32).")
-      .def_static(
-          "hamming",
-          [](py::array_t<double, py::array::c_style | py::array::forcecast>
-                 np_input) -> py::array_t<double> {
-            std::vector<double> input_vec(np_input.data(),
-                                          np_input.data() + np_input.size());
-            return vector_to_numpy_1d(OmniDSP::Window::hamming(input_vec));
+          py::arg("input"), "Compute one-off real RFFT (double).")
+      .def(
+          "irfft",
+          [](const OmniDSP& self, py::array_t<float_c> input,
+             size_t output_length) {
+            return check_expected(self.irfft<float>(
+                input.cast<std::vector<float_c>>(), output_length));
           },
-          py::arg("input"), "Applies Hamming window (float64).")
-
-      // --- Kaiser Window ---
-      .def_static(
-          "kaiser",
-          [](py::array_t<float, py::array::c_style | py::array::forcecast>
-                 np_input,
-             float beta) -> py::array_t<float> {
-            std::vector<float> input_vec(np_input.data(),
-                                         np_input.data() + np_input.size());
-            // Call C++ kaiser<float>
-            return vector_to_numpy_1d(OmniDSP::Window::kaiser(input_vec, beta));
+          py::arg("input"), py::arg("output_length"),
+          "Compute one-off real IRFFT (float, scaled by 1/N).")
+      .def(
+          "irfft",
+          [](const OmniDSP& self, py::array_t<double_c> input,
+             size_t output_length) {
+            return check_expected(self.irfft<double>(
+                input.cast<std::vector<double_c>>(), output_length));
           },
-          py::arg("input"), py::arg("beta"), "Applies Kaiser window (float32).")
-      .def_static(
-          "kaiser",
-          [](py::array_t<double, py::array::c_style | py::array::forcecast>
-                 np_input,
-             double beta) -> py::array_t<double> {
-            std::vector<double> input_vec(np_input.data(),
-                                          np_input.data() + np_input.size());
-            // Call C++ kaiser<double>
-            return vector_to_numpy_1d(OmniDSP::Window::kaiser(input_vec, beta));
+          py::arg("input"), py::arg("output_length"),
+          "Compute one-off real IRFFT (double, scaled by 1/N).")
+
+      // Window Generation
+      .def(
+          "bartlett_window",
+          [](const OmniDSP& self, size_t length) {
+            return check_expected(self.bartlett_window<float>(length));
           },
-          py::arg("input"), py::arg("beta"), "Applies Kaiser window (float64).")
-
-      // --- Flattop Window ---
-      .def_static(
-          "flattop",
-          [](py::array_t<float, py::array::c_style | py::array::forcecast>
-                 np_input) -> py::array_t<float> {
-            std::vector<float> input_vec(np_input.data(),
-                                         np_input.data() + np_input.size());
-            return vector_to_numpy_1d(OmniDSP::Window::flattop(input_vec));
+          py::arg("length"), "Generate Bartlett window (float).")
+      .def(
+          "bartlett_window",
+          [](const OmniDSP& self, size_t length) {
+            return check_expected(self.bartlett_window<double>(length));
           },
-          py::arg("input"), "Applies Flat-top window (float32).")
-      .def_static(
-          "flattop",
-          [](py::array_t<double, py::array::c_style | py::array::forcecast>
-                 np_input) -> py::array_t<double> {
-            std::vector<double> input_vec(np_input.data(),
-                                          np_input.data() + np_input.size());
-            return vector_to_numpy_1d(OmniDSP::Window::flattop(input_vec));
+          py::arg("length"), "Generate Bartlett window (double).")
+      // ... Add bindings for all other window types (blackman, flattop,
+      // gaussian, hamming, hann, kaiser, rectangular, triangular) for float and
+      // double ...
+      .def(
+          "kaiser_window",
+          [](const OmniDSP& self, size_t length, float beta) {
+            return check_expected(self.kaiser_window<float>(length, beta));
           },
-          py::arg("input"), "Applies Flat-top window (float64).");
+          py::arg("length"), py::arg("beta"), "Generate Kaiser window (float).")
+      .def(
+          "kaiser_window",
+          [](const OmniDSP& self, size_t length, double beta) {
+            return check_expected(self.kaiser_window<double>(length, beta));
+          },
+          py::arg("length"), py::arg("beta"),
+          "Generate Kaiser window (double).")
+      // ... etc ...
 
-  // --- Bind Convenience Functions ---
-  // Bind the C++ convenience functions (fft, ifft, rfft, irfft).
-  // Use pybind11 function overloading to handle float/double versions based on
-  // NumPy input type.
+      // Plan Factories (using keep_alive to tie Plan lifetime to OmniDSP
+      // instance)
+      .def(
+          "create_fft_plan",
+          [](const OmniDSP& self, size_t length) {
+            return check_expected(self.create_fft_plan<float_c>(length));
+          },
+          py::arg("length"), py::keep_alive<0, 1>(),
+          "Create complex FFT plan (float).")
+      .def(
+          "create_fft_plan",
+          [](const OmniDSP& self, size_t length) {
+            return check_expected(self.create_fft_plan<double_c>(length));
+          },
+          py::arg("length"), py::keep_alive<0, 1>(),
+          "Create complex FFT plan (double).")
 
-  // --- FFT (C2C Forward) ---
-  m.def(
-      "fft",
-      [](py::array_t<std::complex<float>,
-                     py::array::c_style | py::array::forcecast>
-             np_input) -> py::array_t<std::complex<float>> {
-        // Input validation: ensure 1D array.
-        if (np_input.ndim() != 1)
-          throw std::runtime_error("Input must be a 1D array");
-        // Convert NumPy array to std::vector.
-        std::vector<std::complex<float>> input_vec(
-            np_input.data(), np_input.data() + np_input.size());
-        std::vector<std::complex<float>>
-            output_vec;  // Output vector to be filled by C++ function.
-        OmniDSP::fft(input_vec,
-                     output_vec);  // Calls C++ OmniDSP::fft<float>
-        // Convert result back to NumPy array.
-        return vector_to_numpy_1d(output_vec);
-      },
-      py::arg("input"),
-      "Performs C2C forward FFT (complex64 input/output, "
-      "NormMode.Backward).");  // Overload 1: float
+      .def(
+          "create_rfft_plan",
+          [](const OmniDSP& self, size_t length) {
+            return check_expected(self.create_rfft_plan<float>(length));
+          },
+          py::arg("length"), py::keep_alive<0, 1>(),
+          "Create real FFT plan (float).")
+      .def(
+          "create_rfft_plan",
+          [](const OmniDSP& self, size_t length) {
+            return check_expected(self.create_rfft_plan<double>(length));
+          },
+          py::arg("length"), py::keep_alive<0, 1>(),
+          "Create real FFT plan (double).")
 
-  m.def(
-      "fft",
-      [](py::array_t<std::complex<double>,
-                     py::array::c_style | py::array::forcecast>
-             np_input) -> py::array_t<std::complex<double>> {
-        // Input validation and conversion.
-        if (np_input.ndim() != 1)
-          throw std::runtime_error("Input must be a 1D array");
-        std::vector<std::complex<double>> input_vec(
-            np_input.data(), np_input.data() + np_input.size());
-        std::vector<std::complex<double>> output_vec;
-        OmniDSP::fft(input_vec,
-                     output_vec);  // Calls C++ OmniDSP::fft<double>
-        // Convert result back to NumPy array.
-        return vector_to_numpy_1d(output_vec);
-      },
-      py::arg("input"),
-      "Performs C2C forward FFT (complex128 input/output, "
-      "NormMode.Backward).");  // Overload 2: double
+      .def(
+          "create_cqt_plan",
+          [](const OmniDSP& self, float sample_rate, float min_freq,
+             float max_freq, int bins_per_octave) {
+            // Pass 'self' as the owner pointer to the C++ factory method
+            return check_expected(self.create_cqt_plan<float>(
+                &self, sample_rate, min_freq, max_freq, bins_per_octave));
+          },
+          py::arg("sample_rate"), py::arg("min_freq"), py::arg("max_freq"),
+          py::arg("bins_per_octave"), py::keep_alive<0, 1>(),
+          "Create CQT plan (float).")
+      .def(
+          "create_cqt_plan",
+          [](const OmniDSP& self, double sample_rate, double min_freq,
+             double max_freq, int bins_per_octave) {
+            return check_expected(self.create_cqt_plan<double>(
+                &self, sample_rate, min_freq, max_freq, bins_per_octave));
+          },
+          py::arg("sample_rate"), py::arg("min_freq"), py::arg("max_freq"),
+          py::arg("bins_per_octave"), py::keep_alive<0, 1>(),
+          "Create CQT plan (double).")
 
-  // --- IFFT (C2C Inverse) --- (Similar binding pattern)
-  m.def(
-      "ifft",
-      [](py::array_t<std::complex<float>,
-                     py::array::c_style | py::array::forcecast>
-             np_input) -> py::array_t<std::complex<float>> {
-        if (np_input.ndim() != 1)
-          throw std::runtime_error("Input must be a 1D array");
-        std::vector<std::complex<float>> input_vec(
-            np_input.data(), np_input.data() + np_input.size());
-        std::vector<std::complex<float>> output_vec;
-        OmniDSP::ifft(input_vec, output_vec);  // Calls C++ OmniDSP::ifft<float>
-        return vector_to_numpy_1d(output_vec);
-      },
-      py::arg("input"),
-      "Performs C2C inverse FFT (complex64 input/output, NormMode.Backward).");
+      .def(
+          "create_resample_plan",
+          [](const OmniDSP& self, double input_rate, double output_rate,
+             size_t max_input_size) {
+            return check_expected(self.create_resample_plan<float>(
+                input_rate, output_rate, max_input_size));
+          },
+          py::arg("input_rate"), py::arg("output_rate"),
+          py::arg("max_input_size"), py::keep_alive<0, 1>(),
+          "Create Resample plan (float).")
+      .def(
+          "create_resample_plan",
+          [](const OmniDSP& self, double input_rate, double output_rate,
+             size_t max_input_size) {
+            return check_expected(self.create_resample_plan<double>(
+                input_rate, output_rate, max_input_size));
+          },
+          py::arg("input_rate"), py::arg("output_rate"),
+          py::arg("max_input_size"), py::keep_alive<0, 1>(),
+          "Create Resample plan (double).")
 
-  m.def(
-      "ifft",
-      [](py::array_t<std::complex<double>,
-                     py::array::c_style | py::array::forcecast>
-             np_input) -> py::array_t<std::complex<double>> {
-        if (np_input.ndim() != 1)
-          throw std::runtime_error("Input must be a 1D array");
-        std::vector<std::complex<double>> input_vec(
-            np_input.data(), np_input.data() + np_input.size());
-        std::vector<std::complex<double>> output_vec;
-        OmniDSP::ifft(input_vec,
-                      output_vec);  // Calls C++ OmniDSP::ifft<double>
-        return vector_to_numpy_1d(output_vec);
-      },
-      py::arg("input"),
-      "Performs C2C inverse FFT (complex128 input/output, NormMode.Backward).");
+      // Add create_convolution_plan / create_correlation_plan bindings...
+      // Example:
+      .def(
+          "create_convolution_plan",
+          [](const OmniDSP& self, py::array_t<float> kernel,
+             ConvolutionMode mode) {
+            return check_expected(self.create_convolution_plan<float>(
+                kernel.cast<std::vector<float>>(), mode));
+          },
+          py::arg("kernel"), py::arg("mode"), py::keep_alive<0, 1>(),
+          "Create Convolution plan (float).")
+      // ... add other types ...
 
-  // --- RFFT (R2C Forward) ---
-  m.def(
-      "rfft",
-      [](py::array_t<float, py::array::c_style | py::array::forcecast> np_input)
-          -> py::array_t<std::complex<float>> {
-        if (np_input.ndim() != 1)
-          throw std::runtime_error("Input must be a 1D array");
-        std::vector<float> input_vec(np_input.data(),
-                                     np_input.data() + np_input.size());
-        std::vector<std::complex<float>> output_vec;  // Output is complex
-        OmniDSP::rfft(input_vec, output_vec);  // Calls C++ OmniDSP::rfft<float>
-        return vector_to_numpy_1d(output_vec);
-      },
-      py::arg("real_input"),
-      "Performs R2C forward FFT (float32 input -> complex64 output, "
-      "NormMode.Backward). Returns N/2+1 complex points.");
-
-  m.def(
-      "rfft",
-      [](py::array_t<double, py::array::c_style | py::array::forcecast>
-             np_input) -> py::array_t<std::complex<double>> {
-        if (np_input.ndim() != 1)
-          throw std::runtime_error("Input must be a 1D array");
-        std::vector<double> input_vec(np_input.data(),
-                                      np_input.data() + np_input.size());
-        std::vector<std::complex<double>> output_vec;  // Output is complex
-        OmniDSP::rfft(input_vec,
-                      output_vec);  // Calls C++ OmniDSP::rfft<double>
-        return vector_to_numpy_1d(output_vec);
-      },
-      py::arg("real_input"),
-      "Performs R2C forward FFT (float64 input -> complex128 output, "
-      "NormMode.Backward). Returns N/2+1 complex points.");
-
-  // --- IRFFT (C2R Inverse) ---
-  m.def(
-      "irfft",
-      [](py::array_t<std::complex<float>,
-                     py::array::c_style | py::array::forcecast>
-             np_input) -> py::array_t<float> {
-        if (np_input.ndim() != 1)
-          throw std::runtime_error("Input must be a 1D array");
-        std::vector<std::complex<float>> input_vec(
-            np_input.data(), np_input.data() + np_input.size());
-        std::vector<float> output_vec;  // Output is real
-        OmniDSP::irfft(input_vec,
-                       output_vec);  // Calls C++ OmniDSP::irfft<float>
-        return vector_to_numpy_1d(output_vec);
-      },
-      py::arg("complex_input"),
-      "Performs C2R inverse FFT (complex64 input -> float32 output, "
-      "NormMode.Backward). Input must have Hermitian symmetry.");
-
-  m.def(
-      "irfft",
-      [](py::array_t<std::complex<double>,
-                     py::array::c_style | py::array::forcecast>
-             np_input) -> py::array_t<double> {
-        if (np_input.ndim() != 1)
-          throw std::runtime_error("Input must be a 1D array");
-        std::vector<std::complex<double>> input_vec(
-            np_input.data(), np_input.data() + np_input.size());
-        std::vector<double> output_vec;  // Output is real
-        OmniDSP::irfft(input_vec,
-                       output_vec);  // Calls C++ OmniDSP::irfft<double>
-        return vector_to_numpy_1d(output_vec);
-      },
-      py::arg("complex_input"),
-      "Performs C2R inverse FFT (complex128 input -> float64 output, "
-      "NormMode.Backward). Input must have Hermitian symmetry.");
-
-  // --- Version Info ---
-  // Embed version information into the module if defined during compilation
-  // (e.g., via CMake -DVERSION_INFO=...)
-#ifdef VERSION_INFO
-// Helper macro to stringify preprocessor defines
-#define STRINGIFY(x) #x
-#define MACRO_STRINGIFY(x) STRINGIFY(x)
-  m.attr("__version__") = MACRO_STRINGIFY(VERSION_INFO);
-#else
-  // Default version if not defined during build
-  m.attr("__version__") = "dev";
-#endif
-
-}  // End PYBIND11_MODULE definition
+      ;  // End OmniDSP class binding
+}

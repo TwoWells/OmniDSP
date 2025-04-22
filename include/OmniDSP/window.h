@@ -1,175 +1,143 @@
 /**
  * @file window.h
- * @brief Public API header for windowing functions in OmniDSP.
- *
- * Declares the OmniDSP::Window class with static methods for generating
- * window coefficients or applying window functions to input signals.
- *
- * @version 2.1.0 (Added coefficient generation methods)
- * @date 2025-04-18
+ * @brief Defines structures for specifying window types and parameters.
+ * @details Window generation itself is handled by methods within the OmniDSP
+ * class (e.g., OmniDSP::hann_window). This header provides ways to specify
+ * which window should be used by other components (like CQT or STFT plans).
  */
+
 #ifndef OMNIDSP_WINDOW_H
 #define OMNIDSP_WINDOW_H
 
-#include <cmath>  // For math functions used in window formulas (e.g., cos, sqrt, Bessel I0)
-#include <cstddef>    // For size_t
-#include <limits>     // For std::numeric_limits
+#include <optional>   // For std::optional (requires C++17)
 #include <stdexcept>  // For std::invalid_argument
-#include <vector>     // For std::vector return types and inputs
+#include <string>     // For exception messages
 
-// Forward declare backend functions (optional, but can help clarity)
-// namespace OmniDSP { namespace Backend {
-//     template <typename T> std::vector<T> generate_hann_window_impl(size_t
-//     length);
-//     // ... other declarations ...
-// }}
+#include "core_types.h"  // Core types like RealT, Window enum, and now get_window_name
 
 namespace OmniDSP {
 
 /**
- * @brief Provides static methods for generating or applying window functions.
+ * @brief Structure to specify a window type and its associated parameters.
+ * @details Used to configure components like CQT or STFT that require
+ * windowing. This struct acts as a stateless parameter object, bundling the
+ * window type (from the Window enum) and any relevant parameters (like beta for
+ * Kaiser or stddev for Gaussian) into a single entity. The constructors ensure
+ * that initially created objects represent a valid state. The object is
+ * immutable after construction (members are private with const getters).
  *
- * Windowing functions are typically applied to input data (e.g., before an FFT)
- * to reduce spectral leakage. This class provides methods both for generating
- * the window coefficients directly and for applying them element-wise to an
- * input signal. Implementations rely on the selected backend (oneMKL,
- * Accelerate, or Stub).
+ * **Design Rationale vs. Plan Objects:**
+ * Unlike stateful Plan objects (e.g., FFTPlan, CQTPlan) which encapsulate
+ * backend-specific resources and are created via OmniDSP factory methods,
+ * WindowSpec is simply configuration data. It does not require backend context
+ * for its creation and is typically instantiated directly by the user using its
+ * constructors. This approach was chosen over alternatives (like an Abstract
+ * Base Class hierarchy) for simplicity, as its primary role is to provide clean
+ * parameter passing to functions or Plan factories that *do* depend on the
+ * OmniDSP instance's backend. The actual generation of window coefficients is
+ * performed by methods on the OmniDSP instance (e.g., `dsp.kaiser_window(len,
+ * beta)`), which aligns with the philosophy of centralizing backend-dependent
+ * operations.
+ *
+ * @tparam T The underlying floating-point type (e.g., float, double) expected
+ * for parameters.
  */
-class Window {
+template <typename T>
+class WindowSpec {  // Changed to class to enforce private members
+
  public:
-  // --- Methods for APPLYING windows ---
+  /**
+   * @brief Default constructor (creates a Hann window spec).
+   */
+  WindowSpec() : type_(Window::Hann) {}  // Initialize private member
 
   /**
-   * @brief Applies the Hann window to the input data.
-   * w[n] = 0.5 - 0.5 * cos(2*pi*n / (N-1))
-   *
-   * @tparam T The floating-point type (float or double).
-   * @param input A vector of input data.
-   * @return A vector containing the input data multiplied by the Hann window.
-   * @throws std::invalid_argument If the input vector is empty.
-   * @throws std::runtime_error If the backend window generation/application
-   * fails.
+   * @brief Constructor for windows **without** parameters.
+   * @param window_type The desired window type (e.g., Window::Hann,
+   * Window::Rectangular).
+   * @throws std::invalid_argument if the type requires parameters (Kaiser,
+   * Gaussian).
    */
-  template <typename T>
-  static std::vector<T> hann(const std::vector<T>& input);
+  explicit WindowSpec(Window window_type) : type_(window_type) {
+    if (type_ == Window::Kaiser || type_ == Window::Gaussian) {
+      // Use the get_window_name function now defined in core_types.h
+      throw std::invalid_argument("Window type '" +
+                                  std::string(get_window_name(type_)) +
+                                  "' requires parameters. Use the constructor "
+                                  "WindowSpec(Window, RealT<T>).");
+    }
+    // No parameters to set for other types
+  }
 
   /**
-   * @brief Applies the Hamming window to the input data.
-   * w[n] = 0.54 - 0.46 * cos(2*pi*n / (N-1))
-   *
-   * @tparam T The floating-point type (float or double).
-   * @param input A vector of input data.
-   * @return A vector containing the input data multiplied by the Hamming
-   * window.
-   * @throws std::invalid_argument If the input vector is empty.
-   * @throws std::runtime_error If the backend window generation/application
-   * fails.
+   * @brief Constructor for windows **with** a single RealT<T> parameter (Kaiser
+   * or Gaussian).
+   * @param window_type The desired window type (must be Window::Kaiser or
+   * Window::Gaussian).
+   * @param param The parameter value (beta for Kaiser, stddev for Gaussian).
+   * @throws std::invalid_argument if window_type is not Kaiser or Gaussian, or
+   * if param is invalid for the type.
    */
-  template <typename T>
-  static std::vector<T> hamming(const std::vector<T>& input);
+  WindowSpec(Window window_type, RealT<T> param) : type_(window_type) {
+    if (type_ == Window::Kaiser) {
+      if (param < static_cast<RealT<T>>(0.0)) {
+        throw std::invalid_argument(
+            "Kaiser window beta parameter must be non-negative.");
+      }
+      beta_ = param;  // Set private member
+    } else if (type_ == Window::Gaussian) {
+      if (param <= static_cast<RealT<T>>(0.0)) {
+        throw std::invalid_argument(
+            "Gaussian window standard deviation must be positive.");
+      }
+      stddev_ = param;  // Set private member
+    } else {
+      // Use the get_window_name function now defined in core_types.h
+      throw std::invalid_argument(
+          "Window type '" + std::string(get_window_name(type_)) +
+          "' does not take a parameter in this constructor. Use "
+          "WindowSpec(Window) instead.");
+    }
+  }
 
-  /**
-   * @brief Applies the Kaiser window to the input data.
-   * Defined using the zeroth-order modified Bessel function I0.
-   * w[n] = I0(beta * sqrt(1 - (2n/(N-1) - 1)^2)) / I0(beta)
-   *
-   * @tparam T The floating-point type (float or double).
-   * @param input A vector of input data.
-   * @param beta  The shape parameter beta (non-negative). Typical values range
-   * from 5 to 10.
-   * @return A vector containing the input data multiplied by the Kaiser window.
-   * @throws std::invalid_argument If the input vector is empty or beta is
-   * negative.
-   * @throws std::runtime_error If the backend window generation/application
-   * fails.
-   */
-  template <typename T>
-  static std::vector<T> kaiser(const std::vector<T>& input, T beta);
+  // --- Getters for accessing specification details ---
 
-  /**
-   * @brief Applies the Flat-top window to the input data.
-   * Designed for accurate amplitude measurements in the frequency domain.
-   * Uses standard 5-term coefficients.
-   *
-   * @tparam T The floating-point type (float or double).
-   * @param input A vector of input data.
-   * @return A vector containing the input data multiplied by the Flat-top
-   * window.
-   * @throws std::invalid_argument If the input vector is empty.
-   * @throws std::runtime_error If the backend window generation/application
-   * fails.
-   */
-  template <typename T>
-  static std::vector<T> flattop(const std::vector<T>& input);
+  /** @brief Gets the type of window function specified. */
+  Window get_type() const noexcept { return type_; }
 
-  // Add applying methods for Blackman, Bartlett etc. if they exist or are
-  // needed.
+  /** @brief Gets the beta parameter if specified (only valid for Kaiser). */
+  std::optional<RealT<T>> get_beta() const noexcept { return beta_; }
 
-  // --- Methods for GENERATING window coefficients ---
+  /** @brief Gets the standard deviation parameter if specified (only valid for
+   * Gaussian). */
+  std::optional<RealT<T>> get_stddev() const noexcept { return stddev_; }
 
-  /**
-   * @brief Generates Hann window coefficients.
-   * w[n] = 0.5 - 0.5 * cos(2*pi*n / (N-1))
-   *
-   * @tparam T The floating-point type (float or double).
-   * @param length The desired number of window coefficients (N).
-   * @return A vector containing the window coefficients. Returns empty if
-   * length is 0.
-   * @throws std::invalid_argument If length is negative (though size_t prevents
-   * this).
-   * @throws std::runtime_error If the backend window generation fails.
-   */
-  template <typename T>
-  static std::vector<T> get_hann_coeffs(size_t length);
+ private:
+  /// @brief The type of window function. (Private)
+  Window type_ = Window::Hann;
 
-  /**
-   * @brief Generates Hamming window coefficients.
-   * w[n] = 0.54 - 0.46 * cos(2*pi*n / (N-1))
-   *
-   * @tparam T The floating-point type (float or double).
-   * @param length The desired number of window coefficients (N).
-   * @return A vector containing the window coefficients. Returns empty if
-   * length is 0.
-   * @throws std::invalid_argument If length is negative.
-   * @throws std::runtime_error If the backend window generation fails.
-   */
-  template <typename T>
-  static std::vector<T> get_hamming_coeffs(size_t length);
+  /// @brief Optional beta parameter, required only for Window::Kaiser.
+  /// (Private)
+  std::optional<RealT<T>> beta_ = std::nullopt;
 
-  /**
-   * @brief Generates Kaiser window coefficients.
-   * w[n] = I0(beta * sqrt(1 - (2n/(N-1) - 1)^2)) / I0(beta)
-   *
-   * @tparam T The floating-point type (float or double).
-   * @param length The desired number of window coefficients (N).
-   * @param beta The shape parameter beta (non-negative).
-   * @return A vector containing the window coefficients. Returns empty if
-   * length is 0.
-   * @throws std::invalid_argument If length is negative or beta is negative.
-   * @throws std::runtime_error If the backend window generation fails.
-   */
-  template <typename T>
-  static std::vector<T> get_kaiser_coeffs(size_t length, T beta);
+  /// @brief Optional standard deviation parameter, required only for
+  /// Window::Gaussian. (Private)
+  std::optional<RealT<T>> stddev_ = std::nullopt;
 
-  /**
-   * @brief Generates Flat-top window coefficients.
-   * Uses standard 5-term coefficients.
-   *
-   * @tparam T The floating-point type (float or double).
-   * @param length The desired number of window coefficients (N).
-   * @return A vector containing the window coefficients. Returns empty if
-   * length is 0.
-   * @throws std::invalid_argument If length is negative.
-   * @throws std::runtime_error If the backend window generation fails.
-   */
-  template <typename T>
-  static std::vector<T> get_flattop_coeffs(size_t length);
+};  // End of class WindowSpec
 
-  // Add get_coeffs methods for Blackman, Bartlett etc. corresponding to the
-  // applying methods.
-
-  // Note: Explicit template instantiations are defined in window.cpp
-};
+// Note: The old standalone `generate_window` function is removed.
+// Window coefficients are now generated via methods on an OmniDSP instance,
+// e.g.: auto dsp = OmniDSP::create().value(); auto hann_coeffs =
+// dsp.hann_window<double>(1024); auto kaiser_coeffs =
+// dsp.kaiser_window<double>(1024, 8.0);
+//
+// WindowSpec is used like this:
+// WindowSpec<double> spec1(Window::Hann);
+// WindowSpec<double> spec2(Window::Kaiser, 8.0);
+// WindowSpec<double> spec3(Window::Gaussian, 0.5);
+// // Pass spec1, spec2, or spec3 to functions needing window configuration.
+// // Access values via getters: spec2.get_type(), spec2.get_beta()
 
 }  // namespace OmniDSP
 

@@ -1,206 +1,352 @@
 /**
- * @file src/omnidsp/backend/stub/fft.cpp
- * @brief Stub (Error) backend implementation for OmniDSP FFTPlan.
- *
- * Provides stub implementations for FFTPlanImpl and FFTPlan methods.
- * Compiled only when no real backend (oneMKL or Accelerate) is selected.
- * Any attempt to create or use an FFTPlan will result in a std::runtime_error.
+ * @file fft.cpp (stub)
+ * @brief Implements Stub backend FFTPlanImpl and RFFTPlanImpl classes using
+ * standard C++.
  */
 
-// --- Includes ---
-#include <OmniDSP/omnidsp.h>  // Public API header
-
-#include <cmath>  // For dummy scale calculation in stub FFTPlanImpl
+#include <algorithm>  // For std::reverse, std::swap
+#include <cmath>      // For M_PI, sin, cos, log2, pow
 #include <complex>
-#include <memory>     // For std::unique_ptr
-#include <stdexcept>  // For std::runtime_error
-#include <string>
-#include <type_traits>  // For std::is_same_v
+#include <iostream>  // For debug/error messages
+#include <numeric>   // For std::iota
+#include <span>
+#include <stdexcept>  // For std::runtime_error, std::invalid_argument
 #include <vector>
 
-#include "../backend.h"  // Internal backend function declarations (not directly used here)
+#include "OmniDSP/core_types.h"  // For Status, RealT, ComplexT etc.
+#include "backend.h"             // Stub backend declarations
 
-// Compile this only if NEITHER Accelerate nor MKL is defined by CMake
-#if !defined(USE_ACCELERATE) && !defined(USE_ONEMKL)
+// Define PI if not available from cmath
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 namespace OmniDSP {
+namespace backend {
 
-// --- FFTPlanImpl Definition (Stub) ---
-// This struct holds placeholder members but its constructor and methods throw
-// errors.
-template <typename T>
-struct FFTPlanImpl {
-  // --- Members (Stored but not functionally used) ---
-  size_t length = 0;
-  size_t complex_length = 0;
-  Direction direction = Direction::Forward;
-  Precision precision = Precision::Single;
-  Domain domain = Domain::Complex;
-  FFTNorm norm_mode = FFTNorm::Backward;
-  T forward_scale = 1.0;
-  T backward_scale = 1.0;
+// Helper function (move to common utility?)
+inline bool is_power_of_two(size_t n) {
+  return (n > 0) && ((n & (n - 1)) == 0);
+}
 
-  // --- Constructor (Throws Error) ---
-  FFTPlanImpl(size_t len, Precision prec, Direction dir, Domain dom,
-              FFTNorm norm) {
-    // Immediately throw an error upon attempted creation.
-    std::string error_msg =
-        "OmniDSP backend (MKL/Accelerate) not selected or available during "
-        "build. ";
-    error_msg += "Cannot create FFTPlan.";
-    throw std::runtime_error(error_msg);
+//--------------------------------------------------------------------------
+// StubFFTPlanImpl Method Definitions (Complex FFT)
+//--------------------------------------------------------------------------
 
-    // --- Unreachable code ---
-    // Initialize members to silence potential compiler warnings, although
-    // the exception above means this code will never actually execute.
-    length = len;
-    complex_length = (dom == Domain::Real) ? len / 2 + 1 : len;
-    direction = dir;
-    precision = prec;
-    domain = dom;
-    norm_mode = norm;
-    // Dummy scale calculations
-    T scaleN = static_cast<T>(length);
-    T scaleSqrtN = std::sqrt(scaleN);
-    switch (norm_mode) {
-      case FFTNorm::Backward:
-        forward_scale = 1.0;
-        backward_scale = 1.0 / scaleN;
-        break;
-      case FFTNorm::Ortho:
-        forward_scale = 1.0 / scaleSqrtN;
-        backward_scale = 1.0 / scaleSqrtN;
-        break;
-      case FFTNorm::Forward:
-        forward_scale = 1.0 / scaleN;
-        backward_scale = 1.0;
-        break;
+// Helper function for bit reversal permutation
+inline size_t reverse_bits(size_t n, size_t num_bits) {
+  size_t reversed_n = 0;
+  for (size_t i = 0; i < num_bits; ++i) {
+    if ((n >> i) & 1) {
+      reversed_n |= (1 << (num_bits - 1 - i));
     }
-    // --- End Unreachable code ---
+  }
+  return reversed_n;
+}
+
+// Basic Iterative Cooley-Tukey FFT Implementation (Radix-2)
+template <typename T>
+void cooley_tukey_fft(std::span<T> data, bool inverse,
+                      const std::vector<T>& twiddles,
+                      const std::vector<size_t>& bit_reverse_indices) {
+  size_t N = data.size();
+  if (N == 0 || N == 1) return;  // Nothing to do for empty or single element
+
+  // 1. Bit-reversal permutation
+  for (size_t i = 0; i < N; ++i) {
+    size_t reversed_i = bit_reverse_indices[i];
+    // Swap only if i < reversed_i to avoid swapping twice
+    if (i < reversed_i) {
+      std::swap(data[i], data[reversed_i]);
+    }
   }
 
-  // --- Destructor ---
-  ~FFTPlanImpl() = default;  // Default destructor is sufficient
+  // 2. Iterative butterfly stages
+  size_t twiddle_idx = 0;
+  for (size_t len = 2; len <= N;
+       len <<= 1) {  // len = block size (2, 4, 8, ...)
+    size_t half_len = len >> 1;
+    for (size_t i = 0; i < N; i += len) {  // i = start index of block
+      for (size_t j = 0; j < half_len;
+           ++j) {  // j = index within the half-block
+        // Get twiddle factor W_N^k (or W_N^-k for inverse)
+        // Twiddles are precomputed as exp(-2*pi*j*k/N)
+        T twiddle = twiddles[twiddle_idx +
+                             j];  // Index depends on how twiddles were stored
+        if (inverse) {
+          twiddle = std::conj(twiddle);  // Use conjugate for inverse FFT
+        }
 
-  // --- Rule of 5/3: Non-Copyable ---
-  FFTPlanImpl(const FFTPlanImpl &) = delete;
-  FFTPlanImpl &operator=(const FFTPlanImpl &) = delete;
-  // Move constructor/assignment defaulted in omnidsp.h for the public class
+        size_t idx1 = i + j;
+        size_t idx2 = i + j + half_len;
 
-  // --- Execute Methods (Throw Error) ---
-  // These methods are defined but will throw if ever called (which shouldn't
-  // happen if the constructor throws as intended).
-  void execute_c2c_oop(const std::complex<T> *, std::complex<T> *) const {
-    throw std::runtime_error(
-        "OmniDSP backend not available (stub execute_c2c_oop called).");
+        T u = data[idx1];
+        T v = data[idx2] * twiddle;
+
+        data[idx1] = u + v;
+        data[idx2] = u - v;
+      }
+    }
+    // Move to the next set of twiddle factors for the next stage
+    // This assumes twiddles are stored stage by stage
+    twiddle_idx += half_len;  // Or calculate based on len/N
   }
-  void execute_c2c_ip(std::complex<T> *) const {
-    throw std::runtime_error(
-        "OmniDSP backend not available (stub execute_c2c_ip called).");
+}
+
+template <typename T>
+StubFFTPlanImpl<T>::StubFFTPlanImpl(size_t length) : length_(length) {
+  if (length == 0) return;  // Allow empty plan? Or throw? Let's allow for now.
+
+  // Stub implementation often uses simple Radix-2 Cooley-Tukey
+  if (!is_power_of_two(length_)) {
+    throw std::invalid_argument(
+        "Stub FFT implementation currently requires power-of-two lengths.");
   }
-  void execute_rfft_oop(const T *, std::complex<T> *) const {
-    throw std::runtime_error(
-        "OmniDSP backend not available (stub execute_rfft_oop called).");
+
+  // Precompute bit reversal indices
+  size_t num_bits =
+      static_cast<size_t>(std::log2(static_cast<double>(length_)));
+  bit_reverse_indices_.resize(length_);
+  for (size_t i = 0; i < length_; ++i) {
+    bit_reverse_indices_[i] = reverse_bits(i, num_bits);
   }
-  void execute_irfft_oop(const std::complex<T> *, T *) const {
-    throw std::runtime_error(
-        "OmniDSP backend not available (stub execute_irfft_oop called).");
+
+  // Precompute twiddle factors: W_N^k = exp(-2*pi*j*k/N)
+  // We need factors for different stages: k/len where len = 2, 4, ..., N
+  // Total twiddles needed: N/2 + N/4 + ... + 1 = N - 1 ? No, just N/2 unique
+  // ones. Store them stage by stage? Or just the N/2 unique ones? Let's store
+  // the N/2 unique W_N^k factors (k=0 to N/2-1) and index correctly later. Or
+  // store them as needed by the iterative algorithm above (N/2 total).
+  twiddle_factors_.resize(length_ / 2);
+  using ValueType = typename T::value_type;  // float or double
+  for (size_t k = 0; k < length_ / 2; ++k) {
+    ValueType angle = -2.0 * M_PI * static_cast<ValueType>(k) /
+                      static_cast<ValueType>(length_);
+    twiddle_factors_[k] = T{std::cos(angle), std::sin(angle)};
   }
-};  // End FFTPlanImpl struct
-
-// --- Explicit Instantiations for FFTPlanImpl (Stub) ---
-template struct FFTPlanImpl<float>;
-template struct FFTPlanImpl<double>;
-
-// --- FFTPlan Method Definitions (Stub) ---
-// These definitions link the public FFTPlan class methods to the stub PIMPL
-// implementation. The constructor will call the throwing FFTPlanImpl
-// constructor.
-
-template <typename T>
-FFTPlan<T>::FFTPlan(size_t l, Precision p, Direction d, Domain dom, FFTNorm n)
-    : pimpl_(std::make_unique<FFTPlanImpl<T>>(l, p, d, dom, n)) {
-}  // This line throws
-
-template <typename T>
-FFTPlan<T>::~FFTPlan() = default;  // unique_ptr handles pimpl_ deletion
-
-// Move constructor/assignment are defaulted in the header (omnidsp.h)
-
-// Execute methods will likely never be reached if constructor throws,
-// but define them to call the throwing implementation methods.
-template <typename T>
-void FFTPlan<T>::execute(const std::complex<T> *i, std::complex<T> *o) const {
-  if (!pimpl_)
-    throw std::runtime_error("Invalid FFTPlan (stub - moved-from?).");
-  pimpl_->execute_c2c_oop(i, o);
-}
-template <typename T>
-void FFTPlan<T>::execute(std::complex<T> *d) const {
-  if (!pimpl_)
-    throw std::runtime_error("Invalid FFTPlan (stub - moved-from?).");
-  pimpl_->execute_c2c_ip(d);
-}
-template <typename T>
-void FFTPlan<T>::execute_rfft(const T *ri, std::complex<T> *co) const {
-  if (!pimpl_)
-    throw std::runtime_error("Invalid FFTPlan (stub - moved-from?).");
-  pimpl_->execute_rfft_oop(ri, co);
-}
-template <typename T>
-void FFTPlan<T>::execute_irfft(const std::complex<T> *ci, T *ro) const {
-  if (!pimpl_)
-    throw std::runtime_error("Invalid FFTPlan (stub - moved-from?).");
-  pimpl_->execute_irfft_oop(ci, ro);
+  std::cout << "Stub FFTPlanImpl created for length " << length_
+            << std::endl;  // Debug
 }
 
-// Getters might be called on a moved-from object if not careful, add checks.
-// They will return default values if called after the constructor throws (which
-// shouldn't happen).
 template <typename T>
-size_t FFTPlan<T>::getLength() const {
-  if (!pimpl_)
-    throw std::runtime_error("Invalid FFTPlan (stub - moved-from?).");
-  return pimpl_->length;  // Returns 0 if constructor failed
-}
-template <typename T>
-size_t FFTPlan<T>::getComplexLength() const {
-  if (!pimpl_)
-    throw std::runtime_error("Invalid FFTPlan (stub - moved-from?).");
-  return pimpl_->complex_length;  // Returns 0 if constructor failed
-}
-template <typename T>
-Direction FFTPlan<T>::getDirection() const {
-  if (!pimpl_)
-    throw std::runtime_error("Invalid FFTPlan (stub - moved-from?).");
-  return pimpl_->direction;
-}
-template <typename T>
-Precision FFTPlan<T>::getPrecision() const {
-  if (!pimpl_)
-    throw std::runtime_error("Invalid FFTPlan (stub - moved-from?).");
-  return pimpl_->precision;
-}
-template <typename T>
-Domain FFTPlan<T>::getDomain() const {
-  if (!pimpl_)
-    throw std::runtime_error("Invalid FFTPlan (stub - moved-from?).");
-  return pimpl_->domain;
-}
-template <typename T>
-FFTNorm FFTPlan<T>::getFFTNorm() const {
-  if (!pimpl_)
-    throw std::runtime_error("Invalid FFTPlan (stub - moved-from?).");
-  return pimpl_->norm_mode;
+Status StubFFTPlanImpl<T>::fft(std::span<const T> input,
+                               std::span<T> output) const {
+  if (input.size() != length_ || output.size() != length_) {
+    return Status::SizeMismatch;
+  }
+  if (length_ == 0) return Status::Success;  // Handle empty case
+
+  // Copy input to output for in-place algorithm (or modify algorithm for
+  // out-of-place)
+  std::copy(input.begin(), input.end(), output.begin());
+
+  // Perform FFT
+  cooley_tukey_fft(output, false, twiddle_factors_, bit_reverse_indices_);
+
+  return Status::Success;
 }
 
-// --- Explicit Template Instantiations for FFTPlan Class ---
-// These ensure the public FFTPlan class itself is instantiated and exported
-// correctly even when linking against the stub implementation. OMNIDSP_EXPORT
-// is needed here if building a shared library/DLL.
-template class OMNIDSP_EXPORT OmniDSP::FFTPlan<float>;
-template class OMNIDSP_EXPORT OmniDSP::FFTPlan<double>;
+template <typename T>
+Status StubFFTPlanImpl<T>::ifft(std::span<const T> input,
+                                std::span<T> output) const {
+  if (input.size() != length_ || output.size() != length_) {
+    return Status::SizeMismatch;
+  }
+  if (length_ == 0) return Status::Success;
 
+  // Copy input to output for in-place algorithm
+  std::copy(input.begin(), input.end(), output.begin());
+
+  // Perform Inverse FFT
+  cooley_tukey_fft(output, true, twiddle_factors_, bit_reverse_indices_);
+
+  // Note: Stub IFFT is unscaled by 1/N.
+  // Scaling is applied in the one-off StubOmniDSPImpl::ifft function.
+
+  return Status::Success;
+}
+
+template <typename T>
+size_t StubFFTPlanImpl<T>::get_length() const {
+  return length_;
+}
+
+//--------------------------------------------------------------------------
+// StubRFFTPlanImpl Method Definitions (Real FFT)
+//--------------------------------------------------------------------------
+
+template <typename T>
+StubRFFTPlanImpl<T>::StubRFFTPlanImpl(size_t length) : length_(length) {
+  if (length == 0) return;
+  if (!is_power_of_two(length_)) {
+    throw std::invalid_argument(
+        "Stub RFFT implementation currently requires power-of-two lengths.");
+  }
+  if (length_ < 2 && length_ != 0) {  // Need N>=2 for N/2 FFT
+    throw std::invalid_argument("Stub RFFT length must be >= 2.");
+  }
+
+  // Precompute factors for the N/2 complex FFT used internally
+  size_t N_over_2 = length_ / 2;
+  size_t num_bits =
+      static_cast<size_t>(std::log2(static_cast<double>(N_over_2)));
+  bit_reverse_indices_.resize(N_over_2);
+  for (size_t i = 0; i < N_over_2; ++i) {
+    bit_reverse_indices_[i] = reverse_bits(i, num_bits);
+  }
+
+  twiddle_factors_.resize(N_over_2 / 2);  // Twiddles for N/2 FFT
+  for (size_t k = 0; k < N_over_2 / 2; ++k) {
+    RealT<T> angle = -2.0 * M_PI * static_cast<RealT<T>>(k) /
+                     static_cast<RealT<T>>(N_over_2);
+    twiddle_factors_[k] = ComplexT<T>{std::cos(angle), std::sin(angle)};
+  }
+
+  std::cout << "Stub RFFTPlanImpl created for length " << length_
+            << std::endl;  // Debug
+}
+
+template <typename T>
+Status StubRFFTPlanImpl<T>::rfft(std::span<const RealT<T>> input,
+                                 std::span<ComplexT<T>> output) const {
+  size_t N = length_;
+  if (N == 0) return Status::Success;
+  size_t N_over_2 = N / 2;
+  size_t output_size_expected = N_over_2 + 1;
+
+  if (input.size() != N || output.size() != output_size_expected) {
+    return Status::SizeMismatch;
+  }
+
+  // 1. Pack N real inputs into N/2 complex inputs: y[k] = x[2k] + j*x[2k+1]
+  std::vector<ComplexT<T>> packed_input(N_over_2);
+  for (size_t k = 0; k < N_over_2; ++k) {
+    packed_input[k] = ComplexT<T>{input[2 * k], input[2 * k + 1]};
+  }
+
+  // 2. Compute N/2 complex FFT on packed_input
+  std::vector<ComplexT<T>> packed_fft(N_over_2);
+  // Use the complex FFT helper with N/2 factors
+  cooley_tukey_fft<ComplexT<T>>(packed_input, false, twiddle_factors_,
+                                bit_reverse_indices_);
+  packed_fft =
+      packed_input;  // Result is now in packed_fft after in-place modification
+
+  // 3. Unpack the N/2 complex FFT result into N/2 + 1 RFFT output
+  //    Requires twiddle factors W_N^k = exp(-2*pi*j*k/N) for k = 0 to N/2
+  output[0] = ComplexT<T>{packed_fft[0].real() + packed_fft[0].imag(),
+                          0.0};  // DC component
+
+  for (size_t k = 1; k <= N / 4; ++k) {  // Iterate up to N/4
+    ComplexT<T> fft_k = packed_fft[k];
+    ComplexT<T> fft_N_minus_k = packed_fft[N_over_2 - k];  // Use symmetry
+
+    RealT<T> angle =
+        -2.0 * M_PI * static_cast<RealT<T>>(k) / static_cast<RealT<T>>(N);
+    ComplexT<T> W_N_k = {std::cos(angle), std::sin(angle)};
+
+    ComplexT<T> term1 = fft_k + std::conj(fft_N_minus_k);
+    ComplexT<T> term2 = fft_k - std::conj(fft_N_minus_k);
+    ComplexT<T> term2_twiddle =
+        ComplexT<T>{0.0, -1.0} * term2 * W_N_k;  // -j * term2 * W_N^k
+
+    output[k] = 0.5 * (term1 + term2_twiddle);
+    // Use conjugate symmetry for the upper half (not needed for standard RFFT
+    // output)
+    if (k < N_over_2) {  // Avoid overwriting Nyquist if N is even
+      output[N_over_2 - k] = 0.5 * std::conj(term1 - term2_twiddle);
+    }
+  }
+
+  // Handle Nyquist frequency (k = N/2) for even N
+  // It's stored in the imaginary part of the DC component of the packed FFT
+  output[N_over_2] =
+      ComplexT<T>{packed_fft[0].real() - packed_fft[0].imag(), 0.0};
+
+  return Status::Success;
+}
+
+template <typename T>
+Status StubRFFTPlanImpl<T>::irfft(std::span<const ComplexT<T>> input,
+                                  std::span<RealT<T>> output) const {
+  size_t N = length_;
+  if (N == 0) return Status::Success;
+  size_t N_over_2 = N / 2;
+  size_t input_size_expected = N_over_2 + 1;
+
+  if (input.size() != input_size_expected || output.size() != N) {
+    return Status::SizeMismatch;
+  }
+
+  // 1. Pack the N/2 + 1 RFFT input into N/2 complex values for IFFT
+  std::vector<ComplexT<T>> packed_ifft_input(N_over_2);
+  // Use formula derived from RFFT unpacking (solve for packed_fft[k])
+  // packed_fft[k] = output[k] + conj(output[N/2-k]) + j*W_N^k*(output[k] -
+  // conj(output[N/2-k])) This seems overly complex. Easier way: Reconstruct the
+  // full N-point complex spectrum using conjugate symmetry.
+  std::vector<ComplexT<T>> full_spectrum(N);
+  full_spectrum[0] = input[0];  // DC
+  for (size_t k = 1; k < N_over_2; ++k) {
+    full_spectrum[k] = input[k];
+    full_spectrum[N - k] = std::conj(input[k]);  // Conjugate symmetry
+  }
+  full_spectrum[N_over_2] = input[N_over_2];  // Nyquist
+
+  // 2. Perform N-point complex IFFT on the reconstructed spectrum
+  //    Need a temporary complex FFT plan for size N
+  try {
+    StubFFTPlanImpl<ComplexT<T>> temp_cfft_plan(N);
+    std::vector<ComplexT<T>> complex_output(N);
+    Status status = temp_cfft_plan.ifft(full_spectrum, complex_output);
+    if (status != Status::Success) return status;
+
+    // 3. The result should be purely real (imaginary parts close to zero)
+    //    Copy the real parts to the output buffer.
+    for (size_t i = 0; i < N; ++i) {
+      // Optional: Check if imag part is acceptably small?
+      // if (std::abs(complex_output[i].imag()) > 1e-9) { // Tolerance check
+      //     std::cerr << "Warning: Non-zero imaginary part in IRFFT result at
+      //     index " << i << std::endl;
+      // }
+      output[i] = complex_output[i].real();
+    }
+
+  } catch (const std::exception& e) {
+    std::cerr << "Error during temporary CFFT plan creation in IRFFT: "
+              << e.what() << std::endl;
+    return Status::Failure;
+  } catch (...) {
+    return Status::Failure;
+  }
+
+  // Note: Stub IRFFT is unscaled by 1/N.
+  // Scaling is applied in the one-off StubOmniDSPImpl::irfft function.
+
+  return Status::Success;
+}
+
+template <typename T>
+size_t StubRFFTPlanImpl<T>::get_length() const {
+  return length_;
+}
+
+//--------------------------------------------------------------------------
+// Explicit Template Instantiations
+//--------------------------------------------------------------------------
+// Instantiate templates for common types (float, double) to ensure code
+// generation.
+
+// Define complex types for brevity
+using float_c = OmniDSP::ComplexT<float>;
+using double_c = OmniDSP::ComplexT<double>;
+
+// StubFFTPlanImpl Instantiations
+template class OmniDSP::backend::StubFFTPlanImpl<float_c>;
+template class OmniDSP::backend::StubFFTPlanImpl<double_c>;
+
+// StubRFFTPlanImpl Instantiations
+template class OmniDSP::backend::StubRFFTPlanImpl<float>;
+template class OmniDSP::backend::StubRFFTPlanImpl<double>;
+
+}  // namespace backend
 }  // namespace OmniDSP
-
-#endif  // !USE_ACCELERATE && !USE_ONEMKL

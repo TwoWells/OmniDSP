@@ -1,116 +1,217 @@
 /**
  * @file convolution.cpp
- * @brief Implementation file for 1D convolution and correlation functions.
+ * @brief Implements the ConvolutionPlan and CorrelationPlan class methods,
+ * forwarding calls to backend implementations.
  */
 
-#include "OmniDSP/convolution.h"  // Public API declarations
+#include "OmniDSP/convolution.h"  // Corresponding header
 
-#include <algorithm>  // For std::reverse
-#include <stdexcept>  // For std::invalid_argument
-#include <string>     // For exception messages
+// Include Pimpl interface definition (defined below or in a separate backend.h)
+// #include "backend/backend.h" // May contain base class definitions if
+// separated
+
+// Include concrete backend implementation headers (Placeholders - needed for
+// unique_ptr deletion) #include "backend/stub/stub_convolution.h" #ifdef
+// USE_ACCELERATE #include "backend/accelerate/accelerate_convolution.h" #endif
+// #ifdef USE_ONEMKL
+// #include "backend/onemkl/onemkl_convolution.h"
+// #endif
+
+#include <memory>  // For std::unique_ptr
+#include <numeric>  // For std::max, std::min (potentially used in get_output_length)
+#include <span>
+#include <stdexcept>  // For std::runtime_error
+#include <utility>    // For std::move
 #include <vector>
 
-#include "backend/backend.h"  // Backend dispatcher function declarations
-
 namespace OmniDSP {
+namespace backend {
 
-//--------------------------------------------------------------------------
-// convolve1d
-//--------------------------------------------------------------------------
+/**
+ * @brief Abstract base class defining the interface for Convolution Plan
+ * implementations (Pimpl).
+ * @tparam T The data type (e.g., float, std::complex<float>).
+ */
 template <typename T>
-std::vector<T> convolve1d(
-    const std::vector<T> &signal, const std::vector<T> &kernel,
-    ConvMode mode /* = ConvMode::Valid */)  // Added mode parameter
-{
-  // --- Input Validation ---
-  if (signal.empty()) {
-    throw std::invalid_argument("convolve1d: Input signal cannot be empty.");
-  }
-  if (kernel.empty()) {
-    throw std::invalid_argument("convolve1d: Kernel cannot be empty.");
-  }
+class ConvolutionPlanImpl {
+ public:
+  virtual ~ConvolutionPlanImpl() = default;
+  virtual Status execute(std::span<const T> input,
+                         std::span<T> output) const = 0;
+  virtual size_t get_kernel_length() const = 0;
+  virtual ConvolutionMode get_mode() const = 0;
+  virtual size_t get_output_length(size_t input_length) const = 0;
+};
 
-  // Additional validation specific to modes might be done here or in the
-  // backend For example, 'Valid' mode typically requires signal_len >=
-  // kernel_len
-  if (mode == ConvMode::Valid && kernel.size() > signal.size()) {
-    throw std::invalid_argument(
-        "convolve1d: For 'Valid' mode, kernel length (" +
-        std::to_string(kernel.size()) +
-        ") cannot be greater than signal length (" +
-        std::to_string(signal.size()) + ").");
-  }
+/**
+ * @brief Abstract base class defining the interface for Correlation Plan
+ * implementations (Pimpl).
+ * @tparam T The data type (e.g., float, std::complex<float>).
+ */
+template <typename T>
+class CorrelationPlanImpl {
+ public:
+  virtual ~CorrelationPlanImpl() = default;
+  virtual Status execute(std::span<const T> input,
+                         std::span<T> output) const = 0;
+  virtual size_t get_template_length()
+      const = 0;  // Renamed from kernel for clarity
+  virtual ConvolutionMode get_mode() const = 0;
+  virtual size_t get_output_length(size_t input_length) const = 0;
+};
 
-  // --- Dispatch to Backend ---
-  // The backend implementation handles the actual computation based on the
+}  // namespace backend
+
+//--------------------------------------------------------------------------
+// ConvolutionPlan Method Definitions
+//--------------------------------------------------------------------------
+
+template <typename T>
+ConvolutionPlan<T>::ConvolutionPlan(
+    std::unique_ptr<backend::ConvolutionPlanImpl<T>> pimpl)
+    : pimpl_(std::move(pimpl)) {
+  if (!pimpl_) {
+    throw std::runtime_error(
+        "ConvolutionPlan created with null implementation.");
+  }
+}
+
+template <typename T>
+ConvolutionPlan<T>::~ConvolutionPlan() = default;
+
+template <typename T>
+ConvolutionPlan<T>::ConvolutionPlan(ConvolutionPlan&& other) noexcept = default;
+
+template <typename T>
+ConvolutionPlan<T>& ConvolutionPlan<T>::operator=(
+    ConvolutionPlan&& other) noexcept = default;
+
+template <typename T>
+[[nodiscard]] Status ConvolutionPlan<T>::execute(std::span<const T> input,
+                                                 std::span<T> output) const {
+  if (!pimpl_) {
+    return Status::InvalidOperation;
+  }
+  // TODO: Add size checks for output based on get_output_length?
+  // size_t expected_len = get_output_length(input.size());
+  // if (output.size() < expected_len) return Status::SizeMismatch;
+  return pimpl_->execute(input, output);
+}
+
+template <typename T>
+size_t ConvolutionPlan<T>::get_kernel_length() const {
+  if (!pimpl_) {
+    throw std::runtime_error(
+        "Invalid ConvolutionPlan instance in get_kernel_length.");
+  }
+  return pimpl_->get_kernel_length();
+}
+
+template <typename T>
+ConvolutionMode ConvolutionPlan<T>::get_mode() const {
+  if (!pimpl_) {
+    throw std::runtime_error("Invalid ConvolutionPlan instance in get_mode.");
+  }
+  return pimpl_->get_mode();
+}
+
+template <typename T>
+size_t ConvolutionPlan<T>::get_output_length(size_t input_length) const {
+  if (!pimpl_) {
+    throw std::runtime_error(
+        "Invalid ConvolutionPlan instance in get_output_length.");
+  }
+  // Forward calculation to implementation, which knows the kernel length and
   // mode.
-  return Backend::convolve1d_impl<T>(signal.data(), signal.size(),
-                                     kernel.data(), kernel.size(),
-                                     mode);  // Pass mode to backend
+  return pimpl_->get_output_length(input_length);
 }
 
 //--------------------------------------------------------------------------
-// correlate1d
+// CorrelationPlan Method Definitions
 //--------------------------------------------------------------------------
+
 template <typename T>
-std::vector<T> correlate1d(
-    const std::vector<T> &signal, const std::vector<T> &kernel,
-    ConvMode mode /* = ConvMode::Valid */)  // Added mode parameter
-{
-  // --- Input Validation ---
-  if (signal.empty()) {
-    throw std::invalid_argument("correlate1d: Input signal cannot be empty.");
+CorrelationPlan<T>::CorrelationPlan(
+    std::unique_ptr<backend::CorrelationPlanImpl<T>> pimpl)
+    : pimpl_(std::move(pimpl)) {
+  if (!pimpl_) {
+    throw std::runtime_error(
+        "CorrelationPlan created with null implementation.");
   }
-  if (kernel.empty()) {
-    throw std::invalid_argument("correlate1d: Kernel cannot be empty.");
+}
+
+template <typename T>
+CorrelationPlan<T>::~CorrelationPlan() = default;
+
+template <typename T>
+CorrelationPlan<T>::CorrelationPlan(CorrelationPlan&& other) noexcept = default;
+
+template <typename T>
+CorrelationPlan<T>& CorrelationPlan<T>::operator=(
+    CorrelationPlan&& other) noexcept = default;
+
+template <typename T>
+[[nodiscard]] Status CorrelationPlan<T>::execute(std::span<const T> input,
+                                                 std::span<T> output) const {
+  if (!pimpl_) {
+    return Status::InvalidOperation;
   }
+  // TODO: Add size checks for output based on get_output_length?
+  // size_t expected_len = get_output_length(input.size());
+  // if (output.size() < expected_len) return Status::SizeMismatch;
+  return pimpl_->execute(input, output);
+}
 
-  // Validation for 'Valid' mode
-  if (mode == ConvMode::Valid && kernel.size() > signal.size()) {
-    throw std::invalid_argument(
-        "correlate1d: For 'Valid' mode, kernel length (" +
-        std::to_string(kernel.size()) +
-        ") cannot be greater than signal length (" +
-        std::to_string(signal.size()) + ").");
+template <typename T>
+size_t CorrelationPlan<T>::get_template_length() const {
+  if (!pimpl_) {
+    throw std::runtime_error(
+        "Invalid CorrelationPlan instance in get_template_length.");
   }
+  return pimpl_->get_template_length();
+}
 
-  // --- Implementation via Convolution ---
-  // Correlation is equivalent to convolution with the time-reversed kernel.
-  // Create a reversed copy of the kernel.
-  std::vector<T> reversed_kernel = kernel;
-  std::reverse(reversed_kernel.begin(), reversed_kernel.end());
+template <typename T>
+ConvolutionMode CorrelationPlan<T>::get_mode() const {
+  if (!pimpl_) {
+    throw std::runtime_error("Invalid CorrelationPlan instance in get_mode.");
+  }
+  return pimpl_->get_mode();
+}
 
-  // Dispatch to the convolve1d backend implementation with the reversed kernel
-  // and mode. (Assuming correlate1d_impl is not strictly necessary if this
-  // approach is used)
-  return Backend::convolve1d_impl<T>(signal.data(), signal.size(),
-                                     reversed_kernel.data(),
-                                     reversed_kernel.size(),
-                                     mode);  // Pass mode to backend
-
-  // Alternatively, if Backend::correlate1d_impl exists and is preferred:
-  // return Backend::correlate1d_impl<T>(signal.data(), signal.size(),
-  //                                    kernel.data(), kernel.size(),
-  //                                    mode);
+template <typename T>
+size_t CorrelationPlan<T>::get_output_length(size_t input_length) const {
+  if (!pimpl_) {
+    throw std::runtime_error(
+        "Invalid CorrelationPlan instance in get_output_length.");
+  }
+  // Forward calculation to implementation.
+  return pimpl_->get_output_length(input_length);
 }
 
 //--------------------------------------------------------------------------
 // Explicit Template Instantiations
 //--------------------------------------------------------------------------
-// Instantiate for float and double for all public functions.
+// Instantiate templates for common types (float, double, complex) to ensure
+// code generation.
 
-template std::vector<float> convolve1d<float>(const std::vector<float> &signal,
-                                              const std::vector<float> &kernel,
-                                              ConvMode mode);  // Added mode
-template std::vector<double> convolve1d<double>(
-    const std::vector<double> &signal, const std::vector<double> &kernel,
-    ConvMode mode);  // Added mode
+// Define complex types for brevity
+using float_c = OmniDSP::ComplexT<float>;
+using double_c = OmniDSP::ComplexT<double>;
 
-template std::vector<float> correlate1d<float>(const std::vector<float> &signal,
-                                               const std::vector<float> &kernel,
-                                               ConvMode mode);  // Added mode
-template std::vector<double> correlate1d<double>(
-    const std::vector<double> &signal, const std::vector<double> &kernel,
-    ConvMode mode);  // Added mode
+// ConvolutionPlan Instantiations
+template class OmniDSP::ConvolutionPlan<float>;
+template class OmniDSP::ConvolutionPlan<double>;
+template class OmniDSP::ConvolutionPlan<float_c>;
+template class OmniDSP::ConvolutionPlan<double_c>;
+
+// CorrelationPlan Instantiations
+template class OmniDSP::CorrelationPlan<float>;
+template class OmniDSP::CorrelationPlan<double>;
+template class OmniDSP::CorrelationPlan<float_c>;
+template class OmniDSP::CorrelationPlan<double_c>;
+
+// Remove implementation of old standalone convolve1d/correlate1d functions here
+// if they existed.
 
 }  // namespace OmniDSP

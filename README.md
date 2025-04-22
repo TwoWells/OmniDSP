@@ -37,7 +37,7 @@ OmniDSP is a C++ library designed for high-performance Digital Signal Processing
 
 OmniDSP requires the following to build and run:
 
-- A C++17 compliant compiler (e.g., GCC, Clang, MSVC)
+- A C++23 compliant compiler (e.g., GCC, Clang, MSVC)
 - CMake (version 3.21 or higher)
 - Python (version 3.8 or higher, if building Python bindings)
 - **Boost C++ Libraries:** Required for certain cross-platform mathematical functions (specifically, the Bessel function needed for Kaiser window generation).

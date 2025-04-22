@@ -1,52 +1,149 @@
+/**
+ * @file cqt.h
+ * @brief Defines the interface for Constant-Q Transform (CQT) Plan objects.
+ * @details Plan objects are created via OmniDSP::create_cqt_plan and provide
+ * optimized execution of CQT for specific configurations and backends.
+ */
+
 #ifndef OMNIDSP_CQT_H
 #define OMNIDSP_CQT_H
 
-// --- Standard Includes ---
-#include <cmath>
-#include <complex>
-#include <memory>     // Needed for std::unique_ptr
-#include <stdexcept>  // For exceptions
-#include <vector>
+#include <complex>  // For std::complex
+#include <cstddef>  // For size_t
+#include <memory>   // For std::unique_ptr (Pimpl)
+#include <span>     // For input/output views (requires C++20)
+#include <vector>   // For std::vector (potentially used internally)
 
-// --- Project Includes ---
-#include "core_types.h"  // Include core types (Precision) - NOT omnidsp.h
-#include "fft.h"         // Need fft.h for FFTNorm and FFTPlan
+#include "core_types.h"  // Core types like RealT, ComplexT, Status, Window
 
-namespace OmniDSP {  // <<< Namespace opened for this header's content
+namespace OmniDSP {
 
-// --- Forward Declarations ---
+// Forward declare the main OmniDSP class for friend declaration
+class OmniDSP;
+
+// Forward declarations for implementation classes (Pimpl idiom)
+namespace backend {
 template <typename T>
-struct CQTPlanImpl;
+class CQTPlanImpl;
+}  // namespace backend
 
-// --- CQTPlan Class ---
+/**
+ * @brief Plan object for executing Constant-Q Transforms (CQT).
+ * @details This class encapsulates the pre-computed data (like CQT kernels)
+ * and backend-specific context required for efficient CQT execution.
+ * Instances are created via OmniDSP::create_cqt_plan.
+ * This class is non-copyable but movable.
+ * @tparam T The underlying floating-point type (e.g., float, double).
+ */
 template <typename T>
 class CQTPlan {
+  // Friend declaration allows OmniDSP factory methods to call the private
+  // constructor
+  friend class OmniDSP;
+
  public:
-  // Constructor Declaration with namespace qualifier for FFTNorm:
-  CQTPlan(double sr, double fmin, int n_bins, int bins_per_octave, Precision p,
-          OmniDSP::FFTNorm norm);
+  /**
+   * @brief Destructor. Cleans up implementation resources.
+   * @details Defined in the source file to handle Pimpl destruction.
+   */
   ~CQTPlan();
+
+  /**
+   * @brief Move constructor.
+   * @details Defined in the source file.
+   */
+  CQTPlan(CQTPlan&& other) noexcept;
+
+  /**
+   * @brief Move assignment operator.
+   * @details Defined in the source file.
+   */
+  CQTPlan& operator=(CQTPlan&& other) noexcept;
+
+  /** @brief Deleted copy constructor. CQTPlan instances are non-copyable. */
   CQTPlan(const CQTPlan&) = delete;
+  /** @brief Deleted copy assignment operator. CQTPlan instances are
+   * non-copyable. */
   CQTPlan& operator=(const CQTPlan&) = delete;
-  CQTPlan(CQTPlan&&) noexcept;
-  CQTPlan& operator=(CQTPlan&&) noexcept;
-  void execute(const std::vector<std::complex<T>>& input,
-               std::vector<std::complex<T>>& output);
-  int getNumBins() const;
-  double getMinFrequency() const;
-  double getSamplingRate() const;
+
+  /**
+   * @brief Executes the Constant-Q Transform on an input signal.
+   * @param input A span representing the real input time-domain signal.
+   * @param output A span representing the complex output buffer for the CQT
+   * result (time-frequency). The required size is get_num_bins() *
+   * get_num_output_frames(input.size()). The layout is typically (num_bins x
+   * num_frames), stored row-major or column-major depending on the
+   * implementation (check Impl details). Assume row-major (frame-by-frame).
+   * @return Status::Success on success, or an error code on failure.
+   * @note The output span must be pre-allocated with sufficient size before
+   * calling execute.
+   */
+  [[nodiscard]] Status execute(std::span<const RealT<T>> input,
+                               std::span<ComplexT<T>> output) const;
+
+  /**
+   * @brief Gets the number of frequency bins configured for this CQT plan.
+   * @return The number of CQT bins.
+   */
+  size_t get_num_bins() const;
+
+  /**
+   * @brief Calculates the number of output time frames for a given input signal
+   * length.
+   * @details This depends on the internal hop length used by the CQT
+   * implementation.
+   * @param input_length The length of the input signal in samples.
+   * @return The expected number of time frames in the CQT output.
+   */
+  size_t get_num_output_frames(size_t input_length) const;
+
+  /**
+   * @brief Gets the hop length (in samples) used between consecutive CQT
+   * frames.
+   * @return The hop length in samples.
+   */
+  size_t get_hop_length() const;
+
+  // Add other potential getters as needed: get_sample_rate(), get_min_freq(),
+  // get_max_freq(), etc.
 
  private:
-  std::unique_ptr<CQTPlanImpl<T>> pimpl_;
+  /**
+   * @brief Private constructor, called by OmniDSP factory methods.
+   * @param pimpl A unique_ptr to the backend-specific implementation object.
+   */
+  explicit CQTPlan(std::unique_ptr<backend::CQTPlanImpl<T>> pimpl);
+
+  /**
+   * @brief Pointer to the implementation object (Pimpl idiom).
+   */
+  std::unique_ptr<backend::CQTPlanImpl<T>> pimpl_;
 };
 
-// --- Convenience Function Declaration ---
+// --- Template Implementations (Definitions) ---
+// Definitions for template class methods that depend on the Impl class
+// (constructor, destructor, move ops, execute, getters) MUST be provided
+// in a .cpp file where the CQTPlanImpl<T> is fully defined.
+
+// Example placeholder for header compilation (real definition MUST be in .cpp):
 template <typename T>
-void cqt(
-    const std::vector<std::complex<T>>& input,
-    std::vector<std::complex<T>>& output, double sr, double fmin, int n_bins,
-    int bins_per_octave,
-    OmniDSP::FFTNorm norm = OmniDSP::FFTNorm::Backward);  // Added OmniDSP::
+size_t CQTPlan<T>::get_num_bins() const {
+  // return pimpl_ ? pimpl_->get_num_bins() : 0; // Requires Impl definition
+  return 0;
+}
+
+template <typename T>
+size_t CQTPlan<T>::get_num_output_frames(size_t /*input_length*/) const {
+  // return pimpl_ ? pimpl_->get_num_output_frames(input_length) : 0; //
+  // Requires Impl definition
+  return 0;
+}
+
+template <typename T>
+size_t CQTPlan<T>::get_hop_length() const {
+  // return pimpl_ ? pimpl_->get_hop_length() : 0; // Requires Impl definition
+  return 0;
+}
 
 }  // namespace OmniDSP
 

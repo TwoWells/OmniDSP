@@ -1,12 +1,120 @@
+# OmniDSP TODO List
+
+## Core Library (`omnidsp`)
+
+- [x] **Refactor Core Types & API Structure:**
+
+  - [x] Replace `Real`/`Complex` typedefs with template aliases (`RealT`, `ComplexT`).
+  - [x] Use `std::vector` directly instead of `VectorReal`/`VectorComplex`.
+  - [x] Introduce core enums (`Status`, `DataType`, `Domain`, `Window`, `ConvolutionMode`, `Backend`).
+  - [x] Add Doxygen comments to core types and API headers.
+  - [x] Implement Pimpl idiom for `OmniDSP` class (central API entry point).
+  - [x] Define Plan-based interfaces (`FFTPlan`, `RFFTPlan`, `CQTPlan`, `ConvolutionPlan`, `CorrelationPlan`) using Pimpl.
+  - [ ] Update C++ implementations (.cpp files) across all modules and backends to use new types, `OmniExpected`, and Pimpl structure.
+  - [ ] Define and implement `OmniDSPImpl` class in `omnidsp.cpp`.
+  - [ ] Define and implement Plan `Impl` classes in respective `.cpp` files.
+  - [ ] Implement `OmniDSP` member functions (DSP ops, Plan factories) in `omnidsp.cpp` (delegating to `pimpl_`).
+
+- [ ] **Implement FFT Module:**
+
+  - [x] Define `FFTPlan` and `RFFTPlan` interfaces (`fft.h`).
+  - [ ] Add `create_fft_plan` and `create_rfft_plan` factory methods to `OmniDSP` class.
+  - [ ] Implement `FFTPlanImpl`/`RFFTPlanImpl` for all backends (`fft.cpp`, backend sources).
+  - [ ] Implement factory methods in `omnidsp.cpp`.
+
+- [ ] **Implement CQT Module:**
+
+  - [x] Define `CQTPlan` interface (`cqt.h`).
+  - [ ] Add `create_cqt_plan` factory method to `OmniDSP` class.
+  - [ ] Implement `CQTPlanImpl` for all backends (`cqt.cpp`, backend sources).
+  - [ ] Implement factory method in `omnidsp.cpp`.
+  - [ ] Optimize kernel calculation.
+  - [ ] Add option for different window functions during plan creation.
+
+- [ ] **Implement Convolution/Correlation Module:**
+
+  - [x] Define `ConvolutionPlan` and `CorrelationPlan` interfaces (`convolution.h`).
+  - [ ] Add `create_convolution_plan` and `create_correlation_plan` factory methods to `OmniDSP` class.
+
+  * [ ] Implement direct `convolve1d`/`correlate1d` member functions in `OmniDSP` class (delegating to `pimpl_`).
+
+  - [ ] Implement `ConvolutionPlanImpl`/`CorrelationPlanImpl` for all backends (`convolution.cpp`, backend sources).
+  - [ ] Implement factory methods in `omnidsp.cpp`.
+
+- [ ] **Implement Resample Module:**
+
+  - [ ] Refactor `resample.h` to define `ResamplePlan` interface (using Pimpl).
+  - [ ] Add `create_resample_plan` factory method to `OmniDSP` class.
+  - [ ] Implement `ResamplePlanImpl` for all backends (`resample.cpp`, backend sources).
+  - [ ] Implement factory method in `omnidsp.cpp`.
+
+- [ ] **Implement Filter Module:**
+
+  - [ ] Add basic FIR/IIR filter design functions (potentially static methods in `OmniDSP` or standalone in `filter.h`?).
+  - [ ] Implement filtering operations (consider using `ConvolutionPlan` internally).
+  - [ ] Define `FilterPlan` interface? Or handle via direct convolution?
+
+- [ ] **Add STFT Module:**
+
+  - [ ] Implement Short-Time Fourier Transform (likely using `FFTPlan` or `RFFTPlan` internally).
+  - [ ] Define `STFTPlan` interface? Or provide helper functions/class?
+  - [ ] Include inverse STFT (ISTFT).
+
+- [ ] **Enhance Backend System:**
+  - [ ] Add support for GPU acceleration (CUDA/OpenCL) via optional backends.
+  - [ ] Refine backend selection logic and error handling in `OmniDSP::create`.
+
+## Python Bindings (`omnidsp_py`)
+
+- [ ] **Refactor Bindings for `OmniDSP` Class:**
+  - [ ] Bind the `OmniDSP` class (creation, methods).
+  - [ ] Bind Plan classes (`FFTPlan`, `RFFTPlan`, `CQTPlan`, `ConvolutionPlan`, `CorrelationPlan`, `ResamplePlan`).
+  - [ ] Ensure `OmniExpected` return values are handled correctly (e.g., raise Python exceptions on error).
+- [ ] **Expose Convolution/Correlation Module:**
+  - [ ] Add bindings for `OmniDSP::convolve1d/correlate1d` methods.
+  - [ ] Add bindings for `ConvolutionPlan/CorrelationPlan` creation and execution.
+- [ ] **Expose Filter Module:**
+  - [ ] Add Python bindings for the new filter functions/classes.
+- [ ] **Expose CQT Module:**
+  - [ ] Ensure all CQT options are available via `create_cqt_plan` binding.
+- [ ] **Expose STFT Module:**
+  - [ ] Add Python bindings for STFT/ISTFT.
+- [ ] **Improve NumPy Integration:**
+  - [ ] Ensure seamless conversion between NumPy arrays and `std::span` arguments in C++ bindings.
+  - [ ] Handle different NumPy dtypes correctly (map to float/double templates).
+
+## Build System & CI
+
+- [ ] **Add Unit Tests:**
+  - [ ] Implement comprehensive unit tests for all modules (core C++ and Python bindings).
+  - [ ] Test different backends.
+  - [ ] Integrate testing into the CI pipeline.
+- [ ] **Configure CI:**
+  - [ ] Set up GitHub Actions for Linux, macOS, and Windows builds.
+  - [ ] Include testing and code coverage checks.
+- [ ] **Packaging:**
+  - [ ] Create Conan package for the C++ library.
+  - [ ] Build Python wheels for distribution on PyPI (handle backend selection/inclusion).
+
+## Documentation
+
+- [x] **Write API Documentation:**
+  - [x] Generate Doxygen documentation for the C++ API headers (`core_types.h`, `omnidsp.h`, `fft.h`, `cqt.h`, `convolution.h` done).
+  - [ ] Add Doxygen comments to remaining headers (`resample.h`, `filter.h`, `stft.h`).
+  - [ ] Add Doxygen comments to `.cpp` implementation files.
+  - [ ] Use Sphinx for Python API documentation.
+- [ ] **Add Examples:**
+  - [ ] Provide usage examples for both C++ (using `OmniDSP` class and Plans) and Python.
+
 # OmniDSP TODO List (Refactored for New Architecture)
 
 _High-level goals: Flatten public namespaces, introduce OmniDSP class (using PIMPL) as the main interface and factory for Plans, use PIMPL for Plan classes, add ResamplePlan. Python API will mirror C++, requiring an OmniDSP instance._
 
 ## Core Refactoring Tasks (High Priority / Blocking)
 
-- [ ] **Define Core API Headers (New Structure):**
-  - [ ] **`core_types.h`:** Review and finalize core enums (`Precision`, `Direction`, `Domain`, `FFTNorm`, `ConvMode`, `WindowType`). Ensure no nested namespaces.
-  - [ ] **`omnidsp.h`:**
+- [x] **Define Core API Headers (New Structure):**
+  - [x] **`core_types.h`:** Review and finalize core enums (`Precision`, `Direction`, `Domain`, `FFTNorm`, `ConvMode`, `WindowType`). Ensure no nested namespaces.
+  - [x] **`omnidsp.h`:**
     - Define the main `OmniDSP` class (forward-declare `OmniDSPImpl` in `OmniDSP::backend` namespace).
     - Declare `OmniDSP` constructor and destructor (defined in `.cpp`).
     - Declare move constructor/assignment (defaulted or defined in `.cpp`). Delete copy constructor/assignment.
@@ -14,58 +122,58 @@ _High-level goals: Flatten public namespaces, introduce OmniDSP class (using PIM
     - Declare factory methods for creating Plans: `create_fft_plan`, `create_rfft_plan`, `create_cqt_plan`, `create_resample_plan`. These should return `std::unique_ptr<FFTPlan<T>>`, etc., and take the necessary configuration parameters (length, precision, sample_rate, etc.).
     - Remove old standalone function declarations.
     - Include necessary Plan headers (`fft.h`, `cqt.h`, `resample.h`).
-  - [ ] **`fft.h`:**
+  - [x] **`fft.h`:**
     - Define `FFTPlan` and `RFFTPlan` classes within the `OmniDSP` namespace.
     - Forward-declare `FFTPlanImpl` and `RFFTPlanImpl` (in `OmniDSP::backend`).
     - Make constructors **private** or **protected**. Add `OmniDSP` as a friend class OR provide an internal constructor taking backend context from the factory.
     - Declare destructor, move operations (potentially delete copy ops), and execution methods (`fft`, `ifft`, `rfft`, `irfft`).
     - Remove old standalone convenience function declarations.
-  - [ ] **`cqt.h`:**
+  - [x] **`cqt.h`:**
     - Define `CQTPlan` class within the `OmniDSP` namespace.
     - Forward-declare `CQTPlanImpl` (in `OmniDSP::backend`).
     - Make constructor **private** or **protected**. Add `OmniDSP` as a friend class OR provide internal constructor. Update signature (e.g., accept `WindowSpec`).
     - Declare destructor, move operations, `execute` method.
     - Remove old standalone `cqt` convenience function declaration.
-  - [ ] **`convolution.h`:**
+  - [x] **`convolution.h`:**
     - Remove standalone `convolve1d`/`correlate1d` declarations.
     - Keep `ConvMode` enum if defined here (or move to `core_types.h`).
-  - [ ] **`window.h`:**
+  - [x] **`window.h`:**
     - Remove `Window` class declaration.
     - Define `WindowType` enum and `WindowSpec` struct.
-  - [ ] **`resample.h`:**
+  - [x] **`resample.h`:**
     - Define `ResamplePlan` class (within `OmniDSP` namespace).
     - Forward-declare `ResamplePlanImpl` (in `OmniDSP::backend`).
     - Make constructor **private** or **protected**. Add `OmniDSP` as a friend class OR provide internal constructor.
     - Declare destructor, move operations, and `execute` method.
     - Remove old standalone `filter_and_downsample` declaration.
 - [ ] **Implement Core API Source Files:**
-  - [ ] **`omnidsp.cpp`:**
+  - [x] **`omnidsp.cpp`:**
     - Implement `OmniDSP` constructor: Create the correct `backend::OmniDSPImpl` based on CMake flags (`USE_ONEMKL`, `USE_ACCELERATE`). Perform any one-time backend setup (e.g., MKL threading).
     - Implement `OmniDSP` destructor.
     - Implement `OmniDSP` move operations.
     - Implement `OmniDSP` stateless methods (`convolve1d`, etc.) by forwarding calls to `pimpl_->method(...)`.
     - Implement `OmniDSP` factory methods (`create_*_plan`): Use `pimpl_` to access backend context/factory logic, create the appropriate `backend::*PlanImpl`, and construct/return the `std::unique_ptr<PlanType>`.
     - Add necessary explicit template instantiations for `OmniDSP` methods.
-  - [ ] **`fft.cpp`:**
+  - [x] **`fft.cpp`:**
     - Implement internal `FFTPlan`/`RFFTPlan` constructors (taking backend context).
     - Implement `FFTPlan`/`RFFTPlan` destructor, move operations, execute methods (forward to `pimpl_`).
     - Add explicit template instantiations.
     - Remove old convenience function implementations.
-  - [ ] **`cqt.cpp`:**
+  - [x] **`cqt.cpp`:**
     - Implement internal `CQTPlan` constructor (taking backend context). Update internal logic to use `ResamplePlan`.
     - Implement `CQTPlan` destructor, move operations, execute method (forward to `pimpl_`).
     - Add explicit template instantiations.
     - Remove old convenience function implementation.
-  - [ ] **`window.cpp`:**
+  - [x] **`window.cpp`:**
     - Implement `get_window_coeffs` utility function (potentially internal to `backend::OmniDSPImpl`).
     - Remove old `Window` class implementations.
     - Add necessary template instantiations for any remaining helpers.
-  - [ ] **`resample.cpp`:**
+  - [x] **`resample.cpp`:**
     - Implement internal `ResamplePlan` constructor (taking backend context).
     - Implement `ResamplePlan` destructor, move operations, execute method (forward to `pimpl_`).
     - Add explicit template instantiations.
     - Remove old `filter_and_downsample` implementation.
-  - [ ] **`convolution.cpp`:**
+  - [x] **`convolution.cpp`:**
     - Remove old standalone function implementations.
 - [ ] **Refactor Backend Interface and Implementations:**
   - [ ] **`backend.h` (Internal Header):**

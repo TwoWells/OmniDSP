@@ -1,328 +1,706 @@
-# omnidsp_py/api.py
-
+# -*- coding: utf-8 -*-
 """
-Python wrappers and factory functions for the OmniDSP library.
+High-level Python API for the OmniDSP library.
 
-This module provides a user-friendly Python interface that dispatches
-calls to the appropriate C++ bindings based on NumPy data types or
-explicit precision requests. It defines convenience functions (like fft, rfft)
-and factory functions (like create_fft_plan, create_cqt_plan) for creating
-plan objects.
+This module provides Python functions that wrap the underlying C++ bindings,
+offering a more convenient interface using NumPy arrays and standard Python types.
 """
 
 import numpy as np
+import warnings
+from typing import Optional, Union, Sequence, Type
 
-# Import standard typing utilities
-from typing import Callable, Union, Optional, TypeVar
+# Attempt to import the compiled C++ bindings module
+try:
+    from ._omnidsp_cpp import (
+        # Core Classes/Enums
+        OmniDSP,
+        Backend,
+        Status,  # noqa: F401 - Part of public API, potentially used by callers
+        DataType,  # noqa: F401 - Part of public API
+        Domain,  # noqa: F401 - Part of public API
+        WindowType,
+        ConvolutionMode,
+        WindowSpecFloat,  # noqa: F401 - Part of public API
+        WindowSpecDouble,  # noqa: F401 - Part of public API
+        OmniDSPError,  # Custom exception class
+        # Plan Classes (Example Float versions, add Double/Complex as needed)
+        FFTPlanFloatComplex,
+        RFFTPlanFloat,
+        CQTPlanFloat,
+        ConvolutionPlanFloat,
+        CorrelationPlanFloat,
+        ResamplePlanFloat,
+        # Add Double/Complex plan types...
+        FFTPlanDoubleComplex,
+        RFFTPlanDouble,
+        CQTPlanDouble,
+        # ConvolutionPlanDouble, ConvolutionPlanFloatComplex, ConvolutionPlanDoubleComplex, # TODO: Bind these
+        # CorrelationPlanDouble, CorrelationPlanFloatComplex, CorrelationPlanDoubleComplex, # TODO: Bind these
+        ResamplePlanDouble,
+    )
 
-# --- Import C++ components ---
-# Import the compiled C++ extension module, aliased as 'cpp' for clarity
-from . import omnidsp_py as cpp
+    _bindings_available = True
+except ImportError:
+    warnings.warn(
+        "OmniDSP C++ bindings (_omnidsp_cpp) not found. API functions will not work.",
+        ImportWarning,
+    )
+    _bindings_available = False
+    # Define dummy types/enums if bindings are missing to allow script import?
+    # Or let it fail later when functions are called. Let it fail for now.
 
-# Import Enums and specific Plan classes which are needed directly by the factory functions
-from .omnidsp_py import (
-    Precision,
-    Direction,
-    Domain,
-    NormMode,  # Enums
-    FFTPlanFloat,
-    FFTPlanDouble,  # Specific FFT Plan classes
+
+# Type hint aliases
+ArrayLike = Union[np.ndarray, Sequence[Union[float, complex]]]
+Plan = Union[
+    FFTPlanFloatComplex,
+    FFTPlanDoubleComplex,
+    RFFTPlanFloat,
+    RFFTPlanDouble,
     CQTPlanFloat,
-    CQTPlanDouble,  # Specific CQT Plan classes
-    # The C++ bound Window class is accessed via cpp.Window
-    # The C++ bound fft, ifft, etc functions are accessed via cpp.fft, cpp.ifft
-)
+    CQTPlanDouble,
+    ConvolutionPlanFloat,  # Add others when bound
+    CorrelationPlanFloat,  # Add others when bound
+    ResamplePlanFloat,
+    ResamplePlanDouble,
+]
 
-# --- Type Aliases ---
-# Define type hints for NumPy arrays for better code readability and static analysis.
-# Using generic np.ndarray for broader compatibility, but implies float32
-ArrayF32 = np.ndarray
-ArrayF64 = np.ndarray  # Implies float64
-ArrayC64 = np.ndarray  # Implies complex64
-ArrayC128 = np.ndarray  # Implies complex128
-# Type hint for real-valued NumPy arrays
-ArrayReal = Union[ArrayF32, ArrayF64]
-# Type hint for complex-valued NumPy arrays
-ArrayComplex = Union[ArrayC64, ArrayC128]
-# Type hint for either FFT plan type
-AnyFFTPlan = Union[FFTPlanFloat, FFTPlanDouble]
-# Type hint for either CQT plan type
-AnyCQTPlan = Union[CQTPlanFloat, CQTPlanDouble]
-
-# Type variable for hinting the signature of the window function callable.
-# It takes an array and returns an array.
-T_WindowFunc = TypeVar("T_WindowFunc", bound=Callable[[np.ndarray], np.ndarray])
-
-# Default values matching C++ implementation (from bindings.cpp/cqt.h)
-DEFAULT_SPARSITY_THRESHOLD = 1e-5
-DEFAULT_FIR_FILTER_ORDER = 101
-
-# --- Wrapper Functions for FFT Convenience Functions ---
-# These Python functions provide a cleaner interface to the overloaded C++ convenience
-# functions bound in bindings.cpp (accessed via the 'cpp' alias). They perform basic
-# type checking before calling the C++ function, which handles the actual dispatch.
+# --- Helper Functions ---
 
 
-def fft(input_array: ArrayComplex) -> ArrayComplex:
+def _get_dsp_instance(
+    dsp_instance: Optional[OmniDSP] = None, backend: Backend = Backend.Stub
+) -> OmniDSP:
+    """Gets or creates an OmniDSP instance."""
+    if not _bindings_available:
+        raise RuntimeError("OmniDSP C++ bindings are not available.")
+    if dsp_instance is not None:
+        if not isinstance(dsp_instance, OmniDSP):
+            raise TypeError("dsp_instance must be an OmniDSP object.")
+        return dsp_instance
+    else:
+        # Create a new instance (caller is responsible for its lifetime if needed beyond the function call)
+        return OmniDSP.create(backend)
+
+
+def _ensure_numpy(arr: ArrayLike, dtype: Optional[np.dtype] = None) -> np.ndarray:
+    """Ensure input is a NumPy array, optionally converting dtype."""
+    if not isinstance(arr, np.ndarray):
+        # Attempt conversion, letting NumPy handle potential errors
+        try:
+            arr = np.asarray(arr, dtype=dtype)
+        except (TypeError, ValueError) as e:
+            raise TypeError(
+                f"Input could not be converted to a NumPy array: {e}"
+            ) from e
+    elif dtype is not None and arr.dtype != dtype:
+        # Ensure conversion doesn't lose precision unexpectedly if casting down
+        if np.issubdtype(dtype, np.integer) and not np.issubdtype(
+            arr.dtype, np.integer
+        ):
+            warnings.warn(
+                f"Casting non-integer array to {dtype}, potential precision loss.",
+                RuntimeWarning,
+            )
+        elif np.issubdtype(dtype, np.floating) and np.issubdtype(
+            arr.dtype, np.complexfloating
+        ):
+            warnings.warn(
+                f"Casting complex array to {dtype}, discarding imaginary part.",
+                RuntimeWarning,
+            )
+            arr = arr.real  # Explicitly take real part before casting
+        try:
+            arr = arr.astype(dtype, casting="safe")  # Use 'safe' casting by default
+        except TypeError as e:
+            # Allow unsafe casting if explicitly requested or handle common cases?
+            # For now, re-raise with a more informative message.
+            raise TypeError(
+                f"Cannot safely cast array from {arr.dtype} to {dtype}: {e}"
+            ) from e
+
+    if arr.ndim != 1:
+        raise ValueError(
+            f"Input must be a 1D array or sequence, but got {arr.ndim} dimensions."
+        )
+    # Ensure C-contiguity for compatibility with C++ std::span/vector expectations
+    if not arr.flags["C_CONTIGUOUS"]:
+        arr = np.ascontiguousarray(arr)
+    return arr
+
+
+def _get_expected_plan_type(plan_type_name: str, dtype: np.dtype) -> type:
+    """Helper to get the correct Plan class based on name and dtype."""
+    if dtype == np.float32:
+        suffix = "Float"
+    elif dtype == np.float64:
+        suffix = "Double"
+    elif dtype == np.complex64:
+        suffix = "FloatComplex"
+    elif dtype == np.complex128:
+        suffix = "DoubleComplex"
+    else:
+        raise TypeError(f"Unsupported dtype for Plan: {dtype}")
+
+    full_class_name = f"{plan_type_name}{suffix}"
+    plan_class = globals().get(full_class_name)  # Access class from module globals
+    if plan_class is None:
+        # This check might be redundant if bindings cover all types, but good practice
+        raise TypeError(
+            f"Plan type '{full_class_name}' not available in bindings for dtype {dtype}."
+        )
+    return plan_class
+
+
+# --- Main API Functions ---
+
+
+def create_dsp_instance(backend: Backend = Backend.Stub) -> OmniDSP:
     """
-    Performs Complex-to-Complex forward FFT (NormMode.BACKWARD).
-
-    Dispatches to the appropriate C++ float32 or float64 implementation
-    based on the input NumPy array's dtype.
+    Creates and returns an OmniDSP instance configured for the specified backend.
 
     Args:
-        input_array: 1D NumPy array (complex64 or complex128).
+        backend (Backend): The desired computation backend (Stub, Accelerate, OneMKL).
+                           Defaults to Stub.
 
     Returns:
-        1D NumPy array of the FFT result, with the same dtype as the input.
+        OmniDSP: The created OmniDSP instance.
 
     Raises:
-        TypeError: If input dtype is not complex64 or complex128.
-        RuntimeError: If the C++ binding encounters an error (e.g., input not 1D).
+        OmniDSPError: If the instance creation fails (e.g., backend not supported).
+        RuntimeError: If C++ bindings are not available.
     """
-    # Check if the input array's data type is supported.
-    if not (input_array.dtype == np.complex64 or input_array.dtype == np.complex128):
-        raise TypeError(
-            f"Unsupported dtype {input_array.dtype} for fft. Expected complex64 or complex128."
-        )
-    # Call the bound C++ function (cpp.fft), which is overloaded in bindings.cpp.
-    # pybind11 automatically selects the correct C++ overload based on the input array type.
-    return cpp.fft(input_array)
+    if not _bindings_available:
+        raise RuntimeError("OmniDSP C++ bindings are not available.")
+    # The C++ factory handles error checking via OmniExpected,
+    # which the binding translates to OmniDSPError exception.
+    return OmniDSP.create(backend)
 
 
-def ifft(input_array: ArrayComplex) -> ArrayComplex:
+# --- DSP Operations ---
+
+
+def convolve(
+    input_arr: ArrayLike,
+    kernel_arr: ArrayLike,
+    mode: ConvolutionMode = ConvolutionMode.Full,
+    dsp_instance: Optional[OmniDSP] = None,
+) -> np.ndarray:
     """
-    Performs Complex-to-Complex inverse FFT (NormMode.BACKWARD).
-
-    Dispatches to the appropriate C++ float32 or float64 implementation
-    based on the input NumPy array's dtype.
+    Performs 1D convolution.
 
     Args:
-        input_array: 1D NumPy array (complex64 or complex128).
+        input_arr: The input signal (1D NumPy array or sequence).
+        kernel_arr: The kernel (1D NumPy array or sequence). Must have the same dtype.
+        mode: The convolution mode (Full, Same, Valid). Defaults to Full.
+        dsp_instance: Optional pre-existing OmniDSP instance. If None, a temporary
+                      Stub instance is used.
 
     Returns:
-        1D NumPy array of the IFFT result, with the same dtype as the input.
+        np.ndarray: The convolution result with the same dtype as input.
 
     Raises:
-        TypeError: If input dtype is not complex64 or complex128.
-        RuntimeError: If the C++ binding encounters an error.
+        OmniDSPError: If the C++ library encounters an error.
+        TypeError: If input types are incompatible or unsupported.
+        ValueError: If inputs are not 1D.
+        RuntimeError: If C++ bindings are not available or other unexpected errors occur.
     """
-    # Check input dtype.
-    if not (input_array.dtype == np.complex64 or input_array.dtype == np.complex128):
-        raise TypeError(
-            f"Unsupported dtype {input_array.dtype} for ifft. Expected complex64 or complex128."
-        )
-    # Call the bound C++ function (cpp.ifft).
-    return cpp.ifft(input_array)
+    dsp = _get_dsp_instance(dsp_instance)  # Gets or creates instance
+    input_np = _ensure_numpy(input_arr)
+    kernel_np = _ensure_numpy(
+        kernel_arr, dtype=input_np.dtype
+    )  # Ensure kernel matches input dtype
+
+    # The C++ binding for OmniDSP::convolve handles the vector conversion and type dispatch
+    try:
+        # Assumes the pybind11 bindings for convolve accept numpy arrays directly
+        result_vec_or_arr = dsp.convolve(input_np, kernel_np, mode)
+        # If the binding returns a std::vector, convert it back
+        if isinstance(result_vec_or_arr, list):  # pybind11 default for vector
+            return np.array(result_vec_or_arr, dtype=input_np.dtype)
+        elif isinstance(
+            result_vec_or_arr, np.ndarray
+        ):  # If binding returns numpy directly
+            return result_vec_or_arr
+        else:
+            raise TypeError(
+                f"Unexpected return type from C++ convolve binding: {type(result_vec_or_arr)}"
+            )
+    except OmniDSPError as e:
+        # Re-raise the specific error from C++
+        raise e
+    except Exception as e:
+        # Catch other potential errors (e.g., pybind type conversion)
+        raise RuntimeError(f"Convolution failed: {e}") from e
 
 
-def rfft(input_array: ArrayReal) -> ArrayComplex:
+def correlate(
+    input_arr: ArrayLike,
+    template_arr: ArrayLike,
+    mode: ConvolutionMode = ConvolutionMode.Full,
+    dsp_instance: Optional[OmniDSP] = None,
+) -> np.ndarray:
     """
-    Performs Real-to-Complex forward FFT (NormMode.BACKWARD).
-
-    Dispatches to the appropriate C++ float32 or float64 implementation
-    based on the input NumPy array's dtype.
-    Returns N/2 + 1 complex frequency points.
+    Performs 1D cross-correlation.
 
     Args:
-        input_array: 1D NumPy array (float32 or float64).
+        input_arr: The input signal (1D NumPy array or sequence).
+        template_arr: The template signal (1D NumPy array or sequence). Must have the same dtype.
+        mode: The correlation mode (Full, Same, Valid). Defaults to Full.
+        dsp_instance: Optional pre-existing OmniDSP instance. If None, a temporary
+                      Stub instance is used.
 
     Returns:
-        1D NumPy array (complex64 or complex128) of size N/2 + 1.
+        np.ndarray: The cross-correlation result with the same dtype as input.
 
     Raises:
-        TypeError: If input dtype is not float32 or float64.
-        RuntimeError: If the C++ binding encounters an error.
+        OmniDSPError: If the C++ library encounters an error.
+        TypeError: If input types are incompatible or unsupported.
+        ValueError: If inputs are not 1D.
+        RuntimeError: If C++ bindings are not available or other unexpected errors occur.
     """
-    # Check input dtype.
-    if not (input_array.dtype == np.float32 or input_array.dtype == np.float64):
-        raise TypeError(
-            f"Unsupported dtype {input_array.dtype} for rfft. Expected float32 or float64."
+    dsp = _get_dsp_instance(dsp_instance)
+    input_np = _ensure_numpy(input_arr)
+    template_np = _ensure_numpy(template_arr, dtype=input_np.dtype)
+
+    try:
+        result_vec_or_arr = dsp.correlate(input_np, template_np, mode)
+        if isinstance(result_vec_or_arr, list):
+            return np.array(result_vec_or_arr, dtype=input_np.dtype)
+        elif isinstance(result_vec_or_arr, np.ndarray):
+            return result_vec_or_arr
+        else:
+            raise TypeError(
+                f"Unexpected return type from C++ correlate binding: {type(result_vec_or_arr)}"
+            )
+    except OmniDSPError as e:
+        raise e
+    except Exception as e:
+        raise RuntimeError(f"Correlation failed: {e}") from e
+
+
+# --- One-off FFTs ---
+
+
+def fft(input_arr: ArrayLike, dsp_instance: Optional[OmniDSP] = None) -> np.ndarray:
+    """Computes the 1D complex Fast Fourier Transform (FFT)."""
+    dsp = _get_dsp_instance(dsp_instance)
+    # Ensure input is complex, default to complex128 if real input provided
+    input_np = _ensure_numpy(input_arr)
+    if not np.iscomplexobj(input_np):
+        input_np = input_np.astype(np.complex128)
+    # Ensure contiguity after potential type change
+    input_np = np.ascontiguousarray(input_np)
+
+    try:
+        result_vec_or_arr = dsp.fft(input_np)  # Assumes binding handles dtype dispatch
+        if isinstance(result_vec_or_arr, list):
+            return np.array(result_vec_or_arr, dtype=input_np.dtype)
+        elif isinstance(result_vec_or_arr, np.ndarray):
+            return result_vec_or_arr
+        else:
+            raise TypeError(
+                f"Unexpected return type from C++ fft binding: {type(result_vec_or_arr)}"
+            )
+    except OmniDSPError as e:
+        raise e
+    except Exception as e:
+        raise RuntimeError(f"FFT failed: {e}") from e
+
+
+def ifft(input_arr: ArrayLike, dsp_instance: Optional[OmniDSP] = None) -> np.ndarray:
+    """Computes the 1D inverse complex FFT (scaled by 1/N)."""
+    dsp = _get_dsp_instance(dsp_instance)
+    # Ensure input is complex, matching precision if possible
+    dtype_in = (
+        np.complex64 if np.result_type(input_arr) == np.complex64 else np.complex128
+    )
+    input_np = _ensure_numpy(input_arr, dtype=dtype_in)
+    if not np.iscomplexobj(input_np):
+        raise TypeError("Input for ifft must be complex.")
+
+    try:
+        result_vec_or_arr = dsp.ifft(input_np)  # Assumes binding handles dtype dispatch
+        # Note: C++ binding applies 1/N scaling for the one-off ifft
+        if isinstance(result_vec_or_arr, list):
+            return np.array(result_vec_or_arr, dtype=input_np.dtype)
+        elif isinstance(result_vec_or_arr, np.ndarray):
+            return result_vec_or_arr
+        else:
+            raise TypeError(
+                f"Unexpected return type from C++ ifft binding: {type(result_vec_or_arr)}"
+            )
+    except OmniDSPError as e:
+        raise e
+    except Exception as e:
+        raise RuntimeError(f"IFFT failed: {e}") from e
+
+
+def rfft(input_arr: ArrayLike, dsp_instance: Optional[OmniDSP] = None) -> np.ndarray:
+    """Computes the 1D real-to-complex FFT."""
+    dsp = _get_dsp_instance(dsp_instance)
+    # Ensure input is real, matching precision if possible
+    dtype_in = np.float32 if np.result_type(input_arr) == np.float32 else np.float64
+    input_np = _ensure_numpy(input_arr, dtype=dtype_in)
+    if np.iscomplexobj(input_np):
+        raise TypeError("Input for rfft must be real.")
+
+    output_dtype = np.complex64 if input_np.dtype == np.float32 else np.complex128
+
+    try:
+        result_vec_or_arr = dsp.rfft(input_np)  # Assumes binding handles dtype dispatch
+        if isinstance(result_vec_or_arr, list):
+            return np.array(result_vec_or_arr, dtype=output_dtype)
+        elif isinstance(result_vec_or_arr, np.ndarray):
+            return result_vec_or_arr.astype(
+                output_dtype, copy=False
+            )  # Ensure correct complex type
+        else:
+            raise TypeError(
+                f"Unexpected return type from C++ rfft binding: {type(result_vec_or_arr)}"
+            )
+    except OmniDSPError as e:
+        raise e
+    except Exception as e:
+        raise RuntimeError(f"RFFT failed: {e}") from e
+
+
+def irfft(
+    input_arr: ArrayLike,
+    n: Optional[int] = None,
+    dsp_instance: Optional[OmniDSP] = None,
+) -> np.ndarray:
+    """Computes the 1D inverse real FFT (complex-to-real, scaled by 1/N)."""
+    dsp = _get_dsp_instance(dsp_instance)
+    # Ensure input is complex
+    dtype_in = (
+        np.complex64 if np.result_type(input_arr) == np.complex64 else np.complex128
+    )
+    input_np = _ensure_numpy(input_arr, dtype=dtype_in)
+    if not np.iscomplexobj(input_np):
+        raise TypeError("Input for irfft must be complex.")
+
+    if n is None:
+        # Infer output length N from input length N/2 + 1
+        if input_np.shape[0] < 1:
+            n = 0  # Handle empty input case
+        else:
+            n = (input_np.shape[0] - 1) * 2
+            if n == 0 and input_np.shape[0] == 1:
+                n = 1  # Handle N=1 case (DC only input)
+    elif not isinstance(n, int) or n < 0:
+        raise ValueError("Output length n must be a non-negative integer.")
+    # Basic validation: input size must correspond roughly to n
+    if n > 0 and input_np.shape[0] != (n // 2) + 1:
+        warnings.warn(
+            f"Input array size {input_np.shape[0]} does not match expected size {(n//2)+1} for output length {n}.",
+            RuntimeWarning,
         )
-    # Call the bound C++ function (cpp.rfft).
-    return cpp.rfft(input_array)
+
+    output_dtype = np.float32 if input_np.dtype == np.complex64 else np.float64
+
+    try:
+        result_vec_or_arr = dsp.irfft(
+            input_np, n
+        )  # Assumes binding handles dtype dispatch
+        # Note: C++ binding applies 1/N scaling for the one-off irfft
+        if isinstance(result_vec_or_arr, list):
+            return np.array(result_vec_or_arr, dtype=output_dtype)
+        elif isinstance(result_vec_or_arr, np.ndarray):
+            return result_vec_or_arr.astype(
+                output_dtype, copy=False
+            )  # Ensure correct real type
+        else:
+            raise TypeError(
+                f"Unexpected return type from C++ irfft binding: {type(result_vec_or_arr)}"
+            )
+    except OmniDSPError as e:
+        raise e
+    except Exception as e:
+        raise RuntimeError(f"IRFFT failed: {e}") from e
 
 
-def irfft(input_array: ArrayComplex) -> ArrayReal:
+# --- Window Generation ---
+
+
+def get_window(
+    window_type: Union[WindowType, str],
+    length: int,
+    beta: Optional[float] = None,
+    stddev: Optional[float] = None,
+    dtype: Type[Union[np.float32, np.float64]] = np.float64,
+    dsp_instance: Optional[OmniDSP] = None,
+) -> np.ndarray:
     """
-    Performs Complex-to-Real inverse FFT (NormMode.BACKWARD).
-
-    Dispatches to the appropriate C++ float32 or float64 implementation
-    based on the input NumPy array's dtype.
-    Input spectrum must have Hermitian symmetry for the output to be purely real.
-    Returns N real points, where N = 2*(Nc-1) if input length Nc > 1, or N=1 if Nc=1.
+    Generates window coefficients.
 
     Args:
-        input_array: 1D NumPy array (complex64 or complex128) of size Nc = N/2 + 1,
-                     possessing Hermitian symmetry.
+        window_type: The type of window (WindowType enum or string name).
+        length: The desired window length. Must be non-negative.
+        beta: The beta parameter (required for Kaiser window).
+        stddev: The standard deviation parameter (required for Gaussian window).
+        dtype: The desired data type (np.float32 or np.float64). Defaults to np.float64.
+        dsp_instance: Optional pre-existing OmniDSP instance. If None, a temporary
+                      Stub instance is used.
 
     Returns:
-        1D NumPy array (float32 or float64) of size N.
+        np.ndarray: The window coefficients.
 
     Raises:
-        TypeError: If input dtype is not complex64 or complex128.
-        RuntimeError: If the C++ binding encounters an error.
+        OmniDSPError: If the C++ library encounters an error.
+        TypeError: If input types are incompatible or unsupported.
+        ValueError: If inputs are invalid (e.g., negative length, missing params).
+        RuntimeError: If C++ bindings are not available or other unexpected errors occur.
     """
-    # Check input dtype.
-    if not (input_array.dtype == np.complex64 or input_array.dtype == np.complex128):
-        raise TypeError(
-            f"Unsupported dtype {input_array.dtype} for irfft. Expected complex64 or complex128."
-        )
-    # Call the bound C++ function (cpp.irfft).
-    return cpp.irfft(input_array)
+    if length < 0:
+        raise ValueError("Window length cannot be negative.")
+    if length == 0:
+        return np.array([], dtype=dtype)  # Return empty array for length 0
+
+    dsp = _get_dsp_instance(dsp_instance)
+
+    # Convert string name to enum if necessary
+    if isinstance(window_type, str):
+        # Handle case variations gracefully
+        wt_str_cap = window_type.capitalize()
+        # Special case for Hann/Hanning? Assume Hann is standard.
+        if wt_str_cap == "Hanning":
+            wt_str_cap = "Hann"
+        try:
+            window_enum = WindowType[wt_str_cap]
+        except KeyError:
+            raise ValueError(f"Unknown window type string: '{window_type}'") from None
+    elif isinstance(window_type, WindowType):
+        window_enum = window_type
+    else:
+        raise TypeError("window_type must be a WindowType enum or string.")
+
+    # Choose function based on type and dtype
+    func_name = window_enum.name.lower() + "_window"  # e.g., "hann_window"
+
+    try:
+        cpp_func = getattr(dsp, func_name)
+        args = [length]
+        # Add parameters specific to certain windows
+        if window_enum == WindowType.Kaiser:
+            if beta is None:
+                raise ValueError("beta parameter required for Kaiser window")
+            args.append(beta)
+        elif window_enum == WindowType.Gaussian:
+            if stddev is None:
+                raise ValueError("stddev parameter required for Gaussian window")
+            args.append(stddev)
+
+        # Call the correct C++ overload based on dtype
+        if dtype == np.float32:
+            # Cast params to float if needed
+            args_casted = [int(args[0])] + [np.float32(p) for p in args[1:]]
+            result_vec_or_arr = cpp_func(
+                *args_casted
+            )  # Assumes binding handles overload
+        elif dtype == np.float64:
+            args_casted = [int(args[0])] + [np.float64(p) for p in args[1:]]
+            result_vec_or_arr = cpp_func(
+                *args_casted
+            )  # Assumes binding handles overload
+        else:
+            raise TypeError(f"Unsupported dtype for get_window: {dtype}")
+
+        # Convert result if necessary
+        if isinstance(result_vec_or_arr, list):
+            return np.array(result_vec_or_arr, dtype=dtype)
+        elif isinstance(result_vec_or_arr, np.ndarray):
+            return result_vec_or_arr.astype(dtype, copy=False)
+        else:
+            raise TypeError(
+                f"Unexpected return type from C++ {func_name} binding: {type(result_vec_or_arr)}"
+            )
+
+    except AttributeError:
+        raise NotImplementedError(
+            f"Window function '{func_name}' not bound or implemented in C++ backend."
+        ) from None
+    except OmniDSPError as e:
+        raise e
+    except Exception as e:
+        raise RuntimeError(
+            f"Window generation failed for type '{window_enum.name}': {e}"
+        ) from e
 
 
-# --- Factory Functions for Creating Plan Objects ---
-# These functions provide a Pythonic way to create instances of the C++ plan objects
-# (FFTPlanFloat, FFTPlanDouble, CQTPlanFloat, CQTPlanDouble) bound in bindings.cpp.
+# --- Plan Creation ---
+# These functions REQUIRE an OmniDSP instance
 
 
 def create_fft_plan(
+    dsp_instance: OmniDSP,
     length: int,
-    precision: Precision,
-    direction: Direction,
-    domain: Domain,
-    norm: NormMode = NormMode.BACKWARD,  # Default normalization mode
-) -> AnyFFTPlan:
-    """
-    Factory function to create an FFTPlan instance.
+    dtype: Type[Union[np.complex64, np.complex128]] = np.complex128,
+) -> Plan:
+    """Creates an optimized FFT plan."""
+    _ensure_instance(dsp_instance)
+    # Let C++ binding handle template instantiation based on dtype passed implicitly or explicitly
+    # The return type hint Union is broad; actual type depends on dtype.
+    return dsp_instance.create_fft_plan(
+        length
+    )  # Assume binding uses dtype info if overloaded
 
-    Chooses between FFTPlanFloat and FFTPlanDouble based on the precision argument.
 
-    Args:
-        length: The size 'N' of the transform (number of points).
-        precision: The desired precision (omnidsp_py.Precision.SINGLE or
-                   omnidsp_py.Precision.DOUBLE).
-        direction: Transform direction (omnidsp_py.Direction.FORWARD or
-                   omnidsp_py.Direction.INVERSE).
-        domain: Transform domain (omnidsp_py.Domain.COMPLEX or
-                omnidsp_py.Domain.REAL).
-        norm: Normalization mode (default: omnidsp_py.NormMode.BACKWARD).
-
-    Returns:
-        An instance of FFTPlanFloat or FFTPlanDouble.
-
-    Raises:
-        ValueError: If an unsupported precision enum value is provided.
-        RuntimeError: If C++ plan creation fails (e.g., invalid length for backend).
-    """
-    # Instantiate the appropriate C++ plan class based on the requested precision.
-    if precision == Precision.SINGLE:
-        # Call the constructor bound in bindings.cpp for FFTPlanFloat
-        return FFTPlanFloat(length, precision, direction, domain, norm)
-    elif precision == Precision.DOUBLE:
-        # Call the constructor bound in bindings.cpp for FFTPlanDouble
-        return FFTPlanDouble(length, precision, direction, domain, norm)
-    else:
-        # Handle invalid precision enum values.
-        prec_repr = (
-            repr(precision) if isinstance(precision, Precision) else str(precision)
-        )
-        raise ValueError(f"Unsupported precision: {prec_repr}")
+def create_rfft_plan(
+    dsp_instance: OmniDSP,
+    length: int,
+    dtype: Type[Union[np.float32, np.float64]] = np.float64,
+) -> Plan:
+    """Creates an optimized real FFT plan."""
+    _ensure_instance(dsp_instance)
+    return dsp_instance.create_rfft_plan(length)  # Assume binding uses dtype info
 
 
 def create_cqt_plan(
+    dsp_instance: OmniDSP,
     sample_rate: float,
-    hop_length: int,  # Added hop_length parameter
-    lowest_freq: float,
-    highest_freq: float,
+    min_freq: float,
+    max_freq: float,
     bins_per_octave: int,
-    window_function: T_WindowFunc,  # Use TypeVar for better hinting of callable type
-    precision: Precision = Precision.DOUBLE,  # Default precision to DOUBLE
-    sparsity_threshold: Optional[float] = None,  # Optional sparsity threshold
-    fir_filter_order: Optional[int] = None,  # Optional FIR filter order
-) -> AnyCQTPlan:
-    """
-    Factory function to create a recursive CQTPlan instance.
-
-    Chooses between CQTPlanFloat and CQTPlanDouble based on the precision argument.
-
-    Args:
-        sample_rate: Sample rate of the input signal in Hz.
-        hop_length: The number of samples between consecutive CQT frames. Must be
-                    divisible by 2^(num_octaves - 1).
-        lowest_freq: Lowest frequency of interest in Hz (> 0).
-        highest_freq: Highest frequency of interest in Hz (<= sample_rate / 2).
-        bins_per_octave: Number of CQT bins per octave (> 0).
-        window_function: A Python callable (function or lambda). It will be called
-                         internally by the C++ backend during kernel generation.
-                         The callable will receive a dummy NumPy array argument whose
-                         size indicates the required window length for a specific CQT bin.
-                         The callable MUST return a 1D NumPy array of window coefficients
-                         of that exact length and with the correct dtype (float32 for
-                         SINGLE precision plan, float64 for DOUBLE precision plan).
-                         Example: `lambda arr: np.hanning(len(arr)).astype(arr.dtype)`
-        precision: The desired precision (omnidsp_py.Precision.SINGLE or
-                   omnidsp_py.Precision.DOUBLE). Defaults to DOUBLE.
-        sparsity_threshold: Threshold below which kernel values are treated as zero
-                            during precomputation. If None, uses C++ default (1e-5).
-        fir_filter_order: Order (length) of the FIR anti-aliasing filter used in
-                          recursive downsampling. Must be odd. If None, uses C++
-                          default (101).
-
-    Returns:
-        An instance of CQTPlanFloat or CQTPlanDouble.
-
-    Raises:
-        ValueError: If an unsupported precision enum value is provided.
-        TypeError: If window_function is not callable.
-        RuntimeError: If C++ plan creation fails (e.g., invalid args, hop_length issue,
-                      window function error during kernel generation).
-    """
-    # Validate that the window_function is actually callable.
-    if not callable(window_function):
-        raise TypeError(
-            "window_function must be a callable (e.g., a Python function or lambda)."
-        )
-
-    # Determine the sparsity threshold and FIR filter order to pass to C++,
-    # using the C++ defaults if the Python arguments are None.
-    # The C++ binding layer expects these values explicitly.
-    sparsity_thresh_cpp = (
-        sparsity_threshold
-        if sparsity_threshold is not None
-        else DEFAULT_SPARSITY_THRESHOLD
-    )
-    fir_order_cpp = (
-        fir_filter_order if fir_filter_order is not None else DEFAULT_FIR_FILTER_ORDER
-    )
-
-    # Instantiate the appropriate C++ plan class based on the requested precision.
-    if precision == Precision.SINGLE:
-        # Call the constructor bound in bindings.cpp for CQTPlanFloat.
-        # The Python callable `window_function` is passed directly; the C++ binding lambda handles the adaptation.
-        return CQTPlanFloat(
-            sample_rate,
-            hop_length,
-            lowest_freq,
-            highest_freq,
+    dtype: Type[Union[np.float32, np.float64]] = np.float64,
+) -> Plan:
+    """Creates an optimized CQT plan."""
+    _ensure_instance(dsp_instance)
+    # Cast args if dtype is float32? The C++ template should handle this.
+    # The binding needs to correctly call the float or double C++ template.
+    # Let's assume the binding handles the dispatch based on a potential dtype argument
+    # or by providing separate bindings like create_cqt_plan_float/double.
+    # For now, assume the binding takes float/double directly.
+    if dtype == np.float32:
+        return dsp_instance.create_cqt_plan(
+            np.float32(sample_rate),
+            np.float32(min_freq),
+            np.float32(max_freq),
             bins_per_octave,
-            window_function,  # Pass the Python callable
-            float(sparsity_thresh_cpp),  # Ensure correct type for float plan
-            fir_order_cpp,
-        )
-    elif precision == Precision.DOUBLE:
-        # Call the constructor bound in bindings.cpp for CQTPlanDouble.
-        return CQTPlanDouble(
-            sample_rate,
-            hop_length,
-            lowest_freq,
-            highest_freq,
-            bins_per_octave,
-            window_function,  # Pass the Python callable
-            float(sparsity_thresh_cpp),  # Ensure correct type for double plan
-            fir_order_cpp,
         )
     else:
-        # Handle invalid precision enum values.
-        prec_repr = (
-            repr(precision) if isinstance(precision, Precision) else str(precision)
+        return dsp_instance.create_cqt_plan(
+            np.float64(sample_rate),
+            np.float64(min_freq),
+            np.float64(max_freq),
+            bins_per_octave,
         )
-        raise ValueError(f"Unsupported precision: {prec_repr}")
 
 
-# Note: Python wrappers are generally not needed for the Window class static methods
-# (like Window.hann). The __init__.py file can directly expose the C++ bound
-# Window class from the 'cpp' module. The overloaded static methods defined
-# in bindings.cpp will handle the type dispatching automatically when called
-# like omnidsp_py.Window.hann(numpy_array).
+def create_resample_plan(
+    dsp_instance: OmniDSP,
+    input_rate: float,
+    output_rate: float,
+    max_input_size: int = 0,
+    dtype: Type[Union[np.float32, np.float64]] = np.float64,
+) -> Plan:
+    """Creates an optimized resampling plan."""
+    _ensure_instance(dsp_instance)
+    # Assume binding handles dtype dispatch
+    return dsp_instance.create_resample_plan(input_rate, output_rate, max_input_size)
+
+
+def create_convolution_plan(
+    dsp_instance: OmniDSP,
+    kernel_arr: ArrayLike,
+    mode: ConvolutionMode = ConvolutionMode.Full,
+) -> Plan:
+    """Creates an optimized convolution plan."""
+    _ensure_instance(dsp_instance)
+    kernel_np = _ensure_numpy(kernel_arr)
+    # Assume binding handles dtype dispatch
+    return dsp_instance.create_convolution_plan(kernel_np, mode)
+
+
+def create_correlation_plan(
+    dsp_instance: OmniDSP,
+    template_arr: ArrayLike,
+    mode: ConvolutionMode = ConvolutionMode.Full,
+) -> Plan:
+    """Creates an optimized correlation plan."""
+    _ensure_instance(dsp_instance)
+    template_np = _ensure_numpy(template_arr)
+    # Assume binding handles dtype dispatch
+    return dsp_instance.create_correlation_plan(template_np, mode)
+
+
+# --- Plan Execution ---
+# Provide functions that take a plan and numpy arrays
+
+
+def execute_plan(plan: Plan, input_arr: np.ndarray, output_arr: np.ndarray) -> None:
+    """
+    Executes a pre-computed Plan on input/output NumPy arrays.
+
+    Args:
+        plan: The Plan object created by a create_*_plan function.
+        input_arr: NumPy array containing the input data. Must match plan's expected dtype.
+        output_arr: NumPy array to store the output data. Must match plan's expected
+                    output dtype and have sufficient size.
+
+    Raises:
+        OmniDSPError: If the C++ library encounters an error during execution.
+        TypeError: If plan is not a valid Plan object or array dtypes are incorrect.
+        ValueError: If array dimensions or sizes are incorrect.
+        RuntimeError: If C++ bindings are not available or other unexpected errors occur.
+    """
+    if not _bindings_available:
+        raise RuntimeError("OmniDSP C++ bindings are not available.")
+    if not hasattr(plan, "execute"):  # Basic check for Plan-like object
+        raise TypeError("Provided object is not a valid OmniDSP Plan.")
+
+    # Basic input validation (more specific checks might be needed depending on plan type)
+    if not isinstance(input_arr, np.ndarray):
+        raise TypeError("input_arr must be a NumPy array.")
+    if not isinstance(output_arr, np.ndarray):
+        raise TypeError("output_arr must be a NumPy array.")
+    if not output_arr.flags["WRITEABLE"]:
+        raise ValueError("output_arr must be writeable.")
+    if not input_arr.flags["C_CONTIGUOUS"]:
+        warnings.warn(
+            "Input array is not C-contiguous. A copy will be made.", RuntimeWarning
+        )
+        input_arr = np.ascontiguousarray(input_arr)
+    if not output_arr.flags["C_CONTIGUOUS"]:
+        warnings.warn(
+            "Output array is not C-contiguous. Performance may be affected.",
+            RuntimeWarning,
+        )
+        # Cannot force output to be contiguous if it wasn't passed that way. C++ binding must handle.
+
+    try:
+        # Let the bound method handle span conversion and more detailed type/size checks
+        plan.execute(input_arr, output_arr)
+    except OmniDSPError as e:
+        raise e
+    except Exception as e:
+        # Catch potential pybind11 errors during argument conversion etc.
+        raise RuntimeError(f"Plan execution failed: {e}") from e
+
+
+# --- Internal Helper ---
+def _ensure_instance(dsp_instance: Optional[OmniDSP]):
+    """Raises TypeError if dsp_instance is not a valid OmniDSP object."""
+    if not _bindings_available:
+        raise RuntimeError("OmniDSP C++ bindings are not available.")
+    if dsp_instance is None or not isinstance(dsp_instance, OmniDSP):
+        raise TypeError("A valid OmniDSP instance is required for creating Plans.")
+
+
+# --- Optional: Add aliases for convenience ---
+# Use def instead of lambda to satisfy linters (E731)
+def hann(length: int, **kwargs) -> np.ndarray:
+    """Alias for get_window(WindowType.Hann, length, **kwargs)."""
+    return get_window(WindowType.Hann, length, **kwargs)
+
+
+def hamming(length: int, **kwargs) -> np.ndarray:
+    """Alias for get_window(WindowType.Hamming, length, **kwargs)."""
+    return get_window(WindowType.Hamming, length, **kwargs)
+
+
+# Add other aliases as needed...
+def kaiser(length: int, beta: float, **kwargs) -> np.ndarray:
+    """Alias for get_window(WindowType.Kaiser, length, beta=beta, **kwargs)."""
+    return get_window(WindowType.Kaiser, length, beta=beta, **kwargs)

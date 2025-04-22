@@ -1,88 +1,139 @@
 /**
  * @file resample.cpp
- * @brief Implementation file for resampling functions.
- * Updated to call the backend implementation using the correct signature.
+ * @brief Implements the ResamplePlan class methods, forwarding calls to backend
+ * implementations.
  */
 
-#include "OmniDSP/resample.h"  // Public API declaration
+#include "OmniDSP/resample.h"  // Corresponding header
 
-#include <cmath>  // For std::floor, std::ceil (potentially needed for validation)
-#include <stdexcept>  // For std::invalid_argument, std::runtime_error
-#include <string>     // For exception messages
+// Include Pimpl interface definition (defined below or in a separate backend.h)
+// #include "backend/backend.h" // May contain base class definitions if
+// separated
+
+// Include concrete backend implementation headers (Placeholders - needed for
+// unique_ptr deletion) #include "backend/stub/stub_resample.h" #ifdef
+// USE_ACCELERATE #include "backend/accelerate/accelerate_resample.h" #endif
+// #ifdef USE_ONEMKL
+// #include "backend/onemkl/onemkl_resample.h"
+// #endif
+
+#include <cmath>   // For std::ceil
+#include <memory>  // For std::unique_ptr
+#include <span>
+#include <stdexcept>  // For std::runtime_error
+#include <utility>    // For std::move
 #include <vector>
 
-// #include "OmniDSP/omnidsp.h" // No longer needed for OMNIDSP_STATUS
-#include "backend/backend.h"  // Use renamed backend header for dispatcher declarations
-
 namespace OmniDSP {
+namespace backend {
 
 /**
- * @brief Implementation for filter_and_downsample.
- * Performs input validation and calls the backend dispatcher.
+ * @brief Abstract base class defining the interface for Resample Plan
+ * implementations (Pimpl).
+ * @tparam T The floating-point type (e.g., float, double).
  */
 template <typename T>
-std::vector<T> filter_and_downsample(const std::vector<T> &signal,
-                                     const std::vector<T> &kernel, int factor) {
-  // --- Input Validation ---
-  if (factor <= 0) {
-    throw std::invalid_argument(
-        "filter_and_downsample: Downsampling factor must be positive.");
-  }
-  if (signal.empty()) {
-    // Return empty vector if input is empty (consistent with some libraries
-    // like SciPy)
-    return {};
-  }
-  if (kernel.empty()) {
-    throw std::invalid_argument(
-        "filter_and_downsample: Kernel cannot be empty.");
-  }
-  // Backend implementations might handle this, but basic check here is good.
-  // 'Valid' mode is often implicit in FIR+downsample operations,
-  // potentially requiring kernel <= signal depending on backend.
-  // Example check (can be refined based on backend needs):
-  // if (kernel.size() > signal.size()) {
-  //   throw std::invalid_argument("filter_and_downsample: Kernel length (" +
-  //                               std::to_string(kernel.size()) +
-  //                               ") cannot be greater than signal length (" +
-  //                               std::to_string(signal.size()) +
-  //                               ") for implicit 'valid' mode processing.");
-  // }
+class ResamplePlanImpl {
+ public:
+  virtual ~ResamplePlanImpl() = default;
+  virtual Status execute(std::span<const T> input,
+                         std::span<T> output) const = 0;
+  virtual double get_input_rate() const = 0;
+  virtual double get_output_rate() const = 0;
+  virtual size_t get_output_length(size_t input_length) const = 0;
+};
 
-  // --- Call Backend Implementation ---
-  // The backend implementation now handles calculating the output size
-  // and returning the result vector directly.
-  // Any errors should be propagated via exceptions.
-  try {
-    // Corrected Call: Use the 3-argument signature declared in backend.h
-    return Backend::filter_and_downsample_impl<T>(signal, kernel, factor);
-  } catch (const std::exception &e) {
-    // Re-throw backend errors with more context if desired
+// Define explicit instantiations for the Impl interfaces if needed,
+// though usually not required for abstract classes.
+
+}  // namespace backend
+
+//--------------------------------------------------------------------------
+// ResamplePlan Method Definitions
+//--------------------------------------------------------------------------
+
+template <typename T>
+ResamplePlan<T>::ResamplePlan(
+    std::unique_ptr<backend::ResamplePlanImpl<T>> pimpl)
+    : pimpl_(std::move(pimpl)) {
+  // Constructor body can be empty, initialization is done via member
+  // initializer list
+  if (!pimpl_) {
+    // This should ideally be caught by the factory creating the Impl
+    throw std::runtime_error("ResamplePlan created with null implementation.");
+  }
+}
+
+// Destructor: Needs definition in the .cpp file where ResamplePlanImpl is
+// complete. Default implementation is usually sufficient if ResamplePlanImpl
+// has a virtual destructor.
+template <typename T>
+ResamplePlan<T>::~ResamplePlan() = default;
+
+// Move Constructor: Default implementation is sufficient for unique_ptr.
+template <typename T>
+ResamplePlan<T>::ResamplePlan(ResamplePlan&& other) noexcept = default;
+
+// Move Assignment Operator: Default implementation is sufficient for
+// unique_ptr.
+template <typename T>
+ResamplePlan<T>& ResamplePlan<T>::operator=(ResamplePlan&& other) noexcept =
+    default;
+
+template <typename T>
+[[nodiscard]] Status ResamplePlan<T>::execute(std::span<const T> input,
+                                              std::span<T> output) const {
+  if (!pimpl_) {
+    // Should not happen if constructor validates, but defensive check
+    return Status::InvalidOperation;  // Or another appropriate error
+  }
+  // TODO: Add size checks for output based on get_output_length?
+  // size_t expected_len = get_output_length(input.size());
+  // if (output.size() < expected_len) return Status::SizeMismatch; // Or
+  // InvalidArgument?
+  return pimpl_->execute(input, output);
+}
+
+template <typename T>
+double ResamplePlan<T>::get_input_rate() const {
+  if (!pimpl_) {
+    // Throw? Return 0? A plan should always have an impl if constructed.
     throw std::runtime_error(
-        "Error during backend filter_and_downsample execution: " +
-        std::string(e.what()));
+        "Invalid ResamplePlan instance in get_input_rate.");
   }
+  return pimpl_->get_input_rate();
+}
 
-  // --- Old Code Removed ---
-  // Removed manual output size calculation (e.g., valid_conv_len, output_len)
-  // Removed creation of output vector before calling backend
-  // Removed call to the old 7-argument backend function
-  // Removed status code checking
-  // --- End Old Code Removed ---
+template <typename T>
+double ResamplePlan<T>::get_output_rate() const {
+  if (!pimpl_) {
+    throw std::runtime_error(
+        "Invalid ResamplePlan instance in get_output_rate.");
+  }
+  return pimpl_->get_output_rate();
+}
+
+template <typename T>
+size_t ResamplePlan<T>::get_output_length(size_t input_length) const {
+  if (!pimpl_) {
+    throw std::runtime_error(
+        "Invalid ResamplePlan instance in get_output_length.");
+  }
+  // Forward the calculation to the implementation, which knows about filter
+  // delays etc.
+  return pimpl_->get_output_length(input_length);
 }
 
 //--------------------------------------------------------------------------
 // Explicit Template Instantiations
 //--------------------------------------------------------------------------
-// These declarations match the ones in resample.h
-template std::vector<float> filter_and_downsample<float>(
-    const std::vector<float> &signal, const std::vector<float> &kernel,
-    int factor);
+// Instantiate templates for common types (float, double) to ensure code
+// generation.
 
-#if !defined(USE_ONEMKL)
-template std::vector<double> filter_and_downsample<double>(
-    const std::vector<double> &signal, const std::vector<double> &kernel,
-    int factor);
-#endif
+template class OmniDSP::ResamplePlan<float>;
+template class OmniDSP::ResamplePlan<double>;
+
+// Remove implementation of old standalone filter_and_downsample function here
+// if it existed.
 
 }  // namespace OmniDSP

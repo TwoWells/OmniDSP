@@ -1,133 +1,272 @@
 /**
  * @file backend.h
- * @brief Declares the functions that specific backend implementations must
- * provide.
- *
- * This header defines the signatures for functions related to windowing,
- * convolution, correlation, and resampling that are dispatched to the
- * selected backend (oneMKL, Accelerate, or Stub) via backend.cpp.
- *
- * @version 2.0.1 (Renamed from backend_impl.h)
- * @date 2025-04-18
+ * @brief Defines the abstract interfaces for backend implementations (Pimpl
+ * pattern).
+ * @details Concrete backend implementations (Stub, Accelerate, oneMKL) must
+ * inherit from the abstract base classes defined here (OmniDSPImpl, *PlanImpl).
  */
-#ifndef OMNIDSP_BACKEND_H  // Renamed Header Guard
-#define OMNIDSP_BACKEND_H  // Renamed Header Guard
+
+#ifndef OMNIDSP_BACKEND_H
+#define OMNIDSP_BACKEND_H
 
 #include <complex>
 #include <cstddef>  // For size_t
+#include <memory>   // For std::unique_ptr
+#include <span>     // For std::span (requires C++20)
 #include <vector>
 
-// Include necessary public API headers for types used in signatures
-#include <OmniDSP/convolution.h>  // Defines ConvMode
-#include <OmniDSP/core_types.h>   // Defines Precision, OMNIDSP_STATUS
-// #include <OmniDSP/fft.h>       // Defines FFTNorm (Only needed if FFT backend
-// funcs were declared here)
+#include "OmniDSP/core_types.h"  // Core types, enums, OmniExpected
 
-// --- Forward declarations for PIMPL implementation structs ---
-// These structs are defined within the backend-specific .cpp files (e.g.,
-// fft.cpp) They are NOT defined or used as interfaces in this header anymore.
-// template <typename T> struct FFTPlanImpl;
-// template <typename T> struct RFFTPlanImpl;
+// Forward declare public Plan classes from the OmniDSP namespace
+namespace OmniDSP {
+template <typename T>
+class FFTPlan;
+template <typename T>
+class RFFTPlan;
+template <typename T>
+class CQTPlan;  // Although CQTPlan doesn't use Pimpl, OmniDSPImpl might still
+                // need it
+template <typename T>
+class ResamplePlan;
+template <typename T>
+class ConvolutionPlan;
+template <typename T>
+class CorrelationPlan;
+// Forward declare FilterPlan when added
+// template<typename T> class FilterPlan;
+}  // namespace OmniDSP
 
 namespace OmniDSP {
-namespace Backend {
+namespace backend {
 
-// --- Backend Window Function Declarations ---
-// These functions generate window coefficients directly.
-// Implementations reside in backend/<backend_name>/window.cpp
-
-/**
- * @brief Backend implementation for generating Hann window coefficients.
- * @param[out] output Pointer to the output buffer where coefficients will be
- * written.
- * @param length The number of coefficients to generate (size of the output
- * buffer).
- */
-template <typename T>
-void hann_window_impl(T* output, size_t length);
+//--------------------------------------------------------------------------
+// Plan Implementation Interfaces (Abstract Base Classes)
+//--------------------------------------------------------------------------
 
 /**
- * @brief Backend implementation for generating Hamming window coefficients.
- * @param[out] output Pointer to the output buffer.
- * @param length The number of coefficients to generate.
+ * @brief Abstract base class defining the interface for complex FFT Plan
+ * implementations (Pimpl).
+ * @tparam T The complex floating-point type (e.g., std::complex<float>).
  */
 template <typename T>
-void hamming_window_impl(T* output, size_t length);
+class FFTPlanImpl {
+ public:
+  virtual ~FFTPlanImpl() = default;
+  virtual Status fft(std::span<const T> input, std::span<T> output) const = 0;
+  virtual Status ifft(std::span<const T> input, std::span<T> output) const = 0;
+  virtual size_t get_length() const = 0;
+};
 
 /**
- * @brief Backend implementation for generating Kaiser window coefficients.
- * @param[out] output Pointer to the output buffer.
- * @param length The number of coefficients to generate.
- * @param beta The Kaiser window shape parameter beta (non-negative).
+ * @brief Abstract base class defining the interface for real FFT Plan
+ * implementations (Pimpl).
+ * @tparam T The real floating-point type (e.g., float, double).
  */
 template <typename T>
-void kaiser_window_impl(T* output, size_t length, T beta);
+class RFFTPlanImpl {
+ public:
+  virtual ~RFFTPlanImpl() = default;
+  virtual Status rfft(std::span<const RealT<T>> input,
+                      std::span<ComplexT<T>> output) const = 0;
+  virtual Status irfft(std::span<const ComplexT<T>> input,
+                       std::span<RealT<T>> output) const = 0;
+  virtual size_t get_length() const = 0;
+};
 
 /**
- * @brief Backend implementation for generating Flat-top window coefficients.
- * @param[out] output Pointer to the output buffer.
- * @param length The number of coefficients to generate.
+ * @brief Abstract base class defining the interface for Resample Plan
+ * implementations (Pimpl).
+ * @tparam T The floating-point type (e.g., float, double).
  */
 template <typename T>
-void flattop_window_impl(T* output, size_t length);
-
-// --- Backend Convolution/Correlation Function Declarations ---
-// These functions perform the core computation.
-// Implementations reside in backend/<backend_name>/convolution.cpp and are
-// dispatched via backend.cpp
+class ResamplePlanImpl {
+ public:
+  virtual ~ResamplePlanImpl() = default;
+  virtual Status execute(std::span<const T> input,
+                         std::span<T> output) const = 0;
+  virtual double get_input_rate() const = 0;
+  virtual double get_output_rate() const = 0;
+  virtual size_t get_output_length(size_t input_length) const = 0;
+};
 
 /**
- * @brief Backend implementation for 1D convolution.
- * @param signal Pointer to the input signal data.
- * @param signal_len Length of the input signal.
- * @param kernel Pointer to the kernel data.
- * @param kernel_len Length of the kernel.
- * @param mode Convolution mode (Full, Same, Valid).
- * @return std::vector<T> The convolution result.
- * @throws std::runtime_error If backend execution fails.
- * @throws std::invalid_argument If inputs/mode are invalid.
+ * @brief Abstract base class defining the interface for Convolution Plan
+ * implementations (Pimpl).
+ * @tparam T The data type (e.g., float, std::complex<float>).
  */
 template <typename T>
-std::vector<T> convolve1d_impl(const T* signal, size_t signal_len,
-                               const T* kernel, size_t kernel_len,
-                               OmniDSP::ConvMode mode);
+class ConvolutionPlanImpl {
+ public:
+  virtual ~ConvolutionPlanImpl() = default;
+  virtual Status execute(std::span<const T> input,
+                         std::span<T> output) const = 0;
+  virtual size_t get_kernel_length() const = 0;
+  virtual ConvolutionMode get_mode() const = 0;
+  virtual size_t get_output_length(size_t input_length) const = 0;
+};
 
 /**
- * @brief Backend implementation for 1D correlation.
- * @param signal Pointer to the input signal data.
- * @param signal_len Length of the input signal.
- * @param kernel Pointer to the kernel data.
- * @param kernel_len Length of the kernel.
- * @param mode Correlation mode (Full, Same, Valid).
- * @return std::vector<T> The correlation result.
- * @throws std::runtime_error If backend execution fails.
- * @throws std::invalid_argument If inputs/mode are invalid.
+ * @brief Abstract base class defining the interface for Correlation Plan
+ * implementations (Pimpl).
+ * @tparam T The data type (e.g., float, std::complex<float>).
  */
 template <typename T>
-std::vector<T> correlate1d_impl(const T* signal, size_t signal_len,
-                                const T* kernel, size_t kernel_len,
-                                OmniDSP::ConvMode mode);
+class CorrelationPlanImpl {
+ public:
+  virtual ~CorrelationPlanImpl() = default;
+  virtual Status execute(std::span<const T> input,
+                         std::span<T> output) const = 0;
+  virtual size_t get_template_length() const = 0;
+  virtual ConvolutionMode get_mode() const = 0;
+  virtual size_t get_output_length(size_t input_length) const = 0;
+};
 
-// --- Backend Resample Function Declarations ---
-// Implementations reside in backend/<backend_name>/resample.cpp and are
-// dispatched via backend.cpp
+// Add FilterPlanImpl when IIR filtering is added
+// template<typename T>
+// class FilterPlanImpl { ... };
+
+//--------------------------------------------------------------------------
+// Main Backend Implementation Interface (Abstract Base Class)
+//--------------------------------------------------------------------------
 
 /**
- * @brief Backend implementation for combined FIR filtering and downsampling.
- * @tparam T float or double.
- * @param signal The input signal vector.
- * @param kernel The FIR filter coefficients vector.
- * @param factor The integer downsampling factor (must be > 0).
- * @return std::vector<T> The filtered and downsampled signal.
- * @throws std::runtime_error If backend execution fails or is unsupported.
- * @throws std::invalid_argument If inputs are invalid.
+ * @brief Abstract base class defining the interface for backend implementations
+ * (Pimpl).
+ * @details Concrete backend implementations (Stub, Accelerate, oneMKL) inherit
+ * from this class. Provides virtual methods corresponding to the public API of
+ * the main OmniDSP class.
  */
-template <typename T>
-std::vector<T> filter_and_downsample_impl(const std::vector<T>& signal,
-                                          const std::vector<T>& kernel,
-                                          int factor);
+class OmniDSPImpl {
+ public:
+  /** @brief Virtual destructor is required for base classes with virtual
+   * functions. */
+  virtual ~OmniDSPImpl() = default;
 
-}  // namespace Backend
+  /** @brief Gets the backend type associated with this implementation. */
+  virtual Backend get_backend() const = 0;
+
+  // === Virtual methods corresponding to OmniDSP public API ===
+
+  // --- DSP Operations ---
+  template <typename T>
+  [[nodiscard]] virtual OmniExpected<std::vector<RealT<T>>> convolve(
+      const std::vector<RealT<T>>& input, const std::vector<RealT<T>>& kernel,
+      ConvolutionMode mode) const = 0;
+
+  template <typename T>
+  [[nodiscard]] virtual OmniExpected<std::vector<ComplexT<T>>> convolve(
+      const std::vector<ComplexT<T>>& input,
+      const std::vector<ComplexT<T>>& kernel, ConvolutionMode mode) const = 0;
+
+  template <typename T>
+  [[nodiscard]] virtual OmniExpected<std::vector<RealT<T>>> correlate(
+      const std::vector<RealT<T>>& input, const std::vector<RealT<T>>& kernel,
+      ConvolutionMode mode) const = 0;
+
+  template <typename T>
+  [[nodiscard]] virtual OmniExpected<std::vector<ComplexT<T>>> correlate(
+      const std::vector<ComplexT<T>>& input,
+      const std::vector<ComplexT<T>>& kernel, ConvolutionMode mode) const = 0;
+
+  // --- One-off FFTs ---
+  template <typename T>
+  [[nodiscard]] virtual OmniExpected<std::vector<ComplexT<T>>> fft(
+      const std::vector<ComplexT<T>>& input) const = 0;
+
+  template <typename T>
+  [[nodiscard]] virtual OmniExpected<std::vector<ComplexT<T>>> ifft(
+      const std::vector<ComplexT<T>>& input) const = 0;
+
+  template <typename T>
+  [[nodiscard]] virtual OmniExpected<std::vector<ComplexT<T>>> rfft(
+      const std::vector<RealT<T>>& input) const = 0;
+
+  template <typename T>
+  [[nodiscard]] virtual OmniExpected<std::vector<RealT<T>>> irfft(
+      const std::vector<ComplexT<T>>& input, size_t output_length) const = 0;
+
+  // --- Window Generation ---
+  template <typename T>
+  [[nodiscard]] virtual OmniExpected<std::vector<RealT<T>>> bartlett_window(
+      size_t length) const = 0;
+  template <typename T>
+  [[nodiscard]] virtual OmniExpected<std::vector<RealT<T>>> blackman_window(
+      size_t length) const = 0;
+  template <typename T>
+  [[nodiscard]] virtual OmniExpected<std::vector<RealT<T>>> flattop_window(
+      size_t length) const = 0;
+  template <typename T>
+  [[nodiscard]] virtual OmniExpected<std::vector<RealT<T>>> gaussian_window(
+      size_t length, RealT<T> stddev) const = 0;
+  template <typename T>
+  [[nodiscard]] virtual OmniExpected<std::vector<RealT<T>>> hamming_window(
+      size_t length) const = 0;
+  template <typename T>
+  [[nodiscard]] virtual OmniExpected<std::vector<RealT<T>>> hann_window(
+      size_t length) const = 0;
+  template <typename T>
+  [[nodiscard]] virtual OmniExpected<std::vector<RealT<T>>> kaiser_window(
+      size_t length, RealT<T> beta) const = 0;
+  template <typename T>
+  [[nodiscard]] virtual OmniExpected<std::vector<RealT<T>>> rectangular_window(
+      size_t length) const = 0;
+  template <typename T>
+  [[nodiscard]] virtual OmniExpected<std::vector<RealT<T>>> triangular_window(
+      size_t length) const = 0;
+
+  // --- Plan Factories ---
+  // Note: These return the public Plan types wrapping the backend-specific Impl
+  // types.
+  template <typename T>
+  [[nodiscard]] virtual OmniExpected<std::unique_ptr<FFTPlan<T>>>
+  create_fft_plan(size_t length) const = 0;
+
+  template <typename T>
+  [[nodiscard]] virtual OmniExpected<std::unique_ptr<RFFTPlan<T>>>
+  create_rfft_plan(size_t length) const = 0;
+
+  // CQTPlan doesn't use Pimpl directly, but the factory logic might differ per
+  // backend if backend-specific FFT/Resample plans influence CQT creation.
+  // However, the simplest approach is likely a non-virtual helper in
+  // OmniDSP::create or a single implementation here that calls the CQTPlan
+  // constructor. Let's keep it virtual for now, allowing backend overrides if
+  // needed.
+  template <typename T>
+  [[nodiscard]] virtual OmniExpected<std::unique_ptr<CQTPlan<T>>>
+  create_cqt_plan(const OmniDSP* owner,  // Pass owner for sub-plan creation
+                  RealT<T> sample_rate, RealT<T> min_freq, RealT<T> max_freq,
+                  int bins_per_octave) const = 0;
+
+  template <typename T>
+  [[nodiscard]] virtual OmniExpected<std::unique_ptr<ResamplePlan<T>>>
+  create_resample_plan(double input_rate, double output_rate,
+                       size_t max_input_size) const = 0;
+
+  template <typename T>
+  [[nodiscard]] virtual OmniExpected<std::unique_ptr<ConvolutionPlan<T>>>
+  create_convolution_plan(const std::vector<T>& kernel,
+                          ConvolutionMode mode) const = 0;  // Added
+
+  template <typename T>
+  [[nodiscard]] virtual OmniExpected<std::unique_ptr<CorrelationPlan<T>>>
+  create_correlation_plan(const std::vector<T>& kernel,
+                          ConvolutionMode mode) const = 0;  // Added
+
+  // Add virtual methods for FilterPlan factory when added to OmniDSP
+  // template<typename T>
+  // [[nodiscard]] virtual OmniExpected<std::unique_ptr<FilterPlan<T>>>
+  // create_iir_filter_plan(...) const = 0;
+
+  // Add virtual methods for filter design if they need backend specifics
+  // template<typename T>
+  // [[nodiscard]] virtual OmniExpected<std::vector<RealT<T>>>
+  // design_fir_filter(...) const = 0; template<typename T>
+  // [[nodiscard]] virtual OmniExpected<std::pair<...>> design_iir_filter(...)
+  // const = 0;
+
+};  // class OmniDSPImpl
+
+}  // namespace backend
 }  // namespace OmniDSP
 
 #endif  // OMNIDSP_BACKEND_H
