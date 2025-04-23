@@ -31,8 +31,8 @@ namespace backend {
 /**
  * @brief Abstract base class defining the interface for backend implementations
  * (Pimpl).
- * @details Concrete backend implementations (Stub, Accelerate, oneMKL) inherit
- * from this class.
+ * @details Concrete backend implementations (Default, Accelerate, oneMKL)
+ * inherit from this class.
  */
 class OmniDSPImpl {
  public:
@@ -191,11 +191,11 @@ class OmniDSPImpl {
 #endif
         break;
 
-      case Backend::Stub:
-      default:  // Fallback to Stub
-        // std::cout << "Creating Stub backend..." << std::endl; // Debug
-        pimpl = std::make_unique<backend::StubOmniDSPImpl>();
-        // std::cout << "Stub backend created." << std::endl; // Debug
+      case Backend::Default:
+      default:  // Fallback to Default
+        // std::cout << "Creating Default backend..." << std::endl; // Debug
+        pimpl = std::make_unique<backend::DefaultOmniDSPImpl>();
+        // std::cout << "Default backend created." << std::endl; // Debug
         break;
     }
 

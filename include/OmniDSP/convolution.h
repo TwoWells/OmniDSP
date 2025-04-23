@@ -1,26 +1,26 @@
 /**
  * @file convolution.h
- * @brief Defines interfaces for Convolution and Correlation Plan objects.
- * @details Plan objects are created via OmniDSP factory methods (e.g.,
- * OmniDSP::create_convolution_plan) and provide optimized execution for
- * repeated convolution or correlation operations, typically with a fixed
- * kernel/template.
+ * @brief Defines the public API for Convolution and Correlation Plan objects.
  */
 
 #ifndef OMNIDSP_CONVOLUTION_H
 #define OMNIDSP_CONVOLUTION_H
 
-#include <complex>  // For std::complex
-#include <cstddef>  // For size_t
-#include <memory>   // For std::unique_ptr (Pimpl)
-#include <span>     // For input/output views (requires C++20)
-#include <vector>   // For std::vector (potentially used internally)
+#include <complex>
+#include <cstddef>
+#include <memory>       // For std::unique_ptr
+#include <span>         // For input/output views (requires C++20)
+#include <string_view>  // For get_convolution_type_name
+#include <vector>
 
-#include "core_types.h"  // Core types like RealT, ComplexT, Status, ConvolutionMode
+#include "core_types.h"  // Core types like RealT, ComplexT, Status
+
+// Include the generated export header for DLL support
+#include "OmniDSP/omnidsp_export.h"
 
 namespace OmniDSP {
 
-// Forward declare the main OmniDSP class for friend declaration
+// Forward declare the main OmniDSP class (needed for friend declaration)
 class OmniDSP;
 
 // Forward declarations for implementation classes (Pimpl idiom)
@@ -32,218 +32,179 @@ class CorrelationPlanImpl;
 }  // namespace backend
 
 /**
- * @brief Plan object for executing 1D Convolutions.
- * @details This class encapsulates the pre-computed data (e.g., FFT of the
- * kernel) and backend-specific context required for efficient convolution
- * execution, especially when convolving multiple input signals with the same
- * kernel. Instances are created via an OmniDSP factory method (to be added).
- * This class is non-copyable but movable.
- * @tparam T The data type of the signals (e.g., RealT<float>,
- * ComplexT<double>).
+ * @brief Specifies the type (output size/boundary handling) for convolution and
+ * correlation operations. <<< MOVED HERE
+ * @details Determines the length and alignment of the output signal relative to
+ * the input signals.
+ */
+enum class ConvolutionType {
+  Full,  ///< Output contains all computed values where the signals overlap at
+         ///< all, size = N + M - 1.
+  Same,  ///< Output size is the same as the first input N. The 'center' part of
+         ///< the full result is returned, aligned with the first input.
+  Valid  ///< Output includes only points where the signals fully overlap
+         ///< without any zero-padding assumptions, size = max(0, N - M + 1).
+};
+
+/**
+ * @brief Gets the string name corresponding to a ConvolutionType enum value.
+ * <<< MOVED HERE
+ * @param type The convolution type enum value.
+ * @return A string_view representing the convolution type name.
+ */
+inline std::string_view get_convolution_type_name(
+    ConvolutionType type) noexcept {
+  switch (type) {
+    case ConvolutionType::Full:
+      return "Full";
+    case ConvolutionType::Same:
+      return "Same";
+    case ConvolutionType::Valid:
+      return "Valid";
+    default:
+      return "Unknown ConvolutionType";
+  }
+}
+
+/**
+ * @brief Plan object for executing Convolution operations.
+ * @details Encapsulates the kernel and backend-specific context for efficient
+ * execution using methods like direct summation or FFT-based convolution.
+ * Created via OmniDSP::create_convolution_plan.
+ * Uses the Pimpl idiom. Non-copyable but movable.
+ * @tparam T The data type (e.g., float, double, std::complex<float>).
  */
 template <typename T>
-class ConvolutionPlan {
-  // Friend declaration allows OmniDSP factory methods to call the private
-  // constructor
-  friend class OmniDSP;
+class OMNIDSP_EXPORT ConvolutionPlan {
+  friend class OmniDSP;  // Allow OmniDSP factory methods to call private
+                         // constructor
 
  public:
-  /**
-   * @brief Destructor. Cleans up implementation resources.
-   * @details Defined in the source file to handle Pimpl destruction.
-   */
+  /** @brief Destructor. */
   ~ConvolutionPlan();
-
-  /**
-   * @brief Move constructor.
-   * @details Defined in the source file.
-   */
+  /** @brief Move constructor. */
   ConvolutionPlan(ConvolutionPlan&& other) noexcept;
-
-  /**
-   * @brief Move assignment operator.
-   * @details Defined in the source file.
-   */
+  /** @brief Move assignment operator. */
   ConvolutionPlan& operator=(ConvolutionPlan&& other) noexcept;
-
-  /** @brief Deleted copy constructor. ConvolutionPlan instances are
-   * non-copyable. */
+  /** @brief Deleted copy constructor. */
   ConvolutionPlan(const ConvolutionPlan&) = delete;
-  /** @brief Deleted copy assignment operator. ConvolutionPlan instances are
-   * non-copyable. */
+  /** @brief Deleted copy assignment operator. */
   ConvolutionPlan& operator=(const ConvolutionPlan&) = delete;
 
   /**
-   * @brief Executes the pre-planned convolution on an input signal.
-   * @param input A span representing the input signal buffer.
-   * @param output A span representing the output buffer for the convolution
-   * result. The required size depends on the mode and can be obtained via
-   * get_output_length().
+   * @brief Executes the convolution operation.
+   * @param input A span representing the input signal.
+   * @param output A span representing the output buffer. Must be pre-allocated
+   * with the size returned by get_output_length(input.size()).
    * @return Status::Success on success, or an error code on failure.
-   * @note The output span must be pre-allocated with sufficient size before
-   * calling execute.
    */
   [[nodiscard]] Status execute(std::span<const T> input,
                                std::span<T> output) const;
 
   /**
-   * @brief Gets the length of the kernel used in this convolution plan.
-   * @return The length of the kernel.
+   * @brief Gets the length of the kernel used by this plan.
+   * @return The kernel length.
    */
   size_t get_kernel_length() const;
 
   /**
-   * @brief Gets the convolution mode (Full, Same, Valid) configured for this
-   * plan.
-   * @return The ConvolutionMode enum value.
+   * @brief Gets the convolution type (boundary handling mode) configured for
+   * this plan. <<< UPDATED
+   * @return The ConvolutionType (Full, Same, Valid).
    */
-  ConvolutionMode get_mode() const;
+  ConvolutionType get_type() const;  // <<< Renamed from get_mode
 
   /**
-   * @brief Calculates the required output length for a given input length based
-   * on the plan's kernel length and mode.
-   * @param input_length The length of the input signal.
-   * @return The expected length of the output signal.
+   * @brief Calculates the expected output length for a given input length based
+   * on the kernel length and convolution type.
+   * @param input_length Length of the input signal.
+   * @return Expected output length.
    */
   size_t get_output_length(size_t input_length) const;
 
  private:
   /**
-   * @brief Private constructor, called by OmniDSP factory methods.
-   * @param pimpl A unique_ptr to the backend-specific implementation object.
+   * @brief Private constructor, called ONLY by OmniDSP factory methods.
+   * @param pimpl A unique_ptr to the backend-specific implementation.
    */
   explicit ConvolutionPlan(
       std::unique_ptr<backend::ConvolutionPlanImpl<T>> pimpl);
 
-  /**
-   * @brief Pointer to the implementation object (Pimpl idiom).
-   */
+  /** @brief Pointer to the implementation object (Pimpl idiom). */
   std::unique_ptr<backend::ConvolutionPlanImpl<T>> pimpl_;
 };
 
 /**
- * @brief Plan object for executing 1D Cross-Correlations.
- * @details This class encapsulates the pre-computed data (e.g., FFT of the
- * template) and backend-specific context required for efficient correlation
- * execution, especially when correlating multiple input signals with the same
- * template. Instances are created via an OmniDSP factory method (to be added).
- * This class is non-copyable but movable.
- * @tparam T The data type of the signals (e.g., RealT<float>,
- * ComplexT<double>).
+ * @brief Plan object for executing Correlation operations.
+ * @details Encapsulates the template (kernel) and backend-specific context for
+ * efficient execution. Created via OmniDSP::create_correlation_plan.
+ * Uses the Pimpl idiom. Non-copyable but movable.
+ * @tparam T The data type (e.g., float, double, std::complex<float>).
  */
 template <typename T>
-class CorrelationPlan {
-  // Friend declaration allows OmniDSP factory methods to call the private
-  // constructor
-  friend class OmniDSP;
+class OMNIDSP_EXPORT CorrelationPlan {
+  friend class OmniDSP;  // Allow OmniDSP factory methods to call private
+                         // constructor
 
  public:
-  /**
-   * @brief Destructor. Cleans up implementation resources.
-   * @details Defined in the source file to handle Pimpl destruction.
-   */
+  /** @brief Destructor. */
   ~CorrelationPlan();
-
-  /**
-   * @brief Move constructor.
-   * @details Defined in the source file.
-   */
+  /** @brief Move constructor. */
   CorrelationPlan(CorrelationPlan&& other) noexcept;
-
-  /**
-   * @brief Move assignment operator.
-   * @details Defined in the source file.
-   */
+  /** @brief Move assignment operator. */
   CorrelationPlan& operator=(CorrelationPlan&& other) noexcept;
-
-  /** @brief Deleted copy constructor. CorrelationPlan instances are
-   * non-copyable. */
+  /** @brief Deleted copy constructor. */
   CorrelationPlan(const CorrelationPlan&) = delete;
-  /** @brief Deleted copy assignment operator. CorrelationPlan instances are
-   * non-copyable. */
+  /** @brief Deleted copy assignment operator. */
   CorrelationPlan& operator=(const CorrelationPlan&) = delete;
 
   /**
-   * @brief Executes the pre-planned cross-correlation on an input signal.
-   * @param input A span representing the input signal buffer.
-   * @param output A span representing the output buffer for the correlation
-   * result. The required size depends on the mode and can be obtained via
-   * get_output_length().
+   * @brief Executes the correlation operation.
+   * @param input A span representing the input signal.
+   * @param output A span representing the output buffer. Must be pre-allocated
+   * with the size returned by get_output_length(input.size()).
    * @return Status::Success on success, or an error code on failure.
-   * @note The output span must be pre-allocated with sufficient size before
-   * calling execute.
    */
   [[nodiscard]] Status execute(std::span<const T> input,
                                std::span<T> output) const;
 
   /**
-   * @brief Gets the length of the template (kernel) used in this correlation
-   * plan.
-   * @return The length of the template.
+   * @brief Gets the length of the template (kernel) used by this plan.
+   * @return The template length.
    */
   size_t get_template_length() const;
 
   /**
-   * @brief Gets the correlation mode (Full, Same, Valid) configured for this
-   * plan.
-   * @return The ConvolutionMode enum value.
+   * @brief Gets the correlation type (boundary handling mode) configured for
+   * this plan. <<< UPDATED
+   * @return The ConvolutionType (Full, Same, Valid).
    */
-  ConvolutionMode get_mode() const;
+  ConvolutionType get_type() const;  // <<< Renamed from get_mode
 
   /**
-   * @brief Calculates the required output length for a given input length based
-   * on the plan's template length and mode.
-   * @param input_length The length of the input signal.
-   * @return The expected length of the output signal.
+   * @brief Calculates the expected output length for a given input length based
+   * on the template length and correlation type.
+   * @param input_length Length of the input signal.
+   * @return Expected output length.
    */
   size_t get_output_length(size_t input_length) const;
 
  private:
   /**
-   * @brief Private constructor, called by OmniDSP factory methods.
-   * @param pimpl A unique_ptr to the backend-specific implementation object.
+   * @brief Private constructor, called ONLY by OmniDSP factory methods.
+   * @param pimpl A unique_ptr to the backend-specific implementation.
    */
   explicit CorrelationPlan(
       std::unique_ptr<backend::CorrelationPlanImpl<T>> pimpl);
 
-  /**
-   * @brief Pointer to the implementation object (Pimpl idiom).
-   */
+  /** @brief Pointer to the implementation object (Pimpl idiom). */
   std::unique_ptr<backend::CorrelationPlanImpl<T>> pimpl_;
 };
 
 // --- Template Implementations (Definitions) ---
-// Definitions for template class methods that depend on the Impl class
-// (constructors, destructors, move ops, execute, getters) MUST be provided
-// in a .cpp file where the Impl classes are fully defined.
-
-// Example placeholders for header compilation (real definitions MUST be in
-// .cpp):
-template <typename T>
-size_t ConvolutionPlan<T>::get_kernel_length() const {
-  return 0;
-}
-template <typename T>
-ConvolutionMode ConvolutionPlan<T>::get_mode() const {
-  return ConvolutionMode::Full;
-}  // Placeholder default
-template <typename T>
-size_t ConvolutionPlan<T>::get_output_length(size_t /*input_length*/) const {
-  return 0;
-}
-
-template <typename T>
-size_t CorrelationPlan<T>::get_template_length() const {
-  return 0;
-}
-template <typename T>
-ConvolutionMode CorrelationPlan<T>::get_mode() const {
-  return ConvolutionMode::Full;
-}  // Placeholder default
-template <typename T>
-size_t CorrelationPlan<T>::get_output_length(size_t /*input_length*/) const {
-  return 0;
-}
+// Definitions for template class methods (constructors, destructors, move ops,
+// execute, getters) MUST be provided in the corresponding .cpp file
+// (convolution.cpp).
 
 }  // namespace OmniDSP
 

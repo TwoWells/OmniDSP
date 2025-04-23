@@ -1,234 +1,162 @@
 /**
  * @file core_types.h
- * @brief Defines fundamental types, enums, and aliases used throughout the
- * OmniDSP library.
+ * @brief Defines core data types, enums, and utilities used throughout OmniDSP.
+ * @details This header establishes fundamental building blocks like type
+ * aliases for real and complex numbers, status codes for operations, and
+ * backend identifiers. It also includes the OmniExpected utility for error
+ * handling based on C++23's std::expected.
  */
 
 #ifndef OMNIDSP_CORE_TYPES_H
 #define OMNIDSP_CORE_TYPES_H
 
 #include <complex>
+#include <cstddef>      // For size_t
 #include <expected>     // Include for std::expected (requires C++23)
-#include <string_view>  // For get_status_string return type (optional)
-#include <type_traits>  // Required for std::is_floating_point
-#include <vector>
+#include <string_view>  // For get_status_string
 
-/**
- * @brief Main namespace for the OmniDSP library.
- */
 namespace OmniDSP {
 
-//-----------------------------------------------------------------------------
-// Core Type Aliases
-//-----------------------------------------------------------------------------
+// --- Basic Type Aliases ---
 
 /**
- * @brief Template alias for real floating-point types (float, double, long
- * double).
- * @details Uses SFINAE (std::enable_if) to ensure T is a floating-point type.
- * This allows functions and classes to be templated on precision.
+ * @brief Alias for real floating-point types used in OmniDSP templates.
+ * @details Ensures consistency in template definitions (e.g., float, double).
  * @tparam T The underlying floating-point type.
  */
 template <typename T>
-using RealT =
-    typename std::enable_if<std::is_floating_point<T>::value, T>::type;
+using RealT = T;
 
 /**
- * @brief Template alias for complex types based on a real floating-point type
- * T.
- * @tparam T The underlying floating-point type for the real and imaginary
- * parts. Must satisfy std::is_floating_point.
- * @see RealT
+ * @brief Alias for complex floating-point types used in OmniDSP templates.
+ * @details Ensures consistency using std::complex<T>.
+ * @tparam T The underlying floating-point type for real and imaginary parts.
  */
 template <typename T>
-using ComplexT = std::complex<RealT<T>>;
+using ComplexT = std::complex<T>;
 
-// --- Deprecated Vector Typedefs ---
-// The following typedefs are removed as per the refactoring TODO:
-// using VectorReal = std::vector<Real>; // Use std::vector<double> or
-// std::vector<RealT<T>> directly using VectorComplex = std::vector<Complex>; //
-// Use std::vector<std::complex<double>> or std::vector<ComplexT<T>> directly
-// -----------------------------------
-
-//-----------------------------------------------------------------------------
-// Status Handling
-//-----------------------------------------------------------------------------
+// --- Core Enums ---
 
 /**
- * @enum Status
- * @brief Represents the status or result code of library operations.
- * @details Intended for use as the error type E in std::expected<T, E>.
+ * @brief Status codes returned by OmniDSP functions and methods.
+ * @details Provides standardized codes to indicate the outcome of operations,
+ * facilitating error handling and checking.
  */
 enum class Status {
-  Success = 0,       ///< Operation completed successfully.
-  Failure,           ///< Generic failure (use specific codes when possible).
-  InvalidArgument,   ///< An invalid argument was provided (e.g., null pointer,
-                     ///< incorrect size/value).
-  InvalidOperation,  ///< The operation is not valid in the current state or
-                     ///< with the given parameters.
-  AllocationError,   ///< Memory allocation failed during the operation.
-  BackendError,  ///< An error occurred within the selected computation backend
-                 ///< (e.g., Accelerate, oneMKL).
-  UnsupportedFeature,  ///< The requested feature or parameter combination is
-                       ///< not supported by the current backend or build.
-  SizeMismatch,        ///< Input signals or data structures have incompatible
-                       ///< dimensions for the operation.
-  OutOfBounds,         ///< An index or access was outside the valid range.
-                       // Add more specific codes as needed...
+  Success = 0,          ///< Operation completed successfully.
+  Failure = 1,          ///< Generic or unknown failure.
+  InvalidArgument = 2,  ///< Invalid input parameter provided (e.g., negative
+                        ///< size, invalid enum).
+  SizeMismatch =
+      3,  ///< Input/output buffer sizes are incompatible for the operation.
+  AllocationError = 4,    ///< Memory allocation failed during the operation.
+  BackendError = 5,       ///< Error originating from a specific backend library
+                          ///< (e.g., MKL error, Accelerate error).
+  InvalidOperation = 6,   ///< Operation attempted in an invalid state (e.g.,
+                          ///< execute on uninitialized plan, unsupported mode).
+  NotImplemented = 7,     ///< Feature or specific case is not implemented yet.
+  UnsupportedFeature = 8  ///< Requested feature is not supported by the
+                          ///< selected backend or configuration.
+  // Add more specific error codes as needed (e.g., FileError, Timeout)
 };
 
 /**
- * @brief Converts a Status enum value to a human-readable string.
- * @param s The Status code to convert.
- * @return A C-style string literal describing the status. Returns "Unknown
- * Status" for invalid enum values.
- * @note This function is declared noexcept as it does not throw exceptions.
+ * @brief Converts a Status enum to a human-readable string representation.
+ * @param status The status code enum value.
+ * @return A string_view describing the status. Useful for logging or error
+ * messages.
  */
-inline const char* get_status_string(
-    Status s) noexcept {  // Use noexcept as it shouldn't throw
-  switch (s) {
+inline std::string_view get_status_string(Status status) noexcept {
+  switch (status) {
     case Status::Success:
       return "Success";
     case Status::Failure:
-      return "Generic Failure";
+      return "Failure";
     case Status::InvalidArgument:
-      return "Invalid Argument";
-    case Status::InvalidOperation:
-      return "Invalid Operation";
-    case Status::AllocationError:
-      return "Allocation Error";
-    case Status::BackendError:
-      return "Backend Error";
-    case Status::UnsupportedFeature:
-      return "Unsupported Feature";
+      return "InvalidArgument";
     case Status::SizeMismatch:
-      return "Size Mismatch";
-    case Status::OutOfBounds:
-      return "Out of Bounds";
+      return "SizeMismatch";
+    case Status::AllocationError:
+      return "AllocationError";
+    case Status::BackendError:
+      return "BackendError";
+    case Status::InvalidOperation:
+      return "InvalidOperation";
+    case Status::NotImplemented:
+      return "NotImplemented";
+    case Status::UnsupportedFeature:
+      return "UnsupportedFeature";
     default:
       return "Unknown Status";
   }
 }
 
 /**
- * @brief Convenience alias for std::expected using OmniDSP::Status as the error
- * type.
- * @tparam T The type of the expected value if the operation is successful.
- * @see Status
- * @see std::expected
- * @usage OmniExpected<std::vector<double>> result = some_function();
+ * @brief Alias for std::expected using OmniDSP::Status as the error type.
+ * @details Simplifies return types for functions that can fail, providing a
+ * standard way to return either a value or a Status error code. Requires C++23.
+ * Example Usage:
+ * OmniExpected<int> result = my_function();
+ * if (result) { process(*result); } else { handle_error(result.error()); }
+ * @tparam T The type of the expected value on success.
  */
 template <typename T>
 using OmniExpected = std::expected<T, Status>;
 
-//-----------------------------------------------------------------------------
-// Signal Properties Enums
-//-----------------------------------------------------------------------------
-
 /**
- * @enum DataType
- * @brief Distinguishes between real and complex data types used in signals.
- */
-enum class DataType {
-  Real,    ///< Data consists of real numbers (e.g., float, double).
-  Complex  ///< Data consists of complex numbers (e.g., std::complex<float>,
-           ///< std::complex<double>).
-};
-
-/**
- * @enum Domain
- * @brief Represents the domain (e.g., time, frequency) of a signal or sequence.
- */
-enum class Domain {
-  Time,       ///< Standard time domain representation.
-  Frequency,  ///< Frequency domain representation (e.g., the result of an FFT).
-  Quefrency   ///< Quefrency domain representation (e.g., the result of cepstral
-              ///< analysis, typically FFT -> log magnitude -> IFFT).
-};
-
-//-----------------------------------------------------------------------------
-// Processing Configuration Enums
-//-----------------------------------------------------------------------------
-
-/**
- * @enum Window
- * @brief Specifies standard window function types used in signal processing
- * (e.g., for FFTs, filter design).
- */
-enum class Window {
-  Bartlett,     ///< Bartlett (triangular) window.
-  Blackman,     ///< Blackman window.
-  Flattop,      ///< Flat top window.
-  Gaussian,     ///< Gaussian window.
-  Hamming,      ///< Hamming window.
-  Hann,         ///< Hann (or Hanning) window.
-  Kaiser,       ///< Kaiser window (often requires a beta parameter).
-  Rectangular,  ///< Rectangular window (no windowing, equivalent to multiplying
-                ///< by 1).
-  Triangular    ///< Triangular window (similar to Bartlett, sometimes defined
-                ///< slightly differently).
-                // Add more as needed
-};
-
-/**
- * @enum ConvolutionMode
- * @brief Defines the size of the output for convolution or correlation
- * operations.
- * @details Determines how boundary effects are handled and the length of the
- * resulting sequence. Also applicable to correlation operations.
- */
-enum class ConvolutionMode {
-  /**
-   * @brief Full convolution/correlation. Output length is N + M - 1, where N
-   * and M are input lengths. Includes all points of the operation, including
-   * boundary effects where signals partially overlap.
-   */
-  Full,
-  /**
-   * @brief 'Same' size convolution/correlation. Output length is max(N, M).
-   * The output is typically centered relative to the 'full' output, matching
-   * the size of the larger input.
-   */
-  Same,
-  /**
-   * @brief 'Valid' convolution/correlation. Output length is max(N, M) - min(N,
-   * M) + 1. Includes only points where the signals fully overlap, discarding
-   * boundary effects.
-   */
-  Valid
-};
-
-/**
- * @enum Backend
- * @brief Specifies the underlying computation backend to use for accelerated
- * operations.
+ * @brief Specifies the backend implementation library to use for computations.
+ * @details Allows selecting between different optimized libraries or a default
+ * portable implementation at runtime via OmniDSP::create.
  */
 enum class Backend {
-  Stub,  ///< Basic, reference implementation (portable, potentially slow).
-  Accelerate,  ///< Apple's Accelerate framework (macOS/iOS optimized).
-  OneMKL  ///< Intel oneAPI Math Kernel Library (optimized for Intel CPUs/GPUs).
-          // Add more backends like CUDA, OpenCL etc. later
+  Default,     ///< Portable C++ implementation with Highway SIMD acceleration.
+  Accelerate,  ///< Apple Accelerate framework (macOS/iOS).
+  OneMKL       ///< Intel oneMKL library.
+  // Add other backends here (e.g., CUDA, OpenCL, ArmComputeLibrary)
 };
 
 /**
- * @brief Gets the human-readable name of a computation backend.
- * @param backend The Backend enum value.
- * @return A C-style string literal representing the backend's name. Returns
- * "Unknown Backend" for invalid enum values.
- * @note This function is declared noexcept as it does not throw exceptions.
+ * @brief Gets the string name corresponding to a Backend enum value.
+ * @param backend The backend enum value.
+ * @return A string_view representing the backend name.
  */
-inline const char* get_backend_name(Backend backend) noexcept {  // Use noexcept
+inline std::string_view get_backend_name(Backend backend) noexcept {
   switch (backend) {
-    case Backend::Stub:
-      return "Stub";
+    case Backend::Default:
+      return "Default";
     case Backend::Accelerate:
       return "Accelerate";
     case Backend::OneMKL:
-      return "oneMKL";  // String representation
+      return "oneMKL";
     default:
-      return "Unknown Backend";  // Should not happen with enum class
+      return "Unknown Backend";
   }
 }
+
+// --- Utility Namespace (Optional) ---
+// Could contain small helper functions or constants used across modules,
+// if they don't fit better elsewhere.
+namespace Detail {
+// Example: Type trait to check if a type is std::complex
+template <typename T>
+struct is_complex : std::false_type {};
+template <typename T>
+struct is_complex<std::complex<T>> : std::true_type {};
+template <typename T>
+constexpr bool is_complex_v = is_complex<T>::value;
+
+// Example: Get underlying real type from complex or real
+template <typename T>
+struct ValueType {
+  using type = T;
+};
+template <typename T>
+struct ValueType<std::complex<T>> {
+  using type = T;
+};
+template <typename T>
+using UnderlyingRealT = typename ValueType<T>::type;
+}  // namespace Detail
 
 }  // namespace OmniDSP
 

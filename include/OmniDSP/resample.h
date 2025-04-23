@@ -1,19 +1,21 @@
 /**
  * @file resample.h
- * @brief Defines the interface for Resample Plan objects.
- * @details Plan objects are created via OmniDSP::create_resample_plan and
- * provide optimized execution for resampling signals between specified input
- * and output rates.
+ * @brief Defines the interface for Resample Plan objects and related
+ * specifications.
+ * @details Plan objects are created via OmniDSP::create_resample_plan using a
+ * ResampleSpec and provide optimized execution for resampling signals between
+ * specified input and output rates.
  */
 
 #ifndef OMNIDSP_RESAMPLE_H
 #define OMNIDSP_RESAMPLE_H
 
-#include <cmath>    // For std::ceil (used in placeholder getter)
-#include <cstddef>  // For size_t
-#include <memory>   // For std::unique_ptr (Pimpl)
-#include <span>     // For input/output views (requires C++20)
-#include <vector>   // For std::vector (potentially used internally)
+#include <cmath>      // For std::ceil (used in placeholder getter)
+#include <cstddef>    // For size_t
+#include <memory>     // For std::unique_ptr (Pimpl)
+#include <span>       // For input/output views (requires C++20)
+#include <stdexcept>  // For invalid_argument in ResampleSpec validation
+#include <vector>     // For std::vector (potentially used internally)
 
 #include "core_types.h"  // Core types like RealT, Status
 
@@ -29,11 +31,47 @@ class ResamplePlanImpl;
 }  // namespace backend
 
 /**
+ * @brief Specification for creating a resampling plan.
+ * @details Defines the input and output sample rates, and a quality parameter
+ * that influences the underlying anti-aliasing/anti-imaging filter design.
+ */
+struct ResampleSpec {
+  double input_rate = 0.0;  ///< Input sample rate in Hz. Must be positive.
+  double output_rate =
+      0.0;  ///< Desired output sample rate in Hz. Must be positive.
+  int quality =
+      12;  ///< Quality factor (e.g., related to filter complexity/taps). Higher
+           ///< values generally mean better quality but more computation.
+           ///< Default is 12. Must be positive.
+  // size_t max_input_size = 0; ///< Optional hint for max input block size
+  // (potentially removed or handled differently)
+
+  /**
+   * @brief Validates the resampling specification parameters.
+   * @return True if the parameters are valid, false otherwise.
+   */
+  bool validate() const {
+    if (input_rate <= 0.0 || output_rate <= 0.0) {
+      // std::cerr << "ResampleSpec Error: Input and output rates must be
+      // positive." << std::endl;
+      return false;
+    }
+    if (quality <= 0) {
+      // std::cerr << "ResampleSpec Error: Quality factor must be positive." <<
+      // std::endl;
+      return false;
+    }
+    // Add other checks if necessary (e.g., reasonable ratio?)
+    return true;
+  }
+};
+
+/**
  * @brief Plan object for executing signal resampling operations.
  * @details This class encapsulates the pre-computed data (e.g., polyphase
  * filter coefficients) and backend-specific context required for efficient
- * resampling. Instances are created via OmniDSP::create_resample_plan. This
- * class is non-copyable but movable.
+ * resampling. Instances are created via OmniDSP::create_resample_plan using a
+ * ResampleSpec. This class is non-copyable but movable.
  * @tparam T The underlying floating-point type (e.g., float, double). Typically
  * used with RealT<T>.
  */
@@ -83,6 +121,15 @@ class ResamplePlan {
                                std::span<T> output) const;
 
   /**
+   * @brief Resets the internal state of the resampler (e.g., filter delay
+   * lines).
+   * @details Call this when processing discontinuous blocks of data to avoid
+   * artifacts.
+   * @return Status::Success on success, or an error code if resetting fails.
+   */
+  Status reset();  // Added based on TODO refactoring plan
+
+  /**
    * @brief Gets the input sample rate configured for this plan.
    * @return The input sample rate in Hz.
    */
@@ -105,6 +152,8 @@ class ResamplePlan {
    */
   size_t get_output_length(size_t input_length) const;
 
+  // Consider adding get_quality() if needed
+
  private:
   /**
    * @brief Private constructor, called by OmniDSP factory methods.
@@ -121,34 +170,24 @@ class ResamplePlan {
 // --- Template Implementations (Definitions) ---
 // Definitions for template class methods that depend on the Impl class
 // (constructor, destructor, move ops, execute, getters) MUST be provided
-// in a .cpp file where the ResamplePlanImpl<T> is fully defined.
+// in src/omnidsp/resample.cpp where the ResamplePlanImpl<T> is fully defined.
 
 // Example placeholders for header compilation (real definitions MUST be in
-// .cpp):
+// .cpp): Note: get_output_length implementation moved from header to .cpp as it
+// depends on pimpl_
 template <typename T>
 double ResamplePlan<T>::get_input_rate() const {
   // return pimpl_ ? pimpl_->get_input_rate() : 0.0; // Requires Impl definition
-  return 0.0;
+  return 0.0;  // Placeholder
 }
 template <typename T>
 double ResamplePlan<T>::get_output_rate() const {
   // return pimpl_ ? pimpl_->get_output_rate() : 0.0; // Requires Impl
   // definition
-  return 0.0;
+  return 0.0;  // Placeholder
 }
-template <typename T>
-size_t ResamplePlan<T>::get_output_length(size_t input_length) const {
-  // double ratio = get_output_rate() / get_input_rate(); // Needs real getters
-  // if (ratio == 0.0) return 0; // Avoid division by zero if rates are invalid
-  // // Estimate output length, potentially add padding for filter delay
-  // return static_cast<size_t>(std::ceil(static_cast<double>(input_length) *
-  // ratio)); // Requires Impl definition Placeholder:
-  double in_rate = get_input_rate();
-  double out_rate = get_output_rate();
-  if (in_rate <= 0.0) return 0;  // Avoid division by zero
-  return static_cast<size_t>(
-      std::ceil(static_cast<double>(input_length) * (out_rate / in_rate)));
-}
+// get_output_length definition belongs in resample.cpp
+// reset definition belongs in resample.cpp
 
 }  // namespace OmniDSP
 

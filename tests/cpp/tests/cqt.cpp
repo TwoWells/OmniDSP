@@ -374,7 +374,7 @@ TEST_F(FilterAndDownsampleTest, PublicAPI_Double) {
                                                  downsample_factor),
                std::runtime_error);
 #else
-  // Accelerate or Stub backends might support double or throw differently
+  // Accelerate or Default backends might support double or throw differently
   ASSERT_NO_THROW(output_d = OmniDSP::filter_and_downsample<T>(
                       input_d, filter_coeffs_d, downsample_factor))
       << "Public filter_and_downsample<double> threw unexpectedly.";

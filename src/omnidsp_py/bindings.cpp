@@ -148,7 +148,7 @@ PYBIND11_MODULE(_omnidsp_cpp, m) {  // Matches the target name in CMakeLists.txt
 
   // --- Enums ---
   py::enum_<Backend>(m, "Backend")
-      .value("Stub", Backend::Stub)
+      .value("Default", Backend::Default)
       .value("Accelerate", Backend::Accelerate)
       .value("OneMKL", Backend::OneMKL)
       .export_values();
@@ -447,11 +447,11 @@ PYBIND11_MODULE(_omnidsp_cpp, m) {  // Matches the target name in CMakeLists.txt
       // Do not expose constructor directly
       .def_static(
           "create",
-          [](Backend backend = Backend::Stub) {
+          [](Backend backend = Backend::Default) {
             // Use helper to handle expected and potential exception
             return check_expected(OmniDSP::create(backend), "OmniDSP.create");
           },
-          py::arg("backend") = Backend::Stub,
+          py::arg("backend") = Backend::Default,
           "Static factory method to create an OmniDSP instance.")
 
       .def("get_backend", &OmniDSP::get_backend)

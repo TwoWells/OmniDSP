@@ -4,9 +4,6 @@
  * DFTI.
  */
 
-// Only compile this file if oneMKL backend is enabled via CMake
-#ifdef USE_ONEMKL
-
 #include "OmniDSP/core_types.h"  // For Status, RealT, ComplexT etc.
 #include "backend.h"             // oneMKL backend declarations
 
@@ -344,5 +341,3 @@ template class OmniDSP::backend::OneMKLRFFTPlanImpl<double>;
 
 }  // namespace backend
 }  // namespace OmniDSP
-
-#endif  // USE_ONEMKL

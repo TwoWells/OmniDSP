@@ -3,9 +3,6 @@
  * @brief Implements the OneMKLOmniDSPImpl class methods using oneMKL functions.
  */
 
-// Only compile this file if oneMKL backend is enabled via CMake
-#ifdef USE_ONEMKL
-
 #include "backend.h"  // Corresponding header for oneMKL backend declarations
 
 // Include headers for the public Plan classes (needed for factory return types
@@ -549,5 +546,3 @@ OneMKLOmniDSPImpl::create_correlation_plan(const std::vector<double_c>&,
 
 }  // namespace backend
 }  // namespace OmniDSP
-
-#endif  // USE_ONEMKL

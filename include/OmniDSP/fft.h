@@ -17,6 +17,9 @@
 
 #include "core_types.h"  // Core types like RealT, ComplexT, Status
 
+// Include the generated export header
+#include "OmniDSP/omnidsp_export.h"
+
 namespace OmniDSP {
 
 // Forward declare the main OmniDSP class for friend declaration
@@ -39,7 +42,7 @@ class RFFTPlanImpl;
  * @tparam T The underlying floating-point type (e.g., float, double).
  */
 template <typename T>
-class FFTPlan {
+class OMNIDSP_EXPORT FFTPlan {
   // Friend declaration allows OmniDSP factory methods to call the private
   // constructor
   friend class OmniDSP;
@@ -129,7 +132,7 @@ class FFTPlan {
  * @tparam T The underlying floating-point type (e.g., float, double).
  */
 template <typename T>
-class RFFTPlan {
+class OMNIDSP_EXPORT RFFTPlan {
   // Friend declaration allows OmniDSP factory methods to call the private
   // constructor
   friend class OmniDSP;

@@ -9,9 +9,6 @@
 #ifndef OMNIDSP_ONEMKL_BACKEND_H
 #define OMNIDSP_ONEMKL_BACKEND_H
 
-// Only compile this file if oneMKL backend is enabled via CMake
-#ifdef USE_ONEMKL
-
 #include <mkl.h>  // Main oneMKL header (includes DFTI, VML, etc.)
 
 #include <complex>
@@ -306,5 +303,4 @@ class OneMKLOmniDSPImpl final : public OmniDSPImpl {
 }  // namespace backend
 }  // namespace OmniDSP
 
-#endif  // USE_ONEMKL
 #endif  // OMNIDSP_ONEMKL_BACKEND_H

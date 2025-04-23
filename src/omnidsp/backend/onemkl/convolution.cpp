@@ -4,9 +4,6 @@
  * classes, using internal oneMKL FFT plans (DFTI) for FFT operations.
  */
 
-// Only compile this file if oneMKL backend is enabled via CMake
-#ifdef USE_ONEMKL
-
 #include "OmniDSP/core_types.h"  // For Status, ConvolutionMode etc.
 #include "backend.h"             // oneMKL backend declarations
 
@@ -596,5 +593,3 @@ template class OmniDSP::backend::OneMKLCorrelationPlanImpl<double_c>;
 
 }  // namespace backend
 }  // namespace OmniDSP
-
-#endif  // USE_ONEMKL

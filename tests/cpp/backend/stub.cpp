@@ -1,7 +1,7 @@
 /**
  * @file tests/cpp/backend/stub.cpp
- * @brief Unit tests specifically for the Stub backend convolution/correlation
- * behavior.
+ * @brief Unit tests specifically for the Default backend
+ * convolution/correlation behavior.
  */
 #include <OmniDSP/convolution.h>  // Include the public API
 #include <gtest/gtest.h>
@@ -9,7 +9,7 @@
 #include <stdexcept>
 #include <vector>
 
-// Only compile these tests if the Stub backend is active
+// Only compile these tests if the Default backend is active
 #if !defined(USE_ACCELERATE) && !defined(USE_ONEMKL)
 
 // Test fixture (can inherit if common setup is needed, but maybe not necessary

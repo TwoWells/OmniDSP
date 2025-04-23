@@ -9,10 +9,6 @@
  * (VML) or standard math functions for others.
  */
 
-// Only compile this file if oneMKL backend is enabled via CMake
-// Assumes IPP headers/libs are available when USE_ONEMKL is ON.
-#ifdef USE_ONEMKL
-
 #include "OmniDSP/core_types.h"  // For Status, RealT etc.
 #include "backend.h"  // oneMKL backend declarations (including OneMKLOmniDSPImpl)
 
@@ -417,5 +413,3 @@ OneMKLOmniDSPImpl::triangular_window(size_t length) const {
 
 }  // namespace backend
 }  // namespace OmniDSP
-
-#endif  // USE_ONEMKL
