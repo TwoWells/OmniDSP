@@ -1,41 +1,17 @@
-# OmniDSP TODO List (Updated & Reconciled)
+# OmniDSP Project TODO List
 
-_Based on design_philosophy.md (primary source), existing TODOs, and current code state._
+**Goal:** Outline the development tasks for the OmniDSP library, including C++ core features, backend implementations, Python bindings, build system refactoring, testing, and documentation, ensuring alignment with the design philosophy.
 
 ## High Priority / Blocking Tasks
 
 - **Refactor `ResamplePlan` to use `FilterPlan` Infrastructure:**
 
-  - [x] **Define `ResampleSpec`:** Create `ResampleSpec` struct in `include/OmniDSP/resample.h` to hold `input_rate`, `output_rate`, and a `quality` factor (or specific filter design parameters like transition width/stopband attenuation).
-  - [x] **Update `create_resample_plan` API:**
-    - Modify signature in `src/omnidsp/backend/backend.h` (`OmniDSPImpl`) to accept `const ResampleSpec& spec`.
-    - Modify signature in `include/OmniDSP/omnidsp.h` (`OmniDSP`) to accept `const ResampleSpec& spec`.
-    - Update calls to this factory method (e.g., in `DefaultCQTPlanImpl` constructor, one-off methods if they use it, tests, examples).
-  - [x] **Implement `design_fir_filter` Method:**
-    - Add virtual `design_fir_filter(const FIRFilterSpec<T>& spec)` method to `OmniDSPImpl` base class (`src/omnidsp/backend/backend.h`).
-    - Implement `design_fir_filter` in `DefaultOmniDSPImpl` (`src/omnidsp/backend/default/backend.cpp`) using a standard technique (e.g., windowed-sinc) to calculate FIR coefficients based on the spec. Handle different `FilterType`s if necessary (though resampler only needs lowpass).
-    - Instantiate `design_fir_filter` templates in `default/backend.cpp`.
-  - [x] **Refactor `ResamplePlanImpl` Base Class (`src/omnidsp/backend/backend.h`):**
-    - Add protected helper method `calculate_factors(double in_rate, double out_rate, size_t& L, size_t& M)` (or similar).
-    - Add protected helper method `design_prototype_filter(const OmniDSPImpl* owner, const ResampleSpec& spec, std::vector<T>& coeffs_out)` that determines `FIRFilterSpec` based on `ResampleSpec` and calls `owner->design_fir_filter`.
-    - Add `mutable std::vector<T> filter_state_` and `mutable size_t current_phase_` members.
-    - Add virtual `reset()` method declaration.
-  - [x] **Refactor `DefaultResamplePlanImpl` (`src/omnidsp/backend/default/resample.cpp`):**
+  - [ ] **Refactor `AccelerateResamplePlanImpl` (`src/omnidsp/backend/accelerate/resample.cpp`) (If Applicable):**
     - Update constructor to take `const OmniDSPImpl* owner` and `const ResampleSpec& spec`.
     - Constructor calls `calculate_factors` and `design_prototype_filter` to initialize members (`upsample_factor_L_`, `downsample_factor_M_`, `prototype_filter_coeffs_`).
     - Initialize `filter_state_` based on `prototype_filter_coeffs_` size.
-    - Implement `execute` using polyphase FIR logic based on `prototype_filter_coeffs_`, `filter_state_`, `current_phase_`, `L`, and `M`. Use standard C++ loops/math.
-    - Implement `reset()` to clear state and phase.
-  - [ ] **Refactor `AccelerateResamplePlanImpl` (`src/omnidsp/backend/accelerate/resample.cpp`) (If Applicable):**
-    - Update constructor as above.
     - Implement `execute` using Accelerate vDSP primitives for polyphase FIR filtering, using the designed `prototype_filter_coeffs_`.
     - Implement `reset()`.
-  - [x] **Refactor `OneMKLResamplePlanImpl` (`src/omnidsp/backend/onemkl/resample.cpp`) (If Applicable):**
-    - Update constructor as above.
-    - Implement `execute` using oneMKL VML/VSL primitives for polyphase FIR filtering, using the designed `prototype_filter_coeffs_`.
-    - Implement `reset()`.
-  - [x] **Update `DefaultCQTPlanImpl` (`src/omnidsp/backend/default/cqt.cpp`):**
-    - Ensure its constructor calls the _new_ `create_resample_plan` signature via `owner_impl_`, passing a `ResampleSpec` (e.g., with default quality).
   - [ ] **Add/Update Tests:**
     - Add C++ tests (`tests/cpp`) for `design_fir_filter`.
     - Add C++ and Python tests for the refactored `ResamplePlan`, covering various rate combinations, quality settings, state handling (`reset`), and edge cases.
@@ -60,7 +36,6 @@ _Based on design_philosophy.md (primary source), existing TODOs, and current cod
 ### CQT Module
 
 - [ ] Review CQT Plan implementation (`cqt.cpp` / `backend/*/cqt.cpp`) - Ensure recursive CQT uses `ResamplePlan` correctly and Pimpl is correctly applied.
-- [ ] Implement backend-specific CQT logic if beneficial (`AccelerateCQTPlanImpl`, `OneMKLCQTPlanImpl`) or confirm default implementation is sufficient.
 - [ ] Optimize CQT kernel calculation (`default/cqt.cpp`).
 - [ ] Refine hop length handling in recursive CQT implementation.
 - [ ] Tune CQT scaling factor.
@@ -89,13 +64,37 @@ _Based on design_philosophy.md (primary source), existing TODOs, and current cod
 
 ## Build System & CI
 
-- [ ] Configure full CI via GitHub Actions (or similar) for Linux, macOS, and Windows.
-  - Include builds for all available backends.
-  - Integrate C++ and Python test execution.
-  - Add code coverage checks (ensure CMake flags don't hide code).
-- [ ] Investigate static linking options for dependencies.
-- [ ] Create Conan package for the C++ library.
-- [ ] Build Python wheels for distribution on PyPI (handle backend selection/inclusion robustly).
+- **CMake Refactoring:**
+  - **Objective:** Refactor the CMake build system for modularity and eliminate platform-specific `#ifdef` directives in C++ source code.
+  - **Steps:**
+    1.  **Create `cmake/` Directory:** At the project root.
+    2.  **Create Module Files & Migrate Logic:**
+        - `cmake/project_options.cmake`: Move `option(...)` definitions.
+        - `cmake/compiler_settings.cmake`: Move C++ standard, compile commands setting, MSVC definitions.
+        - `cmake/dependencies.cmake`: Move `find_package(...)` for non-backend dependencies (pybind11, Python, GTest, Boost, highway).
+        - `cmake/backend.cmake`: Initialize common backend list variables (`OMNIDSP_COMPILE_DEFINITIONS`, `OMNIDSP_LINK_LIBS`, etc.). Include files from `cmake/backend/`.
+        - `cmake/backend/` (New Directory):
+          - `accelerate.cmake`: Handle Accelerate detection, set `OMNIDSP_HAS_ACCELERATE`, append definition/libs/sources. Use `PARENT_SCOPE`.
+          - `onemkl.cmake`: Handle MKL/IPP detection, set `OMNIDSP_HAS_ONEMKL`, append definition/libs/sources, handle Conda paths. Use `PARENT_SCOPE`.
+          - _(Future backend files go here)_
+        - `cmake/target_definitions.cmake`: Move `add_library(omnidsp ...)`, `generate_export_header`, `target_compile_features`, `target_include_directories`, `target_compile_definitions`, `target_link_directories`, `target_link_libraries`, `hwy_dynamic_dispatch`. Use variables set by `cmake/backend.cmake`.
+        - `cmake/installation.cmake`: Move `install(...)` commands and package config generation.
+        - `cmake/testing.cmake`: Move `enable_testing()`.
+    3.  **Update Root `CMakeLists.txt`:** Replace moved sections with `include(cmake/...)` calls. Keep project definition, policies, `add_subdirectory()` calls.
+  - **Eliminate C++ `#ifdef`s:**
+    - **Strategy:** Rely _solely_ on CMake for managing platform/backend variations.
+    - **Conditional Source Files:** Ensure backend/platform-specific `.cpp` files are added conditionally via generator expressions in `cmake/target_definitions.cmake`. Refactor _any_ C++ code using `#ifdef` for conditional compilation into separate files managed by CMake.
+    - **Conditional Compile Definitions:** Remove _all_ usage of `#ifdef USE_...`, `#ifdef _WIN32`, etc., for conditional compilation within C++ source. CMake definitions should only be used by CMake itself (generator expressions), except for OS/compiler requirements like `_USE_MATH_DEFINES`.
+    - **Conditional Linking:** Verify libraries are linked conditionally based on logic in `cmake/backend/*.cmake`.
+- **CI Configuration:**
+  - [ ] Configure full CI via GitHub Actions (or similar) for Linux, macOS, and Windows.
+  - [ ] Include builds for all available backends.
+  - [ ] Integrate C++ and Python test execution.
+  - [ ] Add code coverage checks (ensure CMake flags don't hide code).
+- **Packaging:**
+  - [ ] Investigate static linking options for dependencies.
+  - [ ] Create Conan package for the C++ library.
+  - [ ] Build Python wheels for distribution on PyPI (handle backend selection/inclusion robustly).
 
 ## Testing
 
