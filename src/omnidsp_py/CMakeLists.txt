@@ -8,50 +8,44 @@ if(NOT TARGET pybind11::module)
   )
 endif()
 
-# Define the Python module target using pybind11's helper function This creates
-# the C++ extension module (e.g., omnidsp_py.cp313-win_amd64.pyd) The first
-# argument ('omnidsp_py') must match the PYBIND11_MODULE name in bindings.cpp
+# Define the Python module target using pybind11's helper function This creates the C++ extension
+# module (e.g., omnidsp_py.cp313-win_amd64.pyd) The first argument ('omnidsp_py') must match the
+# PYBIND11_MODULE name in bindings.cpp
 pybind11_add_module(
   omnidsp_py # Module target name
   SHARED # Build as shared library (.so/.pyd)
   bindings.cpp # Source file relative to this directory
 )
 
-# Link the Python module against the core C++ omnidsp library target (which
-# should be defined in the parent CMakeLists.txt)
+# Link the Python module against the core C++ omnidsp library target (which should be defined in the
+# parent CMakeLists.txt)
 target_link_libraries(omnidsp_py PRIVATE omnidsp)
 
-# Add include directories needed for compiling bindings.cpp - pybind11 headers
-# are handled automatically by pybind11_add_module when using find_package -
-# Need the project's public include directory for OmniDSP headers
+# Add include directories needed for compiling bindings.cpp - pybind11 headers are handled
+# automatically by pybind11_add_module when using find_package - Need the project's public include
+# directory for OmniDSP headers
 target_include_directories(
-  omnidsp_py
-  PRIVATE ${PROJECT_SOURCE_DIR}/include # Path to the top-level 'include'
-                                        # directory
-          # pybind11::headers # Usually not needed explicitly here with
-          # find_package
+  omnidsp_py PRIVATE ${PROJECT_SOURCE_DIR}/include # Path to the top-level 'include' directory
+                     # pybind11::headers # Usually not needed explicitly here with find_package
 )
 
-# Define the installation destination directory relative to site-packages This
-# name should match the Python package name
+# Define the installation destination directory relative to site-packages This name should match the
+# Python package name
 set(PYTHON_PACKAGE_DESTINATION omnidsp_py)
 
 # --- MKL DLL Handling Removed ---
-# When using Conda to manage dependencies, Conda environment activation handles
-# making the necessary runtime libraries (like MKL DLLs) available. Bundling
-# them into the wheel via CMake/delvewheel is not required for running within
-# the Conda environment.
+# When using Conda to manage dependencies, Conda environment activation handles making the necessary
+# runtime libraries (like MKL DLLs) available. Bundling them into the wheel via CMake/delvewheel is
+# not required for running within the Conda environment.
 
-# Install __init__.py (Optional, uncomment if you have package logic there)
-# install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/__init__.py DESTINATION
-# ${PYTHON_PACKAGE_DESTINATION} )
+# Install __init__.py (Optional, uncomment if you have package logic there) install(FILES
+# ${CMAKE_CURRENT_SOURCE_DIR}/__init__.py DESTINATION ${PYTHON_PACKAGE_DESTINATION} )
 
 # Install the Python stub file for type hinting (PEP 561)
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/omnidsp_py.pyi
-        DESTINATION ${PYTHON_PACKAGE_DESTINATION})
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/omnidsp_py.pyi DESTINATION ${PYTHON_PACKAGE_DESTINATION})
 
-# Install Python Module Target artifacts (.pyd, .so) ARCHIVE (.lib) is usually
-# not needed for Python module installation
+# Install Python Module Target artifacts (.pyd, .so) ARCHIVE (.lib) is usually not needed for Python
+# module installation
 install(
   TARGETS omnidsp_py
   RUNTIME DESTINATION ${PYTHON_PACKAGE_DESTINATION} # Installs .dll/.so

@@ -7,29 +7,21 @@
 
 #include <OmniDSP/cqt.h>      // Include Recursive CQT header
 #include <OmniDSP/omnidsp.h>  // For FFTPlan potentially and Enums
-#include <OmniDSP/window.h>  // Include window header (needed for M_PI in helper)
+// #include <OmniDSP/window.h>
 #include <gtest/gtest.h>
 
 #include <cmath>
 #include <complex>
-
-#include "test_data_utils.h"  // Include the new utility header
-// #include <fstream> // No longer needed
 #include <iostream>  // For std::cout/cerr (optional debugging)
 #include <limits>
-// #include <map> // No longer needed for sparse kernel checks here
-#include <memory>   // For std::unique_ptr access in tests
-#include <numeric>  // For std::iota, std::accumulate
-// #include <sstream> // No longer needed
+#include <memory>  // For std::unique_ptr access in tests
+#include <numbers>
+#include <numeric>    // For std::iota, std::accumulate
 #include <stdexcept>  // Needed for EXPECT_THROW
 #include <string>     // For std::string, std::getline, std::stod, etc.
 #include <vector>
 
-// Define M_PI if it's not already defined (e.g., by <cmath> in some
-// environments/standards)
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+#include "test_data_utils.h"  // Include the new utility header
 
 // Define a constant for the default FIR order used in tests, matching the C++
 // implementation
@@ -68,8 +60,8 @@ class PrecomputedRecursiveCQTTest : public ::testing::Test {
     std::vector<T> window_coeffs(length);
     double denom = (length > 1) ? static_cast<double>(length - 1) : 1.0;
     for (size_t n = 0; n < length; ++n) {
-      window_coeffs[n]
-          = static_cast<T>(0.5 - 0.5 * std::cos(2.0 * M_PI * n / denom));
+      window_coeffs[n] = static_cast<T>(
+          0.5 - 0.5 * std::cos(2.0 * std::numbers::pi * n / denom));
     }
     // CQTPlan internally normalizes the kernel, so no need to normalize here
     // for the generator function passed to the constructor.
@@ -84,8 +76,8 @@ class PrecomputedRecursiveCQTTest : public ::testing::Test {
     if (length == 0) return {};
     std::vector<T> signal(length);
     for (size_t i = 0; i < length; ++i) {
-      signal[i] = static_cast<T>(
-          std::sin(2.0 * M_PI * freq * static_cast<double>(i) / sr));
+      signal[i] = static_cast<T>(std::sin(
+          2.0 * std::numbers::pi * freq * static_cast<double>(i) / sr));
     }
     return signal;
   }
@@ -307,12 +299,14 @@ TEST_F(PrecomputedRecursiveCQTTest, FilterAndDownsample)
     double freq_high = 750.0;
     std::vector<T> test_signal_combined(len);
     for (size_t i = 0; i < len; ++i) {
-      test_signal_combined[i]
-          = T(0.5)
-                * std::sin(2.0 * M_PI * freq_low * static_cast<double>(i) / sr)
-            + T(0.5)
-                  * std::sin(
-                      2.0 * M_PI * freq_high * static_cast<double>(i) / sr);
+      test_signal_combined[i] = T(0.5)
+                                    * std::sin(
+                                        2.0 * std::numbers::pi * freq_low
+                                        * static_cast<double>(i) / sr)
+                                + T(0.5)
+                                      * std::sin(
+                                          2.0 * std::numbers::pi * freq_high
+                                          * static_cast<double>(i) / sr);
     }
     // Use dummy CQT parameters, only FIR order and SR matter for this test
     OmniDSP::CQTPlan<T> plan(
@@ -356,12 +350,14 @@ TEST_F(PrecomputedRecursiveCQTTest, FilterAndDownsample)
     double freq_high = 750.0;
     std::vector<T> test_signal_combined(len);
     for (size_t i = 0; i < len; ++i) {
-      test_signal_combined[i]
-          = T(0.5)
-                * std::sin(2.0 * M_PI * freq_low * static_cast<double>(i) / sr)
-            + T(0.5)
-                  * std::sin(
-                      2.0 * M_PI * freq_high * static_cast<double>(i) / sr);
+      test_signal_combined[i] = T(0.5)
+                                    * std::sin(
+                                        2.0 * std::numbers::pi * freq_low
+                                        * static_cast<double>(i) / sr)
+                                + T(0.5)
+                                      * std::sin(
+                                          2.0 * std::numbers::pi * freq_high
+                                          * static_cast<double>(i) / sr);
     }
     OmniDSP::CQTPlan<T> plan(
         sr,

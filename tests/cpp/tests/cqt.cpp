@@ -8,24 +8,20 @@
 #include <OmniDSP/cqt.h>         // Include the OmniDSP CQT header
 #include <OmniDSP/fft.h>         // Include for FFTNorm enum
 #include <OmniDSP/resample.h>    // Include for filter_and_downsample
-#include <OmniDSP/window.h>  // Include window header (needed for M_PI in helper)
+// #include <OmniDSP/window.h>
 #include <gtest/gtest.h>
 
 #include <cmath>
 #include <complex>
 #include <limits>
 #include <memory>  // For std::unique_ptr
+#include <numbers>
 #include <numeric>
 #include <stdexcept>  // For std::invalid_argument, std::runtime_error
 #include <string>
 #include <vector>
 
 #include "../TestDataLoader.h"  // Include the new data loader utility
-
-// Define M_PI if it's not already defined
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
 
 // Define aliases for vector/matrix types
 using VecD = std::vector<double>;
@@ -107,7 +103,8 @@ template <typename T> std::vector<T> hannWindowGenerator(size_t length)
   double denom = (length > 1) ? static_cast<double>(length - 1) : 1.0;
   T sum = 0;
   for (size_t n = 0; n < length; ++n) {
-    T val = static_cast<T>(0.5 - 0.5 * std::cos(2.0 * M_PI * n / denom));
+    T val = static_cast<T>(
+        0.5 - 0.5 * std::cos(2.0 * std::numbers::pi * n / denom));
     window_coeffs[n] = val;
     sum += val;
   }
@@ -130,7 +127,7 @@ std::vector<T> generateSineWave(double freq, double duration_sec, double sr)
   std::vector<T> signal(length);
   for (size_t i = 0; i < length; ++i) {
     signal[i] = static_cast<T>(
-        std::sin(2.0 * M_PI * freq * static_cast<double>(i) / sr));
+        std::sin(2.0 * std::numbers::pi * freq * static_cast<double>(i) / sr));
   }
   return signal;
 }

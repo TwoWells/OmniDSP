@@ -13,12 +13,9 @@
 #include <cmath>
 #include <complex>
 #include <iostream>
+#include <numbers>
 #include <stdexcept>
 #include <vector>
-
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
 
 int main()
 {
@@ -36,8 +33,8 @@ int main()
   std::vector<Real> input_signal_real(N);
   double frequency = 3.0;  // Example frequency for RFFT input
   for (size_t i = 0; i < N; ++i) {
-    input_signal_real[i]
-        = std::cos(2.0 * M_PI * frequency * static_cast<Real>(i) / N);
+    input_signal_real[i] = std::cos(
+        2.0 * std::numbers::pi * frequency * static_cast<Real>(i) / N);
   }
 
   std::cout << "Input Real Signal:" << std::endl;

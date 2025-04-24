@@ -1,6 +1,6 @@
-# CMakeLists.txt for OmniDSP project Uses Conda for managing CMake, pybind11,
-# GTest, Boost, Highway, and MKL/IPP dependencies Supports compiling multiple
-# backends (Default + available Accelerate/oneMKL) for runtime selection.
+# CMakeLists.txt for OmniDSP project
+# Uses Conda for managing CMake, pybind11, GTest, Boost, Highway, and MKL/IPP dependencies
+# Supports compiling multiple backends (Default + available Accelerate/oneMKL) for runtime selection.
 
 cmake_minimum_required(VERSION 3.21)
 cmake_policy(SET CMP0148 NEW) # Policy for modern FindPython behavior
@@ -16,13 +16,19 @@ project(
 # --- Include Project Modules ---
 # Create the cmake directory if it doesn't exist
 file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/cmake)
+
+# Include utility functions first
+include(cmake/utils.cmake)
+
+# --- Include Project Modules (Continued) ---
 # Include project options
 include(cmake/project_options.cmake)
 # Include compiler settings
 include(cmake/compiler_settings.cmake)
-# Include core dependency finding
-include(cmake/dependencies.cmake)
-# Include backend detection and configuration Requires cmake/backend/ directory
+# Include core dependency finding/fetching orchestrator
+include(cmake/depend.cmake)
+# Include backend detection and configuration
+# Requires cmake/backend/ directory
 file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/cmake/backend)
 include(cmake/backend.cmake)
 
@@ -33,25 +39,23 @@ include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 # GenerateExportHeader is needed *before* target_definitions.cmake
 include(GenerateExportHeader)
+# FetchContent is included within depend.cmake
 
 # --- Define and Configure Core Library Target ---
 # This module uses variables set by previous includes (especially backend.cmake)
-# to define the 'omnidsp' target and set its properties (sources, includes,
-# links, etc.)
+# to define the 'omnidsp' target and set its properties (sources, includes, links, etc.)
 include(cmake/target_definitions.cmake)
 
 # =============================================================================
 # Conditionally Add Subdirectories (Python Bindings Source)
 # =============================================================================
-# Include the module that adds the Python bindings source subdirectory if
-# enabled.
+# Include the module that adds the Python bindings source subdirectory if enabled.
 include(cmake/omnidsp_py.cmake)
 
 # =============================================================================
 # Examples Configuration
 # =============================================================================
-# Include the module that adds example subdirectories (currently only C++
-# examples).
+# Include the module that adds example subdirectories (currently only C++ examples).
 include(cmake/examples.cmake)
 
 # =============================================================================
@@ -63,8 +67,8 @@ include(cmake/testing.cmake)
 # =============================================================================
 # Installation Rules
 # =============================================================================
-# Include the module that defines all installation rules for the project. This
-# should generally come after all targets that need to be installed are defined.
+# Include the module that defines all installation rules for the project.
+# This should generally come after all targets that need to be installed are defined.
 include(cmake/installation.cmake)
 
 message(STATUS "Finished processing root CMakeLists.txt")

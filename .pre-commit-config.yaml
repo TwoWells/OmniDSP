@@ -51,6 +51,8 @@ repos:
     hooks:
       - id: cmake-format
         types: [cmake] # Targets CMakeLists.txt and potentially .cmake files
+        additional_dependencies: [pyyaml>=5.1]
+        args: ["-c", ".cmake-format.yaml"]
         # Optional args, e.g., specify config file location
         # args: ["-c", "path/to/.cmake-format.yaml"]
 

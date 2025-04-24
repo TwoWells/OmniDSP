@@ -4,8 +4,9 @@
  * using standard C++.
  */
 
-#include <cmath>        // For M_PI, sin, cos, exp, sqrt, abs etc.
-#include <iostream>     // For debug/error messages
+#include <cmath>     // For sin, cos, exp, sqrt, abs etc.
+#include <iostream>  // For debug/error messages
+#include <numbers>
 #include <numeric>      // For std::accumulate
 #include <stdexcept>    // For std::invalid_argument
 #include <type_traits>  // For std::is_same_v
@@ -16,11 +17,6 @@
 
 // Include Boost Bessel function for Kaiser window
 #include <boost/math/special_functions/bessel.hpp>
-
-// Define PI if not available from cmath
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
 
 namespace OmniDSP {
   namespace backend {
@@ -61,7 +57,8 @@ namespace OmniDSP {
       const RealT<T> a1 = 0.5;
       const RealT<T> a2 = 0.08;
       const RealT<T> N_minus_1 = static_cast<RealT<T>>(length - 1);
-      const RealT<T> factor1 = (N_minus_1 > 0) ? (2.0 * M_PI / N_minus_1) : 0.0;
+      const RealT<T> factor1
+          = (N_minus_1 > 0) ? (2.0 * std::numbers::pi / N_minus_1) : 0.0;
       const RealT<T> factor2 = 2.0 * factor1;
 
       for (size_t n = 0; n < length; ++n) {
@@ -84,7 +81,8 @@ namespace OmniDSP {
       const RealT<T> a3 = 0.083578947;
       const RealT<T> a4 = 0.006947368;
       const RealT<T> N_minus_1 = static_cast<RealT<T>>(length - 1);
-      const RealT<T> factor = (N_minus_1 > 0) ? (2.0 * M_PI / N_minus_1) : 0.0;
+      const RealT<T> factor
+          = (N_minus_1 > 0) ? (2.0 * std::numbers::pi / N_minus_1) : 0.0;
 
       for (size_t n = 0; n < length; ++n) {
         RealT<T> n_T = static_cast<RealT<T>>(n);
@@ -132,7 +130,8 @@ namespace OmniDSP {
       const RealT<T> a0 = 0.54;
       const RealT<T> a1 = 0.46;  // 1.0 - a0
       const RealT<T> N_minus_1 = static_cast<RealT<T>>(length - 1);
-      const RealT<T> factor = (N_minus_1 > 0) ? (2.0 * M_PI / N_minus_1) : 0.0;
+      const RealT<T> factor
+          = (N_minus_1 > 0) ? (2.0 * std::numbers::pi / N_minus_1) : 0.0;
 
       for (size_t n = 0; n < length; ++n) {
         coeffs[n] = a0 - a1 * std::cos(factor * static_cast<RealT<T>>(n));
@@ -147,7 +146,8 @@ namespace OmniDSP {
       if (length == 1) return std::vector<RealT<T>>(1, 1.0);
       std::vector<RealT<T>> coeffs(length);
       const RealT<T> N_minus_1 = static_cast<RealT<T>>(length - 1);
-      const RealT<T> factor = (N_minus_1 > 0) ? (2.0 * M_PI / N_minus_1) : 0.0;
+      const RealT<T> factor
+          = (N_minus_1 > 0) ? (2.0 * std::numbers::pi / N_minus_1) : 0.0;
 
       for (size_t n = 0; n < length; ++n) {
         coeffs[n] = 0.5 * (1.0 - std::cos(factor * static_cast<RealT<T>>(n)));

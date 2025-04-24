@@ -11,6 +11,7 @@
 #include <cmath>
 #include <complex>
 #include <iostream>
+#include <numbers>
 #include <stdexcept>  // Include for std::exception
 #include <vector>
 
@@ -23,13 +24,9 @@ using Complex = std::complex<Real>;
 std::vector<Real> generateSineWave(
     double freq, double sampleRate, double duration)
 {
-// Use M_PI, ensure cmath is included (it is)
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
   size_t numSamples = static_cast<size_t>(sampleRate * duration);
   std::vector<Real> signal(numSamples);
-  Real angularFreq = 2.0 * M_PI * freq / sampleRate;
+  Real angularFreq = 2.0 * std::numbers::pi * freq / sampleRate;
   for (size_t i = 0; i < numSamples; ++i) {
     signal[i] = std::sin(angularFreq * i);
   }

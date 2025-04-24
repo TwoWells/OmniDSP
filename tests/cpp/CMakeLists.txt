@@ -1,21 +1,15 @@
-# CMakeLists.txt for OmniDSP C++ Tests (Refactored) Uses GoogleTest found by the
-# main CMakeLists.txt. Defines path to reference data directory
-# (OMNIDSP_TEST_DATA_DIR) for tests. Assumes reference data files (.txt) are
-# pre-generated and exist in tests/cpp/data/. Conditionally compiles
-# backend-specific test files from backend/ subdirectory.
+# CMakeLists.txt for OmniDSP C++ Tests (Refactored) Uses GoogleTest found by the main
+# CMakeLists.txt. Defines path to reference data directory (OMNIDSP_TEST_DATA_DIR) for tests.
+# Assumes reference data files (.txt) are pre-generated and exist in tests/cpp/data/. Conditionally
+# compiles backend-specific test files from backend/ subdirectory.
 
-message(
-  STATUS
-    "Processing tests/cpp/CMakeLists.txt (Refactored - No Python Execution)...")
+message(STATUS "Processing tests/cpp/CMakeLists.txt (Refactored - No Python Execution)...")
 
 # --- Find Dependencies ---
 
 # Find the main library target
 if(NOT TARGET omnidsp)
-  message(
-    FATAL_ERROR
-      "OmniDSP library target (omnidsp) not found. Build the main library first."
-  )
+  message(FATAL_ERROR "OmniDSP library target (omnidsp) not found. Build the main library first.")
 endif()
 
 # Find GoogleTest (assuming it's found by the parent CMakeLists.txt)
@@ -30,29 +24,18 @@ endif()
 
 # --- Determine which backend-specific test file to include ---
 set(BACKEND_SPECIFIC_TEST_SRC "") # Initialize empty
-message(
-  STATUS
-    "tests/cpp: Checking BACKEND variable for conditional test compilation: ${BACKEND}"
-)
+message(STATUS "tests/cpp: Checking BACKEND variable for conditional test compilation: ${BACKEND}")
 
 # Construct the path relative to the current CMakeLists.txt file
 if(BACKEND STREQUAL "ONEMKL")
   set(BACKEND_SPECIFIC_TEST_SRC ${CMAKE_CURRENT_SOURCE_DIR}/backend/onemkl.cpp)
-  message(
-    STATUS
-      "tests/cpp: Including MKL-specific tests: ${BACKEND_SPECIFIC_TEST_SRC}")
+  message(STATUS "tests/cpp: Including MKL-specific tests: ${BACKEND_SPECIFIC_TEST_SRC}")
 elseif(BACKEND STREQUAL "ACCELERATE")
-  set(BACKEND_SPECIFIC_TEST_SRC
-      ${CMAKE_CURRENT_SOURCE_DIR}/backend/accelerate.cpp)
-  message(
-    STATUS
-      "tests/cpp: Including Accelerate-specific tests: ${BACKEND_SPECIFIC_TEST_SRC}"
-  )
+  set(BACKEND_SPECIFIC_TEST_SRC ${CMAKE_CURRENT_SOURCE_DIR}/backend/accelerate.cpp)
+  message(STATUS "tests/cpp: Including Accelerate-specific tests: ${BACKEND_SPECIFIC_TEST_SRC}")
 else() # Assuming "NONE" or empty means Stub backend
   set(BACKEND_SPECIFIC_TEST_SRC ${CMAKE_CURRENT_SOURCE_DIR}/backend/stub.cpp)
-  message(
-    STATUS
-      "tests/cpp: Including Stub-specific tests: ${BACKEND_SPECIFIC_TEST_SRC}")
+  message(STATUS "tests/cpp: Including Stub-specific tests: ${BACKEND_SPECIFIC_TEST_SRC}")
 endif()
 
 # --- Define the test executable target ---
@@ -85,21 +68,16 @@ else()
 endif()
 
 # Pass the data directory path definition to the C++ code
-target_compile_definitions(
-  omnidsp_tests PRIVATE OMNIDSP_TEST_DATA_DIR="${TEST_DATA_SRC_DIR_ESC}")
+target_compile_definitions(omnidsp_tests PRIVATE OMNIDSP_TEST_DATA_DIR="${TEST_DATA_SRC_DIR_ESC}")
 
 # Conditionally add the backend definition if it's set
 if(BACKEND_DEFINITION)
   target_compile_definitions(omnidsp_tests PRIVATE ${BACKEND_DEFINITION})
-  message(
-    STATUS
-      "tests/cpp: Added backend definition ${BACKEND_DEFINITION} to omnidsp_tests"
-  )
+  message(STATUS "tests/cpp: Added backend definition ${BACKEND_DEFINITION} to omnidsp_tests")
 endif()
 
 get_target_property(TEST_DEFS omnidsp_tests COMPILE_DEFINITIONS)
-message(
-  STATUS "tests/cpp: Final COMPILE_DEFINITIONS for omnidsp_tests: ${TEST_DEFS}")
+message(STATUS "tests/cpp: Final COMPILE_DEFINITIONS for omnidsp_tests: ${TEST_DEFS}")
 
 # --- Dependencies and Linking ---
 
@@ -107,17 +85,14 @@ message(
 
 # Link the test executable
 target_link_libraries(omnidsp_tests PRIVATE GTest::gtest_main omnidsp)
-message(
-  STATUS
-    "tests/cpp: Linking omnidsp_tests against GTest::gtest_main and omnidsp.")
+message(STATUS "tests/cpp: Linking omnidsp_tests against GTest::gtest_main and omnidsp.")
 
 # Add include directories needed for the tests
 target_include_directories(
   omnidsp_tests
   PRIVATE ${PROJECT_SOURCE_DIR}/include # For OmniDSP headers
           ${CMAKE_CURRENT_SOURCE_DIR} # For TestDataLoader.h
-          # ${PROJECT_SOURCE_DIR}/src # Potentially for internal headers if
-          # needed
+          # ${PROJECT_SOURCE_DIR}/src # Potentially for internal headers if needed
 )
 message(STATUS "tests/cpp: Added include directories for omnidsp_tests.")
 

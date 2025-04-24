@@ -15,7 +15,8 @@
 #include <cmath>    // For std::ceil, std::floor, std::gcd, std::log10, std::min
 #include <complex>  // Include complex for potential internal use if needed
 #include <iostream>  // For debug/error messages
-#include <numeric>   // For std::gcd
+#include <numbers>
+#include <numeric>  // For std::gcd
 #include <span>
 #include <stdexcept>  // For std::runtime_error, std::invalid_argument
 #include <vector>
@@ -43,12 +44,15 @@ namespace OmniDSP {
       T sum = 0;
       for (size_t i = 0; i < num_taps; ++i) {
         T n = static_cast<T>(i) - center;
-        T sinc_val = (n == 0) ? static_cast<T>(2.0 * cutoff_freq_norm)
-                              : static_cast<T>(
-                                    std::sin(2.0 * M_PI * cutoff_freq_norm * n)
-                                    / (M_PI * n));
+        T sinc_val
+            = (n == 0)
+                  ? static_cast<T>(2.0 * cutoff_freq_norm)
+                  : static_cast<T>(
+                        std::sin(2.0 * std::numbers::pi * cutoff_freq_norm * n)
+                        / (std::numbers::pi * n));
         T hann_val = static_cast<T>(
-            0.5 * (1.0 - std::cos(2.0 * M_PI * i / (num_taps - 1))));
+            0.5
+            * (1.0 - std::cos(2.0 * std::numbers::pi * i / (num_taps - 1))));
         h[i] = sinc_val * hann_val;
         sum += h[i];
       }

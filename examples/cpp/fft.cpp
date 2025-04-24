@@ -12,12 +12,9 @@
 #include <cmath>
 #include <complex>
 #include <iostream>
+#include <numbers>
 #include <stdexcept>
 #include <vector>
-
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
 
 int main()
 {
@@ -35,9 +32,10 @@ int main()
   std::vector<Complex> input_signal_c2c(N);
   double frequency = 3.0;  // Example frequency for FFT input
   for (size_t i = 0; i < N; ++i) {
-    Real real_val = std::cos(2.0 * M_PI * frequency * static_cast<Real>(i) / N);
+    Real real_val = std::cos(
+        2.0 * std::numbers::pi * frequency * static_cast<Real>(i) / N);
     Real imag_val = std::sin(
-        1.5 * M_PI * frequency * static_cast<Real>(i)
+        1.5 * std::numbers::pi * frequency * static_cast<Real>(i)
         / N);  // Different frequency for imag part
     input_signal_c2c[i] = Complex(real_val, imag_val);
   }

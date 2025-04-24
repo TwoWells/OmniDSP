@@ -20,10 +20,11 @@
 
 // Include standard library headers needed for default implementations
 #include <algorithm>  // For std::reverse, std::copy, std::fill, std::max, std::min
-#include <cmath>  // For M_PI, sin, cos, exp, sqrt, abs, log2, ceil, floor etc.
+#include <cmath>      // For sin, cos, exp, sqrt, abs, log2, ceil, floor etc.
 #include <complex>
-#include <iostream>   // For debug/error messages
-#include <memory>     // For std::unique_ptr, std::make_unique
+#include <iostream>  // For debug/error messages
+#include <memory>    // For std::unique_ptr, std::make_unique
+#include <numbers>
 #include <numeric>    // For std::accumulate, std::gcd
 #include <stdexcept>  // For std::runtime_error, std::invalid_argument
 #include <string>     // For exception messages
@@ -32,11 +33,6 @@
 
 // Include Boost Bessel function for Kaiser window (needed by default impl)
 #include <boost/math/special_functions/bessel.hpp>
-
-// Define PI if not available from cmath
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
 
 namespace OmniDSP {
   namespace backend {
@@ -301,7 +297,7 @@ namespace OmniDSP {
       const RealT<T> N_minus_1 = static_cast<RealT<T>>(length - 1);
       const RealT<T> factor1
           = (N_minus_1 > static_cast<RealT<T>>(0.0))
-                ? (static_cast<RealT<T>>(2.0 * M_PI) / N_minus_1)
+                ? (static_cast<RealT<T>>(2.0 * std::numbers::pi) / N_minus_1)
                 : static_cast<RealT<T>>(0.0);
       const RealT<T> factor2 = static_cast<RealT<T>>(2.0) * factor1;
       for (size_t n = 0; n < length; ++n) {
@@ -326,7 +322,7 @@ namespace OmniDSP {
       const RealT<T> N_minus_1 = static_cast<RealT<T>>(length - 1);
       const RealT<T> factor
           = (N_minus_1 > static_cast<RealT<T>>(0.0))
-                ? (static_cast<RealT<T>>(2.0 * M_PI) / N_minus_1)
+                ? (static_cast<RealT<T>>(2.0 * std::numbers::pi) / N_minus_1)
                 : static_cast<RealT<T>>(0.0);
       for (size_t n = 0; n < length; ++n) {
         RealT<T> n_T = static_cast<RealT<T>>(n);
@@ -375,7 +371,7 @@ namespace OmniDSP {
       const RealT<T> N_minus_1 = static_cast<RealT<T>>(length - 1);
       const RealT<T> factor
           = (N_minus_1 > static_cast<RealT<T>>(0.0))
-                ? (static_cast<RealT<T>>(2.0 * M_PI) / N_minus_1)
+                ? (static_cast<RealT<T>>(2.0 * std::numbers::pi) / N_minus_1)
                 : static_cast<RealT<T>>(0.0);
       for (size_t n = 0; n < length; ++n) {
         coeffs[n] = a0 - a1 * std::cos(factor * static_cast<RealT<T>>(n));
@@ -392,7 +388,7 @@ namespace OmniDSP {
       const RealT<T> N_minus_1 = static_cast<RealT<T>>(length - 1);
       const RealT<T> factor
           = (N_minus_1 > static_cast<RealT<T>>(0.0))
-                ? (static_cast<RealT<T>>(2.0 * M_PI) / N_minus_1)
+                ? (static_cast<RealT<T>>(2.0 * std::numbers::pi) / N_minus_1)
                 : static_cast<RealT<T>>(0.0);
       for (size_t n = 0; n < length; ++n) {
         coeffs[n] = static_cast<RealT<T>>(0.5)
@@ -672,20 +668,22 @@ namespace OmniDSP {
         RealT<T> sinc_val
             = (m == static_cast<RealT<T>>(0.0))
                   ? static_cast<RealT<T>>(1.0)
-                  : std::sin(static_cast<RealT<T>>(2.0 * M_PI) * fn1 * m)
-                        / (static_cast<RealT<T>>(M_PI) * m);
+                  : std::sin(
+                        static_cast<RealT<T>>(2.0 * std::numbers::pi) * fn1 * m)
+                        / (static_cast<RealT<T>>(std::numbers::pi) * m);
 
         switch (spec.type) {
           case FilterType::Lowpass:
             ideal_coeffs[n] = static_cast<RealT<T>>(2.0) * fn1 * sinc_val;
             break;
           case FilterType::Highpass:
-            ideal_coeffs[n] = ((m == static_cast<RealT<T>>(0.0))
-                                   ? static_cast<RealT<T>>(1.0)
-                                   : std::sin(static_cast<RealT<T>>(M_PI) * m)
-                                         / (static_cast<RealT<T>>(M_PI)
-                                            * m))  // Sinc(n) for delta
-                              - static_cast<RealT<T>>(2.0) * fn1 * sinc_val;
+            ideal_coeffs[n]
+                = ((m == static_cast<RealT<T>>(0.0))
+                       ? static_cast<RealT<T>>(1.0)
+                       : std::sin(static_cast<RealT<T>>(std::numbers::pi) * m)
+                             / (static_cast<RealT<T>>(std::numbers::pi)
+                                * m))  // Sinc(n) for delta
+                  - static_cast<RealT<T>>(2.0) * fn1 * sinc_val;
             break;
           case FilterType::Bandpass: {
             if (!fn2.has_value())
@@ -695,8 +693,9 @@ namespace OmniDSP {
                 = (m == static_cast<RealT<T>>(0.0))
                       ? static_cast<RealT<T>>(1.0)
                       : std::sin(
-                            static_cast<RealT<T>>(2.0 * M_PI) * fn2.value() * m)
-                            / (static_cast<RealT<T>>(M_PI) * m);
+                            static_cast<RealT<T>>(2.0 * std::numbers::pi)
+                            * fn2.value() * m)
+                            / (static_cast<RealT<T>>(std::numbers::pi) * m);
             ideal_coeffs[n]
                 = static_cast<RealT<T>>(2.0) * fn2.value() * sinc_val2
                   - static_cast<RealT<T>>(2.0) * fn1 * sinc_val;
@@ -709,13 +708,14 @@ namespace OmniDSP {
                 = (m == static_cast<RealT<T>>(0.0))
                       ? static_cast<RealT<T>>(1.0)
                       : std::sin(
-                            static_cast<RealT<T>>(2.0 * M_PI) * fn2.value() * m)
-                            / (static_cast<RealT<T>>(M_PI) * m);
+                            static_cast<RealT<T>>(2.0 * std::numbers::pi)
+                            * fn2.value() * m)
+                            / (static_cast<RealT<T>>(std::numbers::pi) * m);
             ideal_coeffs[n]
                 = ((m == static_cast<RealT<T>>(0.0))
                        ? static_cast<RealT<T>>(1.0)
-                       : std::sin(static_cast<RealT<T>>(M_PI) * m)
-                             / (static_cast<RealT<T>>(M_PI)
+                       : std::sin(static_cast<RealT<T>>(std::numbers::pi) * m)
+                             / (static_cast<RealT<T>>(std::numbers::pi)
                                 * m))  // Sinc(n) for delta
                   - (static_cast<RealT<T>>(2.0) * fn2.value() * sinc_val2
                      - static_cast<RealT<T>>(2.0) * fn1

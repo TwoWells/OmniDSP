@@ -16,10 +16,11 @@
 #endif
 
 #include <algorithm>  // For std::reverse, std::swap, std::copy
-#include <cmath>      // For M_PI, sin, cos, log2, pow
+#include <cmath>      // For sin, cos, log2, pow
 #include <complex>
 #include <iostream>  // For debug/error messages
-#include <numeric>   // For std::iota
+#include <numbers>
+#include <numeric>  // For std::iota
 #include <span>
 #include <stdexcept>  // For std::runtime_error, std::invalid_argument
 #include <vector>
@@ -30,11 +31,6 @@
 #include "hwy/contrib/math/math-inl.h"
 #include "hwy/foreach_target.h"  // Must be first Highway include
 #include "hwy/highway.h"
-
-// Define PI if not available from cmath
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
 
 // Highway namespace alias within the compilation unit for the active target
 HWY_BEFORE_NAMESPACE();
@@ -650,7 +646,7 @@ namespace OmniDSP {
       twiddle_factors_.resize(length_ / 2);
       using ValueType = typename T::value_type;
       for (size_t k = 0; k < length_ / 2; ++k) {
-        ValueType angle = -2.0 * M_PI * static_cast<ValueType>(k)
+        ValueType angle = -2.0 * std::numbers::pi * static_cast<ValueType>(k)
                           / static_cast<ValueType>(length_);
         twiddle_factors_[k] = T{std::cos(angle), std::sin(angle)};
       }
@@ -701,7 +697,7 @@ namespace OmniDSP {
         bit_reverse_indices_[i] = reverse_bits(i, num_bits);
       twiddle_factors_.resize(N_over_2 / 2);
       for (size_t k = 0; k < N_over_2 / 2; ++k) {
-        RealT<T> angle = -2.0 * M_PI * static_cast<RealT<T>>(k)
+        RealT<T> angle = -2.0 * std::numbers::pi * static_cast<RealT<T>>(k)
                          / static_cast<RealT<T>>(N_over_2);
         twiddle_factors_[k] = ComplexT<T>{std::cos(angle), std::sin(angle)};
       }
@@ -733,8 +729,8 @@ namespace OmniDSP {
       // 3. Unpack (using Highway dispatch)
       std::vector<ComplexT<T>> WN_twiddles(N_over_2);  // Need W_N not W_{N/2}
       for (size_t k = 0; k < N_over_2; ++k) {
-        RealT<T> angle
-            = -2.0 * M_PI * static_cast<RealT<T>>(k) / static_cast<RealT<T>>(N);
+        RealT<T> angle = -2.0 * std::numbers::pi * static_cast<RealT<T>>(k)
+                         / static_cast<RealT<T>>(N);
         WN_twiddles[k] = ComplexT<T>{std::cos(angle), std::sin(angle)};
       }
       status = DispatchRFFTUnpack(

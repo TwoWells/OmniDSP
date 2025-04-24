@@ -31,9 +31,7 @@ dependencies:
   - cmake>=3.21
   - cxx-compiler
   - make # Or ninja
-  - gtest
   - boost
-  - libhwy
 
   # --------------------------------------------------------------------
   # Optimized DSP Backends (Selected by CMake based on availability)

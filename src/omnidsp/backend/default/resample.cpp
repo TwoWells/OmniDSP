@@ -15,11 +15,6 @@
 
 #include "backend.h"  // Default backend declarations (includes DefaultResamplePlanImpl declaration)
 
-// Define PI if not available from cmath
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
-
 namespace OmniDSP {
   namespace backend {
 

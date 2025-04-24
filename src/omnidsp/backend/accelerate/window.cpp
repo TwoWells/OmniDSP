@@ -9,8 +9,9 @@
 
 #include <Accelerate/Accelerate.h>
 
-#include <cmath>  // For M_PI, sin, cos, exp, sqrt, etc. (needed for manual implementations)
-#include <iostream>     // For debug/error messages
+#include <cmath>  // For sin, cos, exp, sqrt, etc. (needed for manual implementations)
+#include <iostream>  // For debug/error messages
+#include <numbers>
 #include <stdexcept>    // For std::invalid_argument
 #include <type_traits>  // For std::is_same_v
 #include <vector>
@@ -20,11 +21,6 @@
 
 // Include Boost Bessel function for Kaiser window
 #include <boost/math/special_functions/bessel.hpp>
-
-// Define PI if not available from cmath
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
 
 namespace OmniDSP {
   namespace backend {
@@ -144,8 +140,9 @@ namespace OmniDSP {
       const RealT<T> N_minus_1 = static_cast<RealT<T>>(length - 1);
       // Avoid division by zero if length is 1 (already handled, but defensive)
       const RealT<T> factor
-          = (N_minus_1 > 0) ? (static_cast<RealT<T>>(2.0 * M_PI) / N_minus_1)
-                            : 0.0;
+          = (N_minus_1 > 0)
+                ? (static_cast<RealT<T>>(2.0 * std::numbers::pi) / N_minus_1)
+                : 0.0;
 
       // Generate n = 0, 1, ..., N-1
       RealT<T> start = 0.0;

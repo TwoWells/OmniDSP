@@ -1,0 +1,19 @@
+# Sample .cmake-format.yaml configuration
+# See: https://cmake-format.readthedocs.io/en/latest/configuration.html
+
+line_width: 100
+tab_size: 2
+use_tabchars: false
+dangle_parens: false
+
+# If an argument group contains more than this many sub-groups (parg or kwarg
+# groups) then force it to a vertical layout.
+max_subgroups_hwrap: 1
+
+command_case: "lower"
+keyword_case: "upper"
+
+enable_sort: true
+autosort: true
+
+bullet_char: "-"

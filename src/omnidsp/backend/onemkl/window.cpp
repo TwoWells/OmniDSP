@@ -20,20 +20,13 @@
 // Include MKL header for VML (used for windows not directly in IPP)
 #include <mkl.h>
 
-#include <cmath>        // For M_PI, sin, cos, exp, sqrt, abs etc.
-#include <iostream>     // For debug/error messages
+#include <cmath>     // For sin, cos, exp, sqrt, abs etc.
+#include <iostream>  // For debug/error messages
+#include <numbers>
 #include <stdexcept>    // For std::invalid_argument
 #include <string>       // For error messages
 #include <type_traits>  // For std::is_same_v
 #include <vector>
-
-// Boost Bessel function no longer needed for Kaiser if using ippsWinKaiser
-// #include <boost/math/special_functions/bessel.hpp>
-
-// Define PI if not available from cmath
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
 
 namespace OmniDSP {
   namespace backend {
@@ -156,8 +149,9 @@ namespace OmniDSP {
       const RealT<T> N_minus_1 = static_cast<RealT<T>>(length - 1);
       // Avoid division by zero if length is 1 (already handled, but defensive)
       const RealT<T> factor
-          = (N_minus_1 > 0) ? (static_cast<RealT<T>>(2.0 * M_PI) / N_minus_1)
-                            : 0.0;
+          = (N_minus_1 > 0)
+                ? (static_cast<RealT<T>>(2.0 * std::numbers::pi) / N_minus_1)
+                : 0.0;
 
       // Generate n = 0, 1, ..., N-1 using VML Ramp function
       RealT<T> start = 0.0;
@@ -384,7 +378,7 @@ namespace OmniDSP {
       int len_int = static_cast<int>(length);
 
       // Convert beta to IPP's alpha parameter: alpha = beta / pi
-      RealT<T> alpha = beta / static_cast<RealT<T>>(M_PI);
+      RealT<T> alpha = beta / static_cast<RealT<T>>(std::numbers::pi);
 
       if constexpr (std::is_same_v<T, float>) {
         status = ippsWinKaiser_32f(coeffs.data(), len_int, alpha);

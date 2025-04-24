@@ -9,15 +9,10 @@
 #include <OmniDSP/omnidsp.h>  // Includes enums
 #include <OmniDSP/window.h>   // <-- Corrected include
 
-#include <cmath>    // For M_PI, sin
+#include <cmath>    // For sin
 #include <iomanip>  // For std::setprecision
 #include <iostream>
 #include <vector>
-
-// Define M_PI if it's not already defined
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
 
 // Helper to print vector contents
 template <typename T>
@@ -48,8 +43,8 @@ int main()
     double sample_rate
         = static_cast<double>(signal_length);  // Make one cycle fit
     for (size_t i = 0; i < signal_length; ++i) {
-      input_signal[i]
-          = std::sin(2.0 * M_PI * freq * static_cast<double>(i) / sample_rate);
+      input_signal[i] = std::sin(
+          2.0 * std::numbers::pi * freq * static_cast<double>(i) / sample_rate);
     }
     print_vector("Input Signal ", input_signal);
     std::cout << std::endl;

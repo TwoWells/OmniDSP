@@ -65,22 +65,6 @@
 ## Build System & CI
 
 - **CMake Refactoring:**
-  - **Objective:** Refactor the CMake build system for modularity and eliminate platform-specific `#ifdef` directives in C++ source code.
-  - **Steps:**
-    1.  **Create `cmake/` Directory:** At the project root.
-    2.  **Create Module Files & Migrate Logic:**
-        - `cmake/project_options.cmake`: Move `option(...)` definitions.
-        - `cmake/compiler_settings.cmake`: Move C++ standard, compile commands setting, MSVC definitions.
-        - `cmake/dependencies.cmake`: Move `find_package(...)` for non-backend dependencies (pybind11, Python, GTest, Boost, highway).
-        - `cmake/backend.cmake`: Initialize common backend list variables (`OMNIDSP_COMPILE_DEFINITIONS`, `OMNIDSP_LINK_LIBS`, etc.). Include files from `cmake/backend/`.
-        - `cmake/backend/` (New Directory):
-          - `accelerate.cmake`: Handle Accelerate detection, set `OMNIDSP_HAS_ACCELERATE`, append definition/libs/sources. Use `PARENT_SCOPE`.
-          - `onemkl.cmake`: Handle MKL/IPP detection, set `OMNIDSP_HAS_ONEMKL`, append definition/libs/sources, handle Conda paths. Use `PARENT_SCOPE`.
-          - _(Future backend files go here)_
-        - `cmake/target_definitions.cmake`: Move `add_library(omnidsp ...)`, `generate_export_header`, `target_compile_features`, `target_include_directories`, `target_compile_definitions`, `target_link_directories`, `target_link_libraries`, `hwy_dynamic_dispatch`. Use variables set by `cmake/backend.cmake`.
-        - `cmake/installation.cmake`: Move `install(...)` commands and package config generation.
-        - `cmake/testing.cmake`: Move `enable_testing()`.
-    3.  **Update Root `CMakeLists.txt`:** Replace moved sections with `include(cmake/...)` calls. Keep project definition, policies, `add_subdirectory()` calls.
   - **Eliminate C++ `#ifdef`s:**
     - **Strategy:** Rely _solely_ on CMake for managing platform/backend variations.
     - **Conditional Source Files:** Ensure backend/platform-specific `.cpp` files are added conditionally via generator expressions in `cmake/target_definitions.cmake`. Refactor _any_ C++ code using `#ifdef` for conditional compilation into separate files managed by CMake.

@@ -17,8 +17,9 @@
 #include <functional>  // For std::function (recursive lambda)
 #include <iostream>    // For debug messages
 #include <limits>      // For std::numeric_limits
-#include <numeric>     // For std::iota, std::accumulate
-#include <stdexcept>   // For std::runtime_error, std::invalid_argument
+#include <numbers>
+#include <numeric>    // For std::iota, std::accumulate
+#include <stdexcept>  // For std::runtime_error, std::invalid_argument
 #include <vector>
 
 #include "OmniDSP/core_types.h"  // Core types
@@ -26,11 +27,6 @@
 #include "OmniDSP/resample.h"  // Needed for internal ResamplePlan and ResampleSpec
 #include "OmniDSP/window.h"  // Needed for WindowSpec and window generation
 #include "backend.h"  // Default backend declarations (includes DefaultCQTPlanImpl declaration)
-
-// Define PI if not available from cmath
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
 
 namespace OmniDSP {
   namespace backend {
@@ -294,8 +290,8 @@ namespace OmniDSP {
           RealT<T> time_arg
               = static_cast<RealT<T>>(n)
                 / sample_rate_;  // Time relative to original sample rate
-          RealT<T> angle
-              = static_cast<RealT<T>>(2.0 * M_PI) * freq_k * time_arg;
+          RealT<T> angle = static_cast<RealT<T>>(2.0 * std::numbers::pi)
+                           * freq_k * time_arg;
           ComplexT<T> complex_exp = {std::cos(angle), std::sin(angle)};
           // Apply window and normalization
           temporal_kernel[n] = window_coeffs[n] * complex_exp * norm_factor;
