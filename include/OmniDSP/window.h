@@ -94,8 +94,7 @@ namespace OmniDSP {
    * @tparam T The floating-point type (e.g., float, double) for window
    * parameters.
    */
-  template <typename T>
-  class WindowSpec {
+  template <typename T> class WindowSpec {
    public:
     /**
      * @brief Default constructor. Creates a specification for a Hann window.

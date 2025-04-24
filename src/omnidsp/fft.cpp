@@ -35,8 +35,7 @@ namespace OmniDSP {
      * implementations (Pimpl).
      * @tparam T The floating-point type (e.g., float, double).
      */
-    template <typename T>
-    class FFTPlanImpl {
+    template <typename T> class FFTPlanImpl {
      public:
       virtual ~FFTPlanImpl() = default;
       virtual Status fft(
@@ -55,8 +54,7 @@ namespace OmniDSP {
      * implementations (Pimpl).
      * @tparam T The floating-point type (e.g., float, double).
      */
-    template <typename T>
-    class RFFTPlanImpl {
+    template <typename T> class RFFTPlanImpl {
      public:
       virtual ~RFFTPlanImpl() = default;
       virtual Status rfft(
@@ -92,20 +90,17 @@ namespace OmniDSP {
   // Destructor: Needs definition in the .cpp file where FFTPlanImpl is
   // complete. Default implementation is usually sufficient if FFTPlanImpl has a
   // virtual destructor.
-  template <typename T>
-  FFTPlan<T>::~FFTPlan() = default;
+  template <typename T> FFTPlan<T>::~FFTPlan() = default;
 
   // Move Constructor: Default implementation is sufficient for unique_ptr.
-  template <typename T>
-  FFTPlan<T>::FFTPlan(FFTPlan&& other) noexcept = default;
+  template <typename T> FFTPlan<T>::FFTPlan(FFTPlan&& other) noexcept = default;
 
   // Move Assignment Operator: Default implementation is sufficient for
   // unique_ptr.
   template <typename T>
   FFTPlan<T>& FFTPlan<T>::operator=(FFTPlan&& other) noexcept = default;
 
-  template <typename T>
-  [[nodiscard]] Status FFTPlan<T>::fft(
+  template <typename T> [[nodiscard]] Status FFTPlan<T>::fft(
       std::span<const ComplexT<T>> input, std::span<ComplexT<T>> output) const
   {
     if (!pimpl_) {
@@ -117,8 +112,7 @@ namespace OmniDSP {
     return pimpl_->fft(input, output);
   }
 
-  template <typename T>
-  [[nodiscard]] Status FFTPlan<T>::ifft(
+  template <typename T> [[nodiscard]] Status FFTPlan<T>::ifft(
       std::span<const ComplexT<T>> input, std::span<ComplexT<T>> output) const
   {
     if (!pimpl_) {
@@ -129,8 +123,7 @@ namespace OmniDSP {
     return pimpl_->ifft(input, output);
   }
 
-  template <typename T>
-  size_t FFTPlan<T>::get_length() const
+  template <typename T> size_t FFTPlan<T>::get_length() const
   {
     if (!pimpl_) {
       return 0;  // Or throw? A plan should always have an impl if constructed.
@@ -153,20 +146,18 @@ namespace OmniDSP {
 
   // Destructor: Needs definition in the .cpp file where RFFTPlanImpl is
   // complete.
-  template <typename T>
-  RFFTPlan<T>::~RFFTPlan() = default;
+  template <typename T> RFFTPlan<T>::~RFFTPlan() = default;
 
   // Move Constructor: Default implementation is sufficient for unique_ptr.
-  template <typename T>
-  RFFTPlan<T>::RFFTPlan(RFFTPlan&& other) noexcept = default;
+  template <typename T> RFFTPlan<T>::RFFTPlan(RFFTPlan&& other) noexcept
+      = default;
 
   // Move Assignment Operator: Default implementation is sufficient for
   // unique_ptr.
   template <typename T>
   RFFTPlan<T>& RFFTPlan<T>::operator=(RFFTPlan&& other) noexcept = default;
 
-  template <typename T>
-  [[nodiscard]] Status RFFTPlan<T>::rfft(
+  template <typename T> [[nodiscard]] Status RFFTPlan<T>::rfft(
       std::span<const RealT<T>> input, std::span<ComplexT<T>> output) const
   {
     if (!pimpl_) {
@@ -177,8 +168,7 @@ namespace OmniDSP {
     return pimpl_->rfft(input, output);
   }
 
-  template <typename T>
-  [[nodiscard]] Status RFFTPlan<T>::irfft(
+  template <typename T> [[nodiscard]] Status RFFTPlan<T>::irfft(
       std::span<const ComplexT<T>> input, std::span<RealT<T>> output) const
   {
     if (!pimpl_) {
@@ -189,8 +179,7 @@ namespace OmniDSP {
     return pimpl_->irfft(input, output);
   }
 
-  template <typename T>
-  size_t RFFTPlan<T>::get_length() const
+  template <typename T> size_t RFFTPlan<T>::get_length() const
   {
     if (!pimpl_) {
       return 0;

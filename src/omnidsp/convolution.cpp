@@ -32,8 +32,7 @@ namespace OmniDSP {
      * implementations (Pimpl).
      * @tparam T The data type (e.g., float, std::complex<float>).
      */
-    template <typename T>
-    class ConvolutionPlanImpl {
+    template <typename T> class ConvolutionPlanImpl {
      public:
       virtual ~ConvolutionPlanImpl() = default;
       virtual Status execute(
@@ -49,8 +48,7 @@ namespace OmniDSP {
      * implementations (Pimpl).
      * @tparam T The data type (e.g., float, std::complex<float>).
      */
-    template <typename T>
-    class CorrelationPlanImpl {
+    template <typename T> class CorrelationPlanImpl {
      public:
       virtual ~CorrelationPlanImpl() = default;
       virtual Status execute(
@@ -68,8 +66,7 @@ namespace OmniDSP {
   // ConvolutionPlan Method Definitions
   //--------------------------------------------------------------------------
 
-  template <typename T>
-  ConvolutionPlan<T>::ConvolutionPlan(
+  template <typename T> ConvolutionPlan<T>::ConvolutionPlan(
       std::unique_ptr<backend::ConvolutionPlanImpl<T>> pimpl)
       : pimpl_(std::move(pimpl))
   {
@@ -79,20 +76,17 @@ namespace OmniDSP {
     }
   }
 
-  template <typename T>
-  ConvolutionPlan<T>::~ConvolutionPlan() = default;
+  template <typename T> ConvolutionPlan<T>::~ConvolutionPlan() = default;
 
   template <typename T>
   ConvolutionPlan<T>::ConvolutionPlan(ConvolutionPlan&& other) noexcept
       = default;
 
-  template <typename T>
-  ConvolutionPlan<T>& ConvolutionPlan<T>::operator=(
+  template <typename T> ConvolutionPlan<T>& ConvolutionPlan<T>::operator=(
       ConvolutionPlan&& other) noexcept
       = default;
 
-  template <typename T>
-  [[nodiscard]] Status ConvolutionPlan<T>::execute(
+  template <typename T> [[nodiscard]] Status ConvolutionPlan<T>::execute(
       std::span<const T> input, std::span<T> output) const
   {
     if (!pimpl_) {
@@ -104,8 +98,7 @@ namespace OmniDSP {
     return pimpl_->execute(input, output);
   }
 
-  template <typename T>
-  size_t ConvolutionPlan<T>::get_kernel_length() const
+  template <typename T> size_t ConvolutionPlan<T>::get_kernel_length() const
   {
     if (!pimpl_) {
       throw std::runtime_error(
@@ -114,8 +107,7 @@ namespace OmniDSP {
     return pimpl_->get_kernel_length();
   }
 
-  template <typename T>
-  ConvolutionMode ConvolutionPlan<T>::get_mode() const
+  template <typename T> ConvolutionMode ConvolutionPlan<T>::get_mode() const
   {
     if (!pimpl_) {
       throw std::runtime_error("Invalid ConvolutionPlan instance in get_mode.");
@@ -139,8 +131,7 @@ namespace OmniDSP {
   // CorrelationPlan Method Definitions
   //--------------------------------------------------------------------------
 
-  template <typename T>
-  CorrelationPlan<T>::CorrelationPlan(
+  template <typename T> CorrelationPlan<T>::CorrelationPlan(
       std::unique_ptr<backend::CorrelationPlanImpl<T>> pimpl)
       : pimpl_(std::move(pimpl))
   {
@@ -150,20 +141,17 @@ namespace OmniDSP {
     }
   }
 
-  template <typename T>
-  CorrelationPlan<T>::~CorrelationPlan() = default;
+  template <typename T> CorrelationPlan<T>::~CorrelationPlan() = default;
 
   template <typename T>
   CorrelationPlan<T>::CorrelationPlan(CorrelationPlan&& other) noexcept
       = default;
 
-  template <typename T>
-  CorrelationPlan<T>& CorrelationPlan<T>::operator=(
+  template <typename T> CorrelationPlan<T>& CorrelationPlan<T>::operator=(
       CorrelationPlan&& other) noexcept
       = default;
 
-  template <typename T>
-  [[nodiscard]] Status CorrelationPlan<T>::execute(
+  template <typename T> [[nodiscard]] Status CorrelationPlan<T>::execute(
       std::span<const T> input, std::span<T> output) const
   {
     if (!pimpl_) {
@@ -175,8 +163,7 @@ namespace OmniDSP {
     return pimpl_->execute(input, output);
   }
 
-  template <typename T>
-  size_t CorrelationPlan<T>::get_template_length() const
+  template <typename T> size_t CorrelationPlan<T>::get_template_length() const
   {
     if (!pimpl_) {
       throw std::runtime_error(
@@ -185,8 +172,7 @@ namespace OmniDSP {
     return pimpl_->get_template_length();
   }
 
-  template <typename T>
-  ConvolutionMode CorrelationPlan<T>::get_mode() const
+  template <typename T> ConvolutionMode CorrelationPlan<T>::get_mode() const
   {
     if (!pimpl_) {
       throw std::runtime_error("Invalid CorrelationPlan instance in get_mode.");

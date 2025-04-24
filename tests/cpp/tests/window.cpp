@@ -15,8 +15,7 @@
 #include "gtest/gtest.h"        // Google Test framework
 
 // Helper function to compare real vectors with tolerance
-template <typename T>
-void ExpectRealVectorNear(
+template <typename T> void ExpectRealVectorNear(
     const std::vector<T> &actual,
     const std::vector<T> &expected,
     T abs_error,
@@ -50,8 +49,7 @@ class WindowTest : public ::testing::Test {
   const double kaiser_beta = 8.0;  // Must match generate_window_data.py
 
   // Helper to get tolerance based on type
-  template <typename T>
-  T get_tolerance()
+  template <typename T> T get_tolerance()
   {
     return std::is_same_v<T, float> ? abs_error_f : abs_error_d;
   }

@@ -41,8 +41,7 @@ namespace OmniDSP {
     }
 
     // Helper to get DFTI precision enum value
-    template <typename T>
-    constexpr DFTI_CONFIG_VALUE get_dfti_precision()
+    template <typename T> constexpr DFTI_CONFIG_VALUE get_dfti_precision()
     {
       if constexpr (std::is_same_v<T, float>) return DFTI_SINGLE;
       if constexpr (std::is_same_v<T, double>) return DFTI_DOUBLE;
@@ -56,8 +55,7 @@ namespace OmniDSP {
     // OneMKLFFTPlanImpl Method Definitions (Complex FFT)
     //--------------------------------------------------------------------------
 
-    template <typename T>
-    OneMKLFFTPlanImpl<T>::OneMKLFFTPlanImpl(size_t length)
+    template <typename T> OneMKLFFTPlanImpl<T>::OneMKLFFTPlanImpl(size_t length)
         : length_(length), mkl_status_(DFTI_NO_ERROR)
     {
       if (length == 0) {
@@ -110,8 +108,7 @@ namespace OmniDSP {
                 << std::endl;  // Debug
     }
 
-    template <typename T>
-    OneMKLFFTPlanImpl<T>::~OneMKLFFTPlanImpl()
+    template <typename T> OneMKLFFTPlanImpl<T>::~OneMKLFFTPlanImpl()
     {
       if (descriptor_handle_) {
         mkl_status_ = DftiFreeDescriptor(&descriptor_handle_);
@@ -127,8 +124,7 @@ namespace OmniDSP {
       }
     }
 
-    template <typename T>
-    Status OneMKLFFTPlanImpl<T>::fft(
+    template <typename T> Status OneMKLFFTPlanImpl<T>::fft(
         std::span<const T> input, std::span<T> output) const
     {
       if (!descriptor_handle_)
@@ -146,8 +142,7 @@ namespace OmniDSP {
       return mkl_status_to_omnidsp_status(mkl_status_);
     }
 
-    template <typename T>
-    Status OneMKLFFTPlanImpl<T>::ifft(
+    template <typename T> Status OneMKLFFTPlanImpl<T>::ifft(
         std::span<const T> input, std::span<T> output) const
     {
       if (!descriptor_handle_) return Status::InvalidOperation;
@@ -166,8 +161,7 @@ namespace OmniDSP {
       return mkl_status_to_omnidsp_status(mkl_status_);
     }
 
-    template <typename T>
-    size_t OneMKLFFTPlanImpl<T>::get_length() const
+    template <typename T> size_t OneMKLFFTPlanImpl<T>::get_length() const
     {
       return length_;
     }
@@ -281,8 +275,7 @@ namespace OmniDSP {
                 << std::endl;  // Debug
     }
 
-    template <typename T>
-    OneMKLRFFTPlanImpl<T>::~OneMKLRFFTPlanImpl()
+    template <typename T> OneMKLRFFTPlanImpl<T>::~OneMKLRFFTPlanImpl()
     {
       if (descriptor_handle_) {
         mkl_status_ = DftiFreeDescriptor(&descriptor_handle_);
@@ -297,8 +290,7 @@ namespace OmniDSP {
       }
     }
 
-    template <typename T>
-    Status OneMKLRFFTPlanImpl<T>::rfft(
+    template <typename T> Status OneMKLRFFTPlanImpl<T>::rfft(
         std::span<const RealT<T>> input, std::span<ComplexT<T>> output) const
     {
       if (!descriptor_handle_) return Status::InvalidOperation;
@@ -320,8 +312,7 @@ namespace OmniDSP {
       return mkl_status_to_omnidsp_status(mkl_status_);
     }
 
-    template <typename T>
-    Status OneMKLRFFTPlanImpl<T>::irfft(
+    template <typename T> Status OneMKLRFFTPlanImpl<T>::irfft(
         std::span<const ComplexT<T>> input, std::span<RealT<T>> output) const
     {
       if (!descriptor_handle_) return Status::InvalidOperation;
@@ -345,8 +336,7 @@ namespace OmniDSP {
       return mkl_status_to_omnidsp_status(mkl_status_);
     }
 
-    template <typename T>
-    size_t OneMKLRFFTPlanImpl<T>::get_length() const
+    template <typename T> size_t OneMKLRFFTPlanImpl<T>::get_length() const
     {
       return length_;
     }

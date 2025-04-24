@@ -26,8 +26,7 @@ namespace OmniDSP {
 
   // Forward declarations for implementation classes (Pimpl idiom)
   namespace backend {
-    template <typename T>
-    class ResamplePlanImpl;
+    template <typename T> class ResamplePlanImpl;
   }  // namespace backend
 
   /**
@@ -76,8 +75,7 @@ namespace OmniDSP {
    * @tparam T The underlying floating-point type (e.g., float, double).
    * Typically used with RealT<T>.
    */
-  template <typename T>
-  class ResamplePlan {
+  template <typename T> class ResamplePlan {
     // Friend declaration allows OmniDSP factory methods to call the private
     // constructor
     friend class OmniDSP;
@@ -177,15 +175,13 @@ namespace OmniDSP {
   // Example placeholders for header compilation (real definitions MUST be in
   // .cpp): Note: get_output_length implementation moved from header to .cpp as
   // it depends on pimpl_
-  template <typename T>
-  double ResamplePlan<T>::get_input_rate() const
+  template <typename T> double ResamplePlan<T>::get_input_rate() const
   {
     // return pimpl_ ? pimpl_->get_input_rate() : 0.0; // Requires Impl
     // definition
     return 0.0;  // Placeholder
   }
-  template <typename T>
-  double ResamplePlan<T>::get_output_rate() const
+  template <typename T> double ResamplePlan<T>::get_output_rate() const
   {
     // return pimpl_ ? pimpl_->get_output_rate() : 0.0; // Requires Impl
     // definition

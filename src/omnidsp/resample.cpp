@@ -26,8 +26,7 @@ namespace OmniDSP {
    * @param pimpl A unique_ptr to the backend-specific implementation.
    * @throws std::runtime_error if pimpl is null.
    */
-  template <typename T>
-  ResamplePlan<T>::ResamplePlan(
+  template <typename T> ResamplePlan<T>::ResamplePlan(
       std::unique_ptr<backend::ResamplePlanImpl<T>> pimpl)
       : pimpl_(std::move(pimpl))
   {
@@ -46,8 +45,7 @@ namespace OmniDSP {
    * The unique_ptr pimpl_ automatically deletes the managed implementation
    * object.
    */
-  template <typename T>
-  ResamplePlan<T>::~ResamplePlan() = default;
+  template <typename T> ResamplePlan<T>::~ResamplePlan() = default;
 
   /**
    * @brief Move constructor.
@@ -73,8 +71,7 @@ namespace OmniDSP {
    * @return Status::Success on success, or an error code on failure.
    * Returns Status::InvalidOperation if the plan's implementation is missing.
    */
-  template <typename T>
-  [[nodiscard]] Status ResamplePlan<T>::execute(
+  template <typename T> [[nodiscard]] Status ResamplePlan<T>::execute(
       std::span<const T> input, std::span<T> output) const
   {
     if (!pimpl_) {
@@ -100,8 +97,7 @@ namespace OmniDSP {
    * @return Status::Success on success, or an error code if resetting fails.
    * Returns Status::InvalidOperation if the plan's implementation is missing.
    */
-  template <typename T>
-  Status ResamplePlan<T>::reset()
+  template <typename T> Status ResamplePlan<T>::reset()
   {
     if (!pimpl_) {
       return Status::InvalidOperation;
@@ -115,8 +111,7 @@ namespace OmniDSP {
    * @return The input sample rate in Hz.
    * @throws std::runtime_error if the plan's implementation is missing.
    */
-  template <typename T>
-  double ResamplePlan<T>::get_input_rate() const
+  template <typename T> double ResamplePlan<T>::get_input_rate() const
   {
     if (!pimpl_) {
       // Throwing here because returning 0.0 could be misleading.
@@ -132,8 +127,7 @@ namespace OmniDSP {
    * @return The output sample rate in Hz.
    * @throws std::runtime_error if the plan's implementation is missing.
    */
-  template <typename T>
-  double ResamplePlan<T>::get_output_rate() const
+  template <typename T> double ResamplePlan<T>::get_output_rate() const
   {
     if (!pimpl_) {
       throw std::runtime_error(

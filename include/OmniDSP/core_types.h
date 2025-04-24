@@ -24,16 +24,14 @@ namespace OmniDSP {
    * @details Ensures consistency in template definitions (e.g., float, double).
    * @tparam T The underlying floating-point type.
    */
-  template <typename T>
-  using RealT = T;
+  template <typename T> using RealT = T;
 
   /**
    * @brief Alias for complex floating-point types used in OmniDSP templates.
    * @details Ensures consistency using std::complex<T>.
    * @tparam T The underlying floating-point type for real and imaginary parts.
    */
-  template <typename T>
-  using ComplexT = std::complex<T>;
+  template <typename T> using ComplexT = std::complex<T>;
 
   // --- Core Enums ---
 
@@ -101,8 +99,7 @@ namespace OmniDSP {
    * { process(*result); } else { handle_error(result.error()); }
    * @tparam T The type of the expected value on success.
    */
-  template <typename T>
-  using OmniExpected = std::expected<T, Status>;
+  template <typename T> using OmniExpected = std::expected<T, Status>;
 
   /**
    * @brief Specifies the backend implementation library to use for
@@ -141,24 +138,19 @@ namespace OmniDSP {
   // if they don't fit better elsewhere.
   namespace Detail {
     // Example: Type trait to check if a type is std::complex
-    template <typename T>
-    struct is_complex : std::false_type {};
-    template <typename T>
-    struct is_complex<std::complex<T>> : std::true_type {};
-    template <typename T>
-    constexpr bool is_complex_v = is_complex<T>::value;
+    template <typename T> struct is_complex : std::false_type {};
+    template <typename T> struct is_complex<std::complex<T>> : std::true_type {
+    };
+    template <typename T> constexpr bool is_complex_v = is_complex<T>::value;
 
     // Example: Get underlying real type from complex or real
-    template <typename T>
-    struct ValueType {
+    template <typename T> struct ValueType {
       using type = T;
     };
-    template <typename T>
-    struct ValueType<std::complex<T>> {
+    template <typename T> struct ValueType<std::complex<T>> {
       using type = T;
     };
-    template <typename T>
-    using UnderlyingRealT = typename ValueType<T>::type;
+    template <typename T> using UnderlyingRealT = typename ValueType<T>::type;
   }  // namespace Detail
 
 }  // namespace OmniDSP

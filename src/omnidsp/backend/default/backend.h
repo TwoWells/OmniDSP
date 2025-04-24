@@ -22,22 +22,14 @@
 
 // Forward declare public Plan classes from the OmniDSP namespace
 namespace OmniDSP {
-  template <typename T>
-  class FFTPlan;
-  template <typename T>
-  class RFFTPlan;
-  template <typename T>
-  class CQTPlan;
-  template <typename T>
-  class ResamplePlan;  // Forward declaration
-  template <typename T>
-  class ConvolutionPlan;
-  template <typename T>
-  class CorrelationPlan;
-  template <typename T>
-  class FIRFilterPlan;
-  template <typename T>
-  class IIRFilterPlan;
+  template <typename T> class FFTPlan;
+  template <typename T> class RFFTPlan;
+  template <typename T> class CQTPlan;
+  template <typename T> class ResamplePlan;  // Forward declaration
+  template <typename T> class ConvolutionPlan;
+  template <typename T> class CorrelationPlan;
+  template <typename T> class FIRFilterPlan;
+  template <typename T> class IIRFilterPlan;
   class OmniDSP;
 }  // namespace OmniDSP
 
@@ -75,8 +67,7 @@ namespace OmniDSP {
     };
 
     // ResamplePlanImpl definition...
-    template <typename T>
-    class ResamplePlanImpl {
+    template <typename T> class ResamplePlanImpl {
      public:
       virtual ~ResamplePlanImpl() = default;
       virtual Status execute(
@@ -90,8 +81,7 @@ namespace OmniDSP {
     };
 
     // ConvolutionPlanImpl definition...
-    template <typename T>
-    class ConvolutionPlanImpl {
+    template <typename T> class ConvolutionPlanImpl {
      public:
       virtual ~ConvolutionPlanImpl() = default;
       virtual Status execute(
@@ -103,8 +93,7 @@ namespace OmniDSP {
     };
 
     // CorrelationPlanImpl definition...
-    template <typename T>
-    class CorrelationPlanImpl {
+    template <typename T> class CorrelationPlanImpl {
      public:
       virtual ~CorrelationPlanImpl() = default;
       virtual Status execute(
@@ -116,8 +105,7 @@ namespace OmniDSP {
     };
 
     // FIRFilterPlanImpl definition...
-    template <typename T>
-    class FIRFilterPlanImpl {
+    template <typename T> class FIRFilterPlanImpl {
      public:
       virtual ~FIRFilterPlanImpl() = default;
       virtual Status execute(std::span<const T> input, std::span<T> output) = 0;
@@ -127,8 +115,7 @@ namespace OmniDSP {
     };
 
     // IIRFilterPlanImpl definition...
-    template <typename T>
-    class IIRFilterPlanImpl {
+    template <typename T> class IIRFilterPlanImpl {
      public:
       virtual ~IIRFilterPlanImpl() = default;
       virtual Status execute(std::span<const T> input, std::span<T> output) = 0;

@@ -55,24 +55,19 @@ namespace OmniDSP {
     // Assumes these are defined in onemkl/fft.cpp or similar
     template <typename T_Complex>
     class OneMKLFFTPlanImpl;  // Expects complex type
-    template <typename T_Real>
-    class OneMKLRFFTPlanImpl;  // Expects real type
+    template <typename T_Real> class OneMKLRFFTPlanImpl;  // Expects real type
 
     // Helper type traits (move to common utility?)
     namespace Detail {
-      template <typename T>
-      struct is_complex : std::false_type {};
-      template <typename T>
-      struct is_complex<std::complex<T>> : std::true_type {};
-      template <typename T>
-      constexpr bool is_complex_v = is_complex<T>::value;
+      template <typename T> struct is_complex : std::false_type {};
+      template <typename T> struct is_complex<std::complex<T>>
+          : std::true_type {};
+      template <typename T> constexpr bool is_complex_v = is_complex<T>::value;
 
-      template <typename T>
-      struct ValueType {
+      template <typename T> struct ValueType {
         using type = T;
       };
-      template <typename T>
-      struct ValueType<std::complex<T>> {
+      template <typename T> struct ValueType<std::complex<T>> {
         using type = T;
       };
     }  // namespace Detail
@@ -180,8 +175,7 @@ namespace OmniDSP {
       std::cout << "oneMKL ConvPlanImpl destroyed." << std::endl;  // Debug
     }
 
-    template <typename T>
-    Status OneMKLConvolutionPlanImpl<T>::execute(
+    template <typename T> Status OneMKLConvolutionPlanImpl<T>::execute(
         std::span<const T> input, std::span<T> output) const
     {
       // Check if plan was properly initialized
@@ -466,8 +460,7 @@ namespace OmniDSP {
       std::cout << "oneMKL CorrPlanImpl destroyed." << std::endl;  // Debug
     }
 
-    template <typename T>
-    Status OneMKLCorrelationPlanImpl<T>::execute(
+    template <typename T> Status OneMKLCorrelationPlanImpl<T>::execute(
         std::span<const T> input, std::span<T> output) const
     {
       // Check if plan was properly initialized

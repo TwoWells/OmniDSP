@@ -86,8 +86,7 @@ namespace OmniDSP {
     // DefaultResamplePlanImpl Method Implementations
     //--------------------------------------------------------------------------
 
-    template <typename T>
-    DefaultResamplePlanImpl<T>::DefaultResamplePlanImpl(
+    template <typename T> DefaultResamplePlanImpl<T>::DefaultResamplePlanImpl(
         const OmniDSPImpl* owner, const ResampleSpec& spec)
         : input_rate_(spec.input_rate), output_rate_(spec.output_rate)
     {
@@ -138,14 +137,12 @@ namespace OmniDSP {
                 << std::endl;  // Debug
     }
 
-    template <typename T>
-    DefaultResamplePlanImpl<T>::~DefaultResamplePlanImpl()
+    template <typename T> DefaultResamplePlanImpl<T>::~DefaultResamplePlanImpl()
     {
       std::cout << "Default ResamplePlanImpl destroyed." << std::endl;  // Debug
     }
 
-    template <typename T>
-    Status DefaultResamplePlanImpl<T>::execute(
+    template <typename T> Status DefaultResamplePlanImpl<T>::execute(
         std::span<const T> input, std::span<T> output)
     {
       if (upsample_factor_L_ == 0 || downsample_factor_M_ == 0
@@ -296,8 +293,7 @@ namespace OmniDSP {
       return Status::Success;
     }
 
-    template <typename T>
-    Status DefaultResamplePlanImpl<T>::reset()
+    template <typename T> Status DefaultResamplePlanImpl<T>::reset()
     {
       std::fill(filter_state_.begin(), filter_state_.end(), T{0});
       current_phase_ = 0;
@@ -316,8 +312,7 @@ namespace OmniDSP {
       return output_rate_;
     }
 
-    template <typename T>
-    size_t DefaultResamplePlanImpl<T>::get_output_length(
+    template <typename T> size_t DefaultResamplePlanImpl<T>::get_output_length(
         size_t input_length) const
     {
       if (input_rate_ <= 0.0 || upsample_factor_L_ == 0) return 0;
@@ -373,8 +368,7 @@ namespace OmniDSP {
       return Status::Success;
     }
 
-    template <typename T>
-    Status DefaultResamplePlanImpl<T>::design_filter(
+    template <typename T> Status DefaultResamplePlanImpl<T>::design_filter(
         const OmniDSPImpl* owner, const ResampleSpec& spec, size_t L, size_t M)
     {
       // Use the base class implementation provided in backend.h (via previous

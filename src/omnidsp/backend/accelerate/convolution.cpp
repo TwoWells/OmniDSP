@@ -69,19 +69,15 @@ namespace OmniDSP {
 
     // Helper type traits (can be moved to a common utility header)
     namespace Detail {
-      template <typename T>
-      struct is_complex : std::false_type {};
-      template <typename T>
-      struct is_complex<std::complex<T>> : std::true_type {};
-      template <typename T>
-      constexpr bool is_complex_v = is_complex<T>::value;
+      template <typename T> struct is_complex : std::false_type {};
+      template <typename T> struct is_complex<std::complex<T>>
+          : std::true_type {};
+      template <typename T> constexpr bool is_complex_v = is_complex<T>::value;
 
-      template <typename T>
-      struct ValueType {
+      template <typename T> struct ValueType {
         using type = T;
       };
-      template <typename T>
-      struct ValueType<std::complex<T>> {
+      template <typename T> struct ValueType<std::complex<T>> {
         using type = T;
       };
     }  // namespace Detail
@@ -173,8 +169,7 @@ namespace OmniDSP {
       std::cout << "Accelerate ConvPlanImpl destroyed." << std::endl;  // Debug
     }
 
-    template <typename T>
-    Status AccelerateConvolutionPlanImpl<T>::execute(
+    template <typename T> Status AccelerateConvolutionPlanImpl<T>::execute(
         std::span<const T> input, std::span<T> output) const
     {
       // Check if plan was properly initialized
@@ -504,8 +499,7 @@ namespace OmniDSP {
       std::cout << "Accelerate CorrPlanImpl destroyed." << std::endl;  // Debug
     }
 
-    template <typename T>
-    Status AccelerateCorrelationPlanImpl<T>::execute(
+    template <typename T> Status AccelerateCorrelationPlanImpl<T>::execute(
         std::span<const T> input, std::span<T> output) const
     {
       // Check if plan was properly initialized

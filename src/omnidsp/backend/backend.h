@@ -26,22 +26,14 @@
 // Forward declare public Plan classes from the OmniDSP namespace
 // These are the user-facing classes whose implementation is hidden.
 namespace OmniDSP {
-  template <typename T>
-  class FFTPlan;
-  template <typename T>
-  class RFFTPlan;
-  template <typename T>
-  class CQTPlan;
-  template <typename T>
-  class ResamplePlan;
-  template <typename T>
-  class ConvolutionPlan;
-  template <typename T>
-  class CorrelationPlan;
-  template <typename T>
-  class FIRFilterPlan;
-  template <typename T>
-  class IIRFilterPlan;
+  template <typename T> class FFTPlan;
+  template <typename T> class RFFTPlan;
+  template <typename T> class CQTPlan;
+  template <typename T> class ResamplePlan;
+  template <typename T> class ConvolutionPlan;
+  template <typename T> class CorrelationPlan;
+  template <typename T> class FIRFilterPlan;
+  template <typename T> class IIRFilterPlan;
   class OmniDSP;  // Forward declare the main user-facing OmniDSP class
 }  // namespace OmniDSP
 
@@ -126,8 +118,7 @@ namespace OmniDSP {
     };
 
     /** @brief Interface for convolution plan implementations. */
-    template <typename T>
-    class ConvolutionPlanImpl {
+    template <typename T> class ConvolutionPlanImpl {
      public:
       virtual ~ConvolutionPlanImpl() = default;
       /** @brief Executes the convolution operation. */
@@ -144,8 +135,7 @@ namespace OmniDSP {
     };
 
     /** @brief Interface for correlation plan implementations. */
-    template <typename T>
-    class CorrelationPlanImpl {
+    template <typename T> class CorrelationPlanImpl {
      public:
       virtual ~CorrelationPlanImpl() = default;
       /** @brief Executes the correlation operation. */
@@ -162,8 +152,7 @@ namespace OmniDSP {
     };
 
     /** @brief Interface for FIR filter plan implementations. */
-    template <typename T>
-    class FIRFilterPlanImpl {
+    template <typename T> class FIRFilterPlanImpl {
      public:
       virtual ~FIRFilterPlanImpl() = default;
       /** @brief Applies the FIR filter to an input signal segment, updating
@@ -179,8 +168,7 @@ namespace OmniDSP {
     };
 
     /** @brief Interface for IIR filter plan implementations. */
-    template <typename T>
-    class IIRFilterPlanImpl {
+    template <typename T> class IIRFilterPlanImpl {
      public:
       virtual ~IIRFilterPlanImpl() = default;
       /** @brief Applies the IIR filter to an input signal segment, updating

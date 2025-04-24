@@ -25,10 +25,8 @@ namespace OmniDSP {
 
   // Forward declarations for implementation classes (Pimpl idiom)
   namespace backend {
-    template <typename T>
-    class ConvolutionPlanImpl;
-    template <typename T>
-    class CorrelationPlanImpl;
+    template <typename T> class ConvolutionPlanImpl;
+    template <typename T> class CorrelationPlanImpl;
   }  // namespace backend
 
   /**
@@ -75,8 +73,7 @@ namespace OmniDSP {
    * Uses the Pimpl idiom. Non-copyable but movable.
    * @tparam T The data type (e.g., float, double, std::complex<float>).
    */
-  template <typename T>
-  class OMNIDSP_EXPORT ConvolutionPlan {
+  template <typename T> class OMNIDSP_EXPORT ConvolutionPlan {
     friend class OmniDSP;  // Allow OmniDSP factory methods to call private
                            // constructor
 
@@ -142,8 +139,7 @@ namespace OmniDSP {
    * the Pimpl idiom. Non-copyable but movable.
    * @tparam T The data type (e.g., float, double, std::complex<float>).
    */
-  template <typename T>
-  class OMNIDSP_EXPORT CorrelationPlan {
+  template <typename T> class OMNIDSP_EXPORT CorrelationPlan {
     friend class OmniDSP;  // Allow OmniDSP factory methods to call private
                            // constructor
 

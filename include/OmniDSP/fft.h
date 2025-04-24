@@ -27,10 +27,8 @@ namespace OmniDSP {
 
   // Forward declarations for implementation classes (Pimpl idiom)
   namespace backend {
-    template <typename T>
-    class FFTPlanImpl;
-    template <typename T>
-    class RFFTPlanImpl;
+    template <typename T> class FFTPlanImpl;
+    template <typename T> class RFFTPlanImpl;
   }  // namespace backend
 
   /**
@@ -41,8 +39,7 @@ namespace OmniDSP {
    * OmniDSP::create_fft_plan. This class is non-copyable but movable.
    * @tparam T The underlying floating-point type (e.g., float, double).
    */
-  template <typename T>
-  class OMNIDSP_EXPORT FFTPlan {
+  template <typename T> class OMNIDSP_EXPORT FFTPlan {
     // Friend declaration allows OmniDSP factory methods to call the private
     // constructor
     friend class OmniDSP;
@@ -133,8 +130,7 @@ namespace OmniDSP {
    * This class is non-copyable but movable.
    * @tparam T The underlying floating-point type (e.g., float, double).
    */
-  template <typename T>
-  class OMNIDSP_EXPORT RFFTPlan {
+  template <typename T> class OMNIDSP_EXPORT RFFTPlan {
     // Friend declaration allows OmniDSP factory methods to call the private
     // constructor
     friend class OmniDSP;
@@ -221,8 +217,7 @@ namespace OmniDSP {
   // The constructor, destructor, move ops, and execution methods MUST be
   // defined in a .cpp file where the Impl class is fully defined.
 
-  template <typename T>
-  size_t FFTPlan<T>::get_length() const
+  template <typename T> size_t FFTPlan<T>::get_length() const
   {
     // Implementation requires calling the Impl class.
     // This definition must be moved to the .cpp file.
@@ -232,8 +227,7 @@ namespace OmniDSP {
     return 0;  // Temporary placeholder for header compilation
   }
 
-  template <typename T>
-  size_t RFFTPlan<T>::get_length() const
+  template <typename T> size_t RFFTPlan<T>::get_length() const
   {
     // Implementation requires calling the Impl class.
     // This definition must be moved to the .cpp file.

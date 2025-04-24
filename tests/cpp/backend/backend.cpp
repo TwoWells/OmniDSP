@@ -32,8 +32,7 @@ class BackendConvTest : public ::testing::Test {
   static bool references_loaded;
 
   // Helper to compare vectors with tolerance
-  template <typename T>
-  void ExpectVectorNear(
+  template <typename T> void ExpectVectorNear(
       const std::vector<T>& expected,
       const std::vector<T>& actual,
       T tolerance,
@@ -47,8 +46,7 @@ class BackendConvTest : public ::testing::Test {
   }
 
   // Helper to get tolerance based on type
-  template <typename T>
-  T get_tolerance()
+  template <typename T> T get_tolerance()
   {
     if constexpr (std::is_same_v<T, float>) {
       return std::numeric_limits<float>::epsilon() * 100;

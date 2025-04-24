@@ -144,8 +144,7 @@ namespace OmniDSP {
   // in src/omnidsp/cqt.cpp where the CQTPlanImpl<T> is fully defined.
 
   // Example placeholder getters (real definitions MUST be in .cpp):
-  template <typename T>
-  size_t CQTPlan<T>::get_num_bins() const
+  template <typename T> size_t CQTPlan<T>::get_num_bins() const
   {
     // return pimpl_ ? pimpl_->get_num_bins() : 0; // Requires Impl definition
     return 0;  // Placeholder
@@ -159,8 +158,7 @@ namespace OmniDSP {
     return 0;  // Placeholder
   }
 
-  template <typename T>
-  size_t CQTPlan<T>::get_hop_length() const
+  template <typename T> size_t CQTPlan<T>::get_hop_length() const
   {
     // return pimpl_ ? pimpl_->get_hop_length() : 0; // Requires Impl definition
     return 0;  // Placeholder

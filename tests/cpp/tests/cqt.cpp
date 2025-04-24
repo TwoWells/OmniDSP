@@ -41,8 +41,7 @@ const int DEFAULT_FIR_FILTER_ORDER_TEST = 101;
 // --- Test Helper Functions ---
 
 // Helper function to compare complex matrices
-template <typename T>
-void ExpectComplexMatrixNear(
+template <typename T> void ExpectComplexMatrixNear(
     const std::vector<std::vector<std::complex<T>>> &actual,
     const std::vector<std::vector<std::complex<T>>> &expected,
     T abs_error,
@@ -84,8 +83,7 @@ void ExpectComplexMatrixNear(
 }
 
 // Helper function to compare real vectors
-template <typename T>
-void ExpectRealVectorNear(
+template <typename T> void ExpectRealVectorNear(
     const std::vector<T> &actual,
     const std::vector<T> &expected,
     T abs_error,
@@ -102,8 +100,7 @@ void ExpectRealVectorNear(
 
 // Helper to generate a simple Hann window (L1 normalized is often used
 // internally)
-template <typename T>
-std::vector<T> hannWindowGenerator(size_t length)
+template <typename T> std::vector<T> hannWindowGenerator(size_t length)
 {
   if (length == 0) return {};
   std::vector<T> window_coeffs(length);
@@ -159,8 +156,7 @@ class CQT_Test : public ::testing::Test {
   const std::string suite_name = "cqt";  // Corresponds to data/cqt/ directory
 
   // Helper to get tolerance
-  template <typename T>
-  T get_tolerance()
+  template <typename T> T get_tolerance()
   {
     return std::is_same_v<T, float> ? abs_error_f : abs_error_d;
   }

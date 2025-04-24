@@ -289,8 +289,7 @@ namespace OmniDSP {
   }
 
   // --- DSP Operations ---
-  template <typename T>
-  [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+  template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
   OmniDSP::convolve(  // Renamed
       const std::vector<RealT<T>>& input,
       const std::vector<RealT<T>>& kernel,
@@ -301,8 +300,7 @@ namespace OmniDSP {
     return pimpl_->convolve(input, kernel, mode);  // Renamed
   }
 
-  template <typename T>
-  [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>>
+  template <typename T> [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>>
   OmniDSP::convolve(  // Renamed
       const std::vector<ComplexT<T>>& input,
       const std::vector<ComplexT<T>>& kernel,
@@ -313,8 +311,7 @@ namespace OmniDSP {
     return pimpl_->convolve(input, kernel, mode);  // Renamed
   }
 
-  template <typename T>
-  [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+  template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
   OmniDSP::correlate(  // Renamed
       const std::vector<RealT<T>>& input,
       const std::vector<RealT<T>>& kernel,
@@ -325,8 +322,7 @@ namespace OmniDSP {
     return pimpl_->correlate(input, kernel, mode);  // Renamed
   }
 
-  template <typename T>
-  [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>>
+  template <typename T> [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>>
   OmniDSP::correlate(  // Renamed
       const std::vector<ComplexT<T>>& input,
       const std::vector<ComplexT<T>>& kernel,
@@ -448,8 +444,7 @@ namespace OmniDSP {
   }
 
   // --- Plan Factories ---
-  template <typename T>
-  [[nodiscard]] OmniExpected<std::unique_ptr<FFTPlan<T>>>
+  template <typename T> [[nodiscard]] OmniExpected<std::unique_ptr<FFTPlan<T>>>
   OmniDSP::create_fft_plan(size_t length) const
   {
     if (!pimpl_)
@@ -457,8 +452,7 @@ namespace OmniDSP {
     return pimpl_->create_fft_plan<T>(length);
   }
 
-  template <typename T>
-  [[nodiscard]] OmniExpected<std::unique_ptr<RFFTPlan<T>>>
+  template <typename T> [[nodiscard]] OmniExpected<std::unique_ptr<RFFTPlan<T>>>
   OmniDSP::create_rfft_plan(size_t length) const
   {
     if (!pimpl_)
@@ -466,8 +460,7 @@ namespace OmniDSP {
     return pimpl_->create_rfft_plan<T>(length);
   }
 
-  template <typename T>
-  [[nodiscard]] OmniExpected<std::unique_ptr<CQTPlan<T>>>
+  template <typename T> [[nodiscard]] OmniExpected<std::unique_ptr<CQTPlan<T>>>
   OmniDSP::create_cqt_plan(
       RealT<T> sample_rate,
       RealT<T> min_freq,

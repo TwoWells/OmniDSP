@@ -28,8 +28,8 @@ namespace OmniDSP {
     //--------------------------------------------------------------------------
 
     /** @brief Accelerate implementation for complex FFT plans. */
-    template <typename T>
-    class AccelerateFFTPlanImpl final : public FFTPlanImpl<T> {
+    template <typename T> class AccelerateFFTPlanImpl final
+        : public FFTPlanImpl<T> {
      public:
       // Constructor: Creates vDSP_DFT_Setup
       AccelerateFFTPlanImpl(size_t length);
@@ -54,8 +54,8 @@ namespace OmniDSP {
     };
 
     /** @brief Accelerate implementation for real FFT plans. */
-    template <typename T>
-    class AccelerateRFFTPlanImpl final : public RFFTPlanImpl<T> {
+    template <typename T> class AccelerateRFFTPlanImpl final
+        : public RFFTPlanImpl<T> {
      public:
       // Constructor: Creates vDSP_FFTSetup
       AccelerateRFFTPlanImpl(size_t length);
@@ -88,8 +88,8 @@ namespace OmniDSP {
     };
 
     /** @brief Accelerate implementation for resampling plans. */
-    template <typename T>
-    class AccelerateResamplePlanImpl final : public ResamplePlanImpl<T> {
+    template <typename T> class AccelerateResamplePlanImpl final
+        : public ResamplePlanImpl<T> {
      public:
       // Constructor: Designs polyphase filter, sets up state
       AccelerateResamplePlanImpl(
@@ -116,8 +116,8 @@ namespace OmniDSP {
     };
 
     /** @brief Accelerate implementation for convolution plans. */
-    template <typename T>
-    class AccelerateConvolutionPlanImpl final : public ConvolutionPlanImpl<T> {
+    template <typename T> class AccelerateConvolutionPlanImpl final
+        : public ConvolutionPlanImpl<T> {
      public:
       // Constructor: Stores kernel, mode, potentially pre-computes kernel FFT
       AccelerateConvolutionPlanImpl(
@@ -145,8 +145,8 @@ namespace OmniDSP {
     };
 
     /** @brief Accelerate implementation for correlation plans. */
-    template <typename T>
-    class AccelerateCorrelationPlanImpl final : public CorrelationPlanImpl<T> {
+    template <typename T> class AccelerateCorrelationPlanImpl final
+        : public CorrelationPlanImpl<T> {
      public:
       // Constructor: Stores template, mode, potentially pre-computes template
       // FFT

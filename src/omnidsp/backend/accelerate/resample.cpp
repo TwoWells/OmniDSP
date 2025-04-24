@@ -34,8 +34,7 @@ namespace OmniDSP {
     // Helper for designing a basic low-pass FIR filter (Placeholder)
     // A real implementation would use a proper design method (e.g., Kaiser
     // window)
-    template <typename T>
-    std::vector<T> design_resample_filter(
+    template <typename T> std::vector<T> design_resample_filter(
         size_t num_taps, double cutoff_freq_norm)
     {
       // Placeholder: Returns a simple sinc filter windowed with Hann
@@ -145,8 +144,7 @@ namespace OmniDSP {
                 << std::endl;  // Debug
     }
 
-    template <typename T>
-    Status AccelerateResamplePlanImpl<T>::execute(
+    template <typename T> Status AccelerateResamplePlanImpl<T>::execute(
         std::span<const T> input, std::span<T> output) const
     {
       if (upsample_factor_L_ == 0 || downsample_factor_M_ == 0

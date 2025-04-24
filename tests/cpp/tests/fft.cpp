@@ -17,8 +17,7 @@
 #include "gtest/gtest.h"         // Google Test framework
 
 // Helper function to compare complex vectors with tolerance
-template <typename T>
-void ExpectComplexVectorNear(
+template <typename T> void ExpectComplexVectorNear(
     const std::vector<std::complex<T>> &actual,
     const std::vector<std::complex<T>> &expected,
     T abs_error,
@@ -36,8 +35,7 @@ void ExpectComplexVectorNear(
 }
 
 // Helper function to compare real vectors with tolerance
-template <typename T>
-void ExpectRealVectorNear(
+template <typename T> void ExpectRealVectorNear(
     const std::vector<T> &actual,
     const std::vector<T> &expected,
     T abs_error,
@@ -63,8 +61,7 @@ class FFT_Test : public ::testing::Test {
   const float abs_error_f = 1e-5f;
 
   // Helper to get tolerance based on type
-  template <typename T>
-  T get_tolerance()
+  template <typename T> T get_tolerance()
   {
     return std::is_same_v<T, float> ? abs_error_f : abs_error_d;
   }

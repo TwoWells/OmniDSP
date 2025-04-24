@@ -128,8 +128,7 @@ namespace OmniDSP {
     // DefaultCQTPlanImpl Method Implementations
     //--------------------------------------------------------------------------
 
-    template <typename T>
-    DefaultCQTPlanImpl<T>::DefaultCQTPlanImpl(
+    template <typename T> DefaultCQTPlanImpl<T>::DefaultCQTPlanImpl(
         const OmniDSPImpl* owner_impl,
         RealT<T> sample_rate,
         RealT<T> min_freq,
@@ -325,15 +324,13 @@ namespace OmniDSP {
           << std::endl;
     }
 
-    template <typename T>
-    DefaultCQTPlanImpl<T>::~DefaultCQTPlanImpl()
+    template <typename T> DefaultCQTPlanImpl<T>::~DefaultCQTPlanImpl()
     {
       std::cout << "Default CQTPlanImpl destroyed." << std::endl;
       // fft_plan_ and resample_plan_ unique_ptrs handle cleanup
     }
 
-    template <typename T>
-    Status DefaultCQTPlanImpl<T>::execute(
+    template <typename T> Status DefaultCQTPlanImpl<T>::execute(
         std::span<const RealT<T>> input, std::span<ComplexT<T>> output) const
     {
       if (!owner_impl_ || !fft_plan_ || !resample_plan_) {
@@ -530,14 +527,12 @@ namespace OmniDSP {
       return final_status;
     }
 
-    template <typename T>
-    size_t DefaultCQTPlanImpl<T>::get_num_bins() const
+    template <typename T> size_t DefaultCQTPlanImpl<T>::get_num_bins() const
     {
       return num_bins_;
     }
 
-    template <typename T>
-    size_t DefaultCQTPlanImpl<T>::get_num_output_frames(
+    template <typename T> size_t DefaultCQTPlanImpl<T>::get_num_output_frames(
         size_t input_length) const
     {
       if (hop_length_ == 0 || input_length == 0) {
@@ -549,8 +544,7 @@ namespace OmniDSP {
              / hop_length_;  // Ceiling division
     }
 
-    template <typename T>
-    size_t DefaultCQTPlanImpl<T>::get_hop_length() const
+    template <typename T> size_t DefaultCQTPlanImpl<T>::get_hop_length() const
     {
       return hop_length_;
     }

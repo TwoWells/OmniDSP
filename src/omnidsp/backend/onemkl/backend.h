@@ -19,14 +19,11 @@
 #include "../backend.h"  // Include the main backend interface definitions
 
 // Helper to map std::complex to MKL_Complex types
-template <typename T>
-struct MKLComplexType;
-template <>
-struct MKLComplexType<std::complex<float>> {
+template <typename T> struct MKLComplexType;
+template <> struct MKLComplexType<std::complex<float>> {
   using type = MKL_Complex8;
 };
-template <>
-struct MKLComplexType<std::complex<double>> {
+template <> struct MKLComplexType<std::complex<double>> {
   using type = MKL_Complex16;
 };
 
@@ -38,8 +35,8 @@ namespace OmniDSP {
     //--------------------------------------------------------------------------
 
     /** @brief oneMKL implementation for complex FFT plans using DFTI. */
-    template <typename T>
-    class OneMKLFFTPlanImpl final : public FFTPlanImpl<T> {
+    template <typename T> class OneMKLFFTPlanImpl final
+        : public FFTPlanImpl<T> {
      public:
       // Constructor: Creates DFTI descriptor
       OneMKLFFTPlanImpl(size_t length);
@@ -61,8 +58,8 @@ namespace OmniDSP {
     };
 
     /** @brief oneMKL implementation for real FFT plans using DFTI. */
-    template <typename T>
-    class OneMKLRFFTPlanImpl final : public RFFTPlanImpl<T> {
+    template <typename T> class OneMKLRFFTPlanImpl final
+        : public RFFTPlanImpl<T> {
      public:
       // Constructor: Creates DFTI descriptor for real transforms
       OneMKLRFFTPlanImpl(size_t length);
@@ -95,8 +92,8 @@ namespace OmniDSP {
     };
 
     /** @brief oneMKL implementation for resampling plans. */
-    template <typename T>
-    class OneMKLResamplePlanImpl final : public ResamplePlanImpl<T> {
+    template <typename T> class OneMKLResamplePlanImpl final
+        : public ResamplePlanImpl<T> {
      public:
       // Constructor: Sets up resampling (potentially using MKL VSL
       // convolution/filter design?)
@@ -125,8 +122,8 @@ namespace OmniDSP {
 
     /** @brief oneMKL implementation for convolution plans using DFTI or VSL
      * Convolution. */
-    template <typename T>
-    class OneMKLConvolutionPlanImpl final : public ConvolutionPlanImpl<T> {
+    template <typename T> class OneMKLConvolutionPlanImpl final
+        : public ConvolutionPlanImpl<T> {
      public:
       // Constructor: Stores kernel, mode, potentially pre-computes kernel FFT
       // using DFTI or sets up VSL task
@@ -160,8 +157,8 @@ namespace OmniDSP {
 
     /** @brief oneMKL implementation for correlation plans using DFTI or VSL
      * Convolution. */
-    template <typename T>
-    class OneMKLCorrelationPlanImpl final : public CorrelationPlanImpl<T> {
+    template <typename T> class OneMKLCorrelationPlanImpl final
+        : public CorrelationPlanImpl<T> {
      public:
       // Constructor: Stores template, mode, potentially pre-computes template
       // FFT or sets up VSL task
