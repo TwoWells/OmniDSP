@@ -198,8 +198,6 @@ If you only need the C++ library for use in another C++ project:
 
 ## Project Structure
 
-_(Updated to reflect new structure)_
-
 - `include/OmniDSP/`: Public C++ headers defining the API (`omnidsp.h`, `fft.h`, `cqt.h`, `resample.h`, `core_types.h`).
 - `src/omnidsp/`: Core C++ library implementation files (`omnidsp.cpp`, `fft.cpp`, `cqt.cpp`, `resample.cpp`). These implement the public API classes and forward calls to the backend implementations via PIMPL.
 - `src/omnidsp/backend/`: Contains backend-specific implementations and the internal interface header.
@@ -256,7 +254,6 @@ OmniDSP employs a specific architecture to provide a consistent API while levera
 
 ### Design Rationale
 
-_(New subsection explaining the philosophy)_
 The decision to center the API around an `OmniDSP` instance (which manages the backend and acts as a factory) rather than using standalone functions was made to:
 
 - **Increase Clarity:** Explicitly creating an `OmniDSP` object makes the user aware they are interacting with a specific backend instance and its configuration. Standalone functions can obscure this dependency.
@@ -272,7 +269,6 @@ Testing is crucial. Please ensure all tests pass before submitting changes.
 
 ### Python Tests
 
-_(Updated)_
 Run Python tests using pytest from the root directory:
 
 ```
@@ -283,7 +279,6 @@ These tests check the Python bindings and API. Tests should now instantiate an `
 
 ### C++ Tests
 
-_(Updated)_
 The C++ tests use GoogleTest and rely on reference data files.
 
 #### Selecting Backend for Tests
