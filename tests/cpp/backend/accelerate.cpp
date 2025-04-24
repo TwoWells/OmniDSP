@@ -15,7 +15,8 @@
 // beyond the general correctness tests in backend_conv_test.cpp.
 
 // Example Placeholder Test (can be removed if no Accelerate-specific tests yet)
-TEST(BackendConvAccelerateTest, Placeholder) {
+TEST(BackendConvAccelerateTest, Placeholder)
+{
   SUCCEED() << "No Accelerate-specific convolution tests yet.";
 }
 

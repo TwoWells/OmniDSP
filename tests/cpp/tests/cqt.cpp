@@ -44,8 +44,10 @@ const int DEFAULT_FIR_FILTER_ORDER_TEST = 101;
 template <typename T>
 void ExpectComplexMatrixNear(
     const std::vector<std::vector<std::complex<T>>> &actual,
-    const std::vector<std::vector<std::complex<T>>> &expected, T abs_error,
-    const std::string &message = "") {
+    const std::vector<std::vector<std::complex<T>>> &expected,
+    T abs_error,
+    const std::string &message = "")
+{
   ASSERT_EQ(actual.size(), expected.size())
       << message
       << " - Matrix row counts (bins) differ. Expected: " << expected.size()
@@ -83,9 +85,12 @@ void ExpectComplexMatrixNear(
 
 // Helper function to compare real vectors
 template <typename T>
-void ExpectRealVectorNear(const std::vector<T> &actual,
-                          const std::vector<T> &expected, T abs_error,
-                          const std::string &message = "") {
+void ExpectRealVectorNear(
+    const std::vector<T> &actual,
+    const std::vector<T> &expected,
+    T abs_error,
+    const std::string &message = "")
+{
   ASSERT_EQ(actual.size(), expected.size())
       << message << " - Vector sizes differ. Expected: " << expected.size()
       << ", Got: " << actual.size();
@@ -98,7 +103,8 @@ void ExpectRealVectorNear(const std::vector<T> &actual,
 // Helper to generate a simple Hann window (L1 normalized is often used
 // internally)
 template <typename T>
-std::vector<T> hannWindowGenerator(size_t length) {
+std::vector<T> hannWindowGenerator(size_t length)
+{
   if (length == 0) return {};
   std::vector<T> window_coeffs(length);
   double denom = (length > 1) ? static_cast<double>(length - 1) : 1.0;
@@ -120,7 +126,8 @@ std::vector<T> hannWindowGenerator(size_t length) {
 
 // Helper to generate a sine wave
 template <typename T>
-std::vector<T> generateSineWave(double freq, double duration_sec, double sr) {
+std::vector<T> generateSineWave(double freq, double duration_sec, double sr)
+{
   size_t length = static_cast<size_t>(duration_sec * sr);
   if (length == 0) return {};
   std::vector<T> signal(length);
@@ -137,8 +144,8 @@ class CQT_Test : public ::testing::Test {
   // Common parameters matching reference data generation script
   const double sample_rate = 22050.0;
   const double fmin = 32.7;  // C1
-  const double high_freq =
-      1760.0;             // A6 (Example, ensure matches generation if used)
+  const double high_freq
+      = 1760.0;           // A6 (Example, ensure matches generation if used)
   const int n_bins = 84;  // Example, ensure matches generation
   const int bins_per_octave = 12;
   const size_t hop_length = 512;  // Must be compatible with CQT implementation
@@ -153,7 +160,8 @@ class CQT_Test : public ::testing::Test {
 
   // Helper to get tolerance
   template <typename T>
-  T get_tolerance() {
+  T get_tolerance()
+  {
     return std::is_same_v<T, float> ? abs_error_f : abs_error_d;
   }
 };
@@ -161,81 +169,162 @@ class CQT_Test : public ::testing::Test {
 // --- CQTPlan Tests ---
 
 // Test CQTPlan constructor parameter validation
-TEST_F(CQT_Test, ConstructorParameterValidation) {
+TEST_F(CQT_Test, ConstructorParameterValidation)
+{
   using T = double;
   auto window_gen = hannWindowGenerator<T>;  // Use helper
 
   // Valid case
   ASSERT_NO_THROW(OmniDSP::CQTPlan<T>(
-      sample_rate, hop_length, fmin, high_freq, bins_per_octave, window_gen,
-      sparsity_threshold_double, DEFAULT_FIR_FILTER_ORDER_TEST));
+      sample_rate,
+      hop_length,
+      fmin,
+      high_freq,
+      bins_per_octave,
+      window_gen,
+      sparsity_threshold_double,
+      DEFAULT_FIR_FILTER_ORDER_TEST));
 
   // Invalid parameters
   ASSERT_THROW(
-      OmniDSP::CQTPlan<T>(0.0, hop_length, fmin, high_freq, bins_per_octave,
-                          window_gen, sparsity_threshold_double,
-                          DEFAULT_FIR_FILTER_ORDER_TEST),
+      OmniDSP::CQTPlan<T>(
+          0.0,
+          hop_length,
+          fmin,
+          high_freq,
+          bins_per_octave,
+          window_gen,
+          sparsity_threshold_double,
+          DEFAULT_FIR_FILTER_ORDER_TEST),
       std::invalid_argument);  // Invalid SR
-  ASSERT_THROW(OmniDSP::CQTPlan<T>(
-                   sample_rate, 0, fmin, high_freq, bins_per_octave, window_gen,
-                   sparsity_threshold_double, DEFAULT_FIR_FILTER_ORDER_TEST),
-               std::invalid_argument);  // Invalid hop
-  ASSERT_THROW(OmniDSP::CQTPlan<T>(sample_rate, hop_length, 0.0, high_freq,
-                                   bins_per_octave, window_gen,
-                                   sparsity_threshold_double,
-                                   DEFAULT_FIR_FILTER_ORDER_TEST),
-               std::invalid_argument);  // Invalid fmin
   ASSERT_THROW(
-      OmniDSP::CQTPlan<T>(sample_rate, hop_length, fmin, fmin, bins_per_octave,
-                          window_gen, sparsity_threshold_double,
-                          DEFAULT_FIR_FILTER_ORDER_TEST),
+      OmniDSP::CQTPlan<T>(
+          sample_rate,
+          0,
+          fmin,
+          high_freq,
+          bins_per_octave,
+          window_gen,
+          sparsity_threshold_double,
+          DEFAULT_FIR_FILTER_ORDER_TEST),
+      std::invalid_argument);  // Invalid hop
+  ASSERT_THROW(
+      OmniDSP::CQTPlan<T>(
+          sample_rate,
+          hop_length,
+          0.0,
+          high_freq,
+          bins_per_octave,
+          window_gen,
+          sparsity_threshold_double,
+          DEFAULT_FIR_FILTER_ORDER_TEST),
+      std::invalid_argument);  // Invalid fmin
+  ASSERT_THROW(
+      OmniDSP::CQTPlan<T>(
+          sample_rate,
+          hop_length,
+          fmin,
+          fmin,
+          bins_per_octave,
+          window_gen,
+          sparsity_threshold_double,
+          DEFAULT_FIR_FILTER_ORDER_TEST),
       std::invalid_argument);  // fmax <= fmin
-  ASSERT_THROW(OmniDSP::CQTPlan<T>(sample_rate, hop_length, fmin, sample_rate,
-                                   bins_per_octave, window_gen,
-                                   sparsity_threshold_double,
-                                   DEFAULT_FIR_FILTER_ORDER_TEST),
-               std::invalid_argument);  // fmax >= Nyquist
-  ASSERT_THROW(OmniDSP::CQTPlan<T>(sample_rate, hop_length, fmin, high_freq, 0,
-                                   window_gen, sparsity_threshold_double,
-                                   DEFAULT_FIR_FILTER_ORDER_TEST),
-               std::invalid_argument);  // Invalid BPO
   ASSERT_THROW(
-      OmniDSP::CQTPlan<T>(sample_rate, hop_length, fmin, high_freq,
-                          bins_per_octave, nullptr, sparsity_threshold_double,
-                          DEFAULT_FIR_FILTER_ORDER_TEST),
+      OmniDSP::CQTPlan<T>(
+          sample_rate,
+          hop_length,
+          fmin,
+          sample_rate,
+          bins_per_octave,
+          window_gen,
+          sparsity_threshold_double,
+          DEFAULT_FIR_FILTER_ORDER_TEST),
+      std::invalid_argument);  // fmax >= Nyquist
+  ASSERT_THROW(
+      OmniDSP::CQTPlan<T>(
+          sample_rate,
+          hop_length,
+          fmin,
+          high_freq,
+          0,
+          window_gen,
+          sparsity_threshold_double,
+          DEFAULT_FIR_FILTER_ORDER_TEST),
+      std::invalid_argument);  // Invalid BPO
+  ASSERT_THROW(
+      OmniDSP::CQTPlan<T>(
+          sample_rate,
+          hop_length,
+          fmin,
+          high_freq,
+          bins_per_octave,
+          nullptr,
+          sparsity_threshold_double,
+          DEFAULT_FIR_FILTER_ORDER_TEST),
       std::invalid_argument);  // Null window gen
   ASSERT_THROW(
-      OmniDSP::CQTPlan<T>(sample_rate, 511, fmin, high_freq, bins_per_octave,
-                          window_gen, sparsity_threshold_double,
-                          DEFAULT_FIR_FILTER_ORDER_TEST),
+      OmniDSP::CQTPlan<T>(
+          sample_rate,
+          511,
+          fmin,
+          high_freq,
+          bins_per_octave,
+          window_gen,
+          sparsity_threshold_double,
+          DEFAULT_FIR_FILTER_ORDER_TEST),
       std::invalid_argument);  // Invalid hop length for typical recursive CQT
-  ASSERT_THROW(OmniDSP::CQTPlan<T>(sample_rate, hop_length, fmin, high_freq,
-                                   bins_per_octave, window_gen, -0.1,
-                                   DEFAULT_FIR_FILTER_ORDER_TEST),
-               std::invalid_argument);  // Invalid sparsity
-  ASSERT_THROW(OmniDSP::CQTPlan<T>(sample_rate, hop_length, fmin, high_freq,
-                                   bins_per_octave, window_gen,
-                                   sparsity_threshold_double, 0),
-               std::invalid_argument);  // Invalid FIR order (zero)
-  ASSERT_THROW(OmniDSP::CQTPlan<T>(sample_rate, hop_length, fmin, high_freq,
-                                   bins_per_octave, window_gen,
-                                   sparsity_threshold_double, 100),
-               std::invalid_argument);  // Invalid FIR order (even)
+  ASSERT_THROW(
+      OmniDSP::CQTPlan<T>(
+          sample_rate,
+          hop_length,
+          fmin,
+          high_freq,
+          bins_per_octave,
+          window_gen,
+          -0.1,
+          DEFAULT_FIR_FILTER_ORDER_TEST),
+      std::invalid_argument);  // Invalid sparsity
+  ASSERT_THROW(
+      OmniDSP::CQTPlan<T>(
+          sample_rate,
+          hop_length,
+          fmin,
+          high_freq,
+          bins_per_octave,
+          window_gen,
+          sparsity_threshold_double,
+          0),
+      std::invalid_argument);  // Invalid FIR order (zero)
+  ASSERT_THROW(
+      OmniDSP::CQTPlan<T>(
+          sample_rate,
+          hop_length,
+          fmin,
+          high_freq,
+          bins_per_octave,
+          window_gen,
+          sparsity_threshold_double,
+          100),
+      std::invalid_argument);  // Invalid FIR order (even)
 }
 
 // Test CQTPlan::execute method against reference data
-TEST_F(CQT_Test, ExecuteCQT_Double) {
+TEST_F(CQT_Test, ExecuteCQT_Double)
+{
   using T = double;
   std::string test_case_name = "FullRecursiveCQT_Execute_Double";
   std::vector<T> input_d;
   ComplexMatD expected_cqt_d;  // Expecting 2D complex matrix
 
   // Load input signal (1D real) and expected output (2D complex)
-  ASSERT_NO_THROW(input_d = TestDataLoader::loadVectorData<T>(
-                      suite_name, test_case_name + "_input_d.txt"))
+  ASSERT_NO_THROW(
+      input_d = TestDataLoader::loadVectorData<T>(
+          suite_name, test_case_name + "_input_d.txt"))
       << "Failed to load input data";
-  ASSERT_NO_THROW(expected_cqt_d = TestDataLoader::loadComplexMatrixData<T>(
-                      suite_name, test_case_name + "_expected_cd.txt"))
+  ASSERT_NO_THROW(
+      expected_cqt_d = TestDataLoader::loadComplexMatrixData<T>(
+          suite_name, test_case_name + "_expected_cd.txt"))
       << "Failed to load expected data";
 
   ASSERT_FALSE(input_d.empty()) << "Input data vector is empty";
@@ -243,10 +332,16 @@ TEST_F(CQT_Test, ExecuteCQT_Double) {
 
   // Create CQT plan
   std::unique_ptr<OmniDSP::CQTPlan<T>> plan_ptr;
-  ASSERT_NO_THROW(plan_ptr = std::make_unique<OmniDSP::CQTPlan<T>>(
-                      sample_rate, hop_length, fmin, high_freq, bins_per_octave,
-                      hannWindowGenerator<T>, sparsity_threshold_double,
-                      DEFAULT_FIR_FILTER_ORDER_TEST))
+  ASSERT_NO_THROW(
+      plan_ptr = std::make_unique<OmniDSP::CQTPlan<T>>(
+          sample_rate,
+          hop_length,
+          fmin,
+          high_freq,
+          bins_per_octave,
+          hannWindowGenerator<T>,
+          sparsity_threshold_double,
+          DEFAULT_FIR_FILTER_ORDER_TEST))
       << "CQTPlan constructor threw unexpectedly.";
   ASSERT_NE(plan_ptr, nullptr);
   OmniDSP::CQTPlan<T> &plan = *plan_ptr;
@@ -259,22 +354,25 @@ TEST_F(CQT_Test, ExecuteCQT_Double) {
       << "CQTPlan::execute threw unexpectedly.";
 
   // Compare results
-  ExpectComplexMatrixNear(output_cqt_d, expected_cqt_d, get_tolerance<T>(),
-                          test_case_name);
+  ExpectComplexMatrixNear(
+      output_cqt_d, expected_cqt_d, get_tolerance<T>(), test_case_name);
 }
 
-TEST_F(CQT_Test, ExecuteCQT_Float) {
+TEST_F(CQT_Test, ExecuteCQT_Float)
+{
   using T = float;
   std::string test_case_name = "FullRecursiveCQT_Execute_Float";
   std::vector<T> input_f;
   ComplexMatF expected_cqt_f;  // Expecting 2D complex matrix
 
   // Load input signal (1D real) and expected output (2D complex)
-  ASSERT_NO_THROW(input_f = TestDataLoader::loadVectorData<T>(
-                      suite_name, test_case_name + "_input_f.txt"))
+  ASSERT_NO_THROW(
+      input_f = TestDataLoader::loadVectorData<T>(
+          suite_name, test_case_name + "_input_f.txt"))
       << "Failed to load input data";
-  ASSERT_NO_THROW(expected_cqt_f = TestDataLoader::loadComplexMatrixData<T>(
-                      suite_name, test_case_name + "_expected_cf.txt"))
+  ASSERT_NO_THROW(
+      expected_cqt_f = TestDataLoader::loadComplexMatrixData<T>(
+          suite_name, test_case_name + "_expected_cf.txt"))
       << "Failed to load expected data";
 
   ASSERT_FALSE(input_f.empty()) << "Input data vector is empty";
@@ -282,10 +380,16 @@ TEST_F(CQT_Test, ExecuteCQT_Float) {
 
   // Create CQT plan
   std::unique_ptr<OmniDSP::CQTPlan<T>> plan_ptr;
-  ASSERT_NO_THROW(plan_ptr = std::make_unique<OmniDSP::CQTPlan<T>>(
-                      sample_rate, hop_length, fmin, high_freq, bins_per_octave,
-                      hannWindowGenerator<T>, sparsity_threshold_float,
-                      DEFAULT_FIR_FILTER_ORDER_TEST))
+  ASSERT_NO_THROW(
+      plan_ptr = std::make_unique<OmniDSP::CQTPlan<T>>(
+          sample_rate,
+          hop_length,
+          fmin,
+          high_freq,
+          bins_per_octave,
+          hannWindowGenerator<T>,
+          sparsity_threshold_float,
+          DEFAULT_FIR_FILTER_ORDER_TEST))
       << "CQTPlan constructor threw unexpectedly.";
   ASSERT_NE(plan_ptr, nullptr);
   OmniDSP::CQTPlan<T> &plan = *plan_ptr;
@@ -298,8 +402,8 @@ TEST_F(CQT_Test, ExecuteCQT_Float) {
       << "CQTPlan::execute threw unexpectedly.";
 
   // Compare results
-  ExpectComplexMatrixNear(output_cqt_f, expected_cqt_f, get_tolerance<T>(),
-                          test_case_name);
+  ExpectComplexMatrixNear(
+      output_cqt_f, expected_cqt_f, get_tolerance<T>(), test_case_name);
 }
 
 // --- Filter And Downsample Test ---
@@ -312,19 +416,23 @@ class FilterAndDownsampleTest : public ::testing::Test {
   const float abs_error_f = 1e-5f;
 };
 
-TEST_F(FilterAndDownsampleTest, PublicAPI_Float) {
+TEST_F(FilterAndDownsampleTest, PublicAPI_Float)
+{
   using T = float;
   std::string test_case_name = "FilterAndDownsample";
   std::vector<T> input_f, filter_coeffs_f, expected_f;
 
-  ASSERT_NO_THROW(input_f = TestDataLoader::loadVectorData<T>(
-                      suite_name, test_case_name + "_input_f.txt"))
+  ASSERT_NO_THROW(
+      input_f = TestDataLoader::loadVectorData<T>(
+          suite_name, test_case_name + "_input_f.txt"))
       << "Failed to load input";
-  ASSERT_NO_THROW(filter_coeffs_f = TestDataLoader::loadVectorData<T>(
-                      suite_name, test_case_name + "_filter_coeffs_f.txt"))
+  ASSERT_NO_THROW(
+      filter_coeffs_f = TestDataLoader::loadVectorData<T>(
+          suite_name, test_case_name + "_filter_coeffs_f.txt"))
       << "Failed to load filter coeffs";
-  ASSERT_NO_THROW(expected_f = TestDataLoader::loadVectorData<T>(
-                      suite_name, test_case_name + "_expected_f.txt"))
+  ASSERT_NO_THROW(
+      expected_f = TestDataLoader::loadVectorData<T>(
+          suite_name, test_case_name + "_expected_f.txt"))
       << "Failed to load expected output";
 
   ASSERT_FALSE(input_f.empty());
@@ -335,28 +443,33 @@ TEST_F(FilterAndDownsampleTest, PublicAPI_Float) {
   int downsample_factor = 2;
 
   // Call the public API function
-  ASSERT_NO_THROW(output_f = OmniDSP::filter_and_downsample<T>(
-                      input_f, filter_coeffs_f, downsample_factor))
+  ASSERT_NO_THROW(
+      output_f = OmniDSP::filter_and_downsample<T>(
+          input_f, filter_coeffs_f, downsample_factor))
       << "Public filter_and_downsample<float> threw unexpectedly.";
 
   // Compare results
-  ExpectRealVectorNear(output_f, expected_f, abs_error_f,
-                       test_case_name + "_Float");
+  ExpectRealVectorNear(
+      output_f, expected_f, abs_error_f, test_case_name + "_Float");
 }
 
-TEST_F(FilterAndDownsampleTest, PublicAPI_Double) {
+TEST_F(FilterAndDownsampleTest, PublicAPI_Double)
+{
   using T = double;
   std::string test_case_name = "FilterAndDownsample";
   std::vector<T> input_d, filter_coeffs_d, expected_d;
 
-  ASSERT_NO_THROW(input_d = TestDataLoader::loadVectorData<T>(
-                      suite_name, test_case_name + "_input_d.txt"))
+  ASSERT_NO_THROW(
+      input_d = TestDataLoader::loadVectorData<T>(
+          suite_name, test_case_name + "_input_d.txt"))
       << "Failed to load input";
-  ASSERT_NO_THROW(filter_coeffs_d = TestDataLoader::loadVectorData<T>(
-                      suite_name, test_case_name + "_filter_coeffs_d.txt"))
+  ASSERT_NO_THROW(
+      filter_coeffs_d = TestDataLoader::loadVectorData<T>(
+          suite_name, test_case_name + "_filter_coeffs_d.txt"))
       << "Failed to load filter coeffs";
-  ASSERT_NO_THROW(expected_d = TestDataLoader::loadVectorData<T>(
-                      suite_name, test_case_name + "_expected_d.txt"))
+  ASSERT_NO_THROW(
+      expected_d = TestDataLoader::loadVectorData<T>(
+          suite_name, test_case_name + "_expected_d.txt"))
       << "Failed to load expected output";
 
   ASSERT_FALSE(input_d.empty());
@@ -370,16 +483,18 @@ TEST_F(FilterAndDownsampleTest, PublicAPI_Double) {
 // Depending on the backend, this might throw if double is unsupported
 #if defined(USE_ONEMKL)
   // MKL backend currently throws for double precision resampling
-  ASSERT_THROW(OmniDSP::filter_and_downsample<T>(input_d, filter_coeffs_d,
-                                                 downsample_factor),
-               std::runtime_error);
+  ASSERT_THROW(
+      OmniDSP::filter_and_downsample<T>(
+          input_d, filter_coeffs_d, downsample_factor),
+      std::runtime_error);
 #else
   // Accelerate or Default backends might support double or throw differently
-  ASSERT_NO_THROW(output_d = OmniDSP::filter_and_downsample<T>(
-                      input_d, filter_coeffs_d, downsample_factor))
+  ASSERT_NO_THROW(
+      output_d = OmniDSP::filter_and_downsample<T>(
+          input_d, filter_coeffs_d, downsample_factor))
       << "Public filter_and_downsample<double> threw unexpectedly.";
   // Compare results only if it didn't throw
-  ExpectRealVectorNear(output_d, expected_d, abs_error_d,
-                       test_case_name + "_Double");
+  ExpectRealVectorNear(
+      output_d, expected_d, abs_error_d, test_case_name + "_Double");
 #endif
 }

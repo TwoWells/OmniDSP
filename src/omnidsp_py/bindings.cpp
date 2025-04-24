@@ -39,7 +39,8 @@ using double_c = ComplexT<double>;
 class OmniDSPPyError : public std::runtime_error {
  public:
   OmniDSPPyError(Status s, const std::string& message)
-      : std::runtime_error(message), status_(s) {}
+      : std::runtime_error(message), status_(s)
+  {}
 
   Status get_status() const { return status_; }
 
@@ -49,35 +50,40 @@ class OmniDSPPyError : public std::runtime_error {
 
 // Helper to check OmniExpected<T> and throw OmniDSPPyError on failure
 template <typename T>
-T check_expected(OmniExpected<T>&& result,
-                 const std::string& func_name = "OmniDSP function") {
+T check_expected(
+    OmniExpected<T>&& result, const std::string& func_name = "OmniDSP function")
+{
   if (result.has_value()) {
     return std::move(result.value());
-  } else {
+  }
+  else {
     Status s = result.error();
-    std::string error_msg =
-        func_name + " failed with status: " + get_status_string(s);
+    std::string error_msg
+        = func_name + " failed with status: " + get_status_string(s);
     throw OmniDSPPyError(s, error_msg);
   }
 }
 
 // Overload for OmniExpected<void>
-void check_expected_void(OmniExpected<void>&& result,
-                         const std::string& func_name = "OmniDSP function") {
+void check_expected_void(
+    OmniExpected<void>&& result,
+    const std::string& func_name = "OmniDSP function")
+{
   if (!result.has_value()) {
     Status s = result.error();
-    std::string error_msg =
-        func_name + " failed with status: " + get_status_string(s);
+    std::string error_msg
+        = func_name + " failed with status: " + get_status_string(s);
     throw OmniDSPPyError(s, error_msg);
   }
 }
 
 // Helper to check Status return values (for Plan execute methods)
-void check_status(Status status,
-                  const std::string& func_name = "OmniDSP Plan execute") {
+void check_status(
+    Status status, const std::string& func_name = "OmniDSP Plan execute")
+{
   if (status != Status::Success) {
-    std::string error_msg =
-        func_name + " failed with status: " + get_status_string(status);
+    std::string error_msg
+        = func_name + " failed with status: " + get_status_string(status);
     throw OmniDSPPyError(status, error_msg);
   }
 }
@@ -85,7 +91,8 @@ void check_status(Status status,
 // Helper to convert NumPy array to std::span (const version)
 // Performs dtype and contiguity checks.
 template <typename T>
-std::span<const T> numpy_to_span_const(const py::buffer& buf) {
+std::span<const T> numpy_to_span_const(const py::buffer& buf)
+{
   py::buffer_info info = buf.request();  // Request buffer information
 
   // Check dimensions (expect 1D)
@@ -110,7 +117,8 @@ std::span<const T> numpy_to_span_const(const py::buffer& buf) {
 // Helper to convert NumPy array to std::span (non-const version)
 // Performs dtype and contiguity checks.
 template <typename T>
-std::span<T> numpy_to_span_writable(py::buffer buf) {
+std::span<T> numpy_to_span_writable(py::buffer buf)
+{
   py::buffer_info info = buf.request(true);  // Request writable buffer
 
   if (info.ndim != 1) {
@@ -126,25 +134,30 @@ std::span<T> numpy_to_span_writable(py::buffer buf) {
   return std::span<T>(static_cast<T*>(info.ptr), info.shape[0]);
 }
 
-PYBIND11_MODULE(_omnidsp_cpp, m) {  // Matches the target name in CMakeLists.txt
+PYBIND11_MODULE(_omnidsp_cpp, m)
+{  // Matches the target name in CMakeLists.txt
   m.doc() = "Python bindings for the OmniDSP C++ library";
 
   // --- Custom Exception ---
   // Register the custom exception class with pybind11
-  static py::exception<OmniDSPPyError> omni_dsp_py_error(m, "OmniDSPError",
-                                                         PyExc_RuntimeError);
-  py::register_exception_translator([](std::exception_ptr p) {
-    try {
-      if (p) std::rethrow_exception(p);
-    } catch (const OmniDSPPyError& e) {
-      // Set the Python error object with the message from the C++ exception
-      // Include the status code if desired
-      std::string msg = std::string(e.what()) + " (Status Code: " +
-                        std::to_string(static_cast<int>(e.get_status())) + ")";
-      PyErr_SetString(omni_dsp_py_error.ptr(), msg.c_str());
-    }
-    // Add catch blocks for other C++ exceptions if needed
-  });
+  static py::exception<OmniDSPPyError> omni_dsp_py_error(
+      m, "OmniDSPError", PyExc_RuntimeError);
+  py::register_exception_translator(
+      [](std::exception_ptr p)
+      {
+        try {
+          if (p) std::rethrow_exception(p);
+        }
+        catch (const OmniDSPPyError& e) {
+          // Set the Python error object with the message from the C++ exception
+          // Include the status code if desired
+          std::string msg = std::string(e.what()) + " (Status Code: "
+                            + std::to_string(static_cast<int>(e.get_status()))
+                            + ")";
+          PyErr_SetString(omni_dsp_py_error.ptr(), msg.c_str());
+        }
+        // Add catch blocks for other C++ exceptions if needed
+      });
 
   // --- Enums ---
   py::enum_<Backend>(m, "Backend")
@@ -225,25 +238,30 @@ PYBIND11_MODULE(_omnidsp_cpp, m) {  // Matches the target name in CMakeLists.txt
              py::array_t<float_c, py::array::c_style | py::array::forcecast>
                  input,
              py::array_t<float_c, py::array::c_style | py::array::forcecast>
-                 output) {
+                 output)
+          {
             auto input_span = numpy_to_span_const<float_c>(input);
             auto output_span = numpy_to_span_writable<float_c>(output);
             check_status(self.fft(input_span, output_span), "FFTPlan.fft");
           },
-          py::arg("input"), py::arg("output"), "Execute forward complex FFT.")
+          py::arg("input"),
+          py::arg("output"),
+          "Execute forward complex FFT.")
       .def(
           "ifft",
           [](const FFTPlan<float_c>& self,
              py::array_t<float_c, py::array::c_style | py::array::forcecast>
                  input,
              py::array_t<float_c, py::array::c_style | py::array::forcecast>
-                 output) {
+                 output)
+          {
             auto input_span = numpy_to_span_const<float_c>(input);
             auto output_span = numpy_to_span_writable<float_c>(output);
             check_status(self.ifft(input_span, output_span), "FFTPlan.ifft");
             // Note: No automatic 1/N scaling applied here, matches C++ Plan
           },
-          py::arg("input"), py::arg("output"),
+          py::arg("input"),
+          py::arg("output"),
           "Execute inverse complex FFT (unscaled).")
       .def("get_length", &FFTPlan<float_c>::get_length);
 
@@ -255,42 +273,55 @@ PYBIND11_MODULE(_omnidsp_cpp, m) {  // Matches the target name in CMakeLists.txt
              py::array_t<double_c, py::array::c_style | py::array::forcecast>
                  input,
              py::array_t<double_c, py::array::c_style | py::array::forcecast>
-                 output) {
-            check_status(self.fft(numpy_to_span_const<double_c>(input),
-                                  numpy_to_span_writable<double_c>(output)),
-                         "FFTPlan.fft");
+                 output)
+          {
+            check_status(
+                self.fft(
+                    numpy_to_span_const<double_c>(input),
+                    numpy_to_span_writable<double_c>(output)),
+                "FFTPlan.fft");
           },
-          py::arg("input"), py::arg("output"), "Execute forward complex FFT.")
+          py::arg("input"),
+          py::arg("output"),
+          "Execute forward complex FFT.")
       .def(
           "ifft",
           [](const FFTPlan<double_c>& self,
              py::array_t<double_c, py::array::c_style | py::array::forcecast>
                  input,
              py::array_t<double_c, py::array::c_style | py::array::forcecast>
-                 output) {
-            check_status(self.ifft(numpy_to_span_const<double_c>(input),
-                                   numpy_to_span_writable<double_c>(output)),
-                         "FFTPlan.ifft");
+                 output)
+          {
+            check_status(
+                self.ifft(
+                    numpy_to_span_const<double_c>(input),
+                    numpy_to_span_writable<double_c>(output)),
+                "FFTPlan.ifft");
           },
-          py::arg("input"), py::arg("output"),
+          py::arg("input"),
+          py::arg("output"),
           "Execute inverse complex FFT (unscaled).")
       .def("get_length", &FFTPlan<double_c>::get_length);
 
   // RFFTPlan (Real)
-  py::class_<RFFTPlan<float>, std::unique_ptr<RFFTPlan<float>>>(m,
-                                                                "RFFTPlanFloat")
+  py::class_<RFFTPlan<float>, std::unique_ptr<RFFTPlan<float>>>(
+      m, "RFFTPlanFloat")
       .def(
           "rfft",
           [](const RFFTPlan<float>& self,
              py::array_t<float_r, py::array::c_style | py::array::forcecast>
                  input,
              py::array_t<float_c, py::array::c_style | py::array::forcecast>
-                 output) {
-            check_status(self.rfft(numpy_to_span_const<float_r>(input),
-                                   numpy_to_span_writable<float_c>(output)),
-                         "RFFTPlan.rfft");
+                 output)
+          {
+            check_status(
+                self.rfft(
+                    numpy_to_span_const<float_r>(input),
+                    numpy_to_span_writable<float_c>(output)),
+                "RFFTPlan.rfft");
           },
-          py::arg("input"), py::arg("output"),
+          py::arg("input"),
+          py::arg("output"),
           "Execute forward real-to-complex FFT.")
       .def(
           "irfft",
@@ -298,13 +329,17 @@ PYBIND11_MODULE(_omnidsp_cpp, m) {  // Matches the target name in CMakeLists.txt
              py::array_t<float_c, py::array::c_style | py::array::forcecast>
                  input,
              py::array_t<float_r, py::array::c_style | py::array::forcecast>
-                 output) {
-            check_status(self.irfft(numpy_to_span_const<float_c>(input),
-                                    numpy_to_span_writable<float_r>(output)),
-                         "RFFTPlan.irfft");
+                 output)
+          {
+            check_status(
+                self.irfft(
+                    numpy_to_span_const<float_c>(input),
+                    numpy_to_span_writable<float_r>(output)),
+                "RFFTPlan.irfft");
             // Note: No automatic 1/N scaling applied here
           },
-          py::arg("input"), py::arg("output"),
+          py::arg("input"),
+          py::arg("output"),
           "Execute inverse complex-to-real FFT (unscaled).")
       .def("get_length", &RFFTPlan<float>::get_length);
 
@@ -316,12 +351,16 @@ PYBIND11_MODULE(_omnidsp_cpp, m) {  // Matches the target name in CMakeLists.txt
              py::array_t<double_r, py::array::c_style | py::array::forcecast>
                  input,
              py::array_t<double_c, py::array::c_style | py::array::forcecast>
-                 output) {
-            check_status(self.rfft(numpy_to_span_const<double_r>(input),
-                                   numpy_to_span_writable<double_c>(output)),
-                         "RFFTPlan.rfft");
+                 output)
+          {
+            check_status(
+                self.rfft(
+                    numpy_to_span_const<double_r>(input),
+                    numpy_to_span_writable<double_c>(output)),
+                "RFFTPlan.rfft");
           },
-          py::arg("input"), py::arg("output"),
+          py::arg("input"),
+          py::arg("output"),
           "Execute forward real-to-complex FFT.")
       .def(
           "irfft",
@@ -329,12 +368,16 @@ PYBIND11_MODULE(_omnidsp_cpp, m) {  // Matches the target name in CMakeLists.txt
              py::array_t<double_c, py::array::c_style | py::array::forcecast>
                  input,
              py::array_t<double_r, py::array::c_style | py::array::forcecast>
-                 output) {
-            check_status(self.irfft(numpy_to_span_const<double_c>(input),
-                                    numpy_to_span_writable<double_r>(output)),
-                         "RFFTPlan.irfft");
+                 output)
+          {
+            check_status(
+                self.irfft(
+                    numpy_to_span_const<double_c>(input),
+                    numpy_to_span_writable<double_r>(output)),
+                "RFFTPlan.irfft");
           },
-          py::arg("input"), py::arg("output"),
+          py::arg("input"),
+          py::arg("output"),
           "Execute inverse complex-to-real FFT (unscaled).")
       .def("get_length", &RFFTPlan<double>::get_length);
 
@@ -346,34 +389,48 @@ PYBIND11_MODULE(_omnidsp_cpp, m) {  // Matches the target name in CMakeLists.txt
              py::array_t<float_r, py::array::c_style | py::array::forcecast>
                  input,
              py::array_t<float_c, py::array::c_style | py::array::forcecast>
-                 output) {
-            check_status(self.execute(numpy_to_span_const<float_r>(input),
-                                      numpy_to_span_writable<float_c>(output)),
-                         "CQTPlan.execute");
+                 output)
+          {
+            check_status(
+                self.execute(
+                    numpy_to_span_const<float_r>(input),
+                    numpy_to_span_writable<float_c>(output)),
+                "CQTPlan.execute");
           },
-          py::arg("input"), py::arg("output"), "Execute Constant-Q Transform.")
+          py::arg("input"),
+          py::arg("output"),
+          "Execute Constant-Q Transform.")
       .def("get_num_bins", &CQTPlan<float>::get_num_bins)
-      .def("get_num_output_frames", &CQTPlan<float>::get_num_output_frames,
-           py::arg("input_length"))
+      .def(
+          "get_num_output_frames",
+          &CQTPlan<float>::get_num_output_frames,
+          py::arg("input_length"))
       .def("get_hop_length", &CQTPlan<float>::get_hop_length);
 
-  py::class_<CQTPlan<double>, std::unique_ptr<CQTPlan<double>>>(m,
-                                                                "CQTPlanDouble")
+  py::class_<CQTPlan<double>, std::unique_ptr<CQTPlan<double>>>(
+      m, "CQTPlanDouble")
       .def(
           "execute",
           [](const CQTPlan<double>& self,
              py::array_t<double_r, py::array::c_style | py::array::forcecast>
                  input,
              py::array_t<double_c, py::array::c_style | py::array::forcecast>
-                 output) {
-            check_status(self.execute(numpy_to_span_const<double_r>(input),
-                                      numpy_to_span_writable<double_c>(output)),
-                         "CQTPlan.execute");
+                 output)
+          {
+            check_status(
+                self.execute(
+                    numpy_to_span_const<double_r>(input),
+                    numpy_to_span_writable<double_c>(output)),
+                "CQTPlan.execute");
           },
-          py::arg("input"), py::arg("output"), "Execute Constant-Q Transform.")
+          py::arg("input"),
+          py::arg("output"),
+          "Execute Constant-Q Transform.")
       .def("get_num_bins", &CQTPlan<double>::get_num_bins)
-      .def("get_num_output_frames", &CQTPlan<double>::get_num_output_frames,
-           py::arg("input_length"))
+      .def(
+          "get_num_output_frames",
+          &CQTPlan<double>::get_num_output_frames,
+          py::arg("input_length"))
       .def("get_hop_length", &CQTPlan<double>::get_hop_length);
 
   // ConvolutionPlan
@@ -385,17 +442,23 @@ PYBIND11_MODULE(_omnidsp_cpp, m) {  // Matches the target name in CMakeLists.txt
              py::array_t<float, py::array::c_style | py::array::forcecast>
                  input,
              py::array_t<float, py::array::c_style | py::array::forcecast>
-                 output) {
-            check_status(self.execute(numpy_to_span_const<float>(input),
-                                      numpy_to_span_writable<float>(output)),
-                         "ConvolutionPlan.execute");
+                 output)
+          {
+            check_status(
+                self.execute(
+                    numpy_to_span_const<float>(input),
+                    numpy_to_span_writable<float>(output)),
+                "ConvolutionPlan.execute");
           },
-          py::arg("input"), py::arg("output"),
+          py::arg("input"),
+          py::arg("output"),
           "Execute pre-planned convolution.")
       .def("get_kernel_length", &ConvolutionPlan<float>::get_kernel_length)
       .def("get_mode", &ConvolutionPlan<float>::get_mode)
-      .def("get_output_length", &ConvolutionPlan<float>::get_output_length,
-           py::arg("input_length"));
+      .def(
+          "get_output_length",
+          &ConvolutionPlan<float>::get_output_length,
+          py::arg("input_length"));
   // Add double, complex float, complex double specializations...
 
   // CorrelationPlan
@@ -407,17 +470,23 @@ PYBIND11_MODULE(_omnidsp_cpp, m) {  // Matches the target name in CMakeLists.txt
              py::array_t<float, py::array::c_style | py::array::forcecast>
                  input,
              py::array_t<float, py::array::c_style | py::array::forcecast>
-                 output) {
-            check_status(self.execute(numpy_to_span_const<float>(input),
-                                      numpy_to_span_writable<float>(output)),
-                         "CorrelationPlan.execute");
+                 output)
+          {
+            check_status(
+                self.execute(
+                    numpy_to_span_const<float>(input),
+                    numpy_to_span_writable<float>(output)),
+                "CorrelationPlan.execute");
           },
-          py::arg("input"), py::arg("output"),
+          py::arg("input"),
+          py::arg("output"),
           "Execute pre-planned correlation.")
       .def("get_template_length", &CorrelationPlan<float>::get_template_length)
       .def("get_mode", &CorrelationPlan<float>::get_mode)
-      .def("get_output_length", &CorrelationPlan<float>::get_output_length,
-           py::arg("input_length"));
+      .def(
+          "get_output_length",
+          &CorrelationPlan<float>::get_output_length,
+          py::arg("input_length"));
   // Add double, complex float, complex double specializations...
 
   // ResamplePlan
@@ -429,17 +498,23 @@ PYBIND11_MODULE(_omnidsp_cpp, m) {  // Matches the target name in CMakeLists.txt
              py::array_t<float, py::array::c_style | py::array::forcecast>
                  input,
              py::array_t<float, py::array::c_style | py::array::forcecast>
-                 output) {
-            check_status(self.execute(numpy_to_span_const<float>(input),
-                                      numpy_to_span_writable<float>(output)),
-                         "ResamplePlan.execute");
+                 output)
+          {
+            check_status(
+                self.execute(
+                    numpy_to_span_const<float>(input),
+                    numpy_to_span_writable<float>(output)),
+                "ResamplePlan.execute");
           },
-          py::arg("input"), py::arg("output"),
+          py::arg("input"),
+          py::arg("output"),
           "Execute pre-planned resampling.")
       .def("get_input_rate", &ResamplePlan<float>::get_input_rate)
       .def("get_output_rate", &ResamplePlan<float>::get_output_rate)
-      .def("get_output_length", &ResamplePlan<float>::get_output_length,
-           py::arg("input_length"));
+      .def(
+          "get_output_length",
+          &ResamplePlan<float>::get_output_length,
+          py::arg("input_length"));
   // Add double specialization...
 
   // --- OmniDSP Class ---
@@ -447,7 +522,8 @@ PYBIND11_MODULE(_omnidsp_cpp, m) {  // Matches the target name in CMakeLists.txt
       // Do not expose constructor directly
       .def_static(
           "create",
-          [](Backend backend = Backend::Default) {
+          [](Backend backend = Backend::Default)
+          {
             // Use helper to handle expected and potential exception
             return check_expected(OmniDSP::create(backend), "OmniDSP.create");
           },
@@ -462,113 +538,162 @@ PYBIND11_MODULE(_omnidsp_cpp, m) {  // Matches the target name in CMakeLists.txt
       // Convolution (Real)
       .def(
           "convolve",
-          [](const OmniDSP& self, py::array_t<float_r> input,
-             py::array_t<float_r> kernel, ConvolutionMode mode) {
+          [](const OmniDSP& self,
+             py::array_t<float_r> input,
+             py::array_t<float_r> kernel,
+             ConvolutionMode mode)
+          {
             auto input_vec = input.cast<std::vector<float_r>>();
             auto kernel_vec = kernel.cast<std::vector<float_r>>();
             return check_expected(
                 self.convolve<float>(input_vec, kernel_vec, mode));
           },
-          py::arg("input"), py::arg("kernel"), py::arg("mode"),
+          py::arg("input"),
+          py::arg("kernel"),
+          py::arg("mode"),
           "Perform 1D real convolution (float).")
       .def(
           "convolve",
-          [](const OmniDSP& self, py::array_t<double_r> input,
-             py::array_t<double_r> kernel, ConvolutionMode mode) {
+          [](const OmniDSP& self,
+             py::array_t<double_r> input,
+             py::array_t<double_r> kernel,
+             ConvolutionMode mode)
+          {
             auto input_vec = input.cast<std::vector<double_r>>();
             auto kernel_vec = kernel.cast<std::vector<double_r>>();
             return check_expected(
                 self.convolve<double>(input_vec, kernel_vec, mode));
           },
-          py::arg("input"), py::arg("kernel"), py::arg("mode"),
+          py::arg("input"),
+          py::arg("kernel"),
+          py::arg("mode"),
           "Perform 1D real convolution (double).")
 
       // Convolution (Complex)
       .def(
           "convolve",
-          [](const OmniDSP& self, py::array_t<float_c> input,
-             py::array_t<float_c> kernel, ConvolutionMode mode) {
+          [](const OmniDSP& self,
+             py::array_t<float_c> input,
+             py::array_t<float_c> kernel,
+             ConvolutionMode mode)
+          {
             auto input_vec = input.cast<std::vector<float_c>>();
             auto kernel_vec = kernel.cast<std::vector<float_c>>();
             return check_expected(
                 self.convolve<float_c>(input_vec, kernel_vec, mode));
           },
-          py::arg("input"), py::arg("kernel"), py::arg("mode"),
+          py::arg("input"),
+          py::arg("kernel"),
+          py::arg("mode"),
           "Perform 1D complex convolution (float).")
       .def(
           "convolve",
-          [](const OmniDSP& self, py::array_t<double_c> input,
-             py::array_t<double_c> kernel, ConvolutionMode mode) {
+          [](const OmniDSP& self,
+             py::array_t<double_c> input,
+             py::array_t<double_c> kernel,
+             ConvolutionMode mode)
+          {
             auto input_vec = input.cast<std::vector<double_c>>();
             auto kernel_vec = kernel.cast<std::vector<double_c>>();
             return check_expected(
                 self.convolve<double_c>(input_vec, kernel_vec, mode));
           },
-          py::arg("input"), py::arg("kernel"), py::arg("mode"),
+          py::arg("input"),
+          py::arg("kernel"),
+          py::arg("mode"),
           "Perform 1D complex convolution (double).")
 
       // Correlation (Real)
       .def(
           "correlate",
-          [](const OmniDSP& self, py::array_t<float_r> input,
-             py::array_t<float_r> kernel, ConvolutionMode mode) {
+          [](const OmniDSP& self,
+             py::array_t<float_r> input,
+             py::array_t<float_r> kernel,
+             ConvolutionMode mode)
+          {
             return check_expected(self.correlate<float>(
                 input.cast<std::vector<float_r>>(),
-                kernel.cast<std::vector<float_r>>(), mode));
+                kernel.cast<std::vector<float_r>>(),
+                mode));
           },
-          py::arg("input"), py::arg("kernel"), py::arg("mode"),
+          py::arg("input"),
+          py::arg("kernel"),
+          py::arg("mode"),
           "Perform 1D real correlation (float).")
       .def(
           "correlate",
-          [](const OmniDSP& self, py::array_t<double_r> input,
-             py::array_t<double_r> kernel, ConvolutionMode mode) {
+          [](const OmniDSP& self,
+             py::array_t<double_r> input,
+             py::array_t<double_r> kernel,
+             ConvolutionMode mode)
+          {
             return check_expected(self.correlate<double>(
                 input.cast<std::vector<double_r>>(),
-                kernel.cast<std::vector<double_r>>(), mode));
+                kernel.cast<std::vector<double_r>>(),
+                mode));
           },
-          py::arg("input"), py::arg("kernel"), py::arg("mode"),
+          py::arg("input"),
+          py::arg("kernel"),
+          py::arg("mode"),
           "Perform 1D real correlation (double).")
 
       // Correlation (Complex)
       .def(
           "correlate",
-          [](const OmniDSP& self, py::array_t<float_c> input,
-             py::array_t<float_c> kernel, ConvolutionMode mode) {
+          [](const OmniDSP& self,
+             py::array_t<float_c> input,
+             py::array_t<float_c> kernel,
+             ConvolutionMode mode)
+          {
             return check_expected(self.correlate<float_c>(
                 input.cast<std::vector<float_c>>(),
-                kernel.cast<std::vector<float_c>>(), mode));
+                kernel.cast<std::vector<float_c>>(),
+                mode));
           },
-          py::arg("input"), py::arg("kernel"), py::arg("mode"),
+          py::arg("input"),
+          py::arg("kernel"),
+          py::arg("mode"),
           "Perform 1D complex correlation (float).")
       .def(
           "correlate",
-          [](const OmniDSP& self, py::array_t<double_c> input,
-             py::array_t<double_c> kernel, ConvolutionMode mode) {
+          [](const OmniDSP& self,
+             py::array_t<double_c> input,
+             py::array_t<double_c> kernel,
+             ConvolutionMode mode)
+          {
             return check_expected(self.correlate<double_c>(
                 input.cast<std::vector<double_c>>(),
-                kernel.cast<std::vector<double_c>>(), mode));
+                kernel.cast<std::vector<double_c>>(),
+                mode));
           },
-          py::arg("input"), py::arg("kernel"), py::arg("mode"),
+          py::arg("input"),
+          py::arg("kernel"),
+          py::arg("mode"),
           "Perform 1D complex correlation (double).")
 
       // One-off FFTs
       .def(
           "fft",
-          [](const OmniDSP& self, py::array_t<float_c> input) {
+          [](const OmniDSP& self, py::array_t<float_c> input)
+          {
             return check_expected(
                 self.fft<float_c>(input.cast<std::vector<float_c>>()));
           },
-          py::arg("input"), "Compute one-off complex FFT (float).")
+          py::arg("input"),
+          "Compute one-off complex FFT (float).")
       .def(
           "fft",
-          [](const OmniDSP& self, py::array_t<double_c> input) {
+          [](const OmniDSP& self, py::array_t<double_c> input)
+          {
             return check_expected(
                 self.fft<double_c>(input.cast<std::vector<double_c>>()));
           },
-          py::arg("input"), "Compute one-off complex FFT (double).")
+          py::arg("input"),
+          "Compute one-off complex FFT (double).")
       .def(
           "ifft",
-          [](const OmniDSP& self, py::array_t<float_c> input) {
+          [](const OmniDSP& self, py::array_t<float_c> input)
+          {
             return check_expected(
                 self.ifft<float_c>(input.cast<std::vector<float_c>>()));
           },
@@ -579,7 +704,8 @@ PYBIND11_MODULE(_omnidsp_cpp, m) {  // Matches the target name in CMakeLists.txt
                                                                    // vs Plan
       .def(
           "ifft",
-          [](const OmniDSP& self, py::array_t<double_c> input) {
+          [](const OmniDSP& self, py::array_t<double_c> input)
+          {
             return check_expected(
                 self.ifft<double_c>(input.cast<std::vector<double_c>>()));
           },
@@ -587,65 +713,76 @@ PYBIND11_MODULE(_omnidsp_cpp, m) {  // Matches the target name in CMakeLists.txt
           "Compute one-off complex IFFT (double, scaled by 1/N).")
       .def(
           "rfft",
-          [](const OmniDSP& self, py::array_t<float_r> input) {
+          [](const OmniDSP& self, py::array_t<float_r> input)
+          {
             return check_expected(
                 self.rfft<float>(input.cast<std::vector<float_r>>()));
           },
-          py::arg("input"), "Compute one-off real RFFT (float).")
+          py::arg("input"),
+          "Compute one-off real RFFT (float).")
       .def(
           "rfft",
-          [](const OmniDSP& self, py::array_t<double_r> input) {
+          [](const OmniDSP& self, py::array_t<double_r> input)
+          {
             return check_expected(
                 self.rfft<double>(input.cast<std::vector<double_r>>()));
           },
-          py::arg("input"), "Compute one-off real RFFT (double).")
+          py::arg("input"),
+          "Compute one-off real RFFT (double).")
       .def(
           "irfft",
-          [](const OmniDSP& self, py::array_t<float_c> input,
-             size_t output_length) {
+          [](const OmniDSP& self,
+             py::array_t<float_c> input,
+             size_t output_length)
+          {
             return check_expected(self.irfft<float>(
                 input.cast<std::vector<float_c>>(), output_length));
           },
-          py::arg("input"), py::arg("output_length"),
+          py::arg("input"),
+          py::arg("output_length"),
           "Compute one-off real IRFFT (float, scaled by 1/N).")
       .def(
           "irfft",
-          [](const OmniDSP& self, py::array_t<double_c> input,
-             size_t output_length) {
+          [](const OmniDSP& self,
+             py::array_t<double_c> input,
+             size_t output_length)
+          {
             return check_expected(self.irfft<double>(
                 input.cast<std::vector<double_c>>(), output_length));
           },
-          py::arg("input"), py::arg("output_length"),
+          py::arg("input"),
+          py::arg("output_length"),
           "Compute one-off real IRFFT (double, scaled by 1/N).")
 
       // Window Generation
       .def(
           "bartlett_window",
-          [](const OmniDSP& self, size_t length) {
-            return check_expected(self.bartlett_window<float>(length));
-          },
-          py::arg("length"), "Generate Bartlett window (float).")
+          [](const OmniDSP& self, size_t length)
+          { return check_expected(self.bartlett_window<float>(length)); },
+          py::arg("length"),
+          "Generate Bartlett window (float).")
       .def(
           "bartlett_window",
-          [](const OmniDSP& self, size_t length) {
-            return check_expected(self.bartlett_window<double>(length));
-          },
-          py::arg("length"), "Generate Bartlett window (double).")
+          [](const OmniDSP& self, size_t length)
+          { return check_expected(self.bartlett_window<double>(length)); },
+          py::arg("length"),
+          "Generate Bartlett window (double).")
       // ... Add bindings for all other window types (blackman, flattop,
       // gaussian, hamming, hann, kaiser, rectangular, triangular) for float and
       // double ...
       .def(
           "kaiser_window",
-          [](const OmniDSP& self, size_t length, float beta) {
-            return check_expected(self.kaiser_window<float>(length, beta));
-          },
-          py::arg("length"), py::arg("beta"), "Generate Kaiser window (float).")
+          [](const OmniDSP& self, size_t length, float beta)
+          { return check_expected(self.kaiser_window<float>(length, beta)); },
+          py::arg("length"),
+          py::arg("beta"),
+          "Generate Kaiser window (float).")
       .def(
           "kaiser_window",
-          [](const OmniDSP& self, size_t length, double beta) {
-            return check_expected(self.kaiser_window<double>(length, beta));
-          },
-          py::arg("length"), py::arg("beta"),
+          [](const OmniDSP& self, size_t length, double beta)
+          { return check_expected(self.kaiser_window<double>(length, beta)); },
+          py::arg("length"),
+          py::arg("beta"),
           "Generate Kaiser window (double).")
       // ... etc ...
 
@@ -653,87 +790,115 @@ PYBIND11_MODULE(_omnidsp_cpp, m) {  // Matches the target name in CMakeLists.txt
       // instance)
       .def(
           "create_fft_plan",
-          [](const OmniDSP& self, size_t length) {
-            return check_expected(self.create_fft_plan<float_c>(length));
-          },
-          py::arg("length"), py::keep_alive<0, 1>(),
+          [](const OmniDSP& self, size_t length)
+          { return check_expected(self.create_fft_plan<float_c>(length)); },
+          py::arg("length"),
+          py::keep_alive<0, 1>(),
           "Create complex FFT plan (float).")
       .def(
           "create_fft_plan",
-          [](const OmniDSP& self, size_t length) {
-            return check_expected(self.create_fft_plan<double_c>(length));
-          },
-          py::arg("length"), py::keep_alive<0, 1>(),
+          [](const OmniDSP& self, size_t length)
+          { return check_expected(self.create_fft_plan<double_c>(length)); },
+          py::arg("length"),
+          py::keep_alive<0, 1>(),
           "Create complex FFT plan (double).")
 
       .def(
           "create_rfft_plan",
-          [](const OmniDSP& self, size_t length) {
-            return check_expected(self.create_rfft_plan<float>(length));
-          },
-          py::arg("length"), py::keep_alive<0, 1>(),
+          [](const OmniDSP& self, size_t length)
+          { return check_expected(self.create_rfft_plan<float>(length)); },
+          py::arg("length"),
+          py::keep_alive<0, 1>(),
           "Create real FFT plan (float).")
       .def(
           "create_rfft_plan",
-          [](const OmniDSP& self, size_t length) {
-            return check_expected(self.create_rfft_plan<double>(length));
-          },
-          py::arg("length"), py::keep_alive<0, 1>(),
+          [](const OmniDSP& self, size_t length)
+          { return check_expected(self.create_rfft_plan<double>(length)); },
+          py::arg("length"),
+          py::keep_alive<0, 1>(),
           "Create real FFT plan (double).")
 
       .def(
           "create_cqt_plan",
-          [](const OmniDSP& self, float sample_rate, float min_freq,
-             float max_freq, int bins_per_octave) {
+          [](const OmniDSP& self,
+             float sample_rate,
+             float min_freq,
+             float max_freq,
+             int bins_per_octave)
+          {
             // Pass 'self' as the owner pointer to the C++ factory method
             return check_expected(self.create_cqt_plan<float>(
                 &self, sample_rate, min_freq, max_freq, bins_per_octave));
           },
-          py::arg("sample_rate"), py::arg("min_freq"), py::arg("max_freq"),
-          py::arg("bins_per_octave"), py::keep_alive<0, 1>(),
+          py::arg("sample_rate"),
+          py::arg("min_freq"),
+          py::arg("max_freq"),
+          py::arg("bins_per_octave"),
+          py::keep_alive<0, 1>(),
           "Create CQT plan (float).")
       .def(
           "create_cqt_plan",
-          [](const OmniDSP& self, double sample_rate, double min_freq,
-             double max_freq, int bins_per_octave) {
+          [](const OmniDSP& self,
+             double sample_rate,
+             double min_freq,
+             double max_freq,
+             int bins_per_octave)
+          {
             return check_expected(self.create_cqt_plan<double>(
                 &self, sample_rate, min_freq, max_freq, bins_per_octave));
           },
-          py::arg("sample_rate"), py::arg("min_freq"), py::arg("max_freq"),
-          py::arg("bins_per_octave"), py::keep_alive<0, 1>(),
+          py::arg("sample_rate"),
+          py::arg("min_freq"),
+          py::arg("max_freq"),
+          py::arg("bins_per_octave"),
+          py::keep_alive<0, 1>(),
           "Create CQT plan (double).")
 
       .def(
           "create_resample_plan",
-          [](const OmniDSP& self, double input_rate, double output_rate,
-             size_t max_input_size) {
+          [](const OmniDSP& self,
+             double input_rate,
+             double output_rate,
+             size_t max_input_size)
+          {
             return check_expected(self.create_resample_plan<float>(
                 input_rate, output_rate, max_input_size));
           },
-          py::arg("input_rate"), py::arg("output_rate"),
-          py::arg("max_input_size"), py::keep_alive<0, 1>(),
+          py::arg("input_rate"),
+          py::arg("output_rate"),
+          py::arg("max_input_size"),
+          py::keep_alive<0, 1>(),
           "Create Resample plan (float).")
       .def(
           "create_resample_plan",
-          [](const OmniDSP& self, double input_rate, double output_rate,
-             size_t max_input_size) {
+          [](const OmniDSP& self,
+             double input_rate,
+             double output_rate,
+             size_t max_input_size)
+          {
             return check_expected(self.create_resample_plan<double>(
                 input_rate, output_rate, max_input_size));
           },
-          py::arg("input_rate"), py::arg("output_rate"),
-          py::arg("max_input_size"), py::keep_alive<0, 1>(),
+          py::arg("input_rate"),
+          py::arg("output_rate"),
+          py::arg("max_input_size"),
+          py::keep_alive<0, 1>(),
           "Create Resample plan (double).")
 
       // Add create_convolution_plan / create_correlation_plan bindings...
       // Example:
       .def(
           "create_convolution_plan",
-          [](const OmniDSP& self, py::array_t<float> kernel,
-             ConvolutionMode mode) {
+          [](const OmniDSP& self,
+             py::array_t<float> kernel,
+             ConvolutionMode mode)
+          {
             return check_expected(self.create_convolution_plan<float>(
                 kernel.cast<std::vector<float>>(), mode));
           },
-          py::arg("kernel"), py::arg("mode"), py::keep_alive<0, 1>(),
+          py::arg("kernel"),
+          py::arg("mode"),
+          py::keep_alive<0, 1>(),
           "Create Convolution plan (float).")
       // ... add other types ...
 

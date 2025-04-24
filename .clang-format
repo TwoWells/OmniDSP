@@ -1,0 +1,35 @@
+# .clang-format
+
+BasedOnStyle: Google
+
+AlignAfterOpenBracket: AlwaysBreak
+AlignEscapedNewlines: Right
+AlignTrailingComments: true
+BinPackArguments: false
+BinPackParameters: false
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterCaseLabel: false
+  AfterClass: false
+  AfterControlStatement: Never
+  AfterEnum: false
+  AfterExternBlock: false
+  AfterFunction: true
+  AfterNamespace: false
+  AfterStruct: false
+  AfterUnion: false
+  BeforeCatch: true
+  BeforeElse: true
+  BeforeLambdaBody: true
+  BeforeWhile: true
+  IndentBraces: false
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false
+  SplitEmptyNamespace: false
+BreakBeforeBinaryOperators: All
+ColumnLimit: 80
+FixNamespaceComments: true
+NamespaceIndentation: All
+SortIncludes: true
+
+Language: Cpp

@@ -33,9 +33,12 @@ class BackendConvTest : public ::testing::Test {
 
   // Helper to compare vectors with tolerance
   template <typename T>
-  void ExpectVectorNear(const std::vector<T>& expected,
-                        const std::vector<T>& actual, T tolerance,
-                        const std::string& msg = "") {
+  void ExpectVectorNear(
+      const std::vector<T>& expected,
+      const std::vector<T>& actual,
+      T tolerance,
+      const std::string& msg = "")
+  {
     ASSERT_EQ(expected.size(), actual.size()) << msg << " - Size mismatch";
     for (size_t i = 0; i < expected.size(); ++i) {
       EXPECT_NEAR(expected[i], actual[i], tolerance)
@@ -45,10 +48,12 @@ class BackendConvTest : public ::testing::Test {
 
   // Helper to get tolerance based on type
   template <typename T>
-  T get_tolerance() {
+  T get_tolerance()
+  {
     if constexpr (std::is_same_v<T, float>) {
       return std::numeric_limits<float>::epsilon() * 100;
-    } else {
+    }
+    else {
       return std::numeric_limits<double>::epsilon() * 1000;
     }
   }
@@ -56,7 +61,8 @@ class BackendConvTest : public ::testing::Test {
   // Helper to load reference data from file
   // Uses path defined by CMake preprocessor definition
   static void LoadReferenceData(
-      const std::string& default_filename = "test_references.txt") {
+      const std::string& default_filename = "test_references.txt")
+  {
     if (references_loaded) return;
 
     std::string filename_to_open;
@@ -76,9 +82,8 @@ class BackendConvTest : public ::testing::Test {
     std::ifstream infile(filename_to_open);
     if (!infile.is_open()) {
       throw std::runtime_error(
-          "Failed to open reference data file. Path used: '" +
-          filename_to_open +
-          "'. Check CMake definition and file copy command.");
+          "Failed to open reference data file. Path used: '" + filename_to_open
+          + "'. Check CMake definition and file copy command.");
     }
     std::cout << "Loading reference data from: " << filename_to_open
               << std::endl;
@@ -90,26 +95,29 @@ class BackendConvTest : public ::testing::Test {
     while (std::getline(infile, line)) {
       line.erase(0, line.find_first_not_of(" \t\n\r"));
       line.erase(line.find_last_not_of(" \t\n\r") + 1);
-      if (line.empty() || (line[0] == '#' && line.find("# START") != 0 &&
-                           line.find("# END") != 0))
+      if (line.empty()
+          || (line[0] == '#' && line.find("# START") != 0
+              && line.find("# END") != 0))
         continue;
 
       if (line.rfind("# START ", 0) == 0) {
         if (reading_data)
           throw std::runtime_error(
-              "Found new START marker before END marker for key: " +
-              current_key);
+              "Found new START marker before END marker for key: "
+              + current_key);
         current_key = line.substr(8);
         reading_data = true;
         flat_data_buffer.clear();
-      } else if (line.rfind("# END ", 0) == 0) {
+      }
+      else if (line.rfind("# END ", 0) == 0) {
         if (!reading_data)
           throw std::runtime_error(
               "Found END marker without active START marker.");
         std::string end_key = line.substr(6);
         if (end_key != current_key)
-          throw std::runtime_error("Mismatched END marker. Expected: " +
-                                   current_key + ", Got: " + end_key);
+          throw std::runtime_error(
+              "Mismatched END marker. Expected: " + current_key
+              + ", Got: " + end_key);
 
         if (current_key.find("_f") != std::string::npos) {
           VecF current_vec_f;
@@ -118,13 +126,15 @@ class BackendConvTest : public ::testing::Test {
             current_vec_f.push_back(static_cast<float>(val));
           }
           expected_data_f[current_key] = current_vec_f;
-        } else {
+        }
+        else {
           expected_data_d[current_key] = flat_data_buffer;
         }
 
         reading_data = false;
         current_key = "";
-      } else if (reading_data) {
+      }
+      else if (reading_data) {
         try {
           std::string value_str = line;
           size_t comment_pos = value_str.find('#');
@@ -133,10 +143,11 @@ class BackendConvTest : public ::testing::Test {
           }
           value_str.erase(value_str.find_last_not_of(" \t\n\rf") + 1);
           flat_data_buffer.push_back(std::stod(value_str));
-        } catch (const std::exception& e) {
-          throw std::runtime_error("Error parsing number '" + line +
-                                   "' for key '" + current_key +
-                                   "': " + e.what());
+        }
+        catch (const std::exception& e) {
+          throw std::runtime_error(
+              "Error parsing number '" + line + "' for key '" + current_key
+              + "': " + e.what());
         }
       }
     }
@@ -147,19 +158,22 @@ class BackendConvTest : public ::testing::Test {
     infile.close();
   }
 
-  static void SetUpTestSuite() {
+  static void SetUpTestSuite()
+  {
     try {
       LoadReferenceData();
       std::cout << "BackendConvTest: Reference data loaded successfully."
                 << std::endl;
-    } catch (const std::exception& e) {
+    }
+    catch (const std::exception& e) {
       ADD_FAILURE() << "FATAL ERROR in BackendConvTest::SetUpTestSuite: "
                        "Loading reference data failed: "
                     << e.what();
     }
   }
 
-  const VecD& GetExpectedD(const std::string& key) {
+  const VecD& GetExpectedD(const std::string& key)
+  {
     if (!references_loaded)
       throw std::runtime_error(
           "Reference data accessed before SetUpTestSuite completed "
@@ -169,7 +183,8 @@ class BackendConvTest : public ::testing::Test {
       throw std::runtime_error("Reference data key not found (double): " + key);
     return it->second;
   }
-  const VecF& GetExpectedF(const std::string& key) {
+  const VecF& GetExpectedF(const std::string& key)
+  {
     if (!references_loaded)
       throw std::runtime_error(
           "Reference data accessed before SetUpTestSuite completed "
@@ -188,7 +203,8 @@ bool BackendConvTest::references_loaded = false;
 
 // --- Backend Agnostic Test Cases (These should pass regardless of backend) ---
 
-TEST_F(BackendConvTest, Correlate1d_Valid_Double) {
+TEST_F(BackendConvTest, Correlate1d_Valid_Double)
+{
   using T = double;
   const VecD signal = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0};
   const VecD kernel = {0.5, 1.0, 0.5};  // Symmetric
@@ -198,7 +214,8 @@ TEST_F(BackendConvTest, Correlate1d_Valid_Double) {
   ExpectVectorNear(expected, result, get_tolerance<T>(), "Correlation Double");
 }
 
-TEST_F(BackendConvTest, Correlate1d_Valid_Float) {
+TEST_F(BackendConvTest, Correlate1d_Valid_Float)
+{
   using T = float;
   const VecF signal = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f};
   const VecF kernel = {0.5f, 1.0f, 0.5f};  // Symmetric
@@ -208,18 +225,20 @@ TEST_F(BackendConvTest, Correlate1d_Valid_Float) {
   ExpectVectorNear(expected, result, get_tolerance<T>(), "Correlation Float");
 }
 
-TEST_F(BackendConvTest, Correlate1d_Valid_EdgeCase) {
+TEST_F(BackendConvTest, Correlate1d_Valid_EdgeCase)
+{
   using T = double;
   const VecD signal = {1.0, 2.0, 3.0};
   const VecD kernel = {0.5, 1.0, 0.5};
   const VecD& expected = GetExpectedD("expected_corr_edge_d");
   VecD result;
   ASSERT_NO_THROW(result = OmniDSP::correlate1d(signal, kernel));
-  ExpectVectorNear(expected, result, get_tolerance<T>(),
-                   "Correlation Edge Double");
+  ExpectVectorNear(
+      expected, result, get_tolerance<T>(), "Correlation Edge Double");
 }
 
-TEST_F(BackendConvTest, Convolve1d_Valid_Double) {
+TEST_F(BackendConvTest, Convolve1d_Valid_Double)
+{
   using T = double;
   const VecD signal = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0};
   const VecD kernel = {1.0, 2.0, 0.5};  // Asymmetric
@@ -229,7 +248,8 @@ TEST_F(BackendConvTest, Convolve1d_Valid_Double) {
   ExpectVectorNear(expected, result, get_tolerance<T>(), "Convolution Double");
 }
 
-TEST_F(BackendConvTest, Convolve1d_Valid_Float) {
+TEST_F(BackendConvTest, Convolve1d_Valid_Float)
+{
   using T = float;
   const VecF signal = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f};
   const VecF kernel = {1.0f, 2.0f, 0.5f};  // Asymmetric
@@ -239,18 +259,20 @@ TEST_F(BackendConvTest, Convolve1d_Valid_Float) {
   ExpectVectorNear(expected, result, get_tolerance<T>(), "Convolution Float");
 }
 
-TEST_F(BackendConvTest, Convolve1d_Valid_EdgeCase) {
+TEST_F(BackendConvTest, Convolve1d_Valid_EdgeCase)
+{
   using T = double;
   const VecD signal = {1.0, 2.0, 3.0};
   const VecD kernel = {0.5, 1.0, 0.5};
   const VecD& expected = GetExpectedD("expected_conv_edge_d");
   VecD result;
   ASSERT_NO_THROW(result = OmniDSP::convolve1d(signal, kernel));
-  ExpectVectorNear(expected, result, get_tolerance<T>(),
-                   "Convolution Edge Double");
+  ExpectVectorNear(
+      expected, result, get_tolerance<T>(), "Convolution Edge Double");
 }
 
-TEST_F(BackendConvTest, ConvCorr_InvalidInput_ThrowsOrEmpty) {
+TEST_F(BackendConvTest, ConvCorr_InvalidInput_ThrowsOrEmpty)
+{
   VecD signal_d = {1.0, 2.0, 3.0};
   VecD kernel_d = {1.0, 2.0, 3.0, 4.0};  // Kernel longer than signal
   VecD empty_d = {};

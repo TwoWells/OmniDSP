@@ -16,7 +16,8 @@
 // For example, performance benchmarks or tests with MKL-specific edge cases.
 
 // Example Placeholder Test (can be removed if no MKL-specific tests yet)
-TEST(BackendConvMKLTest, Placeholder) {
+TEST(BackendConvMKLTest, Placeholder)
+{
   SUCCEED() << "No MKL-specific convolution tests yet.";
 }
 

@@ -21,7 +21,8 @@
 
 // Helper to print vector contents
 template <typename T>
-void print_vector(const std::string& name, const std::vector<T>& vec) {
+void print_vector(const std::string& name, const std::vector<T>& vec)
+{
   std::cout << name << ": [";
   bool first = true;
   for (const auto& val : vec) {
@@ -32,7 +33,8 @@ void print_vector(const std::string& name, const std::vector<T>& vec) {
   std::cout << "]" << std::endl;
 }
 
-int main() {
+int main()
+{
   using Real = double;  // Use double for examples
 
   std::cout << "OmniDSP Windowing Example" << std::endl;
@@ -43,11 +45,11 @@ int main() {
     size_t signal_length = 10;
     std::vector<Real> input_signal(signal_length);
     double freq = 1.0;  // Arbitrary frequency for shape
-    double sample_rate =
-        static_cast<double>(signal_length);  // Make one cycle fit
+    double sample_rate
+        = static_cast<double>(signal_length);  // Make one cycle fit
     for (size_t i = 0; i < signal_length; ++i) {
-      input_signal[i] =
-          std::sin(2.0 * M_PI * freq * static_cast<double>(i) / sample_rate);
+      input_signal[i]
+          = std::sin(2.0 * M_PI * freq * static_cast<double>(i) / sample_rate);
     }
     print_vector("Input Signal ", input_signal);
     std::cout << std::endl;
@@ -68,8 +70,8 @@ int main() {
     Real kaiser_beta = 8.6;  // Common beta value
     std::cout << "Applying Kaiser Window (beta=" << kaiser_beta << ")..."
               << std::endl;
-    std::vector<Real> kaiser_output =
-        OmniDSP::Window::kaiser(input_signal, kaiser_beta);
+    std::vector<Real> kaiser_output
+        = OmniDSP::Window::kaiser(input_signal, kaiser_beta);
     print_vector("Kaiser Output ", kaiser_output);
     std::cout << std::endl;
 
@@ -78,8 +80,8 @@ int main() {
     std::vector<Real> flattop_output = OmniDSP::Window::flattop(input_signal);
     print_vector("Flattop Output", flattop_output);
     std::cout << std::endl;
-
-  } catch (const std::exception& e) {
+  }
+  catch (const std::exception& e) {
     std::cerr << "ERROR: " << e.what() << std::endl;
     return 1;
   }

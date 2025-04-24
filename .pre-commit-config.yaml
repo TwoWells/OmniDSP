@@ -43,8 +43,7 @@ repos:
     hooks:
       - id: clang-format
         files: \.(c|h|cpp|hpp|cc|cxx|hh|hxx)$
-        # Optional: Specify style if not using a .clang-format file in the root
-        args: ["--style=Google"] # e.g., Google, LLVM, Microsoft, Mozilla, WebKit, file
+        # use .clang-format file
 
   # === CMake Formatting ===
   - repo: https://github.com/cheshirekow/cmake-format-precommit

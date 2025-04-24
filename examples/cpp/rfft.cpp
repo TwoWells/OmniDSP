@@ -20,7 +20,8 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-int main() {
+int main()
+{
   // --- Configuration ---
   // Note: Accelerate backend requires N to be power-of-2 for Real domain FFTs.
   const size_t N = 16;  // FFT Size (must be power of 2 for Accelerate backend)
@@ -35,8 +36,8 @@ int main() {
   std::vector<Real> input_signal_real(N);
   double frequency = 3.0;  // Example frequency for RFFT input
   for (size_t i = 0; i < N; ++i) {
-    input_signal_real[i] =
-        std::cos(2.0 * M_PI * frequency * static_cast<Real>(i) / N);
+    input_signal_real[i]
+        = std::cos(2.0 * M_PI * frequency * static_cast<Real>(i) / N);
   }
 
   std::cout << "Input Real Signal:" << std::endl;
@@ -78,10 +79,11 @@ int main() {
     Real max_diff_real = 0.0;
     if (irfft_reconstructed.size() == N) {
       for (size_t i = 0; i < N; ++i)
-        max_diff_real =
-            std::max(max_diff_real,
-                     std::abs(input_signal_real[i] - irfft_reconstructed[i]));
-    } else {
+        max_diff_real = std::max(
+            max_diff_real,
+            std::abs(input_signal_real[i] - irfft_reconstructed[i]));
+    }
+    else {
       std::cerr << "\nWarning: Reconstructed signal size ("
                 << irfft_reconstructed.size()
                 << ") doesn't match original size (" << N << ")" << std::endl;
@@ -97,18 +99,22 @@ int main() {
     try {
       // Create Forward plan for RFFT
       OmniDSP::RFFTPlan<Real> plan_rfft_ortho(
-          N, CURRENT_PRECISION,
+          N,
+          CURRENT_PRECISION,
           OmniDSP::Direction::Forward,  // Direction Forward
-          OmniDSP::Domain::Real, OmniDSP::FFTNorm::Ortho);
+          OmniDSP::Domain::Real,
+          OmniDSP::FFTNorm::Ortho);
       // Create Inverse plan for IRFFT
       OmniDSP::RFFTPlan<Real> plan_irfft_ortho(
-          N, CURRENT_PRECISION,
+          N,
+          CURRENT_PRECISION,
           OmniDSP::Direction::Inverse,  // Direction Inverse
-          OmniDSP::Domain::Real, OmniDSP::FFTNorm::Ortho);
+          OmniDSP::Domain::Real,
+          OmniDSP::FFTNorm::Ortho);
 
       // Determine expected complex length from the plan
-      size_t complex_len =
-          plan_rfft_ortho.getSize() / 2 + 1;  // Use plan's getSize()
+      size_t complex_len
+          = plan_rfft_ortho.getSize() / 2 + 1;  // Use plan's getSize()
       std::vector<Complex> spectrum_ortho(complex_len);
       std::vector<Real> recon_ortho(N);  // Use N from plan
 
@@ -135,20 +141,21 @@ int main() {
         for (size_t i = 0; i < N; ++i)
           max_diff_ortho = std::max(
               max_diff_ortho, std::abs(input_signal_real[i] - recon_ortho[i]));
-      } else {
+      }
+      else {
         std::cerr << "\nWarning: Reconstructed signal size Ortho ("
                   << recon_ortho.size() << ") doesn't match original size ("
                   << N << ")" << std::endl;
       }
       std::cout << "Max Difference (Ortho): " << max_diff_ortho << std::endl
                 << std::endl;
-
-    } catch (const std::exception& e) {
+    }
+    catch (const std::exception& e) {
       std::cerr << "Error during Ortho test: " << e.what() << std::endl
                 << std::endl;
     }
-
-  } catch (const std::exception& e) {
+  }
+  catch (const std::exception& e) {
     std::cerr << "\nFATAL ERROR during Real FFT operation: " << e.what()
               << std::endl;
     return 1;

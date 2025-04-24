@@ -20,8 +20,9 @@ using Complex = std::complex<Real>;
 
 // --- Helper Function (Example) ---
 // Generates a simple sine wave
-std::vector<Real> generateSineWave(double freq, double sampleRate,
-                                   double duration) {
+std::vector<Real> generateSineWave(
+    double freq, double sampleRate, double duration)
+{
 // Use M_PI, ensure cmath is included (it is)
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -36,16 +37,17 @@ std::vector<Real> generateSineWave(double freq, double sampleRate,
 }
 
 // --- Main Function ---
-int main() {
+int main()
+{
   // --- Parameters ---
   // Example parameters for CQT calculation
   const double sr = 44100.0;  // Sample rate (Hz)
   const double fmin = 27.5;   // Minimum frequency (Hz) - A0 note
-  const double fmax =
-      20000.0;  // Maximum frequency (Hz) - Approximate (Note: fmax isn't
-                // directly used in this CQTPlan constructor)
-  const int bins_per_octave =
-      12;  // Number of bins per octave (e.g., 12 for semitones)
+  const double fmax
+      = 20000.0;  // Maximum frequency (Hz) - Approximate (Note: fmax isn't
+                  // directly used in this CQTPlan constructor)
+  const int bins_per_octave
+      = 12;  // Number of bins per octave (e.g., 12 for semitones)
   const double duration = 1.0;             // Duration of the signal in seconds
   const int n_bins = 7 * bins_per_octave;  // Example: 7 octaves
 
@@ -93,11 +95,12 @@ int main() {
     // cqtResult
 
     std::cout << "CQT example finished." << std::endl;
-
-  } catch (const std::exception& e) {
+  }
+  catch (const std::exception& e) {
     std::cerr << "Error during CQT processing: " << e.what() << std::endl;
     return 1;  // Indicate error
-  } catch (...) {
+  }
+  catch (...) {
     std::cerr << "An unknown error occurred during CQT processing."
               << std::endl;
     return 1;  // Indicate error

@@ -18,7 +18,8 @@ class BackendConvStubTest : public ::testing::Test {};
 
 // Test specifically if stub backend throws (this is the test moved from the
 // main file)
-TEST_F(BackendConvStubTest, PublicApiThrowsError) {
+TEST_F(BackendConvStubTest, PublicApiThrowsError)
+{
   std::vector<double> signal_d = {1.0, 2.0, 3.0};
   std::vector<double> kernel_d = {1.0, 0.5};
   // These call the public API which should dispatch to the throwing stub
