@@ -76,22 +76,22 @@ namespace OmniDSP {
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>> convolve(
         const std::vector<RealT<T>>& input,
         const std::vector<RealT<T>>& kernel,
-        ConvolutionMode mode) const;
+        ConvolutionType type) const;
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>> convolve(
         const std::vector<ComplexT<T>>& input,
         const std::vector<ComplexT<T>>& kernel,
-        ConvolutionMode mode) const;
+        ConvolutionType type) const;
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>> correlate(
         const std::vector<RealT<T>>& input,
         const std::vector<RealT<T>>& kernel,
-        ConvolutionMode mode) const;
+        ConvolutionType type) const;
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>> correlate(
         const std::vector<ComplexT<T>>& input,
         const std::vector<ComplexT<T>>& kernel,
-        ConvolutionMode mode) const;
+        ConvolutionType type) const;
     ///@}
 
     /** @name Fourier Transforms (One-Off) */
@@ -182,13 +182,13 @@ namespace OmniDSP {
     template <typename T>
     [[nodiscard]] OmniExpected<std::unique_ptr<ConvolutionPlan<T>>>
     create_convolution_plan(
-        const std::vector<T>& kernel, ConvolutionMode mode) const;
+        const std::vector<T>& kernel, ConvolutionType type) const;
 
     /** @brief Creates a plan for 1D cross-correlation. */
     template <typename T>
     [[nodiscard]] OmniExpected<std::unique_ptr<CorrelationPlan<T>>>
     create_correlation_plan(
-        const std::vector<T>& kernel, ConvolutionMode mode) const;
+        const std::vector<T>& kernel, ConvolutionType type) const;
 
     /** @brief Creates a plan for FIR filtering. */
     template <typename T>

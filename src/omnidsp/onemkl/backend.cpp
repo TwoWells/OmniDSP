@@ -72,7 +72,8 @@ namespace OmniDSP {
     // These one-off functions would typically involve creating a temporary
     // DFTI descriptor or VSL task, executing it, and then freeing it.
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     OneMKLOmniDSPImpl::convolve(
         const std::vector<RealT<T>>& /*input*/,
         const std::vector<RealT<T>>& /*kernel*/,
@@ -85,7 +86,8 @@ namespace OmniDSP {
       return std::unexpected(Status::UnsupportedFeature);
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>>
     OneMKLOmniDSPImpl::convolve(
         const std::vector<ComplexT<T>>& /*input*/,
         const std::vector<ComplexT<T>>& /*kernel*/,
@@ -98,7 +100,8 @@ namespace OmniDSP {
       return std::unexpected(Status::UnsupportedFeature);
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     OneMKLOmniDSPImpl::correlate(
         const std::vector<RealT<T>>& /*input*/,
         const std::vector<RealT<T>>& /*kernel*/,
@@ -111,7 +114,8 @@ namespace OmniDSP {
       return std::unexpected(Status::UnsupportedFeature);
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>>
     OneMKLOmniDSPImpl::correlate(
         const std::vector<ComplexT<T>>& /*input*/,
         const std::vector<ComplexT<T>>& /*kernel*/,
@@ -135,7 +139,8 @@ namespace OmniDSP {
       return std::unexpected(Status::UnsupportedFeature);
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>>
     OneMKLOmniDSPImpl::ifft(const std::vector<ComplexT<T>>& input) const
     {
       // TODO: Implement one-off complex IFFT using oneMKL DFTI
@@ -143,7 +148,8 @@ namespace OmniDSP {
       return std::unexpected(Status::UnsupportedFeature);
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>>
     OneMKLOmniDSPImpl::rfft(const std::vector<RealT<T>>& input) const
     {
       // TODO: Implement one-off real RFFT using oneMKL DFTI
@@ -165,7 +171,8 @@ namespace OmniDSP {
     // trigonometry, exponentials, etc., which can be used to implement windows.
     // It does not have dedicated window functions like Accelerate's vDSP.
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     OneMKLOmniDSPImpl::bartlett_window(size_t /*length*/) const
     {
       // TODO: Implement using MKL VML functions (e.g., v?Ramp, v?Abs, v?Add,
@@ -175,7 +182,8 @@ namespace OmniDSP {
       return std::unexpected(Status::UnsupportedFeature);
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     OneMKLOmniDSPImpl::blackman_window(size_t /*length*/) const
     {
       // TODO: Implement using MKL VML functions (v?Ramp, v?Cos, v?Add, v?Mul,
@@ -185,7 +193,8 @@ namespace OmniDSP {
       return std::unexpected(Status::UnsupportedFeature);
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     OneMKLOmniDSPImpl::flattop_window(size_t /*length*/) const
     {
       // TODO: Implement using MKL VML functions
@@ -194,7 +203,8 @@ namespace OmniDSP {
       return std::unexpected(Status::UnsupportedFeature);
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     OneMKLOmniDSPImpl::gaussian_window(
         size_t /*length*/, RealT<T> /*stddev*/) const
     {
@@ -205,7 +215,8 @@ namespace OmniDSP {
       return std::unexpected(Status::UnsupportedFeature);
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     OneMKLOmniDSPImpl::hamming_window(size_t /*length*/) const
     {
       // TODO: Implement using MKL VML functions
@@ -214,7 +225,8 @@ namespace OmniDSP {
       return std::unexpected(Status::UnsupportedFeature);
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     OneMKLOmniDSPImpl::hann_window(size_t /*length*/) const
     {
       // TODO: Implement using MKL VML functions
@@ -223,7 +235,8 @@ namespace OmniDSP {
       return std::unexpected(Status::UnsupportedFeature);
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     OneMKLOmniDSPImpl::kaiser_window(size_t /*length*/, RealT<T> /*beta*/) const
     {
       // TODO: Implement using MKL VML functions and Boost Bessel function
@@ -232,7 +245,8 @@ namespace OmniDSP {
       return std::unexpected(Status::UnsupportedFeature);
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     OneMKLOmniDSPImpl::rectangular_window(size_t length) const
     {
       // TODO: Implement using MKL VML (e.g., generate constant value) or simple
@@ -247,7 +261,8 @@ namespace OmniDSP {
       // << std::endl; return std::unexpected(Status::UnsupportedFeature);
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     OneMKLOmniDSPImpl::triangular_window(size_t /*length*/) const
     {
       // TODO: Implement using MKL VML functions

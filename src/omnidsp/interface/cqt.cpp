@@ -43,13 +43,15 @@ namespace OmniDSP {
    * The unique_ptr pimpl_ automatically deletes the managed implementation
    * object.
    */
-  template <typename T> CQTPlan<T>::~CQTPlan() = default;
+  template <typename T>
+  CQTPlan<T>::~CQTPlan() = default;
 
   /**
    * @brief Move constructor.
    * Transfers ownership of the implementation pointer.
    */
-  template <typename T> CQTPlan<T>::CQTPlan(CQTPlan&& other) noexcept = default;
+  template <typename T>
+  CQTPlan<T>::CQTPlan(CQTPlan&& other) noexcept = default;
 
   /**
    * @brief Move assignment operator.
@@ -67,7 +69,8 @@ namespace OmniDSP {
    * @return Status::Success on success, or an error code on failure.
    * Returns Status::InvalidOperation if the plan's implementation is missing.
    */
-  template <typename T> [[nodiscard]] Status CQTPlan<T>::execute(
+  template <typename T>
+  [[nodiscard]] Status CQTPlan<T>::execute(
       std::span<const RealT<T>> input, std::span<ComplexT<T>> output) const
   {
     if (!pimpl_) {
@@ -83,7 +86,8 @@ namespace OmniDSP {
    * @return The number of CQT bins.
    * @throws std::runtime_error if the plan's implementation is missing.
    */
-  template <typename T> size_t CQTPlan<T>::get_num_bins() const
+  template <typename T>
+  size_t CQTPlan<T>::get_num_bins() const
   {
     if (!pimpl_) {
       throw std::runtime_error(
@@ -116,7 +120,8 @@ namespace OmniDSP {
    * @return The hop length in samples.
    * @throws std::runtime_error if the plan's implementation is missing.
    */
-  template <typename T> size_t CQTPlan<T>::get_hop_length() const
+  template <typename T>
+  size_t CQTPlan<T>::get_hop_length() const
   {
     if (!pimpl_) {
       throw std::runtime_error(
@@ -132,7 +137,7 @@ namespace OmniDSP {
   // Instantiate templates for common types (float, double) to ensure code
   // generation for the public CQTPlan class.
 
-  template class OmniDSP::CQTPlan<float>;
-  template class OmniDSP::CQTPlan<double>;
+  template class CQTPlan<float>;
+  template class CQTPlan<double>;
 
 }  // namespace OmniDSP

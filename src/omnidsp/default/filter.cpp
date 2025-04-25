@@ -50,7 +50,8 @@ namespace OmniDSP {
      * @param coefficients The FIR filter tap coefficients.
      * @throws std::invalid_argument If coefficients vector is empty.
      */
-    template <typename T> DefaultFIRFilterPlanImpl<T>::DefaultFIRFilterPlanImpl(
+    template <typename T>
+    DefaultFIRFilterPlanImpl<T>::DefaultFIRFilterPlanImpl(
         const std::vector<T>& coefficients)
         : coefficients_(coefficients),
           state_(
@@ -84,7 +85,8 @@ namespace OmniDSP {
      * @return Status::Success on success, Status::SizeMismatch if output is too
      * small, Status::InvalidOperation if coefficients are empty.
      */
-    template <typename T> Status DefaultFIRFilterPlanImpl<T>::execute(
+    template <typename T>
+    Status DefaultFIRFilterPlanImpl<T>::execute(
         std::span<const T> input, std::span<T> output)
     {
       if (coefficients_.empty()) {
@@ -188,7 +190,8 @@ namespace OmniDSP {
      * @brief Resets the internal state of the FIR filter (delay line) to zeros.
      * @return Status::Success.
      */
-    template <typename T> Status DefaultFIRFilterPlanImpl<T>::reset()
+    template <typename T>
+    Status DefaultFIRFilterPlanImpl<T>::reset()
     {
       std::fill(state_.begin(), state_.end(), T{0});
       return Status::Success;
@@ -199,7 +202,8 @@ namespace OmniDSP {
      * @return The filter order (number of taps - 1). Returns 0 if coefficients
      * are empty.
      */
-    template <typename T> size_t DefaultFIRFilterPlanImpl<T>::get_order() const
+    template <typename T>
+    size_t DefaultFIRFilterPlanImpl<T>::get_order() const
     {
       return coefficients_.empty() ? 0 : coefficients_.size() - 1;
     }
@@ -222,7 +226,8 @@ namespace OmniDSP {
      * the filter.
      * @throws std::invalid_argument If sos_coefficients vector is empty.
      */
-    template <typename T> DefaultIIRFilterPlanImpl<T>::DefaultIIRFilterPlanImpl(
+    template <typename T>
+    DefaultIIRFilterPlanImpl<T>::DefaultIIRFilterPlanImpl(
         const std::vector<SecondOrderSection<T>>& sos_coefficients)
         : sos_coeffs_(sos_coefficients)
     {
@@ -256,7 +261,8 @@ namespace OmniDSP {
      * @return Status::Success on success, Status::SizeMismatch if output is too
      * small, Status::InvalidOperation if coefficients are empty.
      */
-    template <typename T> Status DefaultIIRFilterPlanImpl<T>::execute(
+    template <typename T>
+    Status DefaultIIRFilterPlanImpl<T>::execute(
         std::span<const T> input, std::span<T> output)
     {
       if (sos_coeffs_.empty()) {
@@ -331,7 +337,8 @@ namespace OmniDSP {
      * zeros.
      * @return Status::Success.
      */
-    template <typename T> Status DefaultIIRFilterPlanImpl<T>::reset()
+    template <typename T>
+    Status DefaultIIRFilterPlanImpl<T>::reset()
     {
       std::fill(state_.begin(), state_.end(), T{0});
       return Status::Success;
@@ -343,7 +350,8 @@ namespace OmniDSP {
      * denominator, which for a cascade of N second-order sections is N * 2.
      * @return The filter order. Returns 0 if coefficients are empty.
      */
-    template <typename T> size_t DefaultIIRFilterPlanImpl<T>::get_order() const
+    template <typename T>
+    size_t DefaultIIRFilterPlanImpl<T>::get_order() const
     {
       return sos_coeffs_.empty() ? 0 : sos_coeffs_.size() * 2;
     }

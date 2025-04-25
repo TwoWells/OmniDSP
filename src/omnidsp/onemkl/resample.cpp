@@ -57,7 +57,8 @@ namespace OmniDSP {
         }
       }
       // Overload for the spec structure pointer (const issue)
-      template <typename SpecType> void operator()(SpecType* ptr) const
+      template <typename SpecType>
+      void operator()(SpecType* ptr) const
       {
         if (ptr) {
           ippsFree(ptr);
@@ -67,8 +68,8 @@ namespace OmniDSP {
 
     // Define unique_ptr types using the custom deleter
     using IppBufferPtr = std::unique_ptr<Ipp8u, IPPFreeDeleter>;
-    template <typename SpecType> using IppSpecPtr
-        = std::unique_ptr<SpecType, IPPFreeDeleter>;
+    template <typename SpecType>
+    using IppSpecPtr = std::unique_ptr<SpecType, IPPFreeDeleter>;
 
     //--------------------------------------------------------------------------
     // OneMKLResamplePlanImpl Definition
@@ -142,7 +143,8 @@ namespace OmniDSP {
     // OneMKLResamplePlanImpl Method Implementations
     //--------------------------------------------------------------------------
 
-    template <typename T> OneMKLResamplePlanImpl<T>::OneMKLResamplePlanImpl(
+    template <typename T>
+    OneMKLResamplePlanImpl<T>::OneMKLResamplePlanImpl(
         const OmniDSPImpl* owner, const ResampleSpec& spec)
         : input_rate_(spec.input_rate),
           output_rate_(spec.output_rate),
@@ -260,14 +262,16 @@ namespace OmniDSP {
                 << ", DelayLen=" << delay_len_ << std::endl;  // Debug
     }
 
-    template <typename T> OneMKLResamplePlanImpl<T>::~OneMKLResamplePlanImpl()
+    template <typename T>
+    OneMKLResamplePlanImpl<T>::~OneMKLResamplePlanImpl()
     {
       // unique_ptrs p_spec_ and p_buffer_ automatically call ippsFree via
       // deleter
       std::cout << "oneMKL ResamplePlanImpl destroyed." << std::endl;  // Debug
     }
 
-    template <typename T> Status OneMKLResamplePlanImpl<T>::execute(
+    template <typename T>
+    Status OneMKLResamplePlanImpl<T>::execute(
         std::span<const T> input, std::span<T> output)
     {
       if (!p_spec_ || !p_buffer_) {
@@ -366,7 +370,8 @@ namespace OmniDSP {
       return Status::Success;
     }
 
-    template <typename T> Status OneMKLResamplePlanImpl<T>::reset()
+    template <typename T>
+    Status OneMKLResamplePlanImpl<T>::reset()
     {
       // Reset the internal delay line to zeros
       std::fill(delay_line_.begin(), delay_line_.end(), T{0});
@@ -387,7 +392,8 @@ namespace OmniDSP {
       return output_rate_;
     }
 
-    template <typename T> size_t OneMKLResamplePlanImpl<T>::get_output_length(
+    template <typename T>
+    size_t OneMKLResamplePlanImpl<T>::get_output_length(
         size_t input_length) const
     {
       if (input_rate_ <= 0.0 || upsample_factor_L_ == 0) return 0;
@@ -431,7 +437,8 @@ namespace OmniDSP {
       return Status::Success;
     }
 
-    template <typename T> Status OneMKLResamplePlanImpl<T>::design_filter(
+    template <typename T>
+    Status OneMKLResamplePlanImpl<T>::design_filter(
         const OmniDSPImpl* owner,
         const ResampleSpec& spec,
         size_t L,

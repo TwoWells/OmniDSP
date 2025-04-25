@@ -42,7 +42,8 @@ namespace TestDataLoader {
    * @throws std::runtime_error If the file cannot be opened or a read error
    * occurs.
    */
-  template <typename T> std::vector<T> loadVectorData(
+  template <typename T>
+  std::vector<T> loadVectorData(
       const std::string &suite_name, const std::string &filename);
 
   /**
@@ -68,9 +69,11 @@ namespace TestDataLoader {
   // --- Explicit Template Specialization Declarations ---
   // Ensures these types are supported and can be defined in the .cpp file.
 
-  template <> std::vector<double> loadVectorData<double>(
+  template <>
+  std::vector<double> loadVectorData<double>(
       const std::string &suite_name, const std::string &filename);
-  template <> std::vector<float> loadVectorData<float>(
+  template <>
+  std::vector<float> loadVectorData<float>(
       const std::string &suite_name, const std::string &filename);
   template <>
   std::vector<std::complex<double>> loadVectorData<std::complex<double>>(

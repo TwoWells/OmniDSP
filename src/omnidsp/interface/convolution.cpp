@@ -32,14 +32,15 @@ namespace OmniDSP {
      * implementations (Pimpl).
      * @tparam T The data type (e.g., float, std::complex<float>).
      */
-    template <typename T> class ConvolutionPlanImpl {
+    template <typename T>
+    class ConvolutionPlanImpl {
      public:
       virtual ~ConvolutionPlanImpl() = default;
       virtual Status execute(
           std::span<const T> input, std::span<T> output) const
           = 0;
       virtual size_t get_kernel_length() const = 0;
-      virtual ConvolutionMode get_mode() const = 0;
+      virtual ConvolutionType get_type() const = 0;
       virtual size_t get_output_length(size_t input_length) const = 0;
     };
 
@@ -48,7 +49,8 @@ namespace OmniDSP {
      * implementations (Pimpl).
      * @tparam T The data type (e.g., float, std::complex<float>).
      */
-    template <typename T> class CorrelationPlanImpl {
+    template <typename T>
+    class CorrelationPlanImpl {
      public:
       virtual ~CorrelationPlanImpl() = default;
       virtual Status execute(
@@ -56,7 +58,7 @@ namespace OmniDSP {
           = 0;
       virtual size_t get_template_length() const
           = 0;  // Renamed from kernel for clarity
-      virtual ConvolutionMode get_mode() const = 0;
+      virtual ConvolutionType get_type() const = 0;
       virtual size_t get_output_length(size_t input_length) const = 0;
     };
 
@@ -66,7 +68,8 @@ namespace OmniDSP {
   // ConvolutionPlan Method Definitions
   //--------------------------------------------------------------------------
 
-  template <typename T> ConvolutionPlan<T>::ConvolutionPlan(
+  template <typename T>
+  ConvolutionPlan<T>::ConvolutionPlan(
       std::unique_ptr<backend::ConvolutionPlanImpl<T>> pimpl)
       : pimpl_(std::move(pimpl))
   {
@@ -76,17 +79,20 @@ namespace OmniDSP {
     }
   }
 
-  template <typename T> ConvolutionPlan<T>::~ConvolutionPlan() = default;
+  template <typename T>
+  ConvolutionPlan<T>::~ConvolutionPlan() = default;
 
   template <typename T>
   ConvolutionPlan<T>::ConvolutionPlan(ConvolutionPlan&& other) noexcept
       = default;
 
-  template <typename T> ConvolutionPlan<T>& ConvolutionPlan<T>::operator=(
+  template <typename T>
+  ConvolutionPlan<T>& ConvolutionPlan<T>::operator=(
       ConvolutionPlan&& other) noexcept
       = default;
 
-  template <typename T> [[nodiscard]] Status ConvolutionPlan<T>::execute(
+  template <typename T>
+  [[nodiscard]] Status ConvolutionPlan<T>::execute(
       std::span<const T> input, std::span<T> output) const
   {
     if (!pimpl_) {
@@ -98,7 +104,8 @@ namespace OmniDSP {
     return pimpl_->execute(input, output);
   }
 
-  template <typename T> size_t ConvolutionPlan<T>::get_kernel_length() const
+  template <typename T>
+  size_t ConvolutionPlan<T>::get_kernel_length() const
   {
     if (!pimpl_) {
       throw std::runtime_error(
@@ -107,12 +114,13 @@ namespace OmniDSP {
     return pimpl_->get_kernel_length();
   }
 
-  template <typename T> ConvolutionMode ConvolutionPlan<T>::get_mode() const
+  template <typename T>
+  ConvolutionType ConvolutionPlan<T>::get_type() const
   {
     if (!pimpl_) {
-      throw std::runtime_error("Invalid ConvolutionPlan instance in get_mode.");
+      throw std::runtime_error("Invalid ConvolutionPlan instance in get_type.");
     }
-    return pimpl_->get_mode();
+    return pimpl_->get_type();
   }
 
   template <typename T>
@@ -131,7 +139,8 @@ namespace OmniDSP {
   // CorrelationPlan Method Definitions
   //--------------------------------------------------------------------------
 
-  template <typename T> CorrelationPlan<T>::CorrelationPlan(
+  template <typename T>
+  CorrelationPlan<T>::CorrelationPlan(
       std::unique_ptr<backend::CorrelationPlanImpl<T>> pimpl)
       : pimpl_(std::move(pimpl))
   {
@@ -141,17 +150,20 @@ namespace OmniDSP {
     }
   }
 
-  template <typename T> CorrelationPlan<T>::~CorrelationPlan() = default;
+  template <typename T>
+  CorrelationPlan<T>::~CorrelationPlan() = default;
 
   template <typename T>
   CorrelationPlan<T>::CorrelationPlan(CorrelationPlan&& other) noexcept
       = default;
 
-  template <typename T> CorrelationPlan<T>& CorrelationPlan<T>::operator=(
+  template <typename T>
+  CorrelationPlan<T>& CorrelationPlan<T>::operator=(
       CorrelationPlan&& other) noexcept
       = default;
 
-  template <typename T> [[nodiscard]] Status CorrelationPlan<T>::execute(
+  template <typename T>
+  [[nodiscard]] Status CorrelationPlan<T>::execute(
       std::span<const T> input, std::span<T> output) const
   {
     if (!pimpl_) {
@@ -163,7 +175,8 @@ namespace OmniDSP {
     return pimpl_->execute(input, output);
   }
 
-  template <typename T> size_t CorrelationPlan<T>::get_template_length() const
+  template <typename T>
+  size_t CorrelationPlan<T>::get_template_length() const
   {
     if (!pimpl_) {
       throw std::runtime_error(
@@ -172,12 +185,13 @@ namespace OmniDSP {
     return pimpl_->get_template_length();
   }
 
-  template <typename T> ConvolutionMode CorrelationPlan<T>::get_mode() const
+  template <typename T>
+  ConvolutionType CorrelationPlan<T>::get_type() const
   {
     if (!pimpl_) {
-      throw std::runtime_error("Invalid CorrelationPlan instance in get_mode.");
+      throw std::runtime_error("Invalid CorrelationPlan instance in get_type.");
     }
-    return pimpl_->get_mode();
+    return pimpl_->get_type();
   }
 
   template <typename T>
@@ -197,23 +211,16 @@ namespace OmniDSP {
   // Instantiate templates for common types (float, double, complex) to ensure
   // code generation.
 
-  // Define complex types for brevity
-  using float_c = OmniDSP::ComplexT<float>;
-  using double_c = OmniDSP::ComplexT<double>;
-
   // ConvolutionPlan Instantiations
-  template class OmniDSP::ConvolutionPlan<float>;
-  template class OmniDSP::ConvolutionPlan<double>;
-  template class OmniDSP::ConvolutionPlan<float_c>;
-  template class OmniDSP::ConvolutionPlan<double_c>;
+  template class ConvolutionPlan<F32>;
+  template class ConvolutionPlan<F64>;
+  template class ConvolutionPlan<C32>;
+  template class ConvolutionPlan<C64>;
 
   // CorrelationPlan Instantiations
-  template class OmniDSP::CorrelationPlan<float>;
-  template class OmniDSP::CorrelationPlan<double>;
-  template class OmniDSP::CorrelationPlan<float_c>;
-  template class OmniDSP::CorrelationPlan<double_c>;
-
-  // Remove implementation of old standalone convolve1d/correlate1d functions
-  // here if they existed.
+  template class CorrelationPlan<F32>;
+  template class CorrelationPlan<F64>;
+  template class CorrelationPlan<C32>;
+  template class CorrelationPlan<C64>;
 
 }  // namespace OmniDSP

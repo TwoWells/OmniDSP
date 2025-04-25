@@ -61,7 +61,8 @@ namespace OmniDSP {
        * @param inverse True if computing inverse FFT (applies conjugate
        * twiddle).
        */
-      template <typename T> HWY_NOINLINE void CooleyTukeyStage_HWY(
+      template <typename T>
+      HWY_NOINLINE void CooleyTukeyStage_HWY(
           std::complex<T>* HWY_RESTRICT data,
           size_t N,
           size_t len,
@@ -132,7 +133,8 @@ namespace OmniDSP {
        * @param bit_reverse_indices Precomputed bit-reversal permutation
        * indices.
        */
-      template <typename T_Complex> void CooleyTukeyFFT_HWY(
+      template <typename T_Complex>
+      void CooleyTukeyFFT_HWY(
           std::span<T_Complex> data,
           bool inverse,
           const std::vector<T_Complex>& twiddles,
@@ -169,7 +171,8 @@ namespace OmniDSP {
        * @param output_ptr Pointer to the output array (size N/2+1).
        * @param N The original real FFT length (must be power of two >= 2).
        */
-      template <typename T> HWY_NOINLINE void RFFT_Unpack_HWY(
+      template <typename T>
+      HWY_NOINLINE void RFFT_Unpack_HWY(
           const std::complex<T>* HWY_RESTRICT packed_fft_ptr,
           const std::complex<T>* HWY_RESTRICT WN_twiddles_ptr,
           std::complex<T>* HWY_RESTRICT output_ptr,
@@ -284,7 +287,8 @@ namespace OmniDSP {
        * @param full_spectrum_ptr Pointer to the N complex output array.
        * @param N The target full FFT length (must be power of two >= 2).
        */
-      template <typename T> HWY_NOINLINE void IRFFT_Pack_HWY(
+      template <typename T>
+      HWY_NOINLINE void IRFFT_Pack_HWY(
           const std::complex<T>* HWY_RESTRICT rfft_input_ptr,
           std::complex<T>* HWY_RESTRICT full_spectrum_ptr,
           size_t N)
@@ -336,7 +340,8 @@ namespace OmniDSP {
        * @param real_output_ptr Pointer to the N real output array.
        * @param N The number of elements.
        */
-      template <typename T> HWY_NOINLINE void IRFFT_RealCopy_HWY(
+      template <typename T>
+      HWY_NOINLINE void IRFFT_RealCopy_HWY(
           const std::complex<T>* HWY_RESTRICT complex_input_ptr,
           T* HWY_RESTRICT real_output_ptr,
           size_t N)
@@ -651,7 +656,8 @@ namespace OmniDSP {
         twiddle_factors_[k] = T{std::cos(angle), std::sin(angle)};
       }
     }
-    template <typename T> Status DefaultFFTPlanImpl<T>::fft(
+    template <typename T>
+    Status DefaultFFTPlanImpl<T>::fft(
         std::span<const T> input, std::span<T> output) const
     {
       if (input.size() != length_ || output.size() != length_)
@@ -661,7 +667,8 @@ namespace OmniDSP {
       return DispatchComplexFFT(
           output, false, twiddle_factors_, bit_reverse_indices_);
     }
-    template <typename T> Status DefaultFFTPlanImpl<T>::ifft(
+    template <typename T>
+    Status DefaultFFTPlanImpl<T>::ifft(
         std::span<const T> input, std::span<T> output) const
     {
       if (input.size() != length_ || output.size() != length_)
@@ -671,7 +678,8 @@ namespace OmniDSP {
       return DispatchComplexFFT(
           output, true, twiddle_factors_, bit_reverse_indices_);
     }
-    template <typename T> size_t DefaultFFTPlanImpl<T>::get_length() const
+    template <typename T>
+    size_t DefaultFFTPlanImpl<T>::get_length() const
     {
       return length_;
     }
@@ -703,7 +711,8 @@ namespace OmniDSP {
       }
     }
 
-    template <typename T> Status DefaultRFFTPlanImpl<T>::rfft(
+    template <typename T>
+    Status DefaultRFFTPlanImpl<T>::rfft(
         std::span<const RealT<T>> input, std::span<ComplexT<T>> output) const
     {
       size_t N = length_;
@@ -738,7 +747,8 @@ namespace OmniDSP {
       return status;
     }
 
-    template <typename T> Status DefaultRFFTPlanImpl<T>::irfft(
+    template <typename T>
+    Status DefaultRFFTPlanImpl<T>::irfft(
         std::span<const ComplexT<T>> input, std::span<RealT<T>> output) const
     {
       size_t N = length_;
@@ -769,7 +779,8 @@ namespace OmniDSP {
           std::span<const ComplexT<T>>(full_spectrum), output, N);
       return status;
     }
-    template <typename T> size_t DefaultRFFTPlanImpl<T>::get_length() const
+    template <typename T>
+    size_t DefaultRFFTPlanImpl<T>::get_length() const
     {
       return length_;
     }

@@ -27,7 +27,8 @@ namespace OmniDSP {
 
     // Note: These methods are part of the StubOmniDSPImpl class.
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     StubOmniDSPImpl::bartlett_window(size_t length) const
     {
       if (length == 0) return std::vector<RealT<T>>();
@@ -47,7 +48,8 @@ namespace OmniDSP {
       return coeffs;
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     StubOmniDSPImpl::blackman_window(size_t length) const
     {
       if (length == 0) return std::vector<RealT<T>>();
@@ -69,7 +71,8 @@ namespace OmniDSP {
       return coeffs;
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     StubOmniDSPImpl::flattop_window(size_t length) const
     {
       if (length == 0) return std::vector<RealT<T>>();
@@ -94,7 +97,8 @@ namespace OmniDSP {
       return coeffs;
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     StubOmniDSPImpl::gaussian_window(size_t length, RealT<T> stddev) const
     {
       if (length == 0) return std::vector<RealT<T>>();
@@ -121,7 +125,8 @@ namespace OmniDSP {
       return coeffs;
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     StubOmniDSPImpl::hamming_window(size_t length) const
     {
       if (length == 0) return std::vector<RealT<T>>();
@@ -139,7 +144,8 @@ namespace OmniDSP {
       return coeffs;
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     StubOmniDSPImpl::hann_window(size_t length) const
     {
       if (length == 0) return std::vector<RealT<T>>();
@@ -155,7 +161,8 @@ namespace OmniDSP {
       return coeffs;
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     StubOmniDSPImpl::kaiser_window(size_t length, RealT<T> beta) const
     {
       if (length == 0) return std::vector<RealT<T>>();
@@ -187,14 +194,16 @@ namespace OmniDSP {
       return coeffs;
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     StubOmniDSPImpl::rectangular_window(size_t length) const
     {
       // Simple implementation using std::vector constructor
       return std::vector<RealT<T>>(length, 1.0);
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     StubOmniDSPImpl::triangular_window(size_t length) const
     {
       if (length == 0) return std::vector<RealT<T>>();

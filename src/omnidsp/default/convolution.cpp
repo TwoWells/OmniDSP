@@ -60,7 +60,8 @@ namespace OmniDSP {
        * @param out_ptr Pointer to the complex output array.
        * @param size The number of complex elements in the arrays.
        */
-      template <typename T> HWY_NOINLINE void ComplexMultiply_HWY(
+      template <typename T>
+      HWY_NOINLINE void ComplexMultiply_HWY(
           const std::complex<T>* HWY_RESTRICT a_ptr,
           const std::complex<T>* HWY_RESTRICT b_ptr,
           std::complex<T>* HWY_RESTRICT out_ptr,
@@ -97,7 +98,8 @@ namespace OmniDSP {
        * @param size The number of elements in the array.
        * @param scale The scalar factor to multiply by.
        */
-      template <typename T> HWY_NOINLINE void ScaleArray_HWY(
+      template <typename T>
+      HWY_NOINLINE void ScaleArray_HWY(
           T* HWY_RESTRICT data_ptr,
           size_t size,
           typename Detail::UnderlyingReal<T> scale)
@@ -306,19 +308,24 @@ namespace OmniDSP {
       return result;
     }
     namespace Detail { /* Type traits helpers... */
-      template <typename T> struct is_complex : std::false_type {};
-      template <typename T> struct is_complex<std::complex<T>>
-          : std::true_type {};
-      template <typename T> constexpr bool is_complex_v = is_complex<T>::value;
-      template <typename T> struct ValueType {
+      template <typename T>
+      struct is_complex : std::false_type {};
+      template <typename T>
+      struct is_complex<std::complex<T>> : std::true_type {};
+      template <typename T>
+      constexpr bool is_complex_v = is_complex<T>::value;
+      template <typename T>
+      struct ValueType {
         using type = T;
       };
-      template <typename T> struct ValueType<std::complex<T>> {
+      template <typename T>
+      struct ValueType<std::complex<T>> {
         using type = T;
       };
-      template <typename T> using UnderlyingReal = typename ValueType<T>::type;
-      template <typename T> using CorrespondingComplex
-          = ComplexT<UnderlyingReal<T>>;
+      template <typename T>
+      using UnderlyingReal = typename ValueType<T>::type;
+      template <typename T>
+      using CorrespondingComplex = ComplexT<UnderlyingReal<T>>;
     }  // namespace Detail
 
     //--------------------------------------------------------------------------
@@ -375,7 +382,8 @@ namespace OmniDSP {
     template <typename T>
     DefaultConvolutionPlanImpl<T>::~DefaultConvolutionPlanImpl() = default;
 
-    template <typename T> Status DefaultConvolutionPlanImpl<T>::execute(
+    template <typename T>
+    Status DefaultConvolutionPlanImpl<T>::execute(
         std::span<const T> input, std::span<T> output) const
     {
       if constexpr (Detail::is_complex_v<T>) {
@@ -566,7 +574,8 @@ namespace OmniDSP {
     template <typename T>
     DefaultCorrelationPlanImpl<T>::~DefaultCorrelationPlanImpl() = default;
 
-    template <typename T> Status DefaultCorrelationPlanImpl<T>::execute(
+    template <typename T>
+    Status DefaultCorrelationPlanImpl<T>::execute(
         std::span<const T> input, std::span<T> output) const
     {
       if constexpr (Detail::is_complex_v<T>) {

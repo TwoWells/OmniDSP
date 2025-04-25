@@ -49,7 +49,8 @@ class OmniDSPPyError : public std::runtime_error {
 };
 
 // Helper to check OmniExpected<T> and throw OmniDSPPyError on failure
-template <typename T> T check_expected(
+template <typename T>
+T check_expected(
     OmniExpected<T>&& result, const std::string& func_name = "OmniDSP function")
 {
   if (result.has_value()) {
@@ -115,7 +116,8 @@ std::span<const T> numpy_to_span_const(const py::buffer& buf)
 
 // Helper to convert NumPy array to std::span (non-const version)
 // Performs dtype and contiguity checks.
-template <typename T> std::span<T> numpy_to_span_writable(py::buffer buf)
+template <typename T>
+std::span<T> numpy_to_span_writable(py::buffer buf)
 {
   py::buffer_info info = buf.request(true);  // Request writable buffer
 

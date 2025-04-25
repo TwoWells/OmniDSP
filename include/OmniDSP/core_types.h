@@ -14,6 +14,7 @@
 #include <cstddef>      // For size_t
 #include <expected>     // Include for std::expected (requires C++23)
 #include <string_view>  // For get_status_string
+#include <vector>
 
 namespace OmniDSP {
 
@@ -24,14 +25,66 @@ namespace OmniDSP {
    * @details Ensures consistency in template definitions (e.g., float, double).
    * @tparam T The underlying floating-point type.
    */
-  template <typename T> using RealT = T;
+  template <typename T>
+  using RealT = T;
 
   /**
    * @brief Alias for complex floating-point types used in OmniDSP templates.
    * @details Ensures consistency using std::complex<T>.
    * @tparam T The underlying floating-point type for real and imaginary parts.
    */
-  template <typename T> using ComplexT = std::complex<T>;
+  template <typename T>
+  using ComplexT = std::complex<T>;
+
+  // --- Concrete Type Aliases ---
+
+  /**
+   * @brief Alias for single-precision real floating-point type (float).
+   */
+  using F32 = float;
+
+  /**
+   * @brief Alias for single-precision complex floating-point type
+   * (std::complex<float>).
+   */
+  using C32 = std::complex<float>;
+
+  /**
+   * @brief Alias for double-precision real floating-point type (double).
+   */
+  using F64 = double;
+
+  /**
+   * @brief Alias for double-precision complex floating-point type
+   * (std::complex<double>).
+   */
+  using C64 = std::complex<double>;
+
+  // --- Concrete Vector Type Aliases ---
+
+  /**
+   * @brief Alias for a vector of single-precision real values
+   * (std::vector<F32>).
+   */
+  using F32Vec = std::vector<F32>;
+
+  /**
+   * @brief Alias for a vector of single-precision complex values
+   * (std::vector<C32>).
+   */
+  using C32Vec = std::vector<C32>;
+
+  /**
+   * @brief Alias for a vector of double-precision real values
+   * (std::vector<F64>).
+   */
+  using F64Vec = std::vector<F64>;
+
+  /**
+   * @brief Alias for a vector of double-precision complex values
+   * (std::vector<C64>).
+   */
+  using C64Vec = std::vector<C64>;
 
   // --- Core Enums ---
 
@@ -99,7 +152,8 @@ namespace OmniDSP {
    * { process(*result); } else { handle_error(result.error()); }
    * @tparam T The type of the expected value on success.
    */
-  template <typename T> using OmniExpected = std::expected<T, Status>;
+  template <typename T>
+  using OmniExpected = std::expected<T, Status>;
 
   /**
    * @brief Specifies the backend implementation library to use for
@@ -138,19 +192,24 @@ namespace OmniDSP {
   // if they don't fit better elsewhere.
   namespace Detail {
     // Example: Type trait to check if a type is std::complex
-    template <typename T> struct is_complex : std::false_type {};
-    template <typename T> struct is_complex<std::complex<T>> : std::true_type {
-    };
-    template <typename T> constexpr bool is_complex_v = is_complex<T>::value;
+    template <typename T>
+    struct is_complex : std::false_type {};
+    template <typename T>
+    struct is_complex<std::complex<T>> : std::true_type {};
+    template <typename T>
+    constexpr bool is_complex_v = is_complex<T>::value;
 
     // Example: Get underlying real type from complex or real
-    template <typename T> struct ValueType {
+    template <typename T>
+    struct ValueType {
       using type = T;
     };
-    template <typename T> struct ValueType<std::complex<T>> {
+    template <typename T>
+    struct ValueType<std::complex<T>> {
       using type = T;
     };
-    template <typename T> using UnderlyingRealT = typename ValueType<T>::type;
+    template <typename T>
+    using UnderlyingRealT = typename ValueType<T>::type;
   }  // namespace Detail
 
 }  // namespace OmniDSP

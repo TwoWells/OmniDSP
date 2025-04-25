@@ -131,7 +131,8 @@ namespace OmniDSP {
                 << length_ << std::endl;  // Debug
     }
 
-    template <typename T> AccelerateFFTPlanImpl<T>::~AccelerateFFTPlanImpl()
+    template <typename T>
+    AccelerateFFTPlanImpl<T>::~AccelerateFFTPlanImpl()
     {
       if (setup_) {
         if constexpr (std::is_same_v<T, std::complex<float>>) {
@@ -146,7 +147,8 @@ namespace OmniDSP {
       }
     }
 
-    template <typename T> Status AccelerateFFTPlanImpl<T>::fft(
+    template <typename T>
+    Status AccelerateFFTPlanImpl<T>::fft(
         std::span<const T> input, std::span<T> output) const
     {
       if (!setup_) return Status::InvalidOperation;
@@ -173,7 +175,8 @@ namespace OmniDSP {
       return Status::Success;
     }
 
-    template <typename T> Status AccelerateFFTPlanImpl<T>::ifft(
+    template <typename T>
+    Status AccelerateFFTPlanImpl<T>::ifft(
         std::span<const T> input, std::span<T> output) const
     {
       if (!setup_) return Status::InvalidOperation;
@@ -201,7 +204,8 @@ namespace OmniDSP {
       return Status::Success;
     }
 
-    template <typename T> size_t AccelerateFFTPlanImpl<T>::get_length() const
+    template <typename T>
+    size_t AccelerateFFTPlanImpl<T>::get_length() const
     {
       return length_;
     }
@@ -258,7 +262,8 @@ namespace OmniDSP {
                 << length_ << std::endl;  // Debug
     }
 
-    template <typename T> AccelerateRFFTPlanImpl<T>::~AccelerateRFFTPlanImpl()
+    template <typename T>
+    AccelerateRFFTPlanImpl<T>::~AccelerateRFFTPlanImpl()
     {
       if (setup_) {
         if constexpr (std::is_same_v<T, float>) {
@@ -274,7 +279,8 @@ namespace OmniDSP {
       // No need to free temp_split_complex_
     }
 
-    template <typename T> Status AccelerateRFFTPlanImpl<T>::rfft(
+    template <typename T>
+    Status AccelerateRFFTPlanImpl<T>::rfft(
         std::span<const RealT<T>> input, std::span<ComplexT<T>> output) const
     {
       if (!setup_) return Status::InvalidOperation;
@@ -326,7 +332,8 @@ namespace OmniDSP {
       return Status::Success;
     }
 
-    template <typename T> Status AccelerateRFFTPlanImpl<T>::irfft(
+    template <typename T>
+    Status AccelerateRFFTPlanImpl<T>::irfft(
         std::span<const ComplexT<T>> input, std::span<RealT<T>> output) const
     {
       if (!setup_) return Status::InvalidOperation;
@@ -375,7 +382,8 @@ namespace OmniDSP {
       return Status::Success;
     }
 
-    template <typename T> size_t AccelerateRFFTPlanImpl<T>::get_length() const
+    template <typename T>
+    size_t AccelerateRFFTPlanImpl<T>::get_length() const
     {
       return length_;
     }

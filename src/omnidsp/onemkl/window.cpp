@@ -67,7 +67,8 @@ namespace OmniDSP {
      * @brief Generates Bartlett window coefficients using IPP.
      * @see OmniDSP::OmniDSP::bartlett_window
      */
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     OneMKLOmniDSPImpl::bartlett_window(size_t length) const
     {
       if (length == 0)
@@ -99,7 +100,8 @@ namespace OmniDSP {
      * @details Uses the standard Blackman window definition (alpha = 0.16).
      * @see OmniDSP::OmniDSP::blackman_window
      */
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     OneMKLOmniDSPImpl::blackman_window(size_t length) const
     {
       if (length == 0) return std::vector<RealT<T>>();
@@ -129,7 +131,8 @@ namespace OmniDSP {
      * for calculation.
      * @see OmniDSP::OmniDSP::flattop_window
      */
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     OneMKLOmniDSPImpl::flattop_window(size_t length) const
     {
       if (length == 0) return std::vector<RealT<T>>();
@@ -236,7 +239,8 @@ namespace OmniDSP {
      * used.
      * @see OmniDSP::OmniDSP::gaussian_window
      */
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     OneMKLOmniDSPImpl::gaussian_window(size_t length, RealT<T> stddev) const
     {
       if (length == 0) return std::vector<RealT<T>>();
@@ -305,7 +309,8 @@ namespace OmniDSP {
      * @brief Generates Hamming window coefficients using IPP.
      * @see OmniDSP::OmniDSP::hamming_window
      */
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     OneMKLOmniDSPImpl::hamming_window(size_t length) const
     {
       if (length == 0) return std::vector<RealT<T>>();
@@ -332,7 +337,8 @@ namespace OmniDSP {
      * @brief Generates Hann window coefficients using IPP.
      * @see OmniDSP::OmniDSP::hann_window
      */
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     OneMKLOmniDSPImpl::hann_window(size_t length) const
     {
       if (length == 0) return std::vector<RealT<T>>();
@@ -361,7 +367,8 @@ namespace OmniDSP {
      * by IPP using the relationship alpha = beta / pi.
      * @see OmniDSP::OmniDSP::kaiser_window
      */
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     OneMKLOmniDSPImpl::kaiser_window(size_t length, RealT<T> beta) const
     {
       if (length == 0) return std::vector<RealT<T>>();
@@ -401,7 +408,8 @@ namespace OmniDSP {
      * @brief Generates Rectangular window coefficients (all ones) using IPP.
      * @see OmniDSP::OmniDSP::rectangular_window
      */
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     OneMKLOmniDSPImpl::rectangular_window(size_t length) const
     {
       if (length == 0) return std::vector<RealT<T>>();
@@ -436,7 +444,8 @@ namespace OmniDSP {
      * Triangular definition.
      * @see OmniDSP::OmniDSP::triangular_window
      */
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     OneMKLOmniDSPImpl::triangular_window(size_t length) const
     {
       // IPP doesn't have a distinct triangular window. The Bartlett window is

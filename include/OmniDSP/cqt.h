@@ -127,42 +127,12 @@ namespace OmniDSP {
      * @brief Pointer to the implementation object (Pimpl idiom).
      */
     std::unique_ptr<backend::CQTPlanImpl<T>> pimpl_;  // Pimpl member
-
-    // Remove direct members that are now handled by Impl
-    // const OmniDSP* owner_dsp_ = nullptr; // Removed
-    // RealT<T> sample_rate_ = 0.0; // Removed (or get from pimpl_)
-    // size_t num_bins_ = 0; // Removed (get from pimpl_)
-    // size_t hop_length_ = 0; // Removed (get from pimpl_)
-    // std::unique_ptr<FFTPlan<ComplexT<T>>> fft_plan_; // Removed (managed by
-    // Impl) std::vector<std::vector<ComplexT<T>>> kernels_; // Removed (managed
-    // by Impl)
   };
 
   // --- Template Implementations (Definitions) ---
   // Definitions for template class methods that depend on the Impl class
   // (constructor, destructor, move ops, execute, getters) MUST be provided
   // in src/omnidsp/cqt.cpp where the CQTPlanImpl<T> is fully defined.
-
-  // Example placeholder getters (real definitions MUST be in .cpp):
-  template <typename T> size_t CQTPlan<T>::get_num_bins() const
-  {
-    // return pimpl_ ? pimpl_->get_num_bins() : 0; // Requires Impl definition
-    return 0;  // Placeholder
-  }
-
-  template <typename T>
-  size_t CQTPlan<T>::get_num_output_frames(size_t /*input_length*/) const
-  {
-    // return pimpl_ ? pimpl_->get_num_output_frames(input_length) : 0; //
-    // Requires Impl definition
-    return 0;  // Placeholder
-  }
-
-  template <typename T> size_t CQTPlan<T>::get_hop_length() const
-  {
-    // return pimpl_ ? pimpl_->get_hop_length() : 0; // Requires Impl definition
-    return 0;  // Placeholder
-  }
 
 }  // namespace OmniDSP
 

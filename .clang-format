@@ -5,7 +5,7 @@ BasedOnStyle: Google
 AlignAfterOpenBracket: AlwaysBreak
 AlignEscapedNewlines: Right
 AlignTrailingComments: true
-AlwaysBreakTemplateDeclarations: No
+AlwaysBreakTemplateDeclarations: Yes
 BinPackArguments: false
 BinPackParameters: false
 BreakBeforeBraces: Custom

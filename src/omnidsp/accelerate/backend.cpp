@@ -53,7 +53,8 @@ namespace OmniDSP {
 
     // --- DSP Operations (Placeholders - Need Accelerate Implementation) ---
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     AccelerateOmniDSPImpl::convolve(
         const std::vector<RealT<T>>& input,
         const std::vector<RealT<T>>& kernel,
@@ -66,7 +67,8 @@ namespace OmniDSP {
       return std::unexpected(Status::UnsupportedFeature);
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>>
     AccelerateOmniDSPImpl::convolve(
         const std::vector<ComplexT<T>>& input,
         const std::vector<ComplexT<T>>& kernel,
@@ -80,7 +82,8 @@ namespace OmniDSP {
       return std::unexpected(Status::UnsupportedFeature);
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     AccelerateOmniDSPImpl::correlate(
         const std::vector<RealT<T>>& input,
         const std::vector<RealT<T>>& kernel,
@@ -94,7 +97,8 @@ namespace OmniDSP {
       return std::unexpected(Status::UnsupportedFeature);
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>>
     AccelerateOmniDSPImpl::correlate(
         const std::vector<ComplexT<T>>& input,
         const std::vector<ComplexT<T>>& kernel,
@@ -109,7 +113,8 @@ namespace OmniDSP {
     }
 
     // --- One-off FFTs (Placeholders - Need Accelerate Implementation) ---
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>>
     AccelerateOmniDSPImpl::fft(const std::vector<ComplexT<T>>& input) const
     {
       // TODO: Implement one-off complex FFT using Accelerate (e.g., create
@@ -119,7 +124,8 @@ namespace OmniDSP {
       return std::unexpected(Status::UnsupportedFeature);
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>>
     AccelerateOmniDSPImpl::ifft(const std::vector<ComplexT<T>>& input) const
     {
       // TODO: Implement one-off complex IFFT using Accelerate (e.g., create
@@ -129,7 +135,8 @@ namespace OmniDSP {
       return std::unexpected(Status::UnsupportedFeature);
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>>
     AccelerateOmniDSPImpl::rfft(const std::vector<RealT<T>>& input) const
     {
       // TODO: Implement one-off real RFFT using Accelerate (e.g., create
@@ -139,7 +146,8 @@ namespace OmniDSP {
       return std::unexpected(Status::UnsupportedFeature);
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     AccelerateOmniDSPImpl::irfft(
         const std::vector<ComplexT<T>>& input, size_t output_length) const
     {
@@ -159,7 +167,8 @@ namespace OmniDSP {
       return Status::Success;
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     AccelerateOmniDSPImpl::bartlett_window(size_t length) const
     {
       if (length == 0) return std::vector<RealT<T>>();  // Handle zero length
@@ -204,7 +213,8 @@ namespace OmniDSP {
       return coeffs;
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     AccelerateOmniDSPImpl::blackman_window(size_t length) const
     {
       if (length == 0) return std::vector<RealT<T>>();
@@ -219,7 +229,8 @@ namespace OmniDSP {
       return coeffs;
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     AccelerateOmniDSPImpl::flattop_window(size_t length) const
     {
       // vDSP does not have a direct flat top window. Needs manual
@@ -232,7 +243,8 @@ namespace OmniDSP {
       return std::unexpected(Status::UnsupportedFeature);
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     AccelerateOmniDSPImpl::gaussian_window(size_t length, RealT<T> stddev) const
     {
       // vDSP does not have a direct Gaussian window. Needs manual
@@ -244,7 +256,8 @@ namespace OmniDSP {
       return std::unexpected(Status::UnsupportedFeature);
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     AccelerateOmniDSPImpl::hamming_window(size_t length) const
     {
       if (length == 0) return std::vector<RealT<T>>();
@@ -258,7 +271,8 @@ namespace OmniDSP {
       return coeffs;
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     AccelerateOmniDSPImpl::hann_window(size_t length) const
     {
       if (length == 0) return std::vector<RealT<T>>();
@@ -272,7 +286,8 @@ namespace OmniDSP {
       return coeffs;
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     AccelerateOmniDSPImpl::kaiser_window(size_t length, RealT<T> beta) const
     {
       // vDSP does not have a direct Kaiser window. Needs manual implementation.
@@ -283,7 +298,8 @@ namespace OmniDSP {
       return std::unexpected(Status::UnsupportedFeature);
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     AccelerateOmniDSPImpl::rectangular_window(size_t length) const
     {
       if (length == 0) return std::vector<RealT<T>>();
@@ -298,7 +314,8 @@ namespace OmniDSP {
       return coeffs;
     }
 
-    template <typename T> [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
+    template <typename T>
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
     AccelerateOmniDSPImpl::triangular_window(size_t length) const
     {
       // Similar to Bartlett, but often defined slightly differently (ends at

@@ -31,8 +31,10 @@ namespace OmniDSP {
 
   // Forward declarations for implementation classes (Pimpl idiom)
   namespace backend {
-    template <typename T> class FIRFilterPlanImpl;
-    template <typename T> class IIRFilterPlanImpl;
+    template <typename T>
+    class FIRFilterPlanImpl;
+    template <typename T>
+    class IIRFilterPlanImpl;
   }  // namespace backend
 
   /**
@@ -52,7 +54,8 @@ namespace OmniDSP {
    * OmniDSP::create_fir_filter_plan. Currently supports window-based design.
    * @tparam T The floating-point type (e.g., float, double).
    */
-  template <typename T> struct FIRFilterSpec {
+  template <typename T>
+  struct FIRFilterSpec {
     FilterType type = FilterType::Lowpass;  ///< The desired filter type.
     size_t order = 0;  ///< Filter order (number of taps - 1). Must be > 0.
     RealT<T> sample_rate
@@ -101,7 +104,8 @@ namespace OmniDSP {
    * + a1*z^-1 + a2*z^-2) Note the convention: a0 is implicitly 1.
    * @tparam T The floating-point type (e.g., float, double).
    */
-  template <typename T> struct SecondOrderSection {
+  template <typename T>
+  struct SecondOrderSection {
     RealT<T> b0 = 1.0;  ///< Numerator coefficient b0.
     RealT<T> b1 = 0.0;  ///< Numerator coefficient b1.
     RealT<T> b2 = 0.0;  ///< Numerator coefficient b2.
@@ -117,7 +121,8 @@ namespace OmniDSP {
    * represented as a series of Second-Order Sections (SOS).
    * @tparam T The floating-point type (e.g., float, double).
    */
-  template <typename T> struct IIRFilterSpec {
+  template <typename T>
+  struct IIRFilterSpec {
     // TODO: Define IIR filter design parameters. Examples:
     // enum class IIRDesignType { Butterworth, ChebyshevI, ChebyshevII, Elliptic
     // }; IIRDesignType design = IIRDesignType::Butterworth;
@@ -169,7 +174,8 @@ namespace OmniDSP {
    * @tparam T The data type for filtering (e.g., float, double,
    * std::complex<float>).
    */
-  template <typename T> class OMNIDSP_EXPORT FIRFilterPlan {
+  template <typename T>
+  class OMNIDSP_EXPORT FIRFilterPlan {
     friend class OmniDSP;  // Allow OmniDSP factory methods to call private
                            // constructor
 
@@ -243,7 +249,8 @@ namespace OmniDSP {
    * filtering is typically only defined for real signals. Complex IIR filtering
    * is less common.
    */
-  template <typename T> class OMNIDSP_EXPORT IIRFilterPlan {
+  template <typename T>
+  class OMNIDSP_EXPORT IIRFilterPlan {
     friend class OmniDSP;  // Allow OmniDSP factory methods to call private
                            // constructor
 

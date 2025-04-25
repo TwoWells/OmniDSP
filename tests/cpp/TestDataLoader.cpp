@@ -180,7 +180,8 @@ namespace TestDataLoader {
 
   // --- loadVectorData Specializations ---
 
-  template <> std::vector<double> loadVectorData<double>(
+  template <>
+  std::vector<double> loadVectorData<double>(
       const std::string &suite_name, const std::string &filename)
   {
     std::string full_path_str = getTestDataPath(suite_name, filename);
@@ -251,7 +252,8 @@ namespace TestDataLoader {
     return data;
   }
 
-  template <> std::vector<float> loadVectorData<float>(
+  template <>
+  std::vector<float> loadVectorData<float>(
       const std::string &suite_name, const std::string &filename)
   {
     std::string full_path_str = getTestDataPath(suite_name, filename);

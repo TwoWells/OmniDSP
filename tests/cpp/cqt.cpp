@@ -84,7 +84,8 @@ class PrecomputedRecursiveCQTTest : public ::testing::Test {
 
   // Helper to compare complex matrices (using double for expected always for
   // now)
-  template <typename T> void ExpectComplexMatrixNear(
+  template <typename T>
+  void ExpectComplexMatrixNear(
       const ComplexMatD &expected,
       const std::vector<std::vector<std::complex<T>>> &actual,
       T tolerance,
@@ -125,7 +126,8 @@ class PrecomputedRecursiveCQTTest : public ::testing::Test {
   }
 
   // Helper to compare real vectors
-  template <typename T> void ExpectRealVectorNear(
+  template <typename T>
+  void ExpectRealVectorNear(
       const std::vector<T> &expected,
       const std::vector<T> &actual,
       T tolerance,
@@ -141,7 +143,8 @@ class PrecomputedRecursiveCQTTest : public ::testing::Test {
   }
 
   // Helper to get tolerance
-  template <typename T> T get_tolerance(size_t N = 1024)
+  template <typename T>
+  T get_tolerance(size_t N = 1024)
   {
     // Tolerance might need adjustment based on Librosa vs OmniDSP differences
     return std::numeric_limits<T>::epsilon() * N * 1000;
@@ -149,12 +152,14 @@ class PrecomputedRecursiveCQTTest : public ::testing::Test {
 
   // --- Accessors for Private CQTPlan Members (Requires Friend Declaration in
   // cqt.h) ---
-  template <typename T> static const std::vector<size_t> &getOctaveFFTLens(
+  template <typename T>
+  static const std::vector<size_t> &getOctaveFFTLens(
       const OmniDSP::CQTPlan<T> &plan)
   {
     return plan.octave_fft_lens_;
   }
-  template <typename T> static const std::vector<size_t> &getOctaveSpectrumLens(
+  template <typename T>
+  static const std::vector<size_t> &getOctaveSpectrumLens(
       const OmniDSP::CQTPlan<T> &plan)
   {
     return plan.octave_spectrum_lens_;
@@ -178,13 +183,15 @@ class PrecomputedRecursiveCQTTest : public ::testing::Test {
     return plan.precomputed_sparse_kernels_;
   }
   // Helper to call the private method calculateFirCoefficients
-  template <typename T> static std::vector<T> callCalculateFirCoefficients(
+  template <typename T>
+  static std::vector<T> callCalculateFirCoefficients(
       const OmniDSP::CQTPlan<T> &plan, double current_sr, int N)
   {
     return plan.calculateFirCoefficients(current_sr, N);
   }
   // Helper to call the private method filterAndDownsampleBy2
-  template <typename T> static std::vector<T> callFilterAndDownsampleBy2(
+  template <typename T>
+  static std::vector<T> callFilterAndDownsampleBy2(
       const OmniDSP::CQTPlan<T> &plan,
       const std::vector<T> &signal,
       double current_sr)
