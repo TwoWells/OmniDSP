@@ -1,22 +1,23 @@
 /**
  * @file backend.cpp (default)
- * @brief Implements the DefaultOmniDSPImpl class methods using standard C++.
+ * @brief Implements the DefaultBackend class methods using standard C++.
  * @details This file provides the base implementations for DSP operations,
  * window generation, and plan factories. Optimized backends inherit from
- * DefaultOmniDSPImpl and override methods where applicable.
+ * DefaultBackend and override methods where applicable.
  */
 
-#include "backend.h"  // Corresponding header for Default backend declarations
+#include "backend.hpp"  // Corresponding header for Default backend declarations
 
 // Include headers for the public Plan classes (needed for factory return types
 // and Pimpl access/construction)
-#include "OmniDSP/convolution.h"
-#include "OmniDSP/cqt.h"  // Include CQTPlan header
-#include "OmniDSP/fft.h"
-#include "OmniDSP/filter.h"  // Include FilterPlan header
-#include "OmniDSP/omnidsp.h"  // Needed only if DefaultCQTPlanImpl needs OmniDSP* owner
-#include "OmniDSP/resample.h"
-#include "OmniDSP/window.h"
+#include "OmniDSP/convolution.hpp"
+#include "OmniDSP/core_types.hpp"
+#include "OmniDSP/cqt.hpp"  // Include CQTPlan header
+#include "OmniDSP/fft.hpp"
+#include "OmniDSP/filter.hpp"  // Include FilterPlan header
+#include "OmniDSP/omnidsp.hpp"  // Needed only if DefaultCQTPlanImpl needs OmniDSP* owner
+#include "OmniDSP/resample.hpp"
+#include "OmniDSP/window.hpp"
 
 // Include standard library headers needed for default implementations
 #include <algorithm>  // For std::reverse, std::copy, std::fill, std::max, std::min
@@ -60,13 +61,13 @@ namespace OmniDSP {
     }
 
     //--------------------------------------------------------------------------
-    // DefaultOmniDSPImpl Method Definitions
+    // DefaultBackend Method Definitions
     //--------------------------------------------------------------------------
 
     /**
      * @brief Constructor for the Default backend implementation.
      */
-    DefaultOmniDSPImpl::DefaultOmniDSPImpl()
+    DefaultBackend::DefaultBackend()
     {
       // No specific setup needed for the default backend
       std::cout << "Default Backend Initialized."
@@ -76,7 +77,7 @@ namespace OmniDSP {
     /**
      * @brief Destructor for the Default backend implementation.
      */
-    DefaultOmniDSPImpl::~DefaultOmniDSPImpl()
+    DefaultBackend::~DefaultBackend()
     {
       std::cout << "Default Backend Destroyed." << std::endl;  // Debug message
     }
@@ -85,19 +86,18 @@ namespace OmniDSP {
      * @brief Gets the backend type identifier.
      * @return Backend::Default.
      */
-    Backend DefaultOmniDSPImpl::get_backend() const { return Backend::Default; }
+    Backend DefaultBackend::get_backend() const { return Backend::Default; }
 
     // --- DSP Operations ---
     // (convolve, correlate implementations...)
     template <typename T>
-    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    DefaultOmniDSPImpl::convolve(
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>> DefaultBackend::convolve(
         const std::vector<RealT<T>>& input,
         const std::vector<RealT<T>>& kernel,
-        ConvolutionMode mode) const
+        ConvolutionType type) const
     {
       try {
-        DefaultConvolutionPlanImpl<RealT<T>> plan(kernel, mode);
+        DefaultConvolutionPlanImpl<RealT<T>> plan(kernel, type);
         size_t output_len = plan.get_output_length(input.size());
         std::vector<RealT<T>> output(output_len);
         Status status = plan.execute(input, output);
@@ -111,13 +111,13 @@ namespace OmniDSP {
     }
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>>
-    DefaultOmniDSPImpl::convolve(
+    DefaultBackend::convolve(
         const std::vector<ComplexT<T>>& input,
         const std::vector<ComplexT<T>>& kernel,
-        ConvolutionMode mode) const
+        ConvolutionType type) const
     {
       try {
-        DefaultConvolutionPlanImpl<ComplexT<T>> plan(kernel, mode);
+        DefaultConvolutionPlanImpl<ComplexT<T>> plan(kernel, type);
         size_t output_len = plan.get_output_length(input.size());
         std::vector<ComplexT<T>> output(output_len);
         Status status = plan.execute(input, output);
@@ -131,14 +131,13 @@ namespace OmniDSP {
       }
     }
     template <typename T>
-    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    DefaultOmniDSPImpl::correlate(
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>> DefaultBackend::correlate(
         const std::vector<RealT<T>>& input,
         const std::vector<RealT<T>>& kernel,
-        ConvolutionMode mode) const
+        ConvolutionType type) const
     {
       try {
-        DefaultCorrelationPlanImpl<RealT<T>> plan(kernel, mode);
+        DefaultCorrelationPlanImpl<RealT<T>> plan(kernel, type);
         size_t output_len = plan.get_output_length(input.size());
         std::vector<RealT<T>> output(output_len);
         Status status = plan.execute(input, output);
@@ -153,13 +152,13 @@ namespace OmniDSP {
     }
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>>
-    DefaultOmniDSPImpl::correlate(
+    DefaultBackend::correlate(
         const std::vector<ComplexT<T>>& input,
         const std::vector<ComplexT<T>>& kernel,
-        ConvolutionMode mode) const
+        ConvolutionType type) const
     {
       try {
-        DefaultCorrelationPlanImpl<ComplexT<T>> plan(kernel, mode);
+        DefaultCorrelationPlanImpl<ComplexT<T>> plan(kernel, type);
         size_t output_len = plan.get_output_length(input.size());
         std::vector<ComplexT<T>> output(output_len);
         Status status = plan.execute(input, output);
@@ -176,8 +175,8 @@ namespace OmniDSP {
     // --- One-off FFTs ---
     // (fft, ifft, rfft, irfft implementations...)
     template <typename T>
-    [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>>
-    DefaultOmniDSPImpl::fft(const std::vector<ComplexT<T>>& input) const
+    [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>> DefaultBackend::fft(
+        const std::vector<ComplexT<T>>& input) const
     {
       try {
         DefaultFFTPlanImpl<ComplexT<T>> plan(input.size());
@@ -192,8 +191,8 @@ namespace OmniDSP {
       }
     }
     template <typename T>
-    [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>>
-    DefaultOmniDSPImpl::ifft(const std::vector<ComplexT<T>>& input) const
+    [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>> DefaultBackend::ifft(
+        const std::vector<ComplexT<T>>& input) const
     {
       try {
         DefaultFFTPlanImpl<ComplexT<T>> plan(input.size());
@@ -216,8 +215,8 @@ namespace OmniDSP {
       }
     }
     template <typename T>
-    [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>>
-    DefaultOmniDSPImpl::rfft(const std::vector<RealT<T>>& input) const
+    [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>> DefaultBackend::rfft(
+        const std::vector<RealT<T>>& input) const
     {
       try {
         DefaultRFFTPlanImpl<RealT<T>> plan(input.size());
@@ -233,7 +232,7 @@ namespace OmniDSP {
       }
     }
     template <typename T>
-    [[nodiscard]] OmniExpected<std::vector<RealT<T>>> DefaultOmniDSPImpl::irfft(
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>> DefaultBackend::irfft(
         const std::vector<ComplexT<T>>& input, size_t output_length) const
     {
       try {
@@ -274,7 +273,7 @@ namespace OmniDSP {
     // (bartlett_window, blackman_window, etc. implementations...)
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    DefaultOmniDSPImpl::bartlett_window(size_t length) const
+    DefaultBackend::bartlett_window(size_t length) const
     {
       if (length == 0) return std::vector<RealT<T>>();
       std::vector<RealT<T>> coeffs(length);
@@ -294,7 +293,7 @@ namespace OmniDSP {
     }
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    DefaultOmniDSPImpl::blackman_window(size_t length) const
+    DefaultBackend::blackman_window(size_t length) const
     {
       if (length == 0) return std::vector<RealT<T>>();
       if (length == 1)
@@ -318,7 +317,7 @@ namespace OmniDSP {
     }
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    DefaultOmniDSPImpl::flattop_window(size_t length) const
+    DefaultBackend::flattop_window(size_t length) const
     {
       if (length == 0) return std::vector<RealT<T>>();
       if (length == 1)
@@ -345,7 +344,7 @@ namespace OmniDSP {
     }
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    DefaultOmniDSPImpl::gaussian_window(size_t length, RealT<T> stddev) const
+    DefaultBackend::gaussian_window(size_t length, RealT<T> stddev) const
     {
       if (length == 0) return std::vector<RealT<T>>();
       if (length == 1)
@@ -372,7 +371,7 @@ namespace OmniDSP {
     }
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    DefaultOmniDSPImpl::hamming_window(size_t length) const
+    DefaultBackend::hamming_window(size_t length) const
     {
       if (length == 0) return std::vector<RealT<T>>();
       if (length == 1)
@@ -392,7 +391,7 @@ namespace OmniDSP {
     }
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    DefaultOmniDSPImpl::hann_window(size_t length) const
+    DefaultBackend::hann_window(size_t length) const
     {
       if (length == 0) return std::vector<RealT<T>>();
       if (length == 1)
@@ -412,7 +411,7 @@ namespace OmniDSP {
     }
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    DefaultOmniDSPImpl::kaiser_window(size_t length, RealT<T> beta) const
+    DefaultBackend::kaiser_window(size_t length, RealT<T> beta) const
     {
       if (length == 0) return std::vector<RealT<T>>();
       if (length == 1)
@@ -448,13 +447,13 @@ namespace OmniDSP {
     }
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    DefaultOmniDSPImpl::rectangular_window(size_t length) const
+    DefaultBackend::rectangular_window(size_t length) const
     {
       return std::vector<RealT<T>>(length, static_cast<RealT<T>>(1.0));
     }
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    DefaultOmniDSPImpl::triangular_window(size_t length) const
+    DefaultBackend::triangular_window(size_t length) const
     {
       if (length == 0) return std::vector<RealT<T>>();
       if (length == 1)
@@ -478,7 +477,7 @@ namespace OmniDSP {
     // create_convolution_plan, create_correlation_plan implementations...)
     template <typename T>
     [[nodiscard]] OmniExpected<std::unique_ptr<FFTPlan<T>>>
-    DefaultOmniDSPImpl::create_fft_plan(size_t length) const
+    DefaultBackend::create_fft_plan(size_t length) const
     {
       try {
         auto pimpl_backend = std::make_unique<DefaultFFTPlanImpl<T>>(length);
@@ -496,7 +495,7 @@ namespace OmniDSP {
     }
     template <typename T>
     [[nodiscard]] OmniExpected<std::unique_ptr<RFFTPlan<T>>>
-    DefaultOmniDSPImpl::create_rfft_plan(size_t length) const
+    DefaultBackend::create_rfft_plan(size_t length) const
     {
       try {
         auto pimpl_backend = std::make_unique<DefaultRFFTPlanImpl<T>>(length);
@@ -514,7 +513,7 @@ namespace OmniDSP {
     }
     template <typename T>
     [[nodiscard]] OmniExpected<std::unique_ptr<ResamplePlan<T>>>
-    DefaultOmniDSPImpl::create_resample_plan(
+    DefaultBackend::create_resample_plan(
         double input_rate, double output_rate, size_t max_input_size) const
     {
       try {
@@ -535,12 +534,12 @@ namespace OmniDSP {
     }
     template <typename T>
     [[nodiscard]] OmniExpected<std::unique_ptr<ConvolutionPlan<T>>>
-    DefaultOmniDSPImpl::create_convolution_plan(
-        const std::vector<T>& kernel, ConvolutionMode mode) const
+    DefaultBackend::create_convolution_plan(
+        const std::vector<T>& kernel, ConvolutionType type) const
     {
       try {
         auto pimpl_backend
-            = std::make_unique<DefaultConvolutionPlanImpl<T>>(kernel, mode);
+            = std::make_unique<DefaultConvolutionPlanImpl<T>>(kernel, type);
         ConvolutionPlan<T>* plan_ptr
             = new ConvolutionPlan<T>(std::move(pimpl_backend));
         return std::unique_ptr<ConvolutionPlan<T>>(plan_ptr);
@@ -556,12 +555,12 @@ namespace OmniDSP {
     }
     template <typename T>
     [[nodiscard]] OmniExpected<std::unique_ptr<CorrelationPlan<T>>>
-    DefaultOmniDSPImpl::create_correlation_plan(
-        const std::vector<T>& kernel, ConvolutionMode mode) const
+    DefaultBackend::create_correlation_plan(
+        const std::vector<T>& kernel, ConvolutionType type) const
     {
       try {
         auto pimpl_backend
-            = std::make_unique<DefaultCorrelationPlanImpl<T>>(kernel, mode);
+            = std::make_unique<DefaultCorrelationPlanImpl<T>>(kernel, type);
         CorrelationPlan<T>* plan_ptr
             = new CorrelationPlan<T>(std::move(pimpl_backend));
         return std::unique_ptr<CorrelationPlan<T>>(plan_ptr);
@@ -587,14 +586,14 @@ namespace OmniDSP {
      */
     template <typename T>
     [[nodiscard]] OmniExpected<std::unique_ptr<FIRFilterPlan<T>>>
-    DefaultOmniDSPImpl::create_fir_filter_plan(
+    DefaultBackend::create_fir_filter_plan(
         const std::vector<T>& coefficients) const
     {
       try {
         auto pimpl_backend
             = std::make_unique<DefaultFIRFilterPlanImpl<T>>(coefficients);
         // Requires FIRFilterPlan to have a constructor taking
-        // unique_ptr<FIRFilterPlanImpl<T>> and OmniDSP (or DefaultOmniDSPImpl)
+        // unique_ptr<FIRFilterPlanImpl<T>> and OmniDSP (or DefaultBackend)
         // to be a friend.
         FIRFilterPlan<T>* plan_ptr
             = new FIRFilterPlan<T>(std::move(pimpl_backend));
@@ -621,14 +620,14 @@ namespace OmniDSP {
      */
     template <typename T>
     [[nodiscard]] OmniExpected<std::unique_ptr<IIRFilterPlan<T>>>
-    DefaultOmniDSPImpl::create_iir_filter_plan(
+    DefaultBackend::create_iir_filter_plan(
         const std::vector<SecondOrderSection<T>>& sos_coefficients) const
     {
       try {
         auto pimpl_backend
             = std::make_unique<DefaultIIRFilterPlanImpl<T>>(sos_coefficients);
         // Requires IIRFilterPlan to have a constructor taking
-        // unique_ptr<IIRFilterPlanImpl<T>> and OmniDSP (or DefaultOmniDSPImpl)
+        // unique_ptr<IIRFilterPlanImpl<T>> and OmniDSP (or DefaultBackend)
         // to be a friend.
         IIRFilterPlan<T>* plan_ptr
             = new IIRFilterPlan<T>(std::move(pimpl_backend));
@@ -656,7 +655,7 @@ namespace OmniDSP {
      */
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    DefaultOmniDSPImpl::design_fir_filter(const FIRFilterSpec<T>& spec) const
+    DefaultBackend::design_fir_filter(const FIRFilterSpec<T>& spec) const
     {
       // 1. Validate Spec
       if (!spec.validate()) {
@@ -788,7 +787,7 @@ namespace OmniDSP {
      */
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<SecondOrderSection<T>>>
-    DefaultOmniDSPImpl::design_iir_filter(const IIRFilterSpec<T>& spec) const
+    DefaultBackend::design_iir_filter(const IIRFilterSpec<T>& spec) const
     {
       // TODO: Implement IIR filter design algorithms (Butterworth, Chebyshev
       // I/II, Elliptic) This involves complex steps like:
@@ -816,7 +815,7 @@ namespace OmniDSP {
      */
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    DefaultOmniDSPImpl::generate_window(
+    DefaultBackend::generate_window(
         const WindowSpec<T>& spec, size_t length) const
     {
       // Dispatch to the specific window generation method based on
@@ -854,192 +853,152 @@ namespace OmniDSP {
     // Explicit Template Instantiations
     //--------------------------------------------------------------------------
     // Instantiate templates for common types (float, double) for
-    // DefaultOmniDSPImpl methods
-
-    // Define types for brevity
-    using float_c = OmniDSP::ComplexT<float>;
-    using double_c = OmniDSP::ComplexT<double>;
+    // DefaultBackend methods
 
     // DSP Operations
-    template OmniExpected<std::vector<float>> DefaultOmniDSPImpl::convolve(
-        const std::vector<float>&,
-        const std::vector<float>&,
-        ConvolutionMode) const;
-    template OmniExpected<std::vector<double>> DefaultOmniDSPImpl::convolve(
-        const std::vector<double>&,
-        const std::vector<double>&,
-        ConvolutionMode) const;
-    template OmniExpected<std::vector<float_c>> DefaultOmniDSPImpl::convolve(
-        const std::vector<float_c>&,
-        const std::vector<float_c>&,
-        ConvolutionMode) const;
-    template OmniExpected<std::vector<double_c>> DefaultOmniDSPImpl::convolve(
-        const std::vector<double_c>&,
-        const std::vector<double_c>&,
-        ConvolutionMode) const;
+    template OmniExpected<F32Vec> DefaultBackend::convolve(
+        const F32Vec&, const F32Vec&, ConvolutionType) const;
+    template OmniExpected<F64Vec> DefaultBackend::convolve(
+        const F64Vec&, const F64Vec&, ConvolutionType) const;
+    template OmniExpected<C32Vec> DefaultBackend::convolve(
+        const C32Vec&, const C32Vec&, ConvolutionType) const;
+    template OmniExpected<C64Vec> DefaultBackend::convolve(
+        const C64Vec&, const C64Vec&, ConvolutionType) const;
 
-    template OmniExpected<std::vector<float>> DefaultOmniDSPImpl::correlate(
-        const std::vector<float>&,
-        const std::vector<float>&,
-        ConvolutionMode) const;
-    template OmniExpected<std::vector<double>> DefaultOmniDSPImpl::correlate(
-        const std::vector<double>&,
-        const std::vector<double>&,
-        ConvolutionMode) const;
-    template OmniExpected<std::vector<float_c>> DefaultOmniDSPImpl::correlate(
-        const std::vector<float_c>&,
-        const std::vector<float_c>&,
-        ConvolutionMode) const;
-    template OmniExpected<std::vector<double_c>> DefaultOmniDSPImpl::correlate(
-        const std::vector<double_c>&,
-        const std::vector<double_c>&,
-        ConvolutionMode) const;
+    template OmniExpected<F32Vec> DefaultBackend::correlate(
+        const F32Vec&, const F32Vec&, ConvolutionType) const;
+    template OmniExpected<F64Vec> DefaultBackend::correlate(
+        const F64Vec&, const F64Vec&, ConvolutionType) const;
+    template OmniExpected<C32Vec> DefaultBackend::correlate(
+        const C32Vec&, const C32Vec&, ConvolutionType) const;
+    template OmniExpected<C64Vec> DefaultBackend::correlate(
+        const C64Vec&, const C64Vec&, ConvolutionType) const;
 
     // One-off FFTs
-    template OmniExpected<std::vector<float_c>> DefaultOmniDSPImpl::fft(
-        const std::vector<float_c>&) const;
-    template OmniExpected<std::vector<double_c>> DefaultOmniDSPImpl::fft(
-        const std::vector<double_c>&) const;
-    template OmniExpected<std::vector<float_c>> DefaultOmniDSPImpl::ifft(
-        const std::vector<float_c>&) const;
-    template OmniExpected<std::vector<double_c>> DefaultOmniDSPImpl::ifft(
-        const std::vector<double_c>&) const;
-    template OmniExpected<std::vector<float_c>> DefaultOmniDSPImpl::rfft(
-        const std::vector<float>&) const;
-    template OmniExpected<std::vector<double_c>> DefaultOmniDSPImpl::rfft(
-        const std::vector<double>&) const;
-    template OmniExpected<std::vector<float>> DefaultOmniDSPImpl::irfft(
-        const std::vector<float_c>&, size_t) const;
-    template OmniExpected<std::vector<double>> DefaultOmniDSPImpl::irfft(
-        const std::vector<double_c>&, size_t) const;
+    template OmniExpected<C32Vec> DefaultBackend::fft(const C32Vec&) const;
+    template OmniExpected<C64Vec> DefaultBackend::fft(const C64Vec&) const;
+    template OmniExpected<C32Vec> DefaultBackend::ifft(const C32Vec&) const;
+    template OmniExpected<C64Vec> DefaultBackend::ifft(const C64Vec&) const;
+    template OmniExpected<C32Vec> DefaultBackend::rfft(const F32Vec&) const;
+    template OmniExpected<C64Vec> DefaultBackend::rfft(const F64Vec&) const;
+    template OmniExpected<F32Vec> DefaultBackend::irfft(
+        const C32Vec&, size_t) const;
+    template OmniExpected<F64Vec> DefaultBackend::irfft(
+        const C64Vec&, size_t) const;
 
     // Window Generation
-    template OmniExpected<std::vector<float>>
-        DefaultOmniDSPImpl::bartlett_window(size_t) const;
-    template OmniExpected<std::vector<double>>
-        DefaultOmniDSPImpl::bartlett_window(size_t) const;
-    template OmniExpected<std::vector<float>>
-        DefaultOmniDSPImpl::blackman_window(size_t) const;
-    template OmniExpected<std::vector<double>>
-        DefaultOmniDSPImpl::blackman_window(size_t) const;
-    template OmniExpected<std::vector<float>>
-        DefaultOmniDSPImpl::flattop_window(size_t) const;
-    template OmniExpected<std::vector<double>>
-        DefaultOmniDSPImpl::flattop_window(size_t) const;
-    template OmniExpected<std::vector<float>>
-    DefaultOmniDSPImpl::gaussian_window(size_t, float) const;
-    template OmniExpected<std::vector<double>>
-    DefaultOmniDSPImpl::gaussian_window(size_t, double) const;
-    template OmniExpected<std::vector<float>>
-        DefaultOmniDSPImpl::hamming_window(size_t) const;
-    template OmniExpected<std::vector<double>>
-        DefaultOmniDSPImpl::hamming_window(size_t) const;
-    template OmniExpected<std::vector<float>> DefaultOmniDSPImpl::hann_window(
-        size_t) const;
-    template OmniExpected<std::vector<double>> DefaultOmniDSPImpl::hann_window(
-        size_t) const;
-    template OmniExpected<std::vector<float>> DefaultOmniDSPImpl::kaiser_window(
+    template OmniExpected<F32Vec> DefaultBackend::bartlett_window(size_t) const;
+    template OmniExpected<F64Vec> DefaultBackend::bartlett_window(size_t) const;
+    template OmniExpected<F32Vec> DefaultBackend::blackman_window(size_t) const;
+    template OmniExpected<F64Vec> DefaultBackend::blackman_window(size_t) const;
+    template OmniExpected<F32Vec> DefaultBackend::flattop_window(size_t) const;
+    template OmniExpected<F64Vec> DefaultBackend::flattop_window(size_t) const;
+    template OmniExpected<F32Vec> DefaultBackend::gaussian_window(
         size_t, float) const;
-    template OmniExpected<std::vector<double>>
-    DefaultOmniDSPImpl::kaiser_window(size_t, double) const;
-    template OmniExpected<std::vector<float>>
-        DefaultOmniDSPImpl::rectangular_window(size_t) const;
-    template OmniExpected<std::vector<double>>
-        DefaultOmniDSPImpl::rectangular_window(size_t) const;
-    template OmniExpected<std::vector<float>>
-        DefaultOmniDSPImpl::triangular_window(size_t) const;
-    template OmniExpected<std::vector<double>>
-        DefaultOmniDSPImpl::triangular_window(size_t) const;
+    template OmniExpected<F64Vec> DefaultBackend::gaussian_window(
+        size_t, double) const;
+    template OmniExpected<F32Vec> DefaultBackend::hamming_window(size_t) const;
+    template OmniExpected<F64Vec> DefaultBackend::hamming_window(size_t) const;
+    template OmniExpected<F32Vec> DefaultBackend::hann_window(size_t) const;
+    template OmniExpected<F64Vec> DefaultBackend::hann_window(size_t) const;
+    template OmniExpected<F32Vec> DefaultBackend::kaiser_window(
+        size_t, float) const;
+    template OmniExpected<F64Vec> DefaultBackend::kaiser_window(
+        size_t, double) const;
+    template OmniExpected<F32Vec> DefaultBackend::rectangular_window(
+        size_t) const;
+    template OmniExpected<F64Vec> DefaultBackend::rectangular_window(
+        size_t) const;
+    template OmniExpected<F32Vec> DefaultBackend::triangular_window(
+        size_t) const;
+    template OmniExpected<F64Vec> DefaultBackend::triangular_window(
+        size_t) const;
 
     // Plan Factories
     template OmniExpected<std::unique_ptr<FFTPlan<float_c>>>
-        DefaultOmniDSPImpl::create_fft_plan(size_t) const;
+        DefaultBackend::create_fft_plan(size_t) const;
     template OmniExpected<std::unique_ptr<FFTPlan<double_c>>>
-        DefaultOmniDSPImpl::create_fft_plan(size_t) const;
+        DefaultBackend::create_fft_plan(size_t) const;
 
     template OmniExpected<std::unique_ptr<RFFTPlan<float>>>
-        DefaultOmniDSPImpl::create_rfft_plan(size_t) const;
+        DefaultBackend::create_rfft_plan(size_t) const;
     template OmniExpected<std::unique_ptr<RFFTPlan<double>>>
-        DefaultOmniDSPImpl::create_rfft_plan(size_t) const;
+        DefaultBackend::create_rfft_plan(size_t) const;
 
     // CQT Plan Factory
     template OmniExpected<std::unique_ptr<CQTPlan<float>>>
-    DefaultOmniDSPImpl::create_cqt_plan(
+    DefaultBackend::create_cqt_plan(
         const OmniDSP*, float, float, float, int) const;
     template OmniExpected<std::unique_ptr<CQTPlan<double>>>
-    DefaultOmniDSPImpl::create_cqt_plan(
+    DefaultBackend::create_cqt_plan(
         const OmniDSP*, double, double, double, int) const;
 
     // Resample Plan Factories
     template OmniExpected<std::unique_ptr<ResamplePlan<float>>>
-    DefaultOmniDSPImpl::create_resample_plan(double, double, size_t) const;
+    DefaultBackend::create_resample_plan(double, double, size_t) const;
     template OmniExpected<std::unique_ptr<ResamplePlan<double>>>
-    DefaultOmniDSPImpl::create_resample_plan(double, double, size_t) const;
+    DefaultBackend::create_resample_plan(double, double, size_t) const;
 
     // Convolution Plan Factories
     template OmniExpected<std::unique_ptr<ConvolutionPlan<float>>>
-    DefaultOmniDSPImpl::create_convolution_plan(
-        const std::vector<float>&, ConvolutionMode) const;
+    DefaultBackend::create_convolution_plan(
+        const F32Vec&, ConvolutionType) const;
     template OmniExpected<std::unique_ptr<ConvolutionPlan<double>>>
-    DefaultOmniDSPImpl::create_convolution_plan(
-        const std::vector<double>&, ConvolutionMode) const;
+    DefaultBackend::create_convolution_plan(
+        const F64Vec&, ConvolutionType) const;
     template OmniExpected<std::unique_ptr<ConvolutionPlan<float_c>>>
-    DefaultOmniDSPImpl::create_convolution_plan(
-        const std::vector<float_c>&, ConvolutionMode) const;
+    DefaultBackend::create_convolution_plan(
+        const C32Vec&, ConvolutionType) const;
     template OmniExpected<std::unique_ptr<ConvolutionPlan<double_c>>>
-    DefaultOmniDSPImpl::create_convolution_plan(
-        const std::vector<double_c>&, ConvolutionMode) const;
+    DefaultBackend::create_convolution_plan(
+        const C64Vec&, ConvolutionType) const;
 
     // Correlation Plan Factories
     template OmniExpected<std::unique_ptr<CorrelationPlan<float>>>
-    DefaultOmniDSPImpl::create_correlation_plan(
-        const std::vector<float>&, ConvolutionMode) const;
+    DefaultBackend::create_correlation_plan(
+        const F32Vec&, ConvolutionType) const;
     template OmniExpected<std::unique_ptr<CorrelationPlan<double>>>
-    DefaultOmniDSPImpl::create_correlation_plan(
-        const std::vector<double>&, ConvolutionMode) const;
+    DefaultBackend::create_correlation_plan(
+        const F64Vec&, ConvolutionType) const;
     template OmniExpected<std::unique_ptr<CorrelationPlan<float_c>>>
-    DefaultOmniDSPImpl::create_correlation_plan(
-        const std::vector<float_c>&, ConvolutionMode) const;
+    DefaultBackend::create_correlation_plan(
+        const C32Vec&, ConvolutionType) const;
     template OmniExpected<std::unique_ptr<CorrelationPlan<double_c>>>
-    DefaultOmniDSPImpl::create_correlation_plan(
-        const std::vector<double_c>&, ConvolutionMode) const;
+    DefaultBackend::create_correlation_plan(
+        const C64Vec&, ConvolutionType) const;
 
     // Filter Plan Factories
     template OmniExpected<std::unique_ptr<FIRFilterPlan<float>>>
-    DefaultOmniDSPImpl::create_fir_filter_plan(const std::vector<float>&) const;
+    DefaultBackend::create_fir_filter_plan(const F32Vec&) const;
     template OmniExpected<std::unique_ptr<FIRFilterPlan<double>>>
-    DefaultOmniDSPImpl::create_fir_filter_plan(
-        const std::vector<double>&) const;
+    DefaultBackend::create_fir_filter_plan(const F64Vec&) const;
     template OmniExpected<std::unique_ptr<FIRFilterPlan<float_c>>>
-    DefaultOmniDSPImpl::create_fir_filter_plan(
-        const std::vector<float_c>&) const;
+    DefaultBackend::create_fir_filter_plan(const C32Vec&) const;
     template OmniExpected<std::unique_ptr<FIRFilterPlan<double_c>>>
-    DefaultOmniDSPImpl::create_fir_filter_plan(
-        const std::vector<double_c>&) const;
+    DefaultBackend::create_fir_filter_plan(const C64Vec&) const;
 
     template OmniExpected<std::unique_ptr<IIRFilterPlan<float>>>
-    DefaultOmniDSPImpl::create_iir_filter_plan(
+    DefaultBackend::create_iir_filter_plan(
         const std::vector<SecondOrderSection<float>>&) const;
     template OmniExpected<std::unique_ptr<IIRFilterPlan<double>>>
-    DefaultOmniDSPImpl::create_iir_filter_plan(
+    DefaultBackend::create_iir_filter_plan(
         const std::vector<SecondOrderSection<double>>&) const;
 
     // Filter Design Methods
-    template OmniExpected<std::vector<float>>
-    DefaultOmniDSPImpl::design_fir_filter(const FIRFilterSpec<float>&) const;
-    template OmniExpected<std::vector<double>>
-    DefaultOmniDSPImpl::design_fir_filter(const FIRFilterSpec<double>&) const;
+    template OmniExpected<F32Vec> DefaultBackend::design_fir_filter(
+        const FIRFilterSpec<float>&) const;
+    template OmniExpected<F64Vec> DefaultBackend::design_fir_filter(
+        const FIRFilterSpec<double>&) const;
 
     template OmniExpected<std::vector<SecondOrderSection<float>>>
-    DefaultOmniDSPImpl::design_iir_filter(const IIRFilterSpec<float>&) const;
+    DefaultBackend::design_iir_filter(const IIRFilterSpec<float>&) const;
     template OmniExpected<std::vector<SecondOrderSection<double>>>
-    DefaultOmniDSPImpl::design_iir_filter(const IIRFilterSpec<double>&) const;
+    DefaultBackend::design_iir_filter(const IIRFilterSpec<double>&) const;
 
     // Window Generation Helper
-    template OmniExpected<std::vector<float>>
-    DefaultOmniDSPImpl::generate_window(const WindowSpec<float>&, size_t) const;
-    template OmniExpected<std::vector<double>>
-    DefaultOmniDSPImpl::generate_window(
+    template OmniExpected<F32Vec> DefaultBackend::generate_window(
+        const WindowSpec<float>&, size_t) const;
+    template OmniExpected<F64Vec> DefaultBackend::generate_window(
         const WindowSpec<double>&, size_t) const;
 
   }  // namespace backend

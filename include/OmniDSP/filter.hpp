@@ -18,11 +18,11 @@
 #include <span>      // For input/output views (requires C++20)
 #include <vector>
 
-#include "core_types.h"  // Core types like RealT, ComplexT, Status, OmniExpected
-#include "window.h"      // Include WindowSpec for FIR filter design
+#include "core_types.hpp"  // Core types like RealT, ComplexT, Status, OmniExpected
+#include "window.hpp"      // Include WindowSpec for FIR filter design
 
 // Include the generated export header for DLL support
-#include "OmniDSP/omnidsp_export.h"
+#include "OmniDSP/omnidsp_export.hpp"
 
 namespace OmniDSP {
 

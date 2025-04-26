@@ -13,7 +13,7 @@
 #include <stdexcept>  // For std::runtime_error, std::invalid_argument
 #include <vector>
 
-#include "backend.h"  // Default backend declarations (includes DefaultResamplePlanImpl declaration)
+#include "backend.hpp"  // Default backend declarations (includes DefaultResamplePlanImpl declaration)
 
 namespace OmniDSP {
   namespace backend {

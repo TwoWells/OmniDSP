@@ -4,7 +4,7 @@
  * backend implementation (Pimpl pattern).
  */
 
-#include "OmniDSP/cqt.h"  // Corresponding header
+#include "OmniDSP/cqt.hpp"  // Corresponding header
 
 // Include the backend interface definition which declares CQTPlanImpl
 #include <memory>  // For std::unique_ptr
@@ -12,7 +12,7 @@
 #include <stdexcept>  // For std::runtime_error
 #include <utility>    // For std::move
 
-#include "backend/backend.h"
+#include "backend.hpp"
 
 namespace OmniDSP {
 

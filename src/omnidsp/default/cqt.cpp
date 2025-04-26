@@ -9,7 +9,7 @@
  * lower octaves.
  */
 
-#include "OmniDSP/cqt.h"  // Public CQTPlan interface
+#include "OmniDSP/cqt.hpp"  // Public CQTPlan interface
 
 #include <algorithm>  // For std::transform, std::max_element, std::fill, std::min
 #include <cmath>
@@ -22,11 +22,11 @@
 #include <stdexcept>  // For std::runtime_error, std::invalid_argument
 #include <vector>
 
-#include "OmniDSP/core_types.h"  // Core types
-#include "OmniDSP/fft.h"         // Needed for internal FFTPlan
-#include "OmniDSP/resample.h"  // Needed for internal ResamplePlan and ResampleSpec
-#include "OmniDSP/window.h"  // Needed for WindowSpec and window generation
-#include "backend.h"  // Default backend declarations (includes DefaultCQTPlanImpl declaration)
+#include "OmniDSP/core_types.hpp"  // Core types
+#include "OmniDSP/fft.hpp"         // Needed for internal FFTPlan
+#include "OmniDSP/resample.hpp"  // Needed for internal ResamplePlan and ResampleSpec
+#include "OmniDSP/window.hpp"  // Needed for WindowSpec and window generation
+#include "backend.hpp"  // Default backend declarations (includes DefaultCQTPlanImpl declaration)
 
 namespace OmniDSP {
   namespace backend {

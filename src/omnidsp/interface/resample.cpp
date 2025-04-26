@@ -4,7 +4,7 @@
  * implementations (Pimpl pattern).
  */
 
-#include "OmniDSP/resample.h"  // Corresponding header
+#include "OmniDSP/resample.hpp"  // Corresponding header
 
 // Include the backend interface definition which declares ResamplePlanImpl
 #include <memory>  // For std::unique_ptr
@@ -12,7 +12,7 @@
 #include <stdexcept>  // For std::runtime_error
 #include <utility>    // For std::move
 
-#include "backend/backend.h"
+#include "backend.hpp"
 
 namespace OmniDSP {
 

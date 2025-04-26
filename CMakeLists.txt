@@ -17,6 +17,8 @@ project(
 # Create the cmake directory if it doesn't exist
 file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/cmake)
 
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+
 # Include utility functions first
 include(cmake/utils.cmake)
 
@@ -56,13 +58,13 @@ include(cmake/omnidsp_py.cmake)
 # Examples Configuration
 # =============================================================================
 # Include the module that adds example subdirectories (currently only C++ examples).
-include(cmake/examples.cmake)
+# include(cmake/examples.cmake)
 
 # =============================================================================
 # Testing Configuration
 # =============================================================================
 # Include the module that enables testing and adds test subdirectories.
-include(cmake/testing.cmake)
+# include(cmake/testing.cmake)
 
 # =============================================================================
 # Installation Rules

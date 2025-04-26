@@ -21,8 +21,8 @@
 #include <type_traits>  // For std::is_same_v
 #include <vector>
 
-#include "OmniDSP/core_types.h"  // For Status, ConvolutionMode etc.
-#include "backend.h"             // Accelerate backend declarations
+#include "OmniDSP/core_types.hpp"  // For Status, ConvolutionMode etc.
+#include "backend.hpp"             // Accelerate backend declarations
 
 namespace OmniDSP {
   namespace backend {

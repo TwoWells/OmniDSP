@@ -11,8 +11,7 @@
 
 // Define HWY_TARGET_INCLUDE before including Highway headers
 #ifndef HWY_TARGET_INCLUDE
-#define HWY_TARGET_INCLUDE                                                     \
-  "src/omnidsp/backend/default/fft.cpp"  // Path to this file
+#define HWY_TARGET_INCLUDE "fft.cpp"
 #endif
 
 #include <algorithm>  // For std::reverse, std::swap, std::copy
@@ -25,9 +24,9 @@
 #include <stdexcept>  // For std::runtime_error, std::invalid_argument
 #include <vector>
 
-#include "OmniDSP/core_types.h"  // For Status, RealT, ComplexT etc.
-#include "backend.h"  // Corresponding header for Default backend declarations
-#include "hwy/contrib/complex/complex-inl.h"  // For complex operations
+#include "OmniDSP/core_types.hpp"  // For Status, RealT, ComplexT etc.
+#include "backend.hpp"  // Corresponding header for Default backend declarations
+// #include "hwy/contrib/complex/complex-inl.h"  // For complex operations
 #include "hwy/contrib/math/math-inl.h"
 #include "hwy/foreach_target.h"  // Must be first Highway include
 #include "hwy/highway.h"
@@ -373,44 +372,42 @@ namespace OmniDSP {
 
       // Explicit instantiations for exported functions
       void CFFT_F32_HWY(
-          std::span<float_c> d,
+          std::span<C32> d,
           bool inv,
-          const std::vector<float_c>& t,
+          const std::vector<C32>& t,
           const std::vector<size_t>& bi)
       {
         CooleyTukeyFFT_HWY(d, inv, t, bi);
       }
       void CFFT_F64_HWY(
-          std::span<double_c> d,
+          std::span<C64> d,
           bool inv,
-          const std::vector<double_c>& t,
+          const std::vector<C64>& t,
           const std::vector<size_t>& bi)
       {
         CooleyTukeyFFT_HWY(d, inv, t, bi);
       }
-      void RFFT_Unpack_F32_HWY(
-          const float_c* p, const float_c* w, float_c* o, size_t n)
+      void RFFT_Unpack_F32_HWY(const C32* p, const C32* w, C32* o, size_t n)
       {
         RFFT_Unpack_HWY<float>(p, w, o, n);
       }
-      void RFFT_Unpack_F64_HWY(
-          const double_c* p, const double_c* w, double_c* o, size_t n)
+      void RFFT_Unpack_F64_HWY(const C64* p, const C64* w, C64* o, size_t n)
       {
         RFFT_Unpack_HWY<double>(p, w, o, n);
       }
-      void IRFFT_Pack_F32_HWY(const float_c* r, float_c* f, size_t n)
+      void IRFFT_Pack_F32_HWY(const C32* r, C32* f, size_t n)
       {
         IRFFT_Pack_HWY<float>(r, f, n);
       }
-      void IRFFT_Pack_F64_HWY(const double_c* r, double_c* f, size_t n)
+      void IRFFT_Pack_F64_HWY(const C64* r, C64* f, size_t n)
       {
         IRFFT_Pack_HWY<double>(r, f, n);
       }
-      void IRFFT_RealCopy_F32_HWY(const float_c* c, float* r, size_t n)
+      void IRFFT_RealCopy_F32_HWY(const C32* c, float* r, size_t n)
       {
         IRFFT_RealCopy_HWY<float>(c, r, n);
       }
-      void IRFFT_RealCopy_F64_HWY(const double_c* c, double* r, size_t n)
+      void IRFFT_RealCopy_F64_HWY(const C64* c, double* r, size_t n)
       {
         IRFFT_RealCopy_HWY<double>(c, r, n);
       }
@@ -438,66 +435,58 @@ HWY_AFTER_NAMESPACE();
 #include <stdexcept>  // For Plan constructors
 #include <vector>
 
-#include "OmniDSP/core_types.h"
-#include "backend.h"               // Include again for HWY_ONCE block
+#include "OmniDSP/core_types.hpp"
+#include "backend.hpp"             // Include again for HWY_ONCE block
 #include "hwy/dynamic_dispatch.h"  // Include again for HWY_ONCE block
 
 namespace OmniDSP {
   namespace backend {
 
-    // Define types for brevity
-    using float_c = OmniDSP::ComplexT<float>;
-    using double_c = OmniDSP::ComplexT<double>;
-    using float_r = OmniDSP::RealT<float>;
-    using double_r = OmniDSP::RealT<double>;
-
     // --- Exported Wrappers for CFFT/IFFT ---
     void CFFT_F32_Export(
-        float_c* d, size_t N, bool inv, const float_c* t, const size_t* bi)
+        C32* d, size_t N, bool inv, const C32* t, const size_t* bi)
     {
       HWY_NAMESPACE::CFFT_F32_HWY({d, N}, inv, {t, N / 2}, {bi, N});
     }
     HWY_EXPORT(CFFT_F32_Export);
     void CFFT_F64_Export(
-        double_c* d, size_t N, bool inv, const double_c* t, const size_t* bi)
+        C64* d, size_t N, bool inv, const C64* t, const size_t* bi)
     {
       HWY_NAMESPACE::CFFT_F64_HWY({d, N}, inv, {t, N / 2}, {bi, N});
     }
     HWY_EXPORT(CFFT_F64_Export);
 
     // --- Exported Wrappers for RFFT Unpacking ---
-    void RFFT_Unpack_F32_Export(
-        const float_c* p, const float_c* w, float_c* o, size_t n)
+    void RFFT_Unpack_F32_Export(const C32* p, const C32* w, C32* o, size_t n)
     {
       HWY_NAMESPACE::RFFT_Unpack_F32_HWY(p, w, o, n);
     }
     HWY_EXPORT(RFFT_Unpack_F32_Export);
-    void RFFT_Unpack_F64_Export(
-        const double_c* p, const double_c* w, double_c* o, size_t n)
+    void RFFT_Unpack_F64_Export(const C64* p, const C64* w, C64* o, size_t n)
     {
       HWY_NAMESPACE::RFFT_Unpack_F64_HWY(p, w, o, n);
     }
     HWY_EXPORT(RFFT_Unpack_F64_Export);
 
     // --- Exported Wrappers for IRFFT Packing ---
-    void IRFFT_Pack_F32_Export(const float_c* r, float_c* f, size_t n)
+    void IRFFT_Pack_F32_Export(const C32* r, C32* f, size_t n)
     {
       HWY_NAMESPACE::IRFFT_Pack_F32_HWY(r, f, n);
     }
     HWY_EXPORT(IRFFT_Pack_F32_Export);
-    void IRFFT_Pack_F64_Export(const double_c* r, double_c* f, size_t n)
+    void IRFFT_Pack_F64_Export(const C64* r, C64* f, size_t n)
     {
       HWY_NAMESPACE::IRFFT_Pack_F64_HWY(r, f, n);
     }
     HWY_EXPORT(IRFFT_Pack_F64_Export);
 
     // --- Exported Wrappers for IRFFT Real Copy ---
-    void IRFFT_RealCopy_F32_Export(const float_c* c, float* r, size_t n)
+    void IRFFT_RealCopy_F32_Export(const C32* c, float* r, size_t n)
     {
       HWY_NAMESPACE::IRFFT_RealCopy_F32_HWY(c, r, n);
     }
     HWY_EXPORT(IRFFT_RealCopy_F32_Export);
-    void IRFFT_RealCopy_F64_Export(const double_c* c, double* r, size_t n)
+    void IRFFT_RealCopy_F64_Export(const C64* c, double* r, size_t n)
     {
       HWY_NAMESPACE::IRFFT_RealCopy_F64_HWY(c, r, n);
     }
@@ -509,9 +498,9 @@ namespace OmniDSP {
 
     /** @brief Dispatches complex FFT/IFFT (float). */
     Status DispatchComplexFFT(
-        std::span<float_c> data,
+        std::span<C32> data,
         bool inverse,
-        const std::vector<float_c>& twiddles,
+        const std::vector<C32>& twiddles,
         const std::vector<size_t>& bit_reverse_indices)
     {
       if (data.empty()) return Status::Success;
@@ -526,9 +515,9 @@ namespace OmniDSP {
     }
     /** @brief Dispatches complex FFT/IFFT (double). */
     Status DispatchComplexFFT(
-        std::span<double_c> data,
+        std::span<C64> data,
         bool inverse,
-        const std::vector<double_c>& twiddles,
+        const std::vector<C64>& twiddles,
         const std::vector<size_t>& bit_reverse_indices)
     {
       if (data.empty()) return Status::Success;
@@ -544,9 +533,9 @@ namespace OmniDSP {
 
     /** @brief Dispatches RFFT unpacking step (float). */
     Status DispatchRFFTUnpack(
-        std::span<const float_c> packed_fft,
-        const std::vector<float_c>& WN_twiddles,
-        std::span<float_c> output,
+        std::span<const C32> packed_fft,
+        const std::vector<C32>& WN_twiddles,
+        std::span<C32> output,
         size_t N)
     {
       if (packed_fft.empty()) return Status::Success;
@@ -556,9 +545,9 @@ namespace OmniDSP {
     }
     /** @brief Dispatches RFFT unpacking step (double). */
     Status DispatchRFFTUnpack(
-        std::span<const double_c> packed_fft,
-        const std::vector<double_c>& WN_twiddles,
-        std::span<double_c> output,
+        std::span<const C64> packed_fft,
+        const std::vector<C64>& WN_twiddles,
+        std::span<C64> output,
         size_t N)
     {
       if (packed_fft.empty()) return Status::Success;
@@ -570,9 +559,7 @@ namespace OmniDSP {
     /** @brief Dispatches IRFFT packing (spectrum reconstruction) step (float).
      */
     Status DispatchIRFFTPack(
-        std::span<const float_c> rfft_input,
-        std::span<float_c> full_spectrum,
-        size_t N)
+        std::span<const C32> rfft_input, std::span<C32> full_spectrum, size_t N)
     {
       if (rfft_input.empty()) return Status::Success;
       auto pack_func = HWY_DYNAMIC_DISPATCH(IRFFT_Pack_F32_Export);
@@ -582,9 +569,7 @@ namespace OmniDSP {
     /** @brief Dispatches IRFFT packing (spectrum reconstruction) step (double).
      */
     Status DispatchIRFFTPack(
-        std::span<const double_c> rfft_input,
-        std::span<double_c> full_spectrum,
-        size_t N)
+        std::span<const C64> rfft_input, std::span<C64> full_spectrum, size_t N)
     {
       if (rfft_input.empty()) return Status::Success;
       auto pack_func = HWY_DYNAMIC_DISPATCH(IRFFT_Pack_F64_Export);
@@ -594,7 +579,7 @@ namespace OmniDSP {
 
     /** @brief Dispatches IRFFT final real part copy step (float). */
     Status DispatchIRFFTRealCopy(
-        std::span<const float_c> complex_input,
+        std::span<const C32> complex_input,
         std::span<float> real_output,
         size_t N)
     {
@@ -605,7 +590,7 @@ namespace OmniDSP {
     }
     /** @brief Dispatches IRFFT final real part copy step (double). */
     Status DispatchIRFFTRealCopy(
-        std::span<const double_c> complex_input,
+        std::span<const C64> complex_input,
         std::span<double> real_output,
         size_t N)
     {
@@ -788,8 +773,8 @@ namespace OmniDSP {
     //--------------------------------------------------------------------------
     // Explicit Template Instantiations
     //--------------------------------------------------------------------------
-    template class OmniDSP::backend::DefaultFFTPlanImpl<float_c>;
-    template class OmniDSP::backend::DefaultFFTPlanImpl<double_c>;
+    template class OmniDSP::backend::DefaultFFTPlanImpl<C32>;
+    template class OmniDSP::backend::DefaultFFTPlanImpl<C64>;
     template class OmniDSP::backend::DefaultRFFTPlanImpl<float>;
     template class OmniDSP::backend::DefaultRFFTPlanImpl<double>;
 

@@ -1,14 +1,17 @@
 # cmake/installation.cmake
 # ========================
-# Defines installation rules for the OmniDSP project. This includes installing: - Public headers -
-# The main library target (omnidsp) - CMake package configuration files (Config.cmake,
-# Targets.cmake, Version.cmake) for find_package() support. - Python example notebooks (if Python
-# bindings are enabled).
+# Defines installation rules for the OmniDSP project.
+# This includes installing:
+#   - Public headers
+#   - The main library target (omnidsp)
+#   - CMake package configuration files (Config.cmake, Targets.cmake, Version.cmake) for find_package() support.
+#   - Python example notebooks (if Python bindings are enabled).
 #
 # Assumes standard CMake modules GNUInstallDirs and CMakePackageConfigHelpers have been included
 # previously. Assumes the 'omnidsp' target exists.
 #
-# Variables Read: - OMNIDSP_BUILD_PYTHON_BINDINGS (from project_options.cmake) - PROJECT_NAME,
+# Variables Read:
+#   - OMNIDSP_BUILD_PYTHON_BINDINGS (from project_options.cmake) - PROJECT_NAME,
 # PROJECT_VERSION (from project() command) - CMAKE_INSTALL_*, CMAKE_CURRENT_SOURCE_DIR,
 # CMAKE_CURRENT_BINARY_DIR (CMake Built-in) - Config.cmake.in (Template file expected in source
 # directory)
@@ -21,7 +24,7 @@ message(STATUS "Configuring installation rules...")
 if(NOT CMAKE_INSTALL_LIBDIR)
   message(
     FATAL_ERROR
-      "GNUInstallDirs must be included before installation.cmake to define CMAKE_INSTALL_* paths.")
+    "GNUInstallDirs must be included before installation.cmake to define CMAKE_INSTALL_* paths.")
 endif()
 
 # Check if the main library target exists
@@ -36,7 +39,7 @@ if(OMNIDSP_BUILD_PYTHON_BINDINGS)
     install(
       DIRECTORY examples/notebooks/
       DESTINATION "${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}/examples_python" # Use GNUInstallDirs
-                                                                             # standard path
+      # standard path
       COMPONENT Examples # Optional component name
       FILES_MATCHING
       PATTERN "*.ipynb")
@@ -52,16 +55,16 @@ else()
 
   # Define the installation path for CMake package files
   set(OMNIDSP_CMAKE_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}") # e.g.,
-                                                                                 # lib/cmake/OmniDSP
+  # lib/cmake/OmniDSP
   message(STATUS "    CMake package install directory: ${OMNIDSP_CMAKE_INSTALL_DIR}")
 
   # --- Install Public Headers ---
   # Install the public headers from the include/OmniDSP directory
   install(
     DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/OmniDSP/" # Source directory (note trailing
-                                                             # slash)
+    # slash)
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/OmniDSP" # Destination directory (relative to
-                                                      # prefix/include)
+    # prefix/include)
     COMPONENT Devel # Component for development files
     FILES_MATCHING # Only install files matching the pattern
     PATTERN "*.h") # Pattern for header files
@@ -70,7 +73,7 @@ else()
   install(
     FILES "${CMAKE_CURRENT_BINARY_DIR}/OmniDSP/omnidsp_export.h" # Source file in build directory
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/OmniDSP" # Place it inside the installed OmniDSP header
-                                                      # dir
+    # dir
     COMPONENT Devel)
   message(STATUS "    Installation rules added for public headers.")
 
@@ -81,7 +84,7 @@ else()
   if(NOT EXISTS "${CONFIG_CMAKE_IN_PATH}")
     message(
       FATAL_ERROR
-        "Config.cmake.in not found at '${CONFIG_CMAKE_IN_PATH}'. This file is required for C++ installation."
+      "Config.cmake.in not found at '${CONFIG_CMAKE_IN_PATH}'. This file is required for C++ installation."
     )
   else()
     message(STATUS "      Using Config.cmake.in template: ${CONFIG_CMAKE_IN_PATH}")
@@ -106,15 +109,15 @@ else()
     "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake" # Output file in build dir
     INSTALL_DESTINATION "${OMNIDSP_CMAKE_INSTALL_DIR}" # Final install destination for this file
     PATH_VARS CMAKE_INSTALL_INCLUDEDIR
-              CMAKE_INSTALL_LIBDIR # Variables to make absolute in installed config file Add other
-                                   # paths if needed (e.g., CMAKE_INSTALL_BINDIR)
+    CMAKE_INSTALL_LIBDIR # Variables to make absolute in installed config file Add other
+    # paths if needed (e.g., CMAKE_INSTALL_BINDIR)
   )
   message(STATUS "      Generated ${PROJECT_NAME}Config.cmake")
 
   # Install the generated Config and Version files
   install(
     FILES "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake"
-          "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"
     DESTINATION "${OMNIDSP_CMAKE_INSTALL_DIR}" # Install to lib/cmake/OmniDSP
     COMPONENT Devel # Development component
   )
@@ -130,7 +133,7 @@ else()
     # Define destinations for different artifact types based on GNUInstallDirs
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Lib # Static libs (.a)
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Lib # Shared libs (.so/.dylib) or DLL
-                                                                # import libs (.lib)
+    # import libs (.lib)
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT Runtime # Executables or DLLs (.dll)
   )
   message(STATUS "      Installation rules added for the 'omnidsp' library files.")
@@ -141,14 +144,14 @@ else()
   install(
     EXPORT OmniDSPTargets # The export set defined in the install(TARGETS) command
     FILE ${PROJECT_NAME}Targets.cmake # The filename for the targets file (e.g.,
-                                      # OmniDSPTargets.cmake)
+    # OmniDSPTargets.cmake)
     NAMESPACE ${PROJECT_NAME}:: # The namespace for imported targets (e.g., OmniDSP::omnidsp)
     DESTINATION "${OMNIDSP_CMAKE_INSTALL_DIR}" # Install alongside Config.cmake
     COMPONENT Devel # Development component
   )
   message(
     STATUS
-      "      Installation rules added for the CMake targets file (${PROJECT_NAME}Targets.cmake).")
+    "      Installation rules added for the CMake targets file (${PROJECT_NAME}Targets.cmake).")
 
 endif() # End C++/Python installation conditional
 

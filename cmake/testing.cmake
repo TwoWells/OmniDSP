@@ -3,8 +3,9 @@
 # Enables CTest support for the project and includes test subdirectories (tests/python or tests/cpp)
 # based on the OMNIDSP_BUILD_PYTHON_BINDINGS option.
 #
-# Variables Read: - OMNIDSP_BUILD_PYTHON_BINDINGS (from project_options.cmake) -
-# CMAKE_CURRENT_SOURCE_DIR, CMAKE_CURRENT_BINARY_DIR (CMake Built-in)
+# Variables Read:
+#   - OMNIDSP_BUILD_PYTHON_BINDINGS (from project_options.cmake)
+#   - CMAKE_CURRENT_SOURCE_DIR, CMAKE_CURRENT_BINARY_DIR (CMake Built-in)
 # ===================
 
 message(STATUS "Configuring testing...")

@@ -18,7 +18,7 @@
 #include <memory>  // For std::unique_ptr
 #include <vector>
 
-#include "../default/backend.h"  // Inherit from DefaultBackend
+#include "../default/backend.hpp"  // Inherit from DefaultBackend
 
 namespace OmniDSP {
   namespace backend {

@@ -1,16 +1,16 @@
 /**
  * @file window.cpp (onemkl / IPP)
  * @brief Implements oneMKL backend window generation methods for
- * OneMKLOmniDSPImpl using Intel IPP.
+ * OneMKLBackend using Intel IPP.
  * @details This file provides the concrete implementations for the window
- * generation functions declared as virtual methods in OneMKLOmniDSPImpl. It
+ * generation functions declared as virtual methods in OneMKLBackend. It
  * leverages Intel Integrated Performance Primitives (IPP) for optimized window
  * calculations where available, falling back to oneMKL Vector Math Library
  * (VML) or standard math functions for others.
  */
 
-#include "OmniDSP/core_types.h"  // For Status, RealT etc.
-#include "backend.h"  // oneMKL backend declarations (including OneMKLOmniDSPImpl)
+#include "OmniDSP/core_types.hpp"  // For Status, RealT etc.
+#include "backend.hpp"  // oneMKL backend declarations (including OneMKLOmniDSPImpl)
 
 // Include Intel IPP signal processing header
 #include <ipp.h>
@@ -59,7 +59,7 @@ namespace OmniDSP {
     }
 
     //--------------------------------------------------------------------------
-    // OneMKLOmniDSPImpl - Window Generation Method Implementations using
+    // OneMKLBackend - Window Generation Method Implementations using
     // IPP/VML
     //--------------------------------------------------------------------------
 
@@ -69,7 +69,7 @@ namespace OmniDSP {
      */
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    OneMKLOmniDSPImpl::bartlett_window(size_t length) const
+    OneMKLBackend::bartlett_window(size_t length) const
     {
       if (length == 0)
         return std::vector<RealT<T>>();  // Empty vector for zero length
@@ -102,7 +102,7 @@ namespace OmniDSP {
      */
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    OneMKLOmniDSPImpl::blackman_window(size_t length) const
+    OneMKLBackend::blackman_window(size_t length) const
     {
       if (length == 0) return std::vector<RealT<T>>();
       if (length == 1)
@@ -133,7 +133,7 @@ namespace OmniDSP {
      */
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    OneMKLOmniDSPImpl::flattop_window(size_t length) const
+    OneMKLBackend::flattop_window(size_t length) const
     {
       if (length == 0) return std::vector<RealT<T>>();
       if (length == 1)
@@ -241,7 +241,7 @@ namespace OmniDSP {
      */
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    OneMKLOmniDSPImpl::gaussian_window(size_t length, RealT<T> stddev) const
+    OneMKLBackend::gaussian_window(size_t length, RealT<T> stddev) const
     {
       if (length == 0) return std::vector<RealT<T>>();
       if (length == 1)
@@ -311,7 +311,7 @@ namespace OmniDSP {
      */
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    OneMKLOmniDSPImpl::hamming_window(size_t length) const
+    OneMKLBackend::hamming_window(size_t length) const
     {
       if (length == 0) return std::vector<RealT<T>>();
       if (length == 1)
@@ -339,7 +339,7 @@ namespace OmniDSP {
      */
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    OneMKLOmniDSPImpl::hann_window(size_t length) const
+    OneMKLBackend::hann_window(size_t length) const
     {
       if (length == 0) return std::vector<RealT<T>>();
       if (length == 1)
@@ -369,7 +369,7 @@ namespace OmniDSP {
      */
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    OneMKLOmniDSPImpl::kaiser_window(size_t length, RealT<T> beta) const
+    OneMKLBackend::kaiser_window(size_t length, RealT<T> beta) const
     {
       if (length == 0) return std::vector<RealT<T>>();
       if (length == 1)
@@ -410,7 +410,7 @@ namespace OmniDSP {
      */
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    OneMKLOmniDSPImpl::rectangular_window(size_t length) const
+    OneMKLBackend::rectangular_window(size_t length) const
     {
       if (length == 0) return std::vector<RealT<T>>();
       std::vector<RealT<T>> coeffs(length);
@@ -446,7 +446,7 @@ namespace OmniDSP {
      */
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    OneMKLOmniDSPImpl::triangular_window(size_t length) const
+    OneMKLBackend::triangular_window(size_t length) const
     {
       // IPP doesn't have a distinct triangular window. The Bartlett window is
       // often considered equivalent or very similar (depending on endpoint
@@ -455,7 +455,7 @@ namespace OmniDSP {
     }
 
     // Note: Explicit template instantiations for these methods belong in
-    // src/omnidsp/backend/onemkl/backend.cpp where the OneMKLOmniDSPImpl
+    // src/omnidsp/backend/onemkl/backend.cpp where the OneMKLBackend
     // class itself is instantiated.
 
   }  // namespace backend

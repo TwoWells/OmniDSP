@@ -4,8 +4,8 @@
  * classes, using internal oneMKL FFT plans (DFTI) for FFT operations.
  */
 
-#include "OmniDSP/core_types.h"  // For Status, ConvolutionMode etc.
-#include "backend.h"             // oneMKL backend declarations
+#include "OmniDSP/core_types.hpp"  // For Status, ConvolutionType etc.
+#include "backend.hpp"             // oneMKL backend declarations
 
 // Include MKL header
 #include <mkl.h>
@@ -294,7 +294,7 @@ namespace OmniDSP {
               result_full_padded.begin() + start + input_len,
               output.begin());
         } break;
-        case ConvolutionMode::Valid: {
+        case ConvolutionType::Valid: {
           size_t start = kernel_length_ - 1;
           size_t valid_len = (input_len >= kernel_length_)
                                  ? (input_len - kernel_length_ + 1)
@@ -326,7 +326,7 @@ namespace OmniDSP {
     }
 
     template <typename T>
-    ConvolutionMode OneMKLConvolutionPlanImpl<T>::get_mode() const
+    ConvolutionType OneMKLConvolutionPlanImpl<T>::get_mode() const
     {
       return mode_;
     }
@@ -337,12 +337,12 @@ namespace OmniDSP {
     {
       if (kernel_length_ == 0) return 0;
       switch (mode_) {
-        case ConvolutionMode::Full:
+        case ConvolutionType::Full:
           if (input_length > SIZE_MAX - kernel_length_ + 1) return SIZE_MAX;
           return input_length + kernel_length_ - 1;
-        case ConvolutionMode::Same:
+        case ConvolutionType::Same:
           return input_length;
-        case ConvolutionMode::Valid:
+        case ConvolutionType::Valid:
           return (input_length >= kernel_length_)
                      ? (input_length - kernel_length_ + 1)
                      : 0;
@@ -357,7 +357,7 @@ namespace OmniDSP {
 
     template <typename T>
     OneMKLCorrelationPlanImpl<T>::OneMKLCorrelationPlanImpl(
-        const std::vector<T>& kernel, ConvolutionMode mode)
+        const std::vector<T>& kernel, ConvolutionType mode)
         : mode_(mode),
           template_length_(kernel.size()),
           mkl_status_(DFTI_NO_ERROR)
@@ -566,13 +566,13 @@ namespace OmniDSP {
       // Correlation output indices differ slightly from convolution for 'same'
       // and 'valid'
       switch (mode_) {
-        case ConvolutionMode::Full:
+        case ConvolutionType::Full:
           std::copy(
               result_full_padded.begin(),
               result_full_padded.begin() + full_output_len,
               output.begin());
           break;
-        case ConvolutionMode::Same: {
+        case ConvolutionType::Same: {
           size_t start = (full_output_len > input_len)
                              ? (full_output_len - input_len) / 2
                              : 0;
@@ -583,7 +583,7 @@ namespace OmniDSP {
               result_full_padded.begin() + start + count,
               output.begin());
         } break;
-        case ConvolutionMode::Valid: {
+        case ConvolutionType::Valid: {
           size_t start = 0;  // Valid correlation starts at index 0
           size_t valid_len = (input_len >= template_length_)
                                  ? (input_len - template_length_ + 1)
@@ -615,7 +615,7 @@ namespace OmniDSP {
     }
 
     template <typename T>
-    ConvolutionMode OneMKLCorrelationPlanImpl<T>::get_mode() const
+    ConvolutionType OneMKLCorrelationPlanImpl<T>::get_mode() const
     {
       return mode_;
     }
@@ -627,12 +627,12 @@ namespace OmniDSP {
       // Same logic as convolution output length
       if (template_length_ == 0) return 0;
       switch (mode_) {
-        case ConvolutionMode::Full:
+        case ConvolutionType::Full:
           if (input_length > SIZE_MAX - template_length_ + 1) return SIZE_MAX;
           return input_length + template_length_ - 1;
-        case ConvolutionMode::Same:
+        case ConvolutionType::Same:
           return input_length;
-        case ConvolutionMode::Valid:
+        case ConvolutionType::Valid:
           return (input_length >= template_length_)
                      ? (input_length - template_length_ + 1)
                      : 0;

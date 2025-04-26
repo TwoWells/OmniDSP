@@ -4,28 +4,16 @@
  * backend implementations.
  */
 
-#include "OmniDSP/fft.h"  // Corresponding header
-
-// Include Pimpl interface definitions (defined below or in a separate
-// backend.h) #include "backend/backend.h" // May contain base class definitions
-// if separated
-
-// Include concrete backend implementation headers (Placeholders - needed for
-// unique_ptr deletion) Although not strictly needed for this file's compilation
-// if using default destructor, good practice to ensure Impl destructors are
-// known. Alternatively, define Plan destructors explicitly here without needing
-// these includes. #include "backend/stub/stub_fft.h" #ifdef USE_ACCELERATE
-// #include "backend/accelerate/accelerate_fft.h"
-// #endif
-// #ifdef USE_ONEMKL
-// #include "backend/onemkl/onemkl_fft.h"
-// #endif
-
+#include "OmniDSP/fft.hpp"  // Corresponding header
+                            //
+// Include the backend interface definition which declares the Impl classes
 #include <memory>  // For std::unique_ptr
 #include <span>
 #include <stdexcept>  // For std::runtime_error
 #include <utility>    // For std::move
 #include <vector>
+
+#include "backend.hpp"
 
 namespace OmniDSP {
   namespace backend {

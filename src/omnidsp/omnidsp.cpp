@@ -5,21 +5,22 @@
  * and compile-time dispatch.
  */
 
-#include "OmniDSP/omnidsp.h"  // Corresponding header
+#include "OmniDSP/omnidsp.hpp"  // Corresponding header
 
 // Include the backend interface definition from the new location
-#include "interface/backend.h"  // Defines AbstractBackend
+#include "interface/backend.hpp"  // Defines AbstractBackend
 
 // Include concrete backend implementation headers for factory function from new
 // locations
-#include "default/backend.h"     // Defines DefaultBackend
-#ifdef OMNIDSP_USE_ACCELERATE    // Use actual CMake flag name
-#include "accelerate/backend.h"  // Defines AccelerateBackend
+#include "default/backend.hpp"     // Defines DefaultBackend
+#ifdef OMNIDSP_USE_ACCELERATE      // Use actual CMake flag name
+#include "accelerate/backend.hpp"  // Defines AccelerateBackend
 #endif
-#ifdef OMNIDSP_USE_ONEMKL    // Use actual CMake flag name
-#include "onemkl/backend.h"  // Defines OneMKLBackend
+#ifdef OMNIDSP_USE_ONEMKL      // Use actual CMake flag name
+#include "onemkl/backend.hpp"  // Defines OneMKLBackend
 #endif
 
+#include <exception>
 #include <iostream>     // For debug/error messages
 #include <memory>       // For std::unique_ptr, std::make_unique
 #include <stdexcept>    // For std::runtime_error

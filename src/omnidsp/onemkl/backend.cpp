@@ -1,18 +1,18 @@
 /**
  * @file backend.cpp (onemkl)
- * @brief Implements the OneMKLOmniDSPImpl class methods using oneMKL functions.
+ * @brief Implements the OneMKLBackend class methods using oneMKL functions.
  */
 
-#include "backend.h"  // Corresponding header for oneMKL backend declarations
+#include "backend.hpp"  // Corresponding header for oneMKL backend declarations
 
 // Include headers for the public Plan classes (needed for factory return types
 // and constructors)
-#include "OmniDSP/convolution.h"
-#include "OmniDSP/cqt.h"
-#include "OmniDSP/fft.h"
-#include "OmniDSP/omnidsp.h"  // Needed for OmniDSP class definition (for owner pointer)
-#include "OmniDSP/resample.h"
-// #include "OmniDSP/filter.h" // Include when FilterPlan is added
+#include "OmniDSP/convolution.hpp"
+#include "OmniDSP/cqt.hpp"
+#include "OmniDSP/fft.hpp"
+#include "OmniDSP/omnidsp.hpp"  // Needed for OmniDSP class definition (for owner pointer)
+#include "OmniDSP/resample.hpp"
+// #include "OmniDSP/filter.hpp" // Include when FilterPlan is added
 
 // Include MKL header
 #include <mkl.h>
@@ -48,10 +48,10 @@ namespace OmniDSP {
     }
 
     //--------------------------------------------------------------------------
-    // OneMKLOmniDSPImpl Method Definitions
+    // OneMKLBackend Method Definitions
     //--------------------------------------------------------------------------
 
-    OneMKLOmniDSPImpl::OneMKLOmniDSPImpl()
+    OneMKLBackend::OneMKLBackend()
     {
       // Perform any one-time setup specific to the oneMKL backend.
       // Example: Set threading mode (though often controlled by environment
@@ -66,103 +66,101 @@ namespace OmniDSP {
       std::cout << "oneMKL Backend Initialized." << std::endl;  // Debug message
     }
 
-    Backend OneMKLOmniDSPImpl::get_backend() const { return Backend::OneMKL; }
+    Backend OneMKLBackend::get_backend() const { return Backend::OneMKL; }
 
     // --- DSP Operations (Placeholders - Need oneMKL Implementation) ---
     // These one-off functions would typically involve creating a temporary
     // DFTI descriptor or VSL task, executing it, and then freeing it.
 
     template <typename T>
-    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    OneMKLOmniDSPImpl::convolve(
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>> OneMKLBackend::convolve(
         const std::vector<RealT<T>>& /*input*/,
         const std::vector<RealT<T>>& /*kernel*/,
         ConvolutionMode /*mode*/) const
     {
       // TODO: Implement 1D real convolution using oneMKL (e.g., VSL Conv/Corr
       // task or DFTI)
-      std::cerr << "OneMKLOmniDSPImpl::convolve (real) not yet implemented."
+      std::cerr << "OneMKLBackend::convolve (real) not yet implemented."
                 << std::endl;
       return std::unexpected(Status::UnsupportedFeature);
     }
 
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>>
-    OneMKLOmniDSPImpl::convolve(
+    OneMKLBackend::convolve(
         const std::vector<ComplexT<T>>& /*input*/,
         const std::vector<ComplexT<T>>& /*kernel*/,
         ConvolutionMode /*mode*/) const
     {
       // TODO: Implement 1D complex convolution using oneMKL (e.g., VSL
       // Conv/Corr task or DFTI)
-      std::cerr << "OneMKLOmniDSPImpl::convolve (complex) not yet implemented."
+      std::cerr << "OneMKLBackend::convolve (complex) not yet implemented."
                 << std::endl;
       return std::unexpected(Status::UnsupportedFeature);
     }
 
     template <typename T>
-    [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    OneMKLOmniDSPImpl::correlate(
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>> OneMKLBackend::correlate(
         const std::vector<RealT<T>>& /*input*/,
         const std::vector<RealT<T>>& /*kernel*/,
         ConvolutionMode /*mode*/) const
     {
       // TODO: Implement 1D real correlation using oneMKL (e.g., VSL Conv/Corr
       // task or DFTI)
-      std::cerr << "OneMKLOmniDSPImpl::correlate (real) not yet implemented."
+      std::cerr << "OneMKLBackend::correlate (real) not yet implemented."
                 << std::endl;
       return std::unexpected(Status::UnsupportedFeature);
     }
 
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>>
-    OneMKLOmniDSPImpl::correlate(
+    OneMKLBackend::correlate(
         const std::vector<ComplexT<T>>& /*input*/,
         const std::vector<ComplexT<T>>& /*kernel*/,
         ConvolutionMode /*mode*/) const
     {
       // TODO: Implement 1D complex correlation using oneMKL (e.g., VSL
       // Conv/Corr task or DFTI)
-      std::cerr << "OneMKLOmniDSPImpl::correlate (complex) not yet implemented."
+      std::cerr << "OneMKLBackend::correlate (complex) not yet implemented."
                 << std::endl;
       return std::unexpected(Status::UnsupportedFeature);
     }
 
     // --- One-off FFTs (Placeholders - Need oneMKL Implementation) ---
     template <typename T>
-    [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>> OneMKLOmniDSPImpl::fft(
+    [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>> OneMKLBackend::fft(
         const std::vector<ComplexT<T>>& input) const
     {
       // TODO: Implement one-off complex FFT using oneMKL DFTI
       // (Create descriptor, commit, compute, free)
-      std::cerr << "OneMKLOmniDSPImpl::fft not yet implemented." << std::endl;
+      std::cerr << "OneMKLBackend::fft not yet implemented." << std::endl;
       return std::unexpected(Status::UnsupportedFeature);
     }
 
     template <typename T>
-    [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>>
-    OneMKLOmniDSPImpl::ifft(const std::vector<ComplexT<T>>& input) const
+    [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>> OneMKLBackend::ifft(
+        const std::vector<ComplexT<T>>& input) const
     {
       // TODO: Implement one-off complex IFFT using oneMKL DFTI
-      std::cerr << "OneMKLOmniDSPImpl::ifft not yet implemented." << std::endl;
+      std::cerr << "OneMKLBackend::ifft not yet implemented." << std::endl;
       return std::unexpected(Status::UnsupportedFeature);
     }
 
     template <typename T>
-    [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>>
-    OneMKLOmniDSPImpl::rfft(const std::vector<RealT<T>>& input) const
+    [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>> OneMKLBackend::rfft(
+        const std::vector<RealT<T>>& input) const
     {
       // TODO: Implement one-off real RFFT using oneMKL DFTI
-      std::cerr << "OneMKLOmniDSPImpl::rfft not yet implemented." << std::endl;
+      std::cerr << "OneMKLBackend::rfft not yet implemented." << std::endl;
       return std::unexpected(Status::UnsupportedFeature);
     }
 
     template <typename T>
-    [[nodiscard]] OmniExpected<std::vector<RealT<T>>> OneMKLOmniDSPImpl::irfft(
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>> OneMKLBackend::irfft(
         const std::vector<ComplexT<T>>& input, size_t /*output_length*/) const
     {
       // TODO: Implement one-off real IRFFT using oneMKL DFTI
-      std::cerr << "OneMKLOmniDSPImpl::irfft not yet implemented." << std::endl;
+      std::cerr << "OneMKLBackend::irfft not yet implemented." << std::endl;
       return std::unexpected(Status::UnsupportedFeature);
     }
 
@@ -173,81 +171,80 @@ namespace OmniDSP {
 
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    OneMKLOmniDSPImpl::bartlett_window(size_t /*length*/) const
+    OneMKLBackend::bartlett_window(size_t /*length*/) const
     {
       // TODO: Implement using MKL VML functions (e.g., v?Ramp, v?Abs, v?Add,
       // v?Sub, v?LinearFrac)
-      std::cerr << "OneMKLOmniDSPImpl::bartlett_window not yet implemented."
+      std::cerr << "OneMKLBackend::bartlett_window not yet implemented."
                 << std::endl;
       return std::unexpected(Status::UnsupportedFeature);
     }
 
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    OneMKLOmniDSPImpl::blackman_window(size_t /*length*/) const
+    OneMKLBackend::blackman_window(size_t /*length*/) const
     {
       // TODO: Implement using MKL VML functions (v?Ramp, v?Cos, v?Add, v?Mul,
       // etc.)
-      std::cerr << "OneMKLOmniDSPImpl::blackman_window not yet implemented."
+      std::cerr << "OneMKLBackend::blackman_window not yet implemented."
                 << std::endl;
       return std::unexpected(Status::UnsupportedFeature);
     }
 
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    OneMKLOmniDSPImpl::flattop_window(size_t /*length*/) const
+    OneMKLBackend::flattop_window(size_t /*length*/) const
     {
       // TODO: Implement using MKL VML functions
-      std::cerr << "OneMKLOmniDSPImpl::flattop_window not yet implemented."
+      std::cerr << "OneMKLBackend::flattop_window not yet implemented."
                 << std::endl;
       return std::unexpected(Status::UnsupportedFeature);
     }
 
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    OneMKLOmniDSPImpl::gaussian_window(
-        size_t /*length*/, RealT<T> /*stddev*/) const
+    OneMKLBackend::gaussian_window(size_t /*length*/, RealT<T> /*stddev*/) const
     {
       // TODO: Implement using MKL VML functions (v?Ramp, v?Sub, v?Sqr, v?Exp,
       // etc.)
-      std::cerr << "OneMKLOmniDSPImpl::gaussian_window not yet implemented."
+      std::cerr << "OneMKLBackend::gaussian_window not yet implemented."
                 << std::endl;
       return std::unexpected(Status::UnsupportedFeature);
     }
 
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    OneMKLOmniDSPImpl::hamming_window(size_t /*length*/) const
+    OneMKLBackend::hamming_window(size_t /*length*/) const
     {
       // TODO: Implement using MKL VML functions
-      std::cerr << "OneMKLOmniDSPImpl::hamming_window not yet implemented."
+      std::cerr << "OneMKLBackend::hamming_window not yet implemented."
                 << std::endl;
       return std::unexpected(Status::UnsupportedFeature);
     }
 
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    OneMKLOmniDSPImpl::hann_window(size_t /*length*/) const
+    OneMKLBackend::hann_window(size_t /*length*/) const
     {
       // TODO: Implement using MKL VML functions
-      std::cerr << "OneMKLOmniDSPImpl::hann_window not yet implemented."
+      std::cerr << "OneMKLBackend::hann_window not yet implemented."
                 << std::endl;
       return std::unexpected(Status::UnsupportedFeature);
     }
 
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    OneMKLOmniDSPImpl::kaiser_window(size_t /*length*/, RealT<T> /*beta*/) const
+    OneMKLBackend::kaiser_window(size_t /*length*/, RealT<T> /*beta*/) const
     {
       // TODO: Implement using MKL VML functions and Boost Bessel function
-      std::cerr << "OneMKLOmniDSPImpl::kaiser_window not yet implemented."
+      std::cerr << "OneMKLBackend::kaiser_window not yet implemented."
                 << std::endl;
       return std::unexpected(Status::UnsupportedFeature);
     }
 
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    OneMKLOmniDSPImpl::rectangular_window(size_t length) const
+    OneMKLBackend::rectangular_window(size_t length) const
     {
       // TODO: Implement using MKL VML (e.g., generate constant value) or simple
       // loop
@@ -256,17 +253,17 @@ namespace OmniDSP {
       // scalar?
       std::vector<RealT<T>> coeffs(length, static_cast<RealT<T>>(1.0));
       return coeffs;  // Simple implementation
-      // std::cerr << "OneMKLOmniDSPImpl::rectangular_window not fully
+      // std::cerr << "OneMKLBackend::rectangular_window not fully
       // optimized."
       // << std::endl; return std::unexpected(Status::UnsupportedFeature);
     }
 
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>>
-    OneMKLOmniDSPImpl::triangular_window(size_t /*length*/) const
+    OneMKLBackend::triangular_window(size_t /*length*/) const
     {
       // TODO: Implement using MKL VML functions
-      std::cerr << "OneMKLOmniDSPImpl::triangular_window not yet implemented."
+      std::cerr << "OneMKLBackend::triangular_window not yet implemented."
                 << std::endl;
       return std::unexpected(Status::UnsupportedFeature);
     }
@@ -277,7 +274,7 @@ namespace OmniDSP {
 
     template <typename T>
     [[nodiscard]] OmniExpected<std::unique_ptr<FFTPlan<T>>>
-    OneMKLOmniDSPImpl::create_fft_plan(size_t length) const
+    OneMKLBackend::create_fft_plan(size_t length) const
     {
       try {
         auto pimpl_backend = std::make_unique<OneMKLFFTPlanImpl<T>>(length);
@@ -307,7 +304,7 @@ namespace OmniDSP {
 
     template <typename T>
     [[nodiscard]] OmniExpected<std::unique_ptr<RFFTPlan<T>>>
-    OneMKLOmniDSPImpl::create_rfft_plan(size_t length) const
+    OneMKLBackend::create_rfft_plan(size_t length) const
     {
       try {
         auto pimpl_backend = std::make_unique<OneMKLRFFTPlanImpl<T>>(length);
@@ -333,7 +330,7 @@ namespace OmniDSP {
 
     template <typename T>
     [[nodiscard]] OmniExpected<std::unique_ptr<CQTPlan<T>>>
-    OneMKLOmniDSPImpl::create_cqt_plan(
+    OneMKLBackend::create_cqt_plan(
         const OmniDSP* owner,  // Pass owner for sub-plan creation
         RealT<T> sample_rate,
         RealT<T> min_freq,
@@ -369,7 +366,7 @@ namespace OmniDSP {
 
     template <typename T>
     [[nodiscard]] OmniExpected<std::unique_ptr<ResamplePlan<T>>>
-    OneMKLOmniDSPImpl::create_resample_plan(
+    OneMKLBackend::create_resample_plan(
         double input_rate, double output_rate, size_t max_input_size) const
     {
       try {
@@ -396,7 +393,7 @@ namespace OmniDSP {
 
     template <typename T>
     [[nodiscard]] OmniExpected<std::unique_ptr<ConvolutionPlan<T>>>
-    OneMKLOmniDSPImpl::create_convolution_plan(
+    OneMKLBackend::create_convolution_plan(
         const std::vector<T>& kernel, ConvolutionMode mode) const
     {
       try {
@@ -428,7 +425,7 @@ namespace OmniDSP {
 
     template <typename T>
     [[nodiscard]] OmniExpected<std::unique_ptr<CorrelationPlan<T>>>
-    OneMKLOmniDSPImpl::create_correlation_plan(
+    OneMKLBackend::create_correlation_plan(
         const std::vector<T>& kernel, ConvolutionMode mode) const
     {
       try {
@@ -465,150 +462,150 @@ namespace OmniDSP {
     // Explicit Template Instantiations
     //--------------------------------------------------------------------------
     // Instantiate templates for common types (float, double) for
-    // OneMKLOmniDSPImpl methods
+    // OneMKLBackend methods
 
     // Define types for brevity
     using float_c = OmniDSP::ComplexT<float>;
     using double_c = OmniDSP::ComplexT<double>;
 
     // DSP Operations
-    template OmniExpected<std::vector<float>> OneMKLOmniDSPImpl::convolve(
+    template OmniExpected<std::vector<float>> OneMKLBackend::convolve(
         const std::vector<float>&,
         const std::vector<float>&,
         ConvolutionMode) const;
-    template OmniExpected<std::vector<double>> OneMKLOmniDSPImpl::convolve(
+    template OmniExpected<std::vector<double>> OneMKLBackend::convolve(
         const std::vector<double>&,
         const std::vector<double>&,
         ConvolutionMode) const;
-    template OmniExpected<std::vector<float_c>> OneMKLOmniDSPImpl::convolve(
+    template OmniExpected<std::vector<float_c>> OneMKLBackend::convolve(
         const std::vector<float_c>&,
         const std::vector<float_c>&,
         ConvolutionMode) const;
-    template OmniExpected<std::vector<double_c>> OneMKLOmniDSPImpl::convolve(
+    template OmniExpected<std::vector<double_c>> OneMKLBackend::convolve(
         const std::vector<double_c>&,
         const std::vector<double_c>&,
         ConvolutionMode) const;
 
-    template OmniExpected<std::vector<float>> OneMKLOmniDSPImpl::correlate(
+    template OmniExpected<std::vector<float>> OneMKLBackend::correlate(
         const std::vector<float>&,
         const std::vector<float>&,
         ConvolutionMode) const;
-    template OmniExpected<std::vector<double>> OneMKLOmniDSPImpl::correlate(
+    template OmniExpected<std::vector<double>> OneMKLBackend::correlate(
         const std::vector<double>&,
         const std::vector<double>&,
         ConvolutionMode) const;
-    template OmniExpected<std::vector<float_c>> OneMKLOmniDSPImpl::correlate(
+    template OmniExpected<std::vector<float_c>> OneMKLBackend::correlate(
         const std::vector<float_c>&,
         const std::vector<float_c>&,
         ConvolutionMode) const;
-    template OmniExpected<std::vector<double_c>> OneMKLOmniDSPImpl::correlate(
+    template OmniExpected<std::vector<double_c>> OneMKLBackend::correlate(
         const std::vector<double_c>&,
         const std::vector<double_c>&,
         ConvolutionMode) const;
 
     // One-off FFTs
-    template OmniExpected<std::vector<float_c>> OneMKLOmniDSPImpl::fft(
+    template OmniExpected<std::vector<float_c>> OneMKLBackend::fft(
         const std::vector<float_c>&) const;
-    template OmniExpected<std::vector<double_c>> OneMKLOmniDSPImpl::fft(
+    template OmniExpected<std::vector<double_c>> OneMKLBackend::fft(
         const std::vector<double_c>&) const;
-    template OmniExpected<std::vector<float_c>> OneMKLOmniDSPImpl::ifft(
+    template OmniExpected<std::vector<float_c>> OneMKLBackend::ifft(
         const std::vector<float_c>&) const;
-    template OmniExpected<std::vector<double_c>> OneMKLOmniDSPImpl::ifft(
+    template OmniExpected<std::vector<double_c>> OneMKLBackend::ifft(
         const std::vector<double_c>&) const;
-    template OmniExpected<std::vector<float_c>> OneMKLOmniDSPImpl::rfft(
+    template OmniExpected<std::vector<float_c>> OneMKLBackend::rfft(
         const std::vector<float>&) const;
-    template OmniExpected<std::vector<double_c>> OneMKLOmniDSPImpl::rfft(
+    template OmniExpected<std::vector<double_c>> OneMKLBackend::rfft(
         const std::vector<double>&) const;
-    template OmniExpected<std::vector<float>> OneMKLOmniDSPImpl::irfft(
+    template OmniExpected<std::vector<float>> OneMKLBackend::irfft(
         const std::vector<float_c>&, size_t) const;
-    template OmniExpected<std::vector<double>> OneMKLOmniDSPImpl::irfft(
+    template OmniExpected<std::vector<double>> OneMKLBackend::irfft(
         const std::vector<double_c>&, size_t) const;
 
     // Window Generation
-    template OmniExpected<std::vector<float>>
-        OneMKLOmniDSPImpl::bartlett_window(size_t) const;
-    template OmniExpected<std::vector<double>>
-        OneMKLOmniDSPImpl::bartlett_window(size_t) const;
-    template OmniExpected<std::vector<float>>
-        OneMKLOmniDSPImpl::blackman_window(size_t) const;
-    template OmniExpected<std::vector<double>>
-        OneMKLOmniDSPImpl::blackman_window(size_t) const;
-    template OmniExpected<std::vector<float>> OneMKLOmniDSPImpl::flattop_window(
+    template OmniExpected<std::vector<float>> OneMKLBackend::bartlett_window(
         size_t) const;
-    template OmniExpected<std::vector<double>>
-        OneMKLOmniDSPImpl::flattop_window(size_t) const;
-    template OmniExpected<std::vector<float>>
-    OneMKLOmniDSPImpl::gaussian_window(size_t, float) const;
-    template OmniExpected<std::vector<double>>
-    OneMKLOmniDSPImpl::gaussian_window(size_t, double) const;
-    template OmniExpected<std::vector<float>> OneMKLOmniDSPImpl::hamming_window(
+    template OmniExpected<std::vector<double>> OneMKLBackend::bartlett_window(
         size_t) const;
-    template OmniExpected<std::vector<double>>
-        OneMKLOmniDSPImpl::hamming_window(size_t) const;
-    template OmniExpected<std::vector<float>> OneMKLOmniDSPImpl::hann_window(
+    template OmniExpected<std::vector<float>> OneMKLBackend::blackman_window(
         size_t) const;
-    template OmniExpected<std::vector<double>> OneMKLOmniDSPImpl::hann_window(
+    template OmniExpected<std::vector<double>> OneMKLBackend::blackman_window(
         size_t) const;
-    template OmniExpected<std::vector<float>> OneMKLOmniDSPImpl::kaiser_window(
+    template OmniExpected<std::vector<float>> OneMKLBackend::flattop_window(
+        size_t) const;
+    template OmniExpected<std::vector<double>> OneMKLBackend::flattop_window(
+        size_t) const;
+    template OmniExpected<std::vector<float>> OneMKLBackend::gaussian_window(
         size_t, float) const;
-    template OmniExpected<std::vector<double>> OneMKLOmniDSPImpl::kaiser_window(
+    template OmniExpected<std::vector<double>> OneMKLBackend::gaussian_window(
         size_t, double) const;
-    template OmniExpected<std::vector<float>>
-        OneMKLOmniDSPImpl::rectangular_window(size_t) const;
+    template OmniExpected<std::vector<float>> OneMKLBackend::hamming_window(
+        size_t) const;
+    template OmniExpected<std::vector<double>> OneMKLBackend::hamming_window(
+        size_t) const;
+    template OmniExpected<std::vector<float>> OneMKLBackend::hann_window(
+        size_t) const;
+    template OmniExpected<std::vector<double>> OneMKLBackend::hann_window(
+        size_t) const;
+    template OmniExpected<std::vector<float>> OneMKLBackend::kaiser_window(
+        size_t, float) const;
+    template OmniExpected<std::vector<double>> OneMKLBackend::kaiser_window(
+        size_t, double) const;
+    template OmniExpected<std::vector<float>> OneMKLBackend::rectangular_window(
+        size_t) const;
     template OmniExpected<std::vector<double>>
-        OneMKLOmniDSPImpl::rectangular_window(size_t) const;
-    template OmniExpected<std::vector<float>>
-        OneMKLOmniDSPImpl::triangular_window(size_t) const;
-    template OmniExpected<std::vector<double>>
-        OneMKLOmniDSPImpl::triangular_window(size_t) const;
+        OneMKLBackend::rectangular_window(size_t) const;
+    template OmniExpected<std::vector<float>> OneMKLBackend::triangular_window(
+        size_t) const;
+    template OmniExpected<std::vector<double>> OneMKLBackend::triangular_window(
+        size_t) const;
 
     // Plan Factories
     template OmniExpected<std::unique_ptr<FFTPlan<float_c>>>
-        OneMKLOmniDSPImpl::create_fft_plan(size_t) const;
+        OneMKLBackend::create_fft_plan(size_t) const;
     template OmniExpected<std::unique_ptr<FFTPlan<double_c>>>
-        OneMKLOmniDSPImpl::create_fft_plan(size_t) const;
+        OneMKLBackend::create_fft_plan(size_t) const;
 
     template OmniExpected<std::unique_ptr<RFFTPlan<float>>>
-        OneMKLOmniDSPImpl::create_rfft_plan(size_t) const;
+        OneMKLBackend::create_rfft_plan(size_t) const;
     template OmniExpected<std::unique_ptr<RFFTPlan<double>>>
-        OneMKLOmniDSPImpl::create_rfft_plan(size_t) const;
+        OneMKLBackend::create_rfft_plan(size_t) const;
 
     template OmniExpected<std::unique_ptr<CQTPlan<float>>>
-    OneMKLOmniDSPImpl::create_cqt_plan(
+    OneMKLBackend::create_cqt_plan(
         const OmniDSP*, float, float, float, int) const;
     template OmniExpected<std::unique_ptr<CQTPlan<double>>>
-    OneMKLOmniDSPImpl::create_cqt_plan(
+    OneMKLBackend::create_cqt_plan(
         const OmniDSP*, double, double, double, int) const;
 
     template OmniExpected<std::unique_ptr<ResamplePlan<float>>>
-    OneMKLOmniDSPImpl::create_resample_plan(double, double, size_t) const;
+    OneMKLBackend::create_resample_plan(double, double, size_t) const;
     template OmniExpected<std::unique_ptr<ResamplePlan<double>>>
-    OneMKLOmniDSPImpl::create_resample_plan(double, double, size_t) const;
+    OneMKLBackend::create_resample_plan(double, double, size_t) const;
 
     template OmniExpected<std::unique_ptr<ConvolutionPlan<float>>>
-    OneMKLOmniDSPImpl::create_convolution_plan(
+    OneMKLBackend::create_convolution_plan(
         const std::vector<float>&, ConvolutionMode) const;
     template OmniExpected<std::unique_ptr<ConvolutionPlan<double>>>
-    OneMKLOmniDSPImpl::create_convolution_plan(
+    OneMKLBackend::create_convolution_plan(
         const std::vector<double>&, ConvolutionMode) const;
     template OmniExpected<std::unique_ptr<ConvolutionPlan<float_c>>>
-    OneMKLOmniDSPImpl::create_convolution_plan(
+    OneMKLBackend::create_convolution_plan(
         const std::vector<float_c>&, ConvolutionMode) const;
     template OmniExpected<std::unique_ptr<ConvolutionPlan<double_c>>>
-    OneMKLOmniDSPImpl::create_convolution_plan(
+    OneMKLBackend::create_convolution_plan(
         const std::vector<double_c>&, ConvolutionMode) const;
 
     template OmniExpected<std::unique_ptr<CorrelationPlan<float>>>
-    OneMKLOmniDSPImpl::create_correlation_plan(
+    OneMKLBackend::create_correlation_plan(
         const std::vector<float>&, ConvolutionMode) const;
     template OmniExpected<std::unique_ptr<CorrelationPlan<double>>>
-    OneMKLOmniDSPImpl::create_correlation_plan(
+    OneMKLBackend::create_correlation_plan(
         const std::vector<double>&, ConvolutionMode) const;
     template OmniExpected<std::unique_ptr<CorrelationPlan<float_c>>>
-    OneMKLOmniDSPImpl::create_correlation_plan(
+    OneMKLBackend::create_correlation_plan(
         const std::vector<float_c>&, ConvolutionMode) const;
     template OmniExpected<std::unique_ptr<CorrelationPlan<double_c>>>
-    OneMKLOmniDSPImpl::create_correlation_plan(
+    OneMKLBackend::create_correlation_plan(
         const std::vector<double_c>&, ConvolutionMode) const;
 
   }  // namespace backend

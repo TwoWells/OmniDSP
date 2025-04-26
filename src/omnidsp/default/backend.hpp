@@ -12,7 +12,7 @@
 
 #include <memory>  // For std::unique_ptr
 
-#include "../interface/backend.h"  // Include the base AbstractBackend interface
+#include "../interface/backend.hpp"  // Include the base AbstractBackend interface
 
 namespace OmniDSP {
   namespace backend {

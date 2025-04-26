@@ -17,7 +17,7 @@
 #include <stdexcept>  // For invalid_argument in ResampleSpec validation
 #include <vector>     // For std::vector (potentially used internally)
 
-#include "core_types.h"  // Core types like RealT, Status
+#include "core_types.hpp"  // Core types like RealT, Status
 
 namespace OmniDSP {
 

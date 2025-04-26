@@ -13,10 +13,10 @@
 #include <string_view>  // For get_convolution_type_name
 #include <vector>
 
-#include "core_types.h"  // Core types like RealT, ComplexT, Status
+#include "core_types.hpp"  // Core types like RealT, ComplexT, Status
 
 // Include the generated export header for DLL support
-#include "OmniDSP/omnidsp_export.h"
+#include "OmniDSP/omnidsp_export.hpp"
 
 namespace OmniDSP {
 

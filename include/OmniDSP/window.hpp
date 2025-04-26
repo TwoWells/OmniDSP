@@ -17,7 +17,7 @@
 #include <stdexcept>    // For invalid_argument
 #include <string_view>  // For get_window_type_name
 
-#include "core_types.h"  // For RealT
+#include "core_types.hpp"  // For RealT
 
 namespace OmniDSP {
 

@@ -26,11 +26,11 @@
 #include <type_traits>  // For std::is_same_v
 #include <vector>
 
-#include "OmniDSP/core_types.h"  // For Status, ConvolutionMode etc.
-#include "backend.h"  // Corresponding header for Default backend declarations
-#include "hwy/contrib/complex/complex-inl.h"  // For complex operations
+#include "OmniDSP/core_types.hpp"  // For Status, ConvolutionMode etc.
+#include "backend.hpp"  // Corresponding header for Default backend declarations
+#include "hwy/contrib/complex/complex-inl.h"
 #include "hwy/contrib/math/math-inl.h"
-#include "hwy/foreach_target.h"  // Must be first Highway include
+#include "hwy/foreach_target.h"
 #include "hwy/highway.h"
 
 // Define complex types for brevity used internally

@@ -15,7 +15,7 @@
 // "hwy/highway.h" #include "hwy/contrib/math/math-inl.h" #include
 // "hwy/contrib/complex/complex-inl.h"
 
-#include "OmniDSP/filter.h"  // Public filter interfaces and specs
+#include "OmniDSP/filter.hpp"  // Public filter interfaces and specs
 
 #include <algorithm>  // For std::copy, std::fill, std::min
 #include <complex>    // For std::complex
@@ -24,8 +24,8 @@
 #include <stdexcept>  // For std::runtime_error, std::invalid_argument
 #include <vector>
 
-#include "OmniDSP/core_types.h"  // Core types
-#include "backend.h"  // Corresponding header for Default backend declarations
+#include "OmniDSP/core_types.hpp"  // Core types
+#include "backend.hpp"  // Corresponding header for Default backend declarations
 
 // TODO: Include FFT plan headers if using FFT-based FIR filtering
 // #include "OmniDSP/fft.h"

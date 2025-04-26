@@ -18,7 +18,7 @@
 #include <stdexcept>  // For std::runtime_error, std::invalid_argument
 #include <vector>
 
-#include "backend.h"  // Accelerate backend declarations
+#include "backend.hpp"  // Accelerate backend declarations
 
 namespace OmniDSP {
   namespace backend {

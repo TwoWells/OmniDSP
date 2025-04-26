@@ -15,10 +15,10 @@
 #include <span>     // For input/output views (requires C++20)
 #include <vector>   // For std::vector (potentially used internally)
 
-#include "core_types.h"  // Core types like RealT, ComplexT, Status
+#include "core_types.hpp"  // Core types like RealT, ComplexT, Status
 
 // Include the generated export header
-#include "OmniDSP/omnidsp_export.h"
+#include "OmniDSP/omnidsp_export.hpp"
 
 namespace OmniDSP {
 

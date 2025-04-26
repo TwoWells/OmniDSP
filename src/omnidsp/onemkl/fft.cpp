@@ -4,8 +4,8 @@
  * DFTI.
  */
 
-#include "OmniDSP/core_types.h"  // For Status, RealT, ComplexT etc.
-#include "backend.h"             // oneMKL backend declarations
+#include "OmniDSP/core_types.hpp"  // For Status, RealT, ComplexT etc.
+#include "backend.hpp"             // oneMKL backend declarations
 
 // Include MKL header for DFTI
 #include <mkl.h>

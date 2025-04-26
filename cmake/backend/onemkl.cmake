@@ -1,122 +1,154 @@
+# ==============================================================================
 # cmake/backend/onemkl.cmake
-# ==========================
-# Detects and configures the Intel oneMKL / IPP backend.
-# Relies on find_package(MKL) respecting CMAKE_PREFIX_PATH (set by Conda env activation).
-# Also adds IPP libraries by name, assuming they are findable in the link path.
+# ==============================================================================
 #
-# Variables Set (Current Scope, if MKL found):
-# - OMNIDSP_HAS_ONEMKL (BOOL): TRUE if MKL is found.
-# - ONEMKL_COMPILE_DEFINITION (STRING): Compile definition ("USE_ONEMKL").
-# - ONEMKL_LINK_LIBS (LIST): Link libraries (MKL::MKL or MKL_LIBRARIES, ippcore, ipps).
-# - ONEMKL_INCLUDE_DIRS (LIST): Additional include directories from MKL_INCLUDE_DIRS (if set and no MKL::MKL target).
-# - ONEMKL_LINK_DIRS (LIST): Additional link directories (likely empty, relying on linker paths).
-# - ONEMKL_BACKEND_SOURCES (LIST): List of source files for the oneMKL backend.
-# - ONEMKL_BACKEND_INCLUDE_DIR (STRING): Path to the oneMKL backend's private include directory.
-# ==========================
+# Brief Description:
+#   Configures the 'omnidsp_backend_onemkl' OBJECT library target if the
+#   Intel oneMKL and IPP libraries are found and the backend is enabled.
+#
+# Variables Read:
+#   - CMAKE_SOURCE_DIR, PROJECT_BINARY_DIR (CMake Built-in)
+#   - APPLE (CMake Built-in)
+#   - OMNIDSP_ENABLE_ONEMKL (Option, dependent on NOT APPLE)
+#   - ENV{MKLROOT} (Environment Variable)
+#   - CMAKE_CURRENT_LIST_DIR (CMake Built-in)
+#   - MKL::MKL, IPP::core, IPP::s targets (Expected from find_package)
+#   - IPP_INCLUDE_DIRS (Variable potentially set by FindIPP.cmake)
+#
+# Variables Set (in Caller's Scope via include()):
+#   - OMNIDSP_SELECTED_BACKEND_TARGETS (Appends 'omnidsp_backend_onemkl' if configured)
+#
+# Targets Defined:
+#   - omnidsp_backend_onemkl (OBJECT Library, if configured successfully)
+#
+# Modules Included:
+#   - CMakeDependentOption, FindMKL, FindIPP
+#
+# ==============================================================================
 
-message(STATUS "Checking for Intel oneMKL backend...")
+include(CMakeDependentOption)
 
-# Default to not found
-set(OMNIDSP_HAS_ONEMKL FALSE)
+cmake_dependent_option(
+    OMNIDSP_ENABLE_ONEMKL
+    "Enable Intel oneMKL backend (requires non-Apple OS and MKL/IPP libs)"
+    ON "NOT APPLE" OFF
+)
 
-# --- Attempt to find MKL ---
-# Use find_package. If the Conda environment is activated, CMAKE_PREFIX_PATH
-# should be set, allowing find_package to locate the MKL config files or FindMKL.cmake module.
-# Using QUIET to avoid errors if not found; we handle the messaging.
-find_package(MKL QUIET)
+if(OMNIDSP_ENABLE_ONEMKL)
+    message(STATUS "  Attempting to configure oneMKL backend...")
 
-if(MKL_FOUND)
-  message(STATUS "  Intel oneMKL backend available (version ${MKL_VERSION}).")
-  set(OMNIDSP_HAS_ONEMKL TRUE)
+    find_package(MKL HINTS ENV MKLROOT QUIET)
+    find_package(IPP COMPONENTS s QUIET) # Assumes FindIPP.cmake provides IPP::core, IPP::s
 
-  # --- Compile Definition ---
-  set(ONEMKL_COMPILE_DEFINITION "USE_ONEMKL")
-  message(STATUS "    Compile definition: ${ONEMKL_COMPILE_DEFINITION}") # Indentation: 4 spaces
+    if(TARGET MKL::MKL AND TARGET IPP::core AND TARGET IPP::s)
+        message(STATUS "    Found oneMKL (MKL::MKL) and IPP (IPP::core, IPP::s). Configuring target.")
 
-  # --- Link Libraries ---
-  set(ONEMKL_LINK_LIBS "") # Initialize list in current scope
-  # Prefer using the imported target MKL::MKL if available (modern CMake)
-  if(TARGET MKL::MKL)
-    list(APPEND ONEMKL_LINK_LIBS MKL::MKL)
-    message(STATUS "    Adding MKL link target: MKL::MKL") # Indentation: 4 spaces
-    # Check if the target provides include directories (modern approach)
-    get_target_property(MKL_INTERFACE_INCLUDE_DIRS MKL::MKL INTERFACE_INCLUDE_DIRECTORIES)
-    if(MKL_INTERFACE_INCLUDE_DIRS)
-        # Use helper for list formatting
-        print_prefixed_list(STATUS "    " "MKL::MKL target provides include directories:" ${MKL_INTERFACE_INCLUDE_DIRS})
-        # These will be automatically used when linking against MKL::MKL
-        # We don't need to add them manually to ONEMKL_INCLUDE_DIRS below if linking the target.
+        add_library(omnidsp_backend_onemkl OBJECT)
+
+        set(OMNIDSP_ONEMKL_BACKEND_SRC_DIR ${CMAKE_SOURCE_DIR}/src/omnidsp/onemkl)
+        message(STATUS "      oneMKL backend source directory: ${OMNIDSP_ONEMKL_BACKEND_SRC_DIR}")
+
+        target_sources(omnidsp_backend_onemkl
+            PRIVATE
+                "${OMNIDSP_ONEMKL_BACKEND_SRC_DIR}/backend.cpp"
+                "${OMNIDSP_ONEMKL_BACKEND_SRC_DIR}/fft.cpp"
+                "${OMNIDSP_ONEMKL_BACKEND_SRC_DIR}/window.cpp"
+                "${OMNIDSP_ONEMKL_BACKEND_SRC_DIR}/convolution.cpp"
+                "${OMNIDSP_ONEMKL_BACKEND_SRC_DIR}/resample.cpp"
+        )
+
+        # --- Get Include Directories from Dependencies ---
+        set(MKL_INCLUDES "")
+        set(IPP_INCLUDES "") # Consolidate IPP includes
+
+        # MKL Includes
+        if(TARGET MKL::MKL)
+            get_target_property(MKL_INCLUDES MKL::MKL INTERFACE_INCLUDE_DIRECTORIES)
+            if(NOT MKL_INCLUDES) # Check if property was empty or not found
+                 message(WARNING "DEBUG oneMKL.cmake: MKL::MKL INTERFACE_INCLUDE_DIRECTORIES not set/empty. Check FindMKL.")
+                 set(MKL_INCLUDES "") # Ensure it's empty if property failed
+            else()
+                 message(STATUS "DEBUG oneMKL.cmake: Retrieved MKL_INCLUDES: ${MKL_INCLUDES}")
+            endif()
+        else()
+            message(WARNING "DEBUG oneMKL.cmake: MKL::MKL target not found.")
+        endif()
+
+        # IPP Includes (Check target properties first, then fallback to IPP_INCLUDE_DIRS)
+        if(TARGET IPP::core)
+             get_target_property(TEMP_IPP_CORE_INCLUDES IPP::core INTERFACE_INCLUDE_DIRECTORIES)
+             if(TEMP_IPP_CORE_INCLUDES)
+                 list(APPEND IPP_INCLUDES ${TEMP_IPP_CORE_INCLUDES})
+                 message(STATUS "DEBUG oneMKL.cmake: Retrieved IPP_CORE_INCLUDES from property: ${TEMP_IPP_CORE_INCLUDES}")
+             endif()
+        else()
+             message(WARNING "DEBUG oneMKL.cmake: IPP::core target not found.")
+        endif()
+        if(TARGET IPP::s)
+             get_target_property(TEMP_IPP_S_INCLUDES IPP::s INTERFACE_INCLUDE_DIRECTORIES)
+              if(TEMP_IPP_S_INCLUDES)
+                 list(APPEND IPP_INCLUDES ${TEMP_IPP_S_INCLUDES})
+                 message(STATUS "DEBUG oneMKL.cmake: Retrieved IPP_S_INCLUDES from property: ${TEMP_IPP_S_INCLUDES}")
+             endif()
+        else()
+              message(WARNING "DEBUG oneMKL.cmake: IPP::s target not found.")
+        endif()
+
+        # Fallback/Primary check for IPP_INCLUDE_DIRS variable if properties were empty
+        if(NOT IPP_INCLUDES)
+            if(DEFINED IPP_INCLUDE_DIRS AND IPP_INCLUDE_DIRS)
+                 message(STATUS "DEBUG oneMKL.cmake: IPP target properties did not provide includes. Falling back to IPP_INCLUDE_DIRS: ${IPP_INCLUDE_DIRS}")
+                 set(IPP_INCLUDES ${IPP_INCLUDE_DIRS})
+            else()
+                 message(WARNING "DEBUG oneMKL.cmake: IPP target properties did not provide includes, AND IPP_INCLUDE_DIRS is not defined/empty.")
+            endif()
+        endif()
+        # Remove duplicates if properties and variable both added paths
+        if(IPP_INCLUDES)
+            list(REMOVE_DUPLICATES IPP_INCLUDES)
+            message(STATUS "DEBUG oneMKL.cmake: Final IPP_INCLUDES: ${IPP_INCLUDES}")
+        endif()
+
+
+        # --- Backend Include Directories ---
+        message(STATUS "DEBUG oneMKL.cmake: Using MKL_INCLUDES='${MKL_INCLUDES}'")
+        message(STATUS "DEBUG oneMKL.cmake: Using IPP_INCLUDES='${IPP_INCLUDES}'")
+
+        target_include_directories(omnidsp_backend_onemkl
+            PUBLIC # Public headers needed by consumers (main include dir)
+                $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
+
+            PRIVATE # Private headers needed only to compile this backend's sources
+                ${OMNIDSP_ONEMKL_BACKEND_SRC_DIR}
+                # Add path to generated export header
+                ${PROJECT_BINARY_DIR}/include # Or CMAKE_BINARY_DIR
+
+                # Explicitly add include directories from MKL and IPP targets/variables
+                ${MKL_INCLUDES}
+                ${IPP_INCLUDES} # Use the consolidated list
+        )
+
+        target_compile_definitions(omnidsp_backend_onemkl
+            INTERFACE # Propagated to the main library target
+                OMNIDSP_USE_ONEMKL=1 # Indicate this backend is active
+        )
+
+        # Link MKL and IPP targets. INTERFACE ensures the main 'omnidsp'
+        # library also links against them (important for shared libs).
+        # The include paths are now handled explicitly above for OBJECT lib compilation.
+        target_link_libraries(omnidsp_backend_onemkl
+            INTERFACE
+                MKL::MKL
+                IPP::core
+                IPP::s
+        )
+
+        list(APPEND OMNIDSP_SELECTED_BACKEND_TARGETS "omnidsp_backend_onemkl")
+        message(STATUS "    Configured oneMKL backend target: omnidsp_backend_onemkl")
+
+    else()
+        message(WARNING "oneMKL backend enabled (OMNIDSP_ENABLE_ONEMKL=ON), but required libraries (MKL::MKL, IPP::core, IPP::s) were not found. Disabling this backend.")
     endif()
-  elseif(MKL_LIBRARIES) # Fallback to using the MKL_LIBRARIES variable
-    list(APPEND ONEMKL_LINK_LIBS ${MKL_LIBRARIES})
-    # Use helper for list formatting
-    print_prefixed_list(STATUS "    " "Adding MKL link libraries from MKL_LIBRARIES:" ${MKL_LIBRARIES})
-  else()
-    message(WARNING "    FindMKL found MKL but did not define MKL::MKL target or MKL_LIBRARIES variable. Linking might fail.") # Indentation: 4 spaces
-  endif()
-
-  # Add IPP libraries by name. Assume they are findable via standard link paths
-  # (including those added to CMAKE_PREFIX_PATH by Conda).
-  list(APPEND ONEMKL_LINK_LIBS ippcore ipps)
-  message(STATUS "    Adding IPP link libraries by name: ippcore ipps") # Indentation: 4 spaces
-  # Set the final list in the current scope
-  set(ONEMKL_LINK_LIBS ${ONEMKL_LINK_LIBS})
-  # Use helper for list formatting
-  print_prefixed_list(STATUS "    " "Final oneMKL link libraries:" ${ONEMKL_LINK_LIBS})
-
-  # --- Include Directories ---
-  set(ONEMKL_INCLUDE_DIRS "") # Initialize list
-  # Add include dirs provided by FindMKL (MKL_INCLUDE_DIRS variable), if any,
-  # *unless* we are using the MKL::MKL target which handles its own includes.
-  if(DEFINED MKL_INCLUDE_DIRS AND NOT MKL_INCLUDE_DIRS STREQUAL "" AND NOT TARGET MKL::MKL)
-    list(APPEND ONEMKL_INCLUDE_DIRS ${MKL_INCLUDE_DIRS})
-    # Use helper for list formatting
-    print_prefixed_list(STATUS "    " "Adding MKL include directories from FindMKL variable:" ${MKL_INCLUDE_DIRS})
-  elseif(NOT TARGET MKL::MKL)
-     message(STATUS "    No MKL_INCLUDE_DIRS variable set by FindMKL (and no MKL::MKL target found).") # Indentation: 4 spaces
-  endif()
-  # We no longer manually add Conda include paths here. find_package or the compiler's
-  # default search paths (influenced by CMAKE_PREFIX_PATH) should handle finding MKL/IPP headers.
-  # If headers (like ipps.h) are not found during compilation, it indicates the
-  # environment or CMAKE_PREFIX_PATH is not set up correctly.
-  set(ONEMKL_INCLUDE_DIRS ${ONEMKL_INCLUDE_DIRS})
-  if(ONEMKL_INCLUDE_DIRS)
-      # Use helper for list formatting
-      print_prefixed_list(STATUS "    " "Additional oneMKL include directories (from MKL_INCLUDE_DIRS if set and no target):" ${ONEMKL_INCLUDE_DIRS})
-  else()
-       message(STATUS "    Additional oneMKL include directories: (None)") # Indentation: 4 spaces
-  endif()
-
-
-  # --- Link Directories ---
-  # We no longer manually add Conda link paths. find_package (for MKL::MKL or MKL_LIBRARIES)
-  # and the linker's default search paths (influenced by CMAKE_PREFIX_PATH / rpath settings)
-  # should handle finding the libraries.
-  set(ONEMKL_LINK_DIRS "") # Initialize empty list (likely not needed)
-  message(STATUS "    Relying on CMAKE_PREFIX_PATH and standard linker search paths for MKL/IPP libraries.") # Indentation: 4 spaces
-
-
-  # --- Source Files ---
-  set(ONEMKL_BACKEND_SOURCES
-      "${CMAKE_CURRENT_SOURCE_DIR}/src/omnidsp/backend/onemkl/fft.cpp"
-      "${CMAKE_CURRENT_SOURCE_DIR}/src/omnidsp/backend/onemkl/window.cpp"
-      "${CMAKE_CURRENT_SOURCE_DIR}/src/omnidsp/backend/onemkl/convolution.cpp"
-      "${CMAKE_CURRENT_SOURCE_DIR}/src/omnidsp/backend/onemkl/resample.cpp"
-      "${CMAKE_CURRENT_SOURCE_DIR}/src/omnidsp/backend/onemkl/backend.cpp"
-  )
-   # Use helper for list formatting
-   print_prefixed_list(STATUS "    " "oneMKL backend sources:" ${ONEMKL_BACKEND_SOURCES})
-
-
-  # --- Backend Include Directory (for private backend headers) ---
-  set(ONEMKL_BACKEND_INCLUDE_DIR
-      "${CMAKE_CURRENT_SOURCE_DIR}/src/omnidsp/backend/onemkl"
-  )
-  message(STATUS "    oneMKL backend include dir: ${ONEMKL_BACKEND_INCLUDE_DIR}") # Indentation: 4 spaces
-
-
 else()
-  # MKL not found
-  message(STATUS "  Intel oneMKL not found.")
-  message(WARNING "  MKL backend cannot be configured. Ensure the Conda environment is activated and contains the necessary MKL/IPP development packages (e.g., 'intel-mkl-devel', 'intel-ipp-devel'). Verify CMAKE_PREFIX_PATH is set correctly if using a custom installation.")
+    message(STATUS "  oneMKL backend disabled (OMNIDSP_ENABLE_ONEMKL=OFF or platform is Apple).")
 endif()

@@ -21,8 +21,8 @@
 #include <stdexcept>  // For std::runtime_error, std::invalid_argument
 #include <vector>
 
-#include "OmniDSP/core_types.h"  // For Status, RealT etc.
-#include "backend.h"             // Accelerate backend declarations
+#include "OmniDSP/core_types.hpp"  // For Status, RealT etc.
+#include "backend.hpp"             // Accelerate backend declarations
 
 namespace OmniDSP {
   namespace backend {

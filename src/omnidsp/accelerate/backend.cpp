@@ -7,16 +7,16 @@
 // Only compile this file if Accelerate backend is enabled via CMake
 #ifdef USE_ACCELERATE
 
-#include "backend.h"  // Corresponding header for Accelerate backend declarations
+#include "backend.hpp"  // Corresponding header for Accelerate backend declarations
 
 // Include headers for the public Plan classes (needed for factory return types
 // and constructors)
-#include "OmniDSP/convolution.h"
-#include "OmniDSP/cqt.h"
-#include "OmniDSP/fft.h"
-#include "OmniDSP/omnidsp.h"  // Needed for OmniDSP class definition (for owner pointer)
-#include "OmniDSP/resample.h"
-// #include "OmniDSP/filter.h" // Include when FilterPlan is added
+#include "OmniDSP/convolution.hpp"
+#include "OmniDSP/cqt.hpp"
+#include "OmniDSP/fft.hpp"
+#include "OmniDSP/omnidsp.hpp"  // Needed for OmniDSP class definition (for owner pointer)
+#include "OmniDSP/resample.hpp"
+// #include "OmniDSP/filter.hpp" // Include when FilterPlan is added
 
 // Include implementation headers for the Plan Impls (optional but good
 // practice) #include "fft.cpp" // Or specific headers if implementations are

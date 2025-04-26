@@ -14,17 +14,17 @@
 #include <vector>       // For std::vector parameter and return types
 
 // Include core types first, as they are used throughout the interface.
-#include "core_types.h"
+#include "core_types.hpp"
 
 // Include Plan interface definitions
-#include "convolution.h"
-#include "cqt.h"
-#include "fft.h"
-#include "filter.h"  // Includes FIRFilterPlan, IIRFilterPlan, FIRFilterSpec, IIRFilterSpec, SecondOrderSection
-#include "resample.h"  // Includes ResampleSpec
+#include "convolution.hpp"
+#include "cqt.hpp"
+#include "fft.hpp"
+#include "filter.hpp"  // Includes FIRFilterPlan, IIRFilterPlan, FIRFilterSpec, IIRFilterSpec, SecondOrderSection
+#include "resample.hpp"  // Includes ResampleSpec
 
 // Include the generated export header
-#include "OmniDSP/omnidsp_export.h"
+#include "OmniDSP/omnidsp_export.hpp"
 
 namespace OmniDSP {
 

@@ -1,77 +1,108 @@
 # cmake/backend.cmake
-# ===================
-# Orchestrates the detection and configuration of available compute backends
-# (Default, Accelerate, oneMKL). It includes specific backend configuration
-# files from the cmake/backend/ directory. Each included file is expected
-# to set backend-specific variables (sources, includes, libs, etc.) in the
-# current scope. This script aggregates these settings into common variables.
-#
-# Includes:
-# - cmake/backend/default.cmake
-# - cmake/backend/accelerate.cmake
-# - cmake/backend/onemkl.cmake
-#
-# Variables Set (Aggregated):
-# - OMNIDSP_ALL_BACKEND_SOURCES (LIST): All source files for enabled backends.
-# - OMNIDSP_ALL_BACKEND_INCLUDE_DIRS (LIST): Private include dirs for enabled backends.
-# - OMNIDSP_ALL_BACKEND_COMPILE_DEFS (LIST): Compile definitions for enabled backends.
-# - OMNIDSP_ALL_BACKEND_LINK_LIBS (LIST): Libraries to link for enabled backends.
-# - OMNIDSP_ALL_BACKEND_LINK_DIRS (LIST): Link directories for enabled backends.
-# - OMNIDSP_HAS_ACCELERATE (BOOL): True if Accelerate backend is available and configured.
-# - OMNIDSP_HAS_ONEMKL (BOOL): True if oneMKL backend is available and configured.
-# ===================
+# Detects and configures available compute backends.
+# The Default backend is always included.
+# Optional backends (Accelerate, oneMKL) are configured based on platform-dependent options.
+# Sets OMNIDSP_SELECTED_BACKEND_TARGETS list.
 
 message(STATUS "Configuring OmniDSP Backends...")
 
-# --- Initialize Aggregation Variables ---
-# These variables will collect settings from all enabled backends.
-set(OMNIDSP_ALL_BACKEND_SOURCES "")       # List of all source files for enabled backends
-set(OMNIDSP_ALL_BACKEND_INCLUDE_DIRS "")  # List of private include dirs for enabled backends
-set(OMNIDSP_ALL_BACKEND_COMPILE_DEFS "") # List of compile definitions for enabled backends
-set(OMNIDSP_ALL_BACKEND_LINK_LIBS "")    # List of libraries to link for enabled backends
-set(OMNIDSP_ALL_BACKEND_LINK_DIRS "")    # List of link directories for enabled backends
+# Include module for dependent options
+include(CMakeDependentOption)
 
-# --- Include Default Backend (Always Enabled) ---
-include(cmake/backend/default.cmake)
-# Add default backend settings to the aggregate lists
-list(APPEND OMNIDSP_ALL_BACKEND_SOURCES ${DEFAULT_BACKEND_SOURCES})
-list(APPEND OMNIDSP_ALL_BACKEND_INCLUDE_DIRS ${DEFAULT_BACKEND_INCLUDE_DIR})
+# --- Backend Options ---
 
-# --- Include Accelerate Backend (Conditional) ---
-include(cmake/backend/accelerate.cmake)
-if(OMNIDSP_HAS_ACCELERATE)
-  message(STATUS "  Enabling Accelerate backend configuration.")
-  list(APPEND OMNIDSP_ALL_BACKEND_SOURCES ${ACCELERATE_BACKEND_SOURCES})
-  list(APPEND OMNIDSP_ALL_BACKEND_INCLUDE_DIRS ${ACCELERATE_BACKEND_INCLUDE_DIR})
-  list(APPEND OMNIDSP_ALL_BACKEND_COMPILE_DEFS ${ACCELERATE_COMPILE_DEFINITION})
-  list(APPEND OMNIDSP_ALL_BACKEND_LINK_LIBS ${ACCELERATE_LINK_LIB})
-  # Accelerate doesn't typically require special link directories
+# Default backend is REQUIRED, no option provided.
+
+# Accelerate backend: Defaults to ON only if APPLE is TRUE.
+cmake_dependent_option(
+    OMNIDSP_ENABLE_BACKEND_ACCELERATE # Option name
+    "Enable Accelerate Backend (macOS only)" # Description
+    ON          # Default value IF dependency met (ON if APPLE)
+    "APPLE"     # Dependency variable(s)
+    OFF         # Default value IF dependency NOT met (OFF if NOT APPLE)
+)
+
+# oneMKL backend: Defaults to ON only if APPLE is FALSE.
+cmake_dependent_option(
+    OMNIDSP_ENABLE_BACKEND_ONEMKL # Option name
+    "Enable oneMKL Backend (requires non-Apple OS)" # Description
+    ON          # Default value IF dependency met (ON if NOT APPLE)
+    "NOT APPLE" # Dependency variable(s)
+    OFF         # Default value IF dependency NOT met (OFF if APPLE)
+)
+
+# Add options for other backends as needed...
+
+# List to hold the targets for the selected backends
+set(OMNIDSP_SELECTED_BACKEND_TARGETS "")
+set(OMNIDSP_ENABLED_BACKEND_NAMES "") # Keep track of names for user feedback
+
+# --- Default Backend (Required) ---
+message(STATUS "Including Required Default backend configuration...")
+# Ensure the backend file exists before including
+if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/backend/Default.cmake")
+    include("${CMAKE_CURRENT_LIST_DIR}/backend/Default.cmake")
+    # The Default.cmake script should add its target (e.g., omnidsp_backend_default)
+    # to the OMNIDSP_SELECTED_BACKEND_TARGETS list.
+    list(APPEND OMNIDSP_ENABLED_BACKEND_NAMES "Default")
+else()
+    # If the required backend is missing, it's a fatal error.
+    message(FATAL_ERROR "Required Default backend configuration file cmake/backend/Default.cmake not found.")
 endif()
 
-# --- Include oneMKL Backend (Conditional) ---
-include(cmake/backend/onemkl.cmake)
-if(OMNIDSP_HAS_ONEMKL)
-   message(STATUS "  Enabling oneMKL backend configuration.")
-   list(APPEND OMNIDSP_ALL_BACKEND_SOURCES ${ONEMKL_BACKEND_SOURCES})
-   list(APPEND OMNIDSP_ALL_BACKEND_INCLUDE_DIRS ${ONEMKL_BACKEND_INCLUDE_DIR})
-   list(APPEND OMNIDSP_ALL_BACKEND_COMPILE_DEFS ${ONEMKL_COMPILE_DEFINITION})
-   list(APPEND OMNIDSP_ALL_BACKEND_LINK_LIBS ${ONEMKL_LINK_LIBS})
-   list(APPEND OMNIDSP_ALL_BACKEND_INCLUDE_DIRS ${ONEMKL_INCLUDE_DIRS}) # Add MKL/IPP includes found by find_package (if any)
-   list(APPEND OMNIDSP_ALL_BACKEND_LINK_DIRS ${ONEMKL_LINK_DIRS})       # Add link dirs (likely empty now)
+# --- Accelerate Backend (Optional, macOS) ---
+# The include logic remains the same, but the option's default state is now platform-dependent.
+# The accelerate.cmake file itself also contains an APPLE check for safety.
+if(OMNIDSP_ENABLE_BACKEND_ACCELERATE)
+    # The check inside accelerate.cmake is the primary guard, but this outer check avoids unnecessary messages.
+    if(APPLE)
+        message(STATUS "Including Accelerate backend configuration...")
+        if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/backend/Accelerate.cmake")
+            include("${CMAKE_CURRENT_LIST_DIR}/backend/Accelerate.cmake")
+            # Accelerate.cmake should add its target to OMNIDSP_SELECTED_BACKEND_TARGETS
+             list(APPEND OMNIDSP_ENABLED_BACKEND_NAMES "Accelerate")
+        else()
+            message(WARNING "Accelerate backend enabled, but cmake/backend/Accelerate.cmake not found.")
+        endif()
+    else()
+         # This message should ideally not be reached if cmake_dependent_option works correctly,
+         # but serves as a fallback message.
+         message(STATUS "Accelerate backend disabled (platform is not Apple).")
+    endif()
+else()
+     message(STATUS "Accelerate backend disabled (OMNIDSP_ENABLE_BACKEND_ACCELERATE=OFF).")
 endif()
 
-# --- Finalize and Report ---
-# Remove duplicates just in case paths were added multiple times
-list(REMOVE_DUPLICATES OMNIDSP_ALL_BACKEND_INCLUDE_DIRS)
-list(REMOVE_DUPLICATES OMNIDSP_ALL_BACKEND_LINK_DIRS)
+# --- oneMKL Backend (Optional, non-Apple) ---
+# The include logic remains the same, but the option's default state is now platform-dependent.
+# The onemkl.cmake file itself also contains an APPLE check.
+if(OMNIDSP_ENABLE_BACKEND_ONEMKL)
+     # Similar to Accelerate, the check inside onemkl.cmake is the primary guard.
+     if(NOT APPLE)
+        message(STATUS "Including oneMKL backend configuration...")
+        if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/backend/oneMKL.cmake")
+            include("${CMAKE_CURRENT_LIST_DIR}/backend/oneMKL.cmake")
+            # oneMKL.cmake should add its target to OMNIDSP_SELECTED_BACKEND_TARGETS
+             list(APPEND OMNIDSP_ENABLED_BACKEND_NAMES "oneMKL")
+        else()
+            message(WARNING "oneMKL backend enabled, but cmake/backend/oneMKL.cmake not found.")
+        endif()
+     else()
+         message(STATUS "oneMKL backend disabled (platform is Apple).")
+     endif()
+else()
+     message(STATUS "oneMKL backend disabled (OMNIDSP_ENABLE_BACKEND_ONEMKL=OFF).")
+endif()
 
-message(STATUS "Backend configuration complete.")
-# Use the helper function for final reporting (handles empty lists internally)
-print_prefixed_list(STATUS "  " "Aggregate Backend Sources:" ${OMNIDSP_ALL_BACKEND_SOURCES})
-print_prefixed_list(STATUS "  " "Aggregate Backend Include Dirs:" ${OMNIDSP_ALL_BACKEND_INCLUDE_DIRS})
-print_prefixed_list(STATUS "  " "Aggregate Backend Compile Defs:" ${OMNIDSP_ALL_BACKEND_COMPILE_DEFS})
-print_prefixed_list(STATUS "  " "Aggregate Backend Link Libs:" ${OMNIDSP_ALL_BACKEND_LINK_LIBS})
-print_prefixed_list(STATUS "  " "Aggregate Backend Link Dirs:" ${OMNIDSP_ALL_BACKEND_LINK_DIRS})
-# Print boolean status
-message(STATUS "  Has Accelerate: ${OMNIDSP_HAS_ACCELERATE}")
-message(STATUS "  Has oneMKL: ${OMNIDSP_HAS_ONEMKL}")
+# --- Add other backends similarly ---
+
+# --- Validation ---
+# This check remains valid, as OMNIDSP_SELECTED_BACKEND_TARGETS should always
+# contain at least "omnidsp_backend_default".
+if(NOT OMNIDSP_SELECTED_BACKEND_TARGETS)
+    message(FATAL_ERROR "No OmniDSP backends were configured successfully. This should not happen as the Default backend is required.")
+endif()
+
+message(STATUS "Enabled OmniDSP Backends: ${OMNIDSP_ENABLED_BACKEND_NAMES}")
+message(STATUS "Selected backend targets: ${OMNIDSP_SELECTED_BACKEND_TARGETS}")
+message(STATUS "Finished configuring OmniDSP Backends.")

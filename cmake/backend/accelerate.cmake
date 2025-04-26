@@ -1,70 +1,85 @@
+# ==============================================================================
 # cmake/backend/accelerate.cmake
-# ==============================
-# Detects and configures the Apple Accelerate framework backend.
-# This script checks if the build is happening on an Apple platform and
-# attempts to find the Accelerate framework.
+# ==============================================================================
 #
-# Variables Set (Current Scope, if Accelerate found):
-# - OMNIDSP_HAS_ACCELERATE (BOOL): TRUE if Accelerate is found.
-# - ACCELERATE_COMPILE_DEFINITION (STRING): Compile definition ("USE_ACCELERATE").
-# - ACCELERATE_LINK_LIB (STRING): Link library/framework name ("Accelerate" or path).
-# - ACCELERATE_BACKEND_SOURCES (LIST): List of source files for the Accelerate backend.
-# - ACCELERATE_BACKEND_INCLUDE_DIR (STRING): Path to the Accelerate backend's private include directory.
-# ==============================
+# Brief Description:
+#   Configures the 'omnidsp_backend_accelerate' OBJECT library target if the
+#   Apple Accelerate framework is found and the backend is enabled via the
+#   OMNIDSP_ENABLE_BACKEND_ACCELERATE option.
+#
+# Variables Read:
+#   - CMAKE_SOURCE_DIR, PROJECT_BINARY_DIR (CMake Built-in)
+#   - APPLE (CMake Built-in)
+#   - OMNIDSP_ENABLE_BACKEND_ACCELERATE (Option, should depend on APPLE)
+#   - CMAKE_CURRENT_LIST_DIR (CMake Built-in)
+#
+# Variables Set (in Caller's Scope via include()):
+#   - OMNIDSP_SELECTED_BACKEND_TARGETS (Appends 'omnidsp_backend_accelerate' if configured)
+#
+# Targets Defined:
+#   - omnidsp_backend_accelerate (OBJECT Library, if configured successfully)
+#
+# Modules Included:
+#   - FindAccelerate (implicitly via find_framework)
+#
+# ==============================================================================
 
-message(STATUS "Checking for Apple Accelerate backend...")
-
-# Default to not found
-set(OMNIDSP_HAS_ACCELERATE FALSE)
-
-# Accelerate is only available on Apple platforms
-if(APPLE)
-  find_package(Accelerate QUIET) # Find the Accelerate framework using CMake's built-in module
-
-  # Check if found OR if the system is Darwin (macOS/iOS) as a fallback
-  # Sometimes find_package might fail but the framework is implicitly available
-  if(Accelerate_FOUND OR CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-    message(STATUS "  Apple Accelerate backend available.")
-    set(OMNIDSP_HAS_ACCELERATE TRUE)
-
-    # Define the compile definition to enable Accelerate code paths
-    set(ACCELERATE_COMPILE_DEFINITION "USE_ACCELERATE")
-    message(STATUS "    Compile definition: ${ACCELERATE_COMPILE_DEFINITION}")
-
-    # Define the link library (framework name)
-    # find_library is good practice but often linking "-framework Accelerate" works directly
-    find_library(ACCELERATE_FRAMEWORK_PATH Accelerate)
-    if(ACCELERATE_FRAMEWORK_PATH)
-        set(ACCELERATE_LINK_LIB ${ACCELERATE_FRAMEWORK_PATH})
-        message(STATUS "    Found Accelerate framework at: ${ACCELERATE_FRAMEWORK_PATH}")
-    else()
-        # Fallback to using the framework name directly, common practice
-        set(ACCELERATE_LINK_LIB Accelerate)
-        message(WARNING "    Could not find Accelerate framework path via find_library, will link by name 'Accelerate'.")
+if(NOT APPLE)
+    message(STATUS "  Accelerate backend is only available on Apple platforms. Skipping configuration.")
+    if(OMNIDSP_ENABLE_BACKEND_ACCELERATE)
+         message(WARNING "OMNIDSP_ENABLE_BACKEND_ACCELERATE was ON but platform is not Apple. Forcing OFF.")
+         set(OMNIDSP_ENABLE_BACKEND_ACCELERATE OFF CACHE BOOL "Accelerate backend disabled because platform is not Apple" FORCE)
     endif()
-    message(STATUS "    Link library: ${ACCELERATE_LINK_LIB}")
+    return()
+endif()
 
+if(OMNIDSP_ENABLE_BACKEND_ACCELERATE)
+    message(STATUS "  Attempting to configure Accelerate backend...")
 
-    # Define source files for the Accelerate backend
-    set(ACCELERATE_BACKEND_SOURCES
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/omnidsp/backend/accelerate/fft.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/omnidsp/backend/accelerate/window.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/omnidsp/backend/accelerate/convolution.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/omnidsp/backend/accelerate/resample.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/omnidsp/backend/accelerate/backend.cpp"
+    find_framework(Accelerate REQUIRED)
+    message(STATUS "    Found Accelerate framework.")
+
+    add_library(omnidsp_backend_accelerate OBJECT)
+
+    set(OMNIDSP_ACCELERATE_BACKEND_SRC_DIR ${CMAKE_SOURCE_DIR}/src/omnidsp/backend/accelerate)
+    message(STATUS "      Accelerate backend source directory: ${OMNIDSP_ACCELERATE_BACKEND_SRC_DIR}")
+
+    target_sources(omnidsp_backend_accelerate
+        PRIVATE
+            "${OMNIDSP_ACCELERATE_BACKEND_SRC_DIR}/fft.cpp"
+            "${OMNIDSP_ACCELERATE_BACKEND_SRC_DIR}/window.cpp"
+            "${OMNIDSP_ACCELERATE_BACKEND_SRC_DIR}/convolution.cpp"
+            "${OMNIDSP_ACCELERATE_BACKEND_SRC_DIR}/resample.cpp"
+            "${OMNIDSP_ACCELERATE_BACKEND_SRC_DIR}/backend.cpp"
     )
-    # Print sources list using the helper function
-    print_prefixed_list(STATUS "    " "Accelerate backend sources:" ${ACCELERATE_BACKEND_SOURCES})
 
-    # Define include directory for the Accelerate backend
-    set(ACCELERATE_BACKEND_INCLUDE_DIR
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/omnidsp/backend/accelerate"
+    # --- Backend Include Directories ---
+    target_include_directories(omnidsp_backend_accelerate
+        PUBLIC # Public headers needed by consumers (main include dir)
+            $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
+
+        PRIVATE # Private headers needed only to compile this backend's sources
+            ${OMNIDSP_ACCELERATE_BACKEND_SRC_DIR}
+            # Add path to generated export header
+            ${PROJECT_BINARY_DIR}/include # Or CMAKE_BINARY_DIR
     )
-     message(STATUS "    Accelerate backend include dir: ${ACCELERATE_BACKEND_INCLUDE_DIR}")
 
-  else()
-    message(STATUS "  Apple Accelerate framework not found.")
-  endif()
+    target_compile_definitions(omnidsp_backend_accelerate
+        INTERFACE
+            OMNIDSP_USE_ACCELERATE=1
+    )
+
+    # Link the Accelerate framework. INTERFACE ensures the main 'omnidsp'
+    # library also links against it. Include paths for frameworks are
+    # typically handled differently and don't need explicit addition here.
+    target_link_libraries(omnidsp_backend_accelerate
+        INTERFACE
+            "-framework Accelerate"
+    )
+
+    list(APPEND OMNIDSP_SELECTED_BACKEND_TARGETS "omnidsp_backend_accelerate")
+    message(STATUS "    Configured Accelerate backend target: omnidsp_backend_accelerate")
+
 else()
-    message(STATUS "  Skipping Accelerate check (not on Apple platform).")
+    message(STATUS "  Accelerate backend disabled (OMNIDSP_ENABLE_BACKEND_ACCELERATE=OFF).")
 endif()

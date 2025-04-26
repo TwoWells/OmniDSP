@@ -17,6 +17,7 @@ FetchContent_Declare(
 set(HWY_ENABLE_TESTS OFF CACHE BOOL "" FORCE) # Don't build Highway's own tests
 # Fetch, configure, build (if necessary), and make Highway targets available
 FetchContent_MakeAvailable(highway)
+
 # Mark Highway includes as SYSTEM to suppress warnings from its headers
 # FetchContent_MakeAvailable doesn't directly support the SYSTEM keyword like add_subdirectory,
 # so we need to set the property on the directory afterwards if desired.

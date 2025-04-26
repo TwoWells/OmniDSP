@@ -4,10 +4,11 @@
 # build configurations like enabling Python bindings, setting the library type, and toggling debug
 # features.
 #
-# Variables Set: - OMNIDSP_BUILD_PYTHON_BINDINGS (BOOL): Controls Python binding build. Default:
-# OFF. - BUILD_SHARED_LIBS (BOOL): Controls shared/static library build. Default: ON. -
-# OMNIDSP_ENABLE_MKL_DEBUG_LOGS (BOOL): Enables MKL backend debug logs. Default: OFF. -
-# OMNIDSP_ENABLE_CQT_WARNINGS (BOOL): Enables CQT Nk clamping warnings. Default: OFF.
+# Variables Set:
+#   - OMNIDSP_BUILD_PYTHON_BINDINGS (BOOL): Controls Python binding build. Default: OFF.
+#   - BUILD_SHARED_LIBS (BOOL): Controls shared/static library build. Default: ON.
+#   - OMNIDSP_ENABLE_MKL_DEBUG_LOGS (BOOL): Enables MKL backend debug logs. Default: OFF.
+#   - OMNIDSP_ENABLE_CQT_WARNINGS (BOOL): Enables CQT Nk clamping warnings. Default: OFF.
 # ===========================
 
 # Option to control whether Python bindings are built

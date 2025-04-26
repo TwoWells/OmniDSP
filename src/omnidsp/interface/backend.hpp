@@ -16,11 +16,11 @@
 #include <vector>
 
 // Include core library types and specifications
-#include "OmniDSP/convolution.h"  // Includes ConvolutionType
-#include "OmniDSP/core_types.h"  // Includes Status, Backend, OmniExpected, F32, C32, F64, C64, Vec aliases etc.
-#include "OmniDSP/filter.h"  // Includes FIRFilterSpec, IIRFilterSpec, SecondOrderSection
-#include "OmniDSP/resample.h"  // Includes ResampleSpec
-#include "OmniDSP/window.h"    // Includes WindowSpec, WindowType
+#include "OmniDSP/convolution.hpp"  // Includes ConvolutionType
+#include "OmniDSP/core_types.hpp"  // Includes Status, Backend, OmniExpected, F32, C32, F64, C64, Vec aliases etc.
+#include "OmniDSP/filter.hpp"  // Includes FIRFilterSpec, IIRFilterSpec, SecondOrderSection
+#include "OmniDSP/resample.hpp"  // Includes ResampleSpec
+#include "OmniDSP/window.hpp"    // Includes WindowSpec, WindowType
 
 // Forward declare public Plan classes from the OmniDSP namespace
 namespace OmniDSP {
@@ -47,7 +47,7 @@ namespace OmniDSP {
   namespace backend {
 
     // Forward declare the main backend implementation base class
-    class AbstractBackend;  // Renamed from OmniDSPImpl
+    class AbstractBackend;
 
     //--------------------------------------------------------------------------
     // Plan Implementation Interfaces (Abstract Base Classes)

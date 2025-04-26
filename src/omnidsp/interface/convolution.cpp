@@ -4,18 +4,10 @@
  * forwarding calls to backend implementations.
  */
 
-#include "OmniDSP/convolution.h"  // Corresponding header
+#include "OmniDSP/convolution.hpp"  // Corresponding header
 
-// Include Pimpl interface definition (defined below or in a separate backend.h)
-// #include "backend/backend.h" // May contain base class definitions if
-// separated
-
-// Include concrete backend implementation headers (Placeholders - needed for
-// unique_ptr deletion) #include "backend/stub/stub_convolution.h" #ifdef
-// USE_ACCELERATE #include "backend/accelerate/accelerate_convolution.h" #endif
-// #ifdef USE_ONEMKL
-// #include "backend/onemkl/onemkl_convolution.h"
-// #endif
+// Include Pimpl interface definition
+// #include "backend/backend.hpp"
 
 #include <memory>  // For std::unique_ptr
 #include <numeric>  // For std::max, std::min (potentially used in get_output_length)

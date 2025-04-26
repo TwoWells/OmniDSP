@@ -16,8 +16,8 @@
 #include <type_traits>  // For std::is_same_v
 #include <vector>
 
-#include "OmniDSP/core_types.h"  // For Status, RealT etc.
-#include "backend.h"  // Accelerate backend declarations (including AccelerateOmniDSPImpl)
+#include "OmniDSP/core_types.hpp"  // For Status, RealT etc.
+#include "backend.hpp"  // Accelerate backend declarations (including AccelerateOmniDSPImpl)
 
 // Include Boost Bessel function for Kaiser window
 #include <boost/math/special_functions/bessel.hpp>

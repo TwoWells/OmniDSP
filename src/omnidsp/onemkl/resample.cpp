@@ -14,7 +14,7 @@
 #include <stdexcept>  // For std::runtime_error, std::invalid_argument
 #include <vector>
 
-#include "backend.h"  // oneMKL backend declarations (includes OneMKLResamplePlanImpl declaration)
+#include "backend.hpp"  // oneMKL backend declarations (includes OneMKLResamplePlanImpl declaration)
 
 // Include Intel IPP signal processing header
 #include <ipps.h>
