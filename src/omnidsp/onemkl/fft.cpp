@@ -65,8 +65,8 @@ namespace OmniDSP {
       }
 
       // Determine precision based on the complex value type
-      using ValueType = typename T::value_type;
-      DFTI_CONFIG_VALUE precision = get_dfti_precision<ValueType>();
+      using RealType = typename T::value_type;
+      DFTI_CONFIG_VALUE precision = get_dfti_precision<RealType>();
       if (precision == DFTI_PRECISION_ERROR) {
         throw std::invalid_argument(
             "Unsupported precision type for oneMKL FFTPlan.");

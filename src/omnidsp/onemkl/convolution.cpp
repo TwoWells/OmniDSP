@@ -68,11 +68,11 @@ namespace OmniDSP {
       constexpr bool is_complex_v = is_complex<T>::value;
 
       template <typename T>
-      struct ValueType {
+      struct RealType {
         using type = T;
       };
       template <typename T>
-      struct ValueType<std::complex<T>> {
+      struct RealType<std::complex<T>> {
         using type = T;
       };
     }  // namespace Detail
@@ -220,7 +220,7 @@ namespace OmniDSP {
       std::vector<T> input_padded(current_fft_len, T{});
       std::copy(input.begin(), input.end(), input_padded.begin());
 
-      using Complex = ComplexT<typename Detail::ValueType<T>::type>;
+      using Complex = ComplexT<typename Detail::RealType<T>::type>;
       std::vector<Complex> input_fft(current_fft_len);
       std::vector<Complex> product_fft(current_fft_len);
       std::vector<T> result_full_padded(current_fft_len);
@@ -239,7 +239,7 @@ namespace OmniDSP {
 
       // --- Multiply FFTs (Input * Kernel) using MKL VML ---
       product_fft.resize(input_fft.size());
-      using Value = typename Detail::ValueType<T>::type;
+      using Value = typename Detail::RealType<T>::type;
       MKL_LONG n_mul = static_cast<MKL_LONG>(
           product_fft.size());  // Number of complex elements to multiply
 
@@ -412,7 +412,7 @@ namespace OmniDSP {
       padded_template.resize(fft_length_, T{});  // Zero-pad
 
       Status fft_status = Status::Success;
-      using Complex = ComplexT<typename Detail::ValueType<T>::type>;
+      using Complex = ComplexT<typename Detail::RealType<T>::type>;
       std::vector<Complex> temp_template_fft;  // Temporary storage
 
       if constexpr (Detail::is_complex_v<T>) {
@@ -436,7 +436,7 @@ namespace OmniDSP {
 
       // --- CONJUGATE the result and store in template_fft_conj_ ---
       template_fft_conj_ = temp_template_fft;  // Copy
-      using Value = typename Detail::ValueType<T>::type;
+      using Value = typename Detail::RealType<T>::type;
       MKL_LONG n_conj = static_cast<MKL_LONG>(template_fft_conj_.size());
       if constexpr (std::is_same_v<Value, float>) {
         vcConj(
@@ -506,7 +506,7 @@ namespace OmniDSP {
       std::vector<T> input_padded(current_fft_len, T{});
       std::copy(input.begin(), input.end(), input_padded.begin());
 
-      using Complex = ComplexT<typename Detail::ValueType<T>::type>;
+      using Complex = ComplexT<typename Detail::RealType<T>::type>;
       std::vector<Complex> input_fft(current_fft_len);
       std::vector<Complex> product_fft(current_fft_len);
       std::vector<T> result_full_padded(current_fft_len);
@@ -525,7 +525,7 @@ namespace OmniDSP {
 
       // --- Multiply FFTs (Input * Conjugated(Template)) ---
       product_fft.resize(input_fft.size());
-      using Value = typename Detail::ValueType<T>::type;
+      using Value = typename Detail::RealType<T>::type;
       MKL_LONG n_mul = static_cast<MKL_LONG>(product_fft.size());
       if constexpr (std::is_same_v<Value, float>) {
         vcMul(

@@ -1,5 +1,5 @@
 /**
- * @file core_types.h
+ * @file core_types.hpp
  * @brief Defines core data types, enums, and utilities used throughout OmniDSP.
  * @details This header establishes fundamental building blocks like type
  * aliases for real and complex numbers, status codes for operations, and
@@ -14,6 +14,7 @@
 #include <cstddef>      // For size_t
 #include <expected>     // Include for std::expected (requires C++23)
 #include <string_view>  // For get_status_string
+#include <utility>      // For std::unexpect
 #include <vector>
 
 namespace OmniDSP {
@@ -156,6 +157,21 @@ namespace OmniDSP {
   using OmniExpected = std::expected<T, Status>;
 
   /**
+   * @brief Macro to propagate an error from an OmniExpected<A> expression
+   * as an OmniExpected<B> error return from the current function.
+   * @details Checks if 'expr' holds an error. If it does, it returns an
+   * OmniExpected<ResultValueT> containing that error.
+   * @param ResultValueT The expected *value* type of the *current function's*
+   * return type.
+   * @param expr The OmniExpected<A> expression to check.
+   */
+#define OMNI_PROPAGATE_ERROR(ResultValueT, expr)                               \
+  if (!(expr)) {                                                               \
+    /* Explicitly construct the target OmniExpected type with the error */     \
+    return OmniExpected<ResultValueT>(std::unexpect, (expr).error());          \
+  }
+
+  /**
    * @brief Specifies the backend implementation library to use for
    * computations.
    * @details Allows selecting between different optimized libraries or a
@@ -191,7 +207,7 @@ namespace OmniDSP {
   // Could contain small helper functions or constants used across modules,
   // if they don't fit better elsewhere.
   namespace Detail {
-    // Example: Type trait to check if a type is std::complex
+    // Type trait to check if a type is std::complex
     template <typename T>
     struct is_complex : std::false_type {};
     template <typename T>
@@ -199,17 +215,33 @@ namespace OmniDSP {
     template <typename T>
     constexpr bool is_complex_v = is_complex<T>::value;
 
-    // Example: Get underlying real type from complex or real
+    // Get underlying real type from complex or real
     template <typename T>
-    struct ValueType {
+    struct RealType {
       using type = T;
     };
     template <typename T>
-    struct ValueType<std::complex<T>> {
+    struct RealType<std::complex<T>> {
       using type = T;
     };
     template <typename T>
-    using UnderlyingRealT = typename ValueType<T>::type;
+
+    using GetRealT = typename RealType<T>::type;
+
+    template <typename T>
+    struct ComplexType;
+    template <>
+    struct ComplexType<F32> {
+      using type = C32;
+    };
+    template <>
+    struct ComplexType<F64> {
+      using type = C64;
+    };
+
+    template <typename T>
+    using GetComplexT = typename ComplexType<GetRealT<T>>::type;
+
   }  // namespace Detail
 
 }  // namespace OmniDSP

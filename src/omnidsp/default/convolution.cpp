@@ -1,731 +1,888 @@
-/**
- * @file convolution.cpp (default)
- * @brief Implements Default backend ConvolutionPlanImpl and CorrelationPlanImpl
- * classes using standard C++ and FFT-based approach via DefaultFFTPlanImpl,
- * with Highway SIMD acceleration for frequency-domain multiplication and IFFT
- * scaling.
- * @details Provides portable implementations using FFT for
- * convolution/correlation, leveraging the Highway-accelerated Default FFT plans
- * and Highway for the element-wise complex multiplication and scaling steps.
- */
+#include "convolution.hpp"  // Plan class declarations for this backend
 
-// Define HWY_TARGET_INCLUDE before including Highway headers
-#ifndef HWY_TARGET_INCLUDE
-#define HWY_TARGET_INCLUDE                                                     \
-  "src/omnidsp/backend/default/convolution.cpp"  // Path to this file
-#endif
-
+// Include necessary standard library headers
 #include <algorithm>  // For std::reverse, std::copy, std::fill, std::max, std::min
-#include <cmath>      // For std::abs, std::log2, std::ceil
+#include <cassert>  // For assert
+#include <cmath>    // For std::log2, std::ceil, std::abs, std::conj
 #include <complex>
-#include <iostream>  // For debug/error messages
-#include <memory>    // For std::unique_ptr, std::make_unique
-#include <numeric>   // For std::max, std::min
-#include <span>
-#include <stdexcept>    // For std::runtime_error, std::invalid_argument
-#include <type_traits>  // For std::is_same_v
+#include <cstddef>  // For size_t
+#include <cstring>  // For std::memcpy
+#include <limits>   // For std::numeric_limits
+#include <memory>   // For std::unique_ptr, std::make_unique
+#include <span>     // For std::span
+#include <stdexcept>  // For std::runtime_error, std::invalid_argument, std::length_error
+#include <string>  // For std::string in exceptions
+#include <type_traits>  // For std::is_same_v, std::is_base_of_v, std::decay_t, std::remove_pointer_t
+#include <variant>  // Include for std::visit, std::holds_alternative, std::monostate, std::get_if
 #include <vector>
 
-#include "OmniDSP/core_types.hpp"  // For Status, ConvolutionMode etc.
-#include "backend.hpp"  // Corresponding header for Default backend declarations
-#include "hwy/contrib/complex/complex-inl.h"
-#include "hwy/contrib/math/math-inl.h"
-#include "hwy/foreach_target.h"
-#include "hwy/highway.h"
+// Include OmniDSP headers
+#include <OmniDSP/convolution.hpp>  // For ConvolutionType, ConvolutionMethod
+#include <OmniDSP/core_types.hpp>   // For Status, F32, C32, etc., Detail::*
 
-// Define complex types for brevity used internally
-using float_c = OmniDSP::ComplexT<float>;
-using double_c = OmniDSP::ComplexT<double>;
+#include "../interface/backend.hpp"  // For AbstractBackend and FFTPlanImpl base classes (FFTPlanImpl, RFFTPlanImpl)
 
-// Highway namespace alias within the compilation unit for the active target
-HWY_BEFORE_NAMESPACE();
-namespace OmniDSP {
-  namespace backend {
-    namespace HWY_NAMESPACE {  // Start Highway's target-specific namespace
+namespace OmniDSP::backend {
 
-      namespace hn
-          = hwy;  // Alias for Highway types/functions within this namespace
+  //--------------------------------------------------------------------------
+  // Helper Functions (Standard C++) - Keep from original file
+  //--------------------------------------------------------------------------
+  namespace convolution_detail {  // Internal namespace
 
-      //--------------------------------------------------------------------------
-      // Highway-Accelerated Operations
-      //--------------------------------------------------------------------------
-
-      /**
-       * @brief Performs element-wise complex multiplication using Highway SIMD.
-       * @details Computes `out[i] = a[i] * b[i]` for complex vectors a and b.
-       * This function lives inside the HWY_NAMESPACE.
-       * @tparam T The underlying real floating-point type (float or double).
-       * @param a_ptr Pointer to the first complex input array.
-       * @param b_ptr Pointer to the second complex input array.
-       * @param out_ptr Pointer to the complex output array.
-       * @param size The number of complex elements in the arrays.
-       */
-      template <typename T>
-      HWY_NOINLINE void ComplexMultiply_HWY(
-          const std::complex<T>* HWY_RESTRICT a_ptr,
-          const std::complex<T>* HWY_RESTRICT b_ptr,
-          std::complex<T>* HWY_RESTRICT out_ptr,
-          size_t size)
-      {
-        const hn::ScalableTag<T> d;
-        using CplxV = hn::Vec2<decltype(d)>;  // Represents complex vector
-
-        size_t i = 0;
-        // Vectorized loop
-        for (; i + hn::Lanes(d) <= size; i += hn::Lanes(d)) {
-          const CplxV a_vec
-              = hn::LoadInterleaved2(d, reinterpret_cast<const T*>(a_ptr + i));
-          const CplxV b_vec
-              = hn::LoadInterleaved2(d, reinterpret_cast<const T*>(b_ptr + i));
-          const CplxV result_vec = hn::ComplexMul(a_vec, b_vec);
-          hn::StoreInterleaved2(
-              result_vec, d, reinterpret_cast<T*>(out_ptr + i));
-        }
-        // Scalar remainder loop
-        for (; i < size; ++i) {
-          out_ptr[i] = a_ptr[i] * b_ptr[i];
-        }
-      }
-
-      /**
-       * @brief Scales elements of an array by a scalar factor using Highway
-       * SIMD.
-       * @details Computes `data[i] *= scale` in-place. Handles both real and
-       * complex types. This function lives inside the HWY_NAMESPACE.
-       * @tparam T Data type (float, double, std::complex<float>,
-       * std::complex<double>).
-       * @param data_ptr Pointer to the data array (modified in-place).
-       * @param size The number of elements in the array.
-       * @param scale The scalar factor to multiply by.
-       */
-      template <typename T>
-      HWY_NOINLINE void ScaleArray_HWY(
-          T* HWY_RESTRICT data_ptr,
-          size_t size,
-          typename Detail::UnderlyingReal<T> scale)
-      {
-        using RealT = typename Detail::UnderlyingReal<T>;
-        const hn::ScalableTag<RealT> d;
-        const auto vscale = hn::Set(d, scale);
-
-        size_t i = 0;
-        if constexpr (Detail::is_complex_v<T>) {
-          using CplxV = hn::Vec2<decltype(d)>;
-          // Vectorized loop for complex
-          for (; i + hn::Lanes(d) <= size; i += hn::Lanes(d)) {
-            CplxV data_vec = hn::LoadInterleaved2(
-                d, reinterpret_cast<RealT*>(data_ptr + i));
-            // Scale both real and imaginary parts by the real scalar
-            data_vec.val[0] = hn::Mul(data_vec.val[0], vscale);  // Real part
-            data_vec.val[1]
-                = hn::Mul(data_vec.val[1], vscale);  // Imaginary part
-            hn::StoreInterleaved2(
-                data_vec, d, reinterpret_cast<RealT*>(data_ptr + i));
-          }
-        }
-        else {
-          using V = hn::Vec<decltype(d)>;
-          // Vectorized loop for real
-          for (; i + hn::Lanes(d) <= size; i += hn::Lanes(d)) {
-            V data_vec = hn::LoadU(
-                d, data_ptr + i);  // Use LoadU for potentially unaligned
-            data_vec = hn::Mul(data_vec, vscale);
-            hn::StoreU(data_vec, d, data_ptr + i);  // Use StoreU
-          }
-        }
-
-        // Scalar remainder loop
-        for (; i < size; ++i) {
-          data_ptr[i] *= scale;
-        }
-      }
-
-      // Explicit instantiations for exported functions
-      void ComplexMultiply_F32_HWY(
-          const float_c* a, const float_c* b, float_c* out, size_t size)
-      {
-        ComplexMultiply_HWY<float>(a, b, out, size);
-      }
-      void ComplexMultiply_F64_HWY(
-          const double_c* a, const double_c* b, double_c* out, size_t size)
-      {
-        ComplexMultiply_HWY<double>(a, b, out, size);
-      }
-      void ScaleReal_F32_HWY(float* data, size_t size, float scale)
-      {
-        ScaleArray_HWY<float>(data, size, scale);
-      }
-      void ScaleReal_F64_HWY(double* data, size_t size, double scale)
-      {
-        ScaleArray_HWY<double>(data, size, scale);
-      }
-      void ScaleComplex_F32_HWY(float_c* data, size_t size, float scale)
-      {
-        ScaleArray_HWY<float_c>(data, size, scale);
-      }
-      void ScaleComplex_F64_HWY(double_c* data, size_t size, double scale)
-      {
-        ScaleArray_HWY<double_c>(data, size, scale);
-      }
-
-    }  // namespace HWY_NAMESPACE
-  }  // namespace backend
-}  // namespace OmniDSP
-HWY_AFTER_NAMESPACE();
-
-//==========================================================================
-// Exported Wrapper Functions & Dispatch Logic (Compiled Once)
-//==========================================================================
-/**
- * @brief This block is compiled only once, regardless of the number of Highway
- * targets.
- * @details Contains exported functions for dynamic dispatch and helpers.
- * Headers needed by this block must be included again within the #if HWY_ONCE
- * scope.
- */
-#if HWY_ONCE
-
-#include <complex>
-#include <span>
-#include <stdexcept>  // For Plan constructors
-#include <vector>
-
-#include "OmniDSP/core_types.h"
-#include "backend.h"               // Include again for HWY_ONCE block
-#include "hwy/dynamic_dispatch.h"  // Include again for HWY_ONCE block
-
-namespace OmniDSP {
-  namespace backend {
-
-    // Define types for brevity
-    using float_c = OmniDSP::ComplexT<float>;
-    using double_c = OmniDSP::ComplexT<double>;
-
-    // --- Exported Wrappers for Complex Multiplication ---
-    void MultiplyComplex_F32_Export(
-        const float_c* a, const float_c* b, float_c* out, size_t size)
-    {
-      HWY_NAMESPACE::ComplexMultiply_F32_HWY(a, b, out, size);
-    }
-    HWY_EXPORT(MultiplyComplex_F32_Export);
-    void MultiplyComplex_F64_Export(
-        const double_c* a, const double_c* b, double_c* out, size_t size)
-    {
-      HWY_NAMESPACE::ComplexMultiply_F64_HWY(a, b, out, size);
-    }
-    HWY_EXPORT(MultiplyComplex_F64_Export);
-
-    // --- Exported Wrappers for Scaling ---
-    void ScaleReal_F32_Export(float* data, size_t size, float scale)
-    {
-      HWY_NAMESPACE::ScaleReal_F32_HWY(data, size, scale);
-    }
-    HWY_EXPORT(ScaleReal_F32_Export);
-    void ScaleReal_F64_Export(double* data, size_t size, double scale)
-    {
-      HWY_NAMESPACE::ScaleReal_F64_HWY(data, size, scale);
-    }
-    HWY_EXPORT(ScaleReal_F64_Export);
-    void ScaleComplex_F32_Export(float_c* data, size_t size, float scale)
-    {
-      HWY_NAMESPACE::ScaleComplex_F32_HWY(data, size, scale);
-    }
-    HWY_EXPORT(ScaleComplex_F32_Export);
-    void ScaleComplex_F64_Export(double_c* data, size_t size, double scale)
-    {
-      HWY_NAMESPACE::ScaleComplex_F64_HWY(data, size, scale);
-    }
-    HWY_EXPORT(ScaleComplex_F64_Export);
-
-    // --- Dispatcher Functions for Complex Multiplication ---
-    Status DispatchMultiplyComplex(
-        std::span<const float_c> a,
-        std::span<const float_c> b,
-        std::span<float_c> out)
-    {
-      if (a.size() != b.size() || a.size() != out.size())
-        return Status::SizeMismatch;
-      if (a.empty()) return Status::Success;
-      auto func = HWY_DYNAMIC_DISPATCH(MultiplyComplex_F32_Export);
-      func(a.data(), b.data(), out.data(), a.size());
-      return Status::Success;
-    }
-    Status DispatchMultiplyComplex(
-        std::span<const double_c> a,
-        std::span<const double_c> b,
-        std::span<double_c> out)
-    {
-      if (a.size() != b.size() || a.size() != out.size())
-        return Status::SizeMismatch;
-      if (a.empty()) return Status::Success;
-      auto func = HWY_DYNAMIC_DISPATCH(MultiplyComplex_F64_Export);
-      func(a.data(), b.data(), out.data(), a.size());
-      return Status::Success;
-    }
-
-    // --- Dispatcher Functions for Scaling ---
-    Status DispatchScale(std::span<float> data, float scale)
-    {
-      if (data.empty()) return Status::Success;
-      auto func = HWY_DYNAMIC_DISPATCH(ScaleReal_F32_Export);
-      func(data.data(), data.size(), scale);
-      return Status::Success;
-    }
-    Status DispatchScale(std::span<double> data, double scale)
-    {
-      if (data.empty()) return Status::Success;
-      auto func = HWY_DYNAMIC_DISPATCH(ScaleReal_F64_Export);
-      func(data.data(), data.size(), scale);
-      return Status::Success;
-    }
-    Status DispatchScale(std::span<float_c> data, float scale)
-    {
-      if (data.empty()) return Status::Success;
-      auto func = HWY_DYNAMIC_DISPATCH(ScaleComplex_F32_Export);
-      func(data.data(), data.size(), scale);
-      return Status::Success;
-    }
-    Status DispatchScale(std::span<double_c> data, double scale)
-    {
-      if (data.empty()) return Status::Success;
-      auto func = HWY_DYNAMIC_DISPATCH(ScaleComplex_F64_Export);
-      func(data.data(), data.size(), scale);
-      return Status::Success;
-    }
-
-    //--------------------------------------------------------------------------
-    // Helper Functions (Standard C++)
-    //--------------------------------------------------------------------------
+    // Calculates the next power of two >= n.
+    // Returns 0 if n is 0 or if the next power of two would overflow size_t.
     inline size_t next_power_of_two(size_t n)
     {
-      if (n == 0) return 1;
-      if ((n > 0) && ((n & (n - 1)) == 0)) return n;
-      if (n > (SIZE_MAX / 2)) return SIZE_MAX;
-      size_t power
-          = static_cast<size_t>(std::ceil(std::log2(static_cast<double>(n))));
-      size_t result = static_cast<size_t>(1) << power;
-      if (result == 0 && power > 0) return SIZE_MAX;
-      return result;
+      if (n == 0) return 0;  // Return 0 for input 0
+      // Check if n is already a power of 2
+      if ((n > 0) && ((n & (n - 1)) == 0)) {
+        return n;
+      }
+      // Check for potential overflow before calculation
+      // If n is already >= half of max size_t, the next power of 2 might
+      // overflow
+      if (n > (std::numeric_limits<size_t>::max() / 2U)) {
+        // Check if n itself is the max power of 2 representable
+        if (n == (~(std::numeric_limits<size_t>::max() >> 1))) return n;
+        return 0;  // Indicate overflow otherwise
+      }
+      // Efficient bit manipulation way to find next power of 2
+      size_t power = 1;
+      while (power < n) {
+        // Check for overflow during shift
+        if (power > (std::numeric_limits<size_t>::max() / 2U)) return 0;
+        power <<= 1;
+      }
+      return power;
     }
-    namespace Detail { /* Type traits helpers... */
-      template <typename T>
-      struct is_complex : std::false_type {};
-      template <typename T>
-      struct is_complex<std::complex<T>> : std::true_type {};
-      template <typename T>
-      constexpr bool is_complex_v = is_complex<T>::value;
-      template <typename T>
-      struct ValueType {
-        using type = T;
-      };
-      template <typename T>
-      struct ValueType<std::complex<T>> {
-        using type = T;
-      };
-      template <typename T>
-      using UnderlyingReal = typename ValueType<T>::type;
-      template <typename T>
-      using CorrespondingComplex = ComplexT<UnderlyingReal<T>>;
-    }  // namespace Detail
 
-    //--------------------------------------------------------------------------
-    // DefaultConvolutionPlanImpl Method Definitions (FFT-based)
-    //--------------------------------------------------------------------------
-    template <typename T>
-    DefaultConvolutionPlanImpl<T>::DefaultConvolutionPlanImpl(
-        const std::vector<T>& kernel, ConvolutionMode mode)
-        : mode_(mode), kernel_length_(kernel.size())
+    // Helper for element-wise complex multiplication (Standard C++)
+    template <typename T_Complex>
+    void complex_multiply(
+        std::span<const T_Complex> a,  // Expects const span
+        std::span<const T_Complex> b,  // Expects const span
+        std::span<T_Complex> out)      // Expects non-const span
     {
-      // Constructor logic remains the same (create FFT plan, FFT kernel)
-      if (kernel_length_ == 0)
-        throw std::invalid_argument("Convolution kernel cannot be empty.");
-      fft_length_ = next_power_of_two(kernel_length_ * 2);
-      if (fft_length_ == SIZE_MAX)
-        throw std::length_error("FFT length exceeds limits.");
-      if constexpr (!Detail::is_complex_v<T>) {
-        if (fft_length_ < 2 && fft_length_ != 0) fft_length_ = 2;
+      assert(
+          a.size() == b.size() && a.size() == out.size()
+          && "Span sizes must match for complex_multiply");
+      size_t n = a.size();
+      for (size_t i = 0; i < n; ++i) {
+        out[i] = a[i] * b[i];
       }
-      try {
-        if constexpr (Detail::is_complex_v<T>)
-          internal_fft_plan_
-              = std::make_unique<DefaultFFTPlanImpl<T>>(fft_length_);
-        else
-          internal_rfft_plan_
-              = std::make_unique<DefaultRFFTPlanImpl<T>>(fft_length_);
-      }
-      catch (const std::exception& e) {
-        throw std::runtime_error(
-            "Failed internal FFT plan creation: " + std::string(e.what()));
-      }
-      std::vector<T> padded_kernel = kernel;
-      std::reverse(padded_kernel.begin(), padded_kernel.end());
-      padded_kernel.resize(fft_length_, T{});
-      Status fft_status;
-      using ComplexOutputType = Detail::CorrespondingComplex<T>;
-      std::vector<ComplexOutputType> temp_fft_output;
-      if constexpr (Detail::is_complex_v<T>) {
-        kernel_fft_.resize(fft_length_);
-        temp_fft_output.resize(fft_length_);
-        fft_status = internal_fft_plan_->fft(padded_kernel, temp_fft_output);
-      }
-      else {
-        kernel_fft_.resize(fft_length_ / 2 + 1);
-        temp_fft_output.resize(fft_length_ / 2 + 1);
-        fft_status = internal_rfft_plan_->rfft(padded_kernel, temp_fft_output);
-      }
-      if (fft_status != Status::Success)
-        throw std::runtime_error(
-            "Failed FFT of kernel: "
-            + std::string(get_status_string(fft_status)));
-      kernel_fft_ = std::move(temp_fft_output);
     }
-    template <typename T>
-    DefaultConvolutionPlanImpl<T>::~DefaultConvolutionPlanImpl() = default;
 
-    template <typename T>
-    Status DefaultConvolutionPlanImpl<T>::execute(
-        std::span<const T> input, std::span<T> output) const
+    // Helper for element-wise complex multiplication with conjugate (Standard
+    // C++) out = a * conj(b)
+    template <typename T_Complex>
+    void complex_multiply_conj(
+        std::span<const T_Complex> a,  // Expects const span
+        std::span<const T_Complex> b,  // Expects const span
+        std::span<T_Complex> out)      // Expects non-const span
     {
-      if constexpr (Detail::is_complex_v<T>) {
-        if (!internal_fft_plan_) return Status::InvalidOperation;
+      assert(
+          a.size() == b.size() && a.size() == out.size()
+          && "Span sizes must match for complex_multiply_conj");
+      size_t n = a.size();
+      for (size_t i = 0; i < n; ++i) {
+        out[i] = a[i] * std::conj(b[i]);
       }
-      else {
-        if (!internal_rfft_plan_) return Status::InvalidOperation;
+    }
+
+  }  // namespace convolution_detail
+
+  //--------------------------------------------------------------------------
+  // DefaultConvolutionPlanImpl Method Definitions (FFT-based, Standard C++)
+  //--------------------------------------------------------------------------
+
+  template <typename T>  // T can be F32, F64, C32, C64
+  DefaultConvolutionPlanImpl<T>::DefaultConvolutionPlanImpl(
+      FFTPlanImplVariant&& fft_plan_variant,  // Accept the FFT plan variant
+      const std::vector<T>& kernel,
+      ConvolutionType type,
+      ConvolutionMethod method)
+      : type_(type),
+        method_(method),
+        original_kernel_(kernel),
+        kernel_length_(kernel.size()),
+        fft_length_(0),  // Will be set below
+        fft_plan_impl_variant_(
+            std::move(fft_plan_variant))  // Store the passed-in plan
+  {
+    if (kernel_length_ == 0) {
+      throw std::invalid_argument("Convolution kernel cannot be empty.");
+    }
+
+    // Define complex type
+    using T_Complex = Detail::GetComplexT<T>;
+    // Define real type
+    using T_Real = Detail::GetRealT<T>;
+    // Define the specific plan pointer types we expect in the variant
+    using FFTPlanPtr = std::unique_ptr<FFTPlanImpl<T_Complex>>;
+    using RFFTPlanPtr = std::unique_ptr<RFFTPlanImpl<T_Real>>;
+
+    Status fft_status = Status::Failure;
+    size_t kernel_fft_size = 0;
+
+    // Prepare the kernel for FFT: Pad and Reverse
+    std::vector<T> padded_kernel = original_kernel_;
+    std::reverse(
+        padded_kernel.begin(), padded_kernel.end());  // Reverse for convolution
+
+    // --- Use if constexpr to separate logic for Real and Complex T ---
+    if constexpr (Detail::is_complex_v<T>) {
+      // --- T is Complex (C32, C64) ---
+      // Expect FFTPlanPtr in the variant
+      const auto* fft_plan_ptr_ptr
+          = std::get_if<FFTPlanPtr>(&fft_plan_impl_variant_);
+      if (!fft_plan_ptr_ptr || !*fft_plan_ptr_ptr) {
+        throw std::invalid_argument(
+            "Incorrect FFT plan type provided for complex convolution "
+            "(expected FFTPlanImpl).");
+      }
+      auto& plan_impl_ptr = *fft_plan_ptr_ptr;  // Get the unique_ptr
+
+      fft_length_ = plan_impl_ptr->get_length();
+      if (fft_length_ < kernel_length_) {
+        throw std::invalid_argument(
+            "Provided FFT plan length is too small for the kernel.");
       }
 
-      size_t input_len = input.size();
-      size_t output_len_expected = get_output_length(input_len);
-      size_t full_conv_len = input_len + kernel_length_ - 1;
+      padded_kernel.resize(fft_length_, T{});  // Pad with zeros
 
-      if (output.size() < output_len_expected) return Status::SizeMismatch;
+      kernel_fft_size = fft_length_;
+      kernel_fft_.resize(kernel_fft_size);
+      const T_Complex* kernel_input_ptr = reinterpret_cast<const T_Complex*>(
+          padded_kernel.data());  // T is T_Complex
+      std::span<const T_Complex> kernel_input_span(
+          kernel_input_ptr, fft_length_);
+      T_Complex* kernel_output_ptr = kernel_fft_.data();
+      std::span<T_Complex> kernel_output_span(
+          kernel_output_ptr, kernel_fft_size);
+      fft_status = plan_impl_ptr->fft(kernel_input_span, kernel_output_span);
+    }
+    else {
+      // --- T is Real (F32, F64) ---
+      // Expect RFFTPlanPtr in the variant
+      const auto* rfft_plan_ptr_ptr
+          = std::get_if<RFFTPlanPtr>(&fft_plan_impl_variant_);
+      if (!rfft_plan_ptr_ptr || !*rfft_plan_ptr_ptr) {
+        throw std::invalid_argument(
+            "Incorrect FFT plan type provided for real convolution (expected "
+            "RFFTPlanImpl).");
+      }
+      auto& plan_impl_ptr = *rfft_plan_ptr_ptr;  // Get the unique_ptr
+
+      fft_length_ = plan_impl_ptr->get_length();
+      if (fft_length_ < 2) {
+        throw std::runtime_error("Internal RFFT plan length must be >= 2.");
+      }
+      if (fft_length_ < kernel_length_) {
+        throw std::invalid_argument(
+            "Provided FFT plan length is too small for the kernel.");
+      }
+
+      padded_kernel.resize(fft_length_, T{});  // Pad with zeros
+
+      kernel_fft_size = fft_length_ / 2 + 1;
+      kernel_fft_.resize(kernel_fft_size);
+      const T_Real* kernel_input_ptr = padded_kernel.data();  // T is T_Real
+      std::span<const T_Real> kernel_input_span(kernel_input_ptr, fft_length_);
+      T_Complex* kernel_output_ptr = kernel_fft_.data();
+      std::span<T_Complex> kernel_output_span(
+          kernel_output_ptr, kernel_fft_size);
+      fft_status = plan_impl_ptr->rfft(kernel_input_span, kernel_output_span);
+    }
+
+    if (fft_status != Status::Success) {
+      throw std::runtime_error(
+          "Failed FFT of convolution kernel. Status: "
+          + std::to_string(static_cast<int>(fft_status)));
+    }
+
+    // Allocate temporary buffers used during execute
+    try {
+      input_padded_ = std::make_unique<T[]>(fft_length_);
+      input_fft_ = std::make_unique<T_Complex[]>(
+          kernel_fft_size);  // Use calculated kernel_fft_size
+      product_fft_ = std::make_unique<T_Complex[]>(
+          kernel_fft_size);  // Use calculated kernel_fft_size
+      result_ifft_ = std::make_unique<T[]>(fft_length_);
+    }
+    catch (const std::bad_alloc& e) {
+      throw std::runtime_error(
+          "Failed to allocate temporary buffers for convolution plan: "
+          + std::string(e.what()));
+    }
+    if (!input_padded_ || !input_fft_ || !product_fft_ || !result_ifft_) {
+      throw std::runtime_error(
+          "Failed to allocate temporary buffers for convolution plan "
+          "(unexpected).");
+    }
+  }
+
+  // Execute method
+  template <typename T>
+  Status DefaultConvolutionPlanImpl<T>::execute(
+      std::span<const T> input, std::span<T> output) const
+  {
+    const size_t signal_len = input.size();
+    const size_t output_len_expected = get_output_length(signal_len);
+
+    // --- Input Validation ---
+    if (output.size() < output_len_expected) {
+      return Status::SizeMismatch;
+    }
+
+    // Define complex/real types and plan pointer types
+    using T_Complex = Detail::GetComplexT<T>;
+    using T_Real = Detail::GetRealT<T>;
+    using FFTPlanPtr = std::unique_ptr<FFTPlanImpl<T_Complex>>;
+    using RFFTPlanPtr = std::unique_ptr<RFFTPlanImpl<T_Real>>;
+
+    // Check for empty input/kernel early
+    if (signal_len == 0 || kernel_length_ == 0) {
       std::fill(output.begin(), output.begin() + output_len_expected, T{});
-      if (input_len == 0 || kernel_length_ == 0) return Status::Success;
-      if (fft_length_ < full_conv_len) { /* Warning */
-      }
-      if (input_len > fft_length_) return Status::InvalidArgument;
-
-      std::vector<T> input_padded(fft_length_, T{});
-      std::copy(input.begin(), input.end(), input_padded.begin());
-
-      using ComplexType = Detail::CorrespondingComplex<T>;
-      std::vector<ComplexType> input_fft;
-      std::vector<ComplexType> product_fft;
-      std::vector<T> result_full_padded(fft_length_);
-
-      Status status;
-      if constexpr (Detail::is_complex_v<T>) {
-        input_fft.resize(fft_length_);
-        status = internal_fft_plan_->fft(input_padded, input_fft);
-      }
-      else {
-        input_fft.resize(fft_length_ / 2 + 1);
-        status = internal_rfft_plan_->rfft(input_padded, input_fft);
-      }
-      if (status != Status::Success) return status;
-
-      // Multiply FFTs using Highway Dispatch
-      product_fft.resize(input_fft.size());
-      status = DispatchMultiplyComplex(
-          std::span<const ComplexType>(input_fft),
-          std::span<const ComplexType>(kernel_fft_),
-          std::span<ComplexType>(product_fft));
-      if (status != Status::Success) return status;
-
-      // Inverse FFT
-      if constexpr (Detail::is_complex_v<T>) {
-        status = internal_fft_plan_->ifft(product_fft, result_full_padded);
-      }
-      else {
-        status = internal_rfft_plan_->irfft(product_fft, result_full_padded);
-      }
-      if (status != Status::Success) return status;
-
-      // Apply IFFT Scaling (1/N) using Highway Dispatch
-      if (fft_length_ > 0) {
-        using RealType = Detail::UnderlyingReal<T>;
-        RealType scale
-            = static_cast<RealType>(1.0) / static_cast<RealType>(fft_length_);
-        // Dispatch based on whether result_full_padded is Real or Complex
-        status = DispatchScale(std::span<T>(result_full_padded), scale);
-        if (status != Status::Success) {
-          std::cerr
-              << "DefaultConvolutionPlanImpl::execute failed during Highway "
-                 "scaling."
-              << std::endl;
-          return status;
-        }
-      }
-
-      // Extract Correct Output based on Mode (Scalar logic)
-      size_t full_start_idx = 0;
-      size_t count = output_len_expected;
-      switch (mode_) { /* Set full_start_idx based on mode */
-        case ConvolutionMode::Full:
-          full_start_idx = 0;
-          break;
-        case ConvolutionMode::Same:
-          full_start_idx = (kernel_length_ - 1) / 2;
-          break;
-        case ConvolutionMode::Valid:
-          full_start_idx = kernel_length_ - 1;
-          break;
-      }
-      size_t copy_end_idx = full_start_idx + count;
-      if (copy_end_idx > fft_length_) { /* Warning & adjust count */
-        copy_end_idx = fft_length_;
-        count = (full_start_idx < fft_length_) ? (fft_length_ - full_start_idx)
-                                               : 0;
-      }
-      count = std::min({count, output.size(), output_len_expected});
-      if (count > 0 && full_start_idx < fft_length_) {
-        std::copy(
-            result_full_padded.begin() + full_start_idx,
-            result_full_padded.begin() + full_start_idx + count,
-            output.begin());
-      }
       if (output.size() > output_len_expected) {
         std::fill(output.begin() + output_len_expected, output.end(), T{});
       }
       return Status::Success;
     }
-    template <typename T>
-    size_t DefaultConvolutionPlanImpl<T>::get_kernel_length() const
-    {
-      return kernel_length_;
-    }
-    template <typename T>
-    ConvolutionMode DefaultConvolutionPlanImpl<T>::get_mode() const
-    {
-      return mode_;
-    }
-    template <typename T>
-    size_t DefaultConvolutionPlanImpl<T>::get_output_length(
-        size_t input_length) const
-    {
-      if (kernel_length_ == 0) return 0;
-      switch (mode_) { /* Calculate length based on mode */
-        case ConvolutionMode::Full:
-          return (input_length > SIZE_MAX - kernel_length_ + 1)
-                     ? SIZE_MAX
-                     : input_length + kernel_length_ - 1;
-        case ConvolutionMode::Same:
-          return input_length;
-        case ConvolutionMode::Valid:
-          return (input_length >= kernel_length_)
-                     ? (input_length - kernel_length_ + 1)
-                     : 0;
-        default:
-          return 0;
-      }
+
+    // --- FFT Length Check ---
+    size_t required_fft_len = signal_len + kernel_length_ - 1;
+    if (fft_length_ < required_fft_len) {
+      return Status::InvalidArgument;  // Plan too small for this input
     }
 
-    //--------------------------------------------------------------------------
-    // DefaultCorrelationPlanImpl Method Definitions (FFT-based)
-    //--------------------------------------------------------------------------
-    template <typename T>
-    DefaultCorrelationPlanImpl<T>::DefaultCorrelationPlanImpl(
-        const std::vector<T>& kernel, ConvolutionMode mode)
-        : mode_(mode), template_length_(kernel.size())
-    {
-      // Constructor logic remains the same (create FFT plan, FFT template,
-      // store conjugate)
-      if (template_length_ == 0)
-        throw std::invalid_argument("Correlation template cannot be empty.");
-      fft_length_ = next_power_of_two(template_length_ * 2);
-      if (fft_length_ == SIZE_MAX)
-        throw std::length_error("FFT length exceeds limits.");
-      if constexpr (!Detail::is_complex_v<T>) {
-        if (fft_length_ < 2 && fft_length_ != 0) fft_length_ = 2;
+    // --- Prepare Buffers ---
+    std::memcpy(input_padded_.get(), input.data(), signal_len * sizeof(T));
+    std::fill(
+        input_padded_.get() + signal_len,
+        input_padded_.get() + fft_length_,
+        T{});
+
+    size_t input_fft_size = kernel_fft_.size();
+    T_Complex* input_fft_ptr = input_fft_.get();
+    std::span<T_Complex> input_fft_span(input_fft_ptr, input_fft_size);
+    T_Complex* product_fft_ptr = product_fft_.get();
+    std::span<T_Complex> product_fft_span(product_fft_ptr, kernel_fft_.size());
+    T* result_ifft_ptr = result_ifft_.get();
+    std::span<T> result_ifft_span(result_ifft_ptr, fft_length_);
+
+    Status status = Status::Failure;
+
+    // --- Use if constexpr to separate logic for Real and Complex T ---
+    if constexpr (Detail::is_complex_v<T>) {
+      // --- T is Complex ---
+      // Retrieve the expected FFTPlanPtr
+      const auto* fft_plan_ptr_ptr
+          = std::get_if<FFTPlanPtr>(&fft_plan_impl_variant_);
+      if (!fft_plan_ptr_ptr || !*fft_plan_ptr_ptr)
+        return Status::InvalidOperation;  // Should not happen if constructor
+                                          // succeeded
+      auto& plan_impl_ptr = *fft_plan_ptr_ptr;
+
+      // 1. FFT Input
+      const T_Complex* input_padded_ptr
+          = reinterpret_cast<const T_Complex*>(input_padded_.get());
+      std::span<const T_Complex> input_padded_complex_span(
+          input_padded_ptr, fft_length_);
+      status = plan_impl_ptr->fft(input_padded_complex_span, input_fft_span);
+      if (status != Status::Success) {
+        return status;
       }
-      try {
-        if constexpr (Detail::is_complex_v<T>)
-          internal_fft_plan_
-              = std::make_unique<DefaultFFTPlanImpl<T>>(fft_length_);
-        else
-          internal_rfft_plan_
-              = std::make_unique<DefaultRFFTPlanImpl<T>>(fft_length_);
+
+      // 2. Multiply FFTs
+      const T_Complex* kernel_fft_ptr = kernel_fft_.data();
+      std::span<const T_Complex> kernel_fft_const_span(
+          kernel_fft_ptr, kernel_fft_.size());
+      convolution_detail::complex_multiply(
+          std::span<const T_Complex>(input_fft_span),
+          kernel_fft_const_span,
+          product_fft_span);
+
+      // 3. IFFT Result
+      const T_Complex* product_ptr = product_fft_.get();
+      std::span<const T_Complex> product_const_span(
+          product_ptr, product_fft_span.size());
+      T_Complex* result_ptr
+          = reinterpret_cast<T_Complex*>(result_ifft_ptr);  // T is T_Complex
+      std::span<T_Complex> result_complex_span(result_ptr, fft_length_);
+      status = plan_impl_ptr->ifft(product_const_span, result_complex_span);
+      if (status != Status::Success) {
+        return status;
       }
-      catch (const std::exception& e) {
-        throw std::runtime_error(
-            "Failed internal FFT plan creation: " + std::string(e.what()));
-      }
-      std::vector<T> padded_template = kernel;
-      padded_template.resize(fft_length_, T{});
-      Status fft_status;
-      using ComplexOutputType = Detail::CorrespondingComplex<T>;
-      std::vector<ComplexOutputType> temp_fft_output;
-      if constexpr (Detail::is_complex_v<T>) {
-        temp_fft_output.resize(fft_length_);
-        fft_status = internal_fft_plan_->fft(padded_template, temp_fft_output);
-      }
-      else {
-        temp_fft_output.resize(fft_length_ / 2 + 1);
-        fft_status
-            = internal_rfft_plan_->rfft(padded_template, temp_fft_output);
-      }
-      if (fft_status != Status::Success)
-        throw std::runtime_error(
-            "Failed FFT of template: "
-            + std::string(get_status_string(fft_status)));
-      template_fft_conj_.resize(temp_fft_output.size());
-      for (size_t i = 0; i < temp_fft_output.size(); ++i)
-        template_fft_conj_[i] = std::conj(temp_fft_output[i]);
     }
-    template <typename T>
-    DefaultCorrelationPlanImpl<T>::~DefaultCorrelationPlanImpl() = default;
+    else {
+      // --- T is Real ---
+      // Retrieve the expected RFFTPlanPtr
+      const auto* rfft_plan_ptr_ptr
+          = std::get_if<RFFTPlanPtr>(&fft_plan_impl_variant_);
+      if (!rfft_plan_ptr_ptr || !*rfft_plan_ptr_ptr)
+        return Status::InvalidOperation;  // Should not happen if constructor
+                                          // succeeded
+      auto& plan_impl_ptr = *rfft_plan_ptr_ptr;
 
-    template <typename T>
-    Status DefaultCorrelationPlanImpl<T>::execute(
-        std::span<const T> input, std::span<T> output) const
-    {
-      if constexpr (Detail::is_complex_v<T>) {
-        if (!internal_fft_plan_) return Status::InvalidOperation;
+      // 1. RFFT Input
+      const T_Real* input_padded_ptr = input_padded_.get();  // T is T_Real
+      std::span<const T_Real> input_padded_real_span(
+          input_padded_ptr, fft_length_);
+      status = plan_impl_ptr->rfft(input_padded_real_span, input_fft_span);
+      if (status != Status::Success) {
+        return status;
+      }
+
+      // 2. Multiply FFTs
+      const T_Complex* kernel_fft_ptr = kernel_fft_.data();
+      std::span<const T_Complex> kernel_fft_const_span(
+          kernel_fft_ptr, kernel_fft_.size());
+      convolution_detail::complex_multiply(
+          std::span<const T_Complex>(input_fft_span),
+          kernel_fft_const_span,
+          product_fft_span);
+
+      // 3. IRFFT Result
+      const T_Complex* product_ptr = product_fft_.get();
+      std::span<const T_Complex> product_const_span(
+          product_ptr, product_fft_span.size());
+      // result_ifft_span is already std::span<T> where T is T_Real
+      status = plan_impl_ptr->irfft(product_const_span, result_ifft_span);
+      if (status != Status::Success) {
+        return status;
+      }
+    }
+
+    // --- Extract Correct Output based on Type ---
+    // (Extraction logic remains the same)
+    size_t full_start_idx = 0;
+    size_t count = output_len_expected;
+
+    switch (type_) {
+      case ConvolutionType::Full:
+        full_start_idx = 0;
+        count = signal_len + kernel_length_ - 1;
+        break;
+      case ConvolutionType::Same:
+        full_start_idx = (kernel_length_ - 1) / 2;
+        count = signal_len;
+        break;
+      case ConvolutionType::Valid:
+        full_start_idx = kernel_length_ - 1;
+        count = (signal_len >= kernel_length_)
+                    ? (signal_len - kernel_length_ + 1)
+                    : 0;
+        break;
+      default:
+        return Status::InvalidArgument;
+    }
+
+    assert(count == output_len_expected);
+
+    size_t linear_conv_len = signal_len + kernel_length_ - 1;
+    if (full_start_idx >= linear_conv_len) {
+      count = 0;
+    }
+    else if (full_start_idx + count > linear_conv_len) {
+      count = linear_conv_len - full_start_idx;
+    }
+
+    count = std::min(count, output.size());
+
+    if (count > 0) {
+      if (full_start_idx + count <= fft_length_) {
+        std::memcpy(
+            output.data(),
+            result_ifft_.get() + full_start_idx,
+            count * sizeof(T));
       }
       else {
-        if (!internal_rfft_plan_) return Status::InvalidOperation;
-      }
-
-      size_t input_len = input.size();
-      size_t output_len_expected = get_output_length(input_len);
-      size_t full_corr_len = input_len + template_length_ - 1;
-
-      if (output.size() < output_len_expected) return Status::SizeMismatch;
-      std::fill(output.begin(), output.begin() + output_len_expected, T{});
-      if (input_len == 0 || template_length_ == 0) return Status::Success;
-      if (fft_length_ < full_corr_len) { /* Warning */
-      }
-      if (input_len > fft_length_) return Status::InvalidArgument;
-
-      std::vector<T> input_padded(fft_length_, T{});
-      std::copy(input.begin(), input.end(), input_padded.begin());
-
-      using ComplexType = Detail::CorrespondingComplex<T>;
-      std::vector<ComplexType> input_fft;
-      std::vector<ComplexType> product_fft;
-      std::vector<T> result_full_padded(fft_length_);
-
-      Status status;
-      if constexpr (Detail::is_complex_v<T>) {
-        input_fft.resize(fft_length_);
-        status = internal_fft_plan_->fft(input_padded, input_fft);
-      }
-      else {
-        input_fft.resize(fft_length_ / 2 + 1);
-        status = internal_rfft_plan_->rfft(input_padded, input_fft);
-      }
-      if (status != Status::Success) return status;
-
-      // Multiply FFTs using Highway Dispatch
-      product_fft.resize(input_fft.size());
-      status = DispatchMultiplyComplex(
-          std::span<const ComplexType>(input_fft),
-          std::span<const ComplexType>(
-              template_fft_conj_),  // Use pre-conjugated
-          std::span<ComplexType>(product_fft));
-      if (status != Status::Success) return status;
-
-      // Inverse FFT
-      if constexpr (Detail::is_complex_v<T>) {
-        status = internal_fft_plan_->ifft(product_fft, result_full_padded);
-      }
-      else {
-        status = internal_rfft_plan_->irfft(product_fft, result_full_padded);
-      }
-      if (status != Status::Success) return status;
-
-      // Apply IFFT Scaling (1/N) using Highway Dispatch
-      if (fft_length_ > 0) {
-        using RealType = Detail::UnderlyingReal<T>;
-        RealType scale
-            = static_cast<RealType>(1.0) / static_cast<RealType>(fft_length_);
-        status = DispatchScale(std::span<T>(result_full_padded), scale);
-        if (status != Status::Success) {
-          std::cerr
-              << "DefaultCorrelationPlanImpl::execute failed during Highway "
-                 "scaling."
-              << std::endl;
-          return status;
+        size_t safe_count = (full_start_idx < fft_length_)
+                                ? (fft_length_ - full_start_idx)
+                                : 0;
+        safe_count = std::min(safe_count, count);
+        if (safe_count > 0) {
+          std::memcpy(
+              output.data(),
+              result_ifft_.get() + full_start_idx,
+              safe_count * sizeof(T));
+        }
+        if (output_len_expected > safe_count) {
+          std::fill(
+              output.begin() + safe_count,
+              output.begin() + output_len_expected,
+              T{});
         }
       }
+    }
 
-      // Extract Correct Output based on Mode (Scalar logic)
-      size_t full_start_idx = 0;
-      size_t count = output_len_expected;
-      switch (mode_) { /* Set full_start_idx based on mode */
-        case ConvolutionMode::Full:
-          full_start_idx = 0;
-          break;
-        case ConvolutionMode::Same:
-          full_start_idx = (full_corr_len > input_len)
-                               ? (full_corr_len - input_len) / 2
-                               : 0;
-          break;
-        case ConvolutionMode::Valid:
-          full_start_idx = 0;
-          break;
+    if (count < output_len_expected) {
+      std::fill(
+          output.begin() + count, output.begin() + output_len_expected, T{});
+    }
+    if (output.size() > output_len_expected) {
+      std::fill(output.begin() + output_len_expected, output.end(), T{});
+    }
+
+    return Status::Success;
+  }
+
+  // --- Getters (remain the same) ---
+  template <typename T>
+  size_t DefaultConvolutionPlanImpl<T>::get_kernel_length() const
+  {
+    return kernel_length_;
+  }
+  template <typename T>
+  ConvolutionType DefaultConvolutionPlanImpl<T>::get_type() const
+  {
+    return type_;
+  }
+  template <typename T>
+  ConvolutionMethod DefaultConvolutionPlanImpl<T>::get_method() const
+  {
+    return method_;
+  }
+  template <typename T>
+  size_t DefaultConvolutionPlanImpl<T>::get_output_length(
+      size_t input_length) const
+  {
+    if (kernel_length_ == 0)
+      return (
+          type_ == ConvolutionType::Same ? input_length
+                                         : 0);  // Handle zero kernel length
+    switch (type_) {
+      case ConvolutionType::Full:
+        // Check for potential overflow before adding
+        if (input_length
+            > std::numeric_limits<size_t>::max() - kernel_length_ + 1) {
+          throw std::length_error(
+              "Output length calculation overflow (Full mode)");
+        }
+        return input_length + kernel_length_ - 1;
+      case ConvolutionType::Same:
+        return input_length;
+      case ConvolutionType::Valid:
+        return (input_length >= kernel_length_)
+                   ? (input_length - kernel_length_ + 1)
+                   : 0;
+      default:
+        throw std::logic_error(
+            "Invalid ConvolutionType encountered in get_output_length");  // Should
+                                                                          // not
+                                                                          // happen
+    }
+  }
+  template <typename T>
+  std::span<const T> DefaultConvolutionPlanImpl<T>::get_kernel() const
+  {
+    // Return span of the original, non-padded, non-reversed kernel
+    return std::span<const T>(original_kernel_);
+  }
+
+  //--------------------------------------------------------------------------
+  // DefaultCorrelationPlanImpl Method Definitions (FFT-based, Standard C++)
+  //--------------------------------------------------------------------------
+
+  template <typename T>  // T can be F32, F64, C32, C64
+  DefaultCorrelationPlanImpl<T>::DefaultCorrelationPlanImpl(
+      FFTPlanImplVariant&& fft_plan_variant,  // Accept the FFT plan variant
+      const std::vector<T>& kernel,  // This is the 'template' for correlation
+      ConvolutionType
+          type,  // Using ConvolutionType enum for mode (Full, Same, Valid)
+      ConvolutionMethod method)  // Using ConvolutionMethod enum
+      : type_(type),
+        method_(method),
+        original_kernel_(kernel),       // Store the original template
+        kernel_length_(kernel.size()),  // Length of the template
+        fft_length_(0),                 // Will be set below
+        fft_plan_impl_variant_(
+            std::move(fft_plan_variant))  // Store the passed-in plan
+  {
+    if (kernel_length_ == 0) {
+      throw std::invalid_argument(
+          "Correlation kernel (template) cannot be empty.");
+    }
+
+    // Define complex/real types and plan pointer types
+    using T_Complex = Detail::GetComplexT<T>;
+    using T_Real = Detail::GetRealT<T>;
+    using FFTPlanPtr = std::unique_ptr<FFTPlanImpl<T_Complex>>;
+    using RFFTPlanPtr = std::unique_ptr<RFFTPlanImpl<T_Real>>;
+
+    Status fft_status = Status::Failure;
+    size_t kernel_fft_size = 0;
+    std::vector<T_Complex>
+        temp_kernel_fft;  // Temp buffer for FFT result before conjugation
+
+    // Prepare the kernel for FFT: Pad (NO reverse for correlation)
+    std::vector<T> padded_kernel = original_kernel_;
+
+    // --- Use if constexpr to separate logic for Real and Complex T ---
+    if constexpr (Detail::is_complex_v<T>) {
+      // --- T is Complex ---
+      // Expect FFTPlanPtr
+      const auto* fft_plan_ptr_ptr
+          = std::get_if<FFTPlanPtr>(&fft_plan_impl_variant_);
+      if (!fft_plan_ptr_ptr || !*fft_plan_ptr_ptr) {
+        throw std::invalid_argument(
+            "Incorrect FFT plan type provided for complex correlation "
+            "(expected FFTPlanImpl).");
       }
-      size_t copy_end_idx = full_start_idx + count;
-      if (copy_end_idx > fft_length_) { /* Warning & adjust count */
-        copy_end_idx = fft_length_;
-        count = (full_start_idx < fft_length_) ? (fft_length_ - full_start_idx)
-                                               : 0;
+      auto& plan_impl_ptr = *fft_plan_ptr_ptr;
+
+      fft_length_ = plan_impl_ptr->get_length();
+      if (fft_length_ < kernel_length_) {
+        throw std::invalid_argument(
+            "Provided FFT plan length is too small for the template.");
       }
-      count = std::min({count, output.size(), output_len_expected});
-      if (count > 0 && full_start_idx < fft_length_) {
-        std::copy(
-            result_full_padded.begin() + full_start_idx,
-            result_full_padded.begin() + full_start_idx + count,
-            output.begin());
+
+      padded_kernel.resize(fft_length_, T{});  // Pad
+
+      kernel_fft_size = fft_length_;
+      temp_kernel_fft.resize(kernel_fft_size);
+      const T_Complex* kernel_input_ptr
+          = reinterpret_cast<const T_Complex*>(padded_kernel.data());
+      std::span<const T_Complex> kernel_input_span(
+          kernel_input_ptr, fft_length_);
+      T_Complex* kernel_output_ptr = temp_kernel_fft.data();
+      std::span<T_Complex> kernel_output_span(
+          kernel_output_ptr, kernel_fft_size);
+      fft_status = plan_impl_ptr->fft(kernel_input_span, kernel_output_span);
+    }
+    else {
+      // --- T is Real ---
+      // Expect RFFTPlanPtr
+      const auto* rfft_plan_ptr_ptr
+          = std::get_if<RFFTPlanPtr>(&fft_plan_impl_variant_);
+      if (!rfft_plan_ptr_ptr || !*rfft_plan_ptr_ptr) {
+        throw std::invalid_argument(
+            "Incorrect FFT plan type provided for real correlation (expected "
+            "RFFTPlanImpl).");
       }
+      auto& plan_impl_ptr = *rfft_plan_ptr_ptr;
+
+      fft_length_ = plan_impl_ptr->get_length();
+      if (fft_length_ < 2) {
+        throw std::runtime_error(
+            "Internal RFFT plan length must be >= 2 for correlation.");
+      }
+      if (fft_length_ < kernel_length_) {
+        throw std::invalid_argument(
+            "Provided FFT plan length is too small for the template.");
+      }
+
+      padded_kernel.resize(fft_length_, T{});  // Pad
+
+      kernel_fft_size = fft_length_ / 2 + 1;
+      temp_kernel_fft.resize(kernel_fft_size);
+      const T_Real* kernel_input_ptr = padded_kernel.data();
+      std::span<const T_Real> kernel_input_span(kernel_input_ptr, fft_length_);
+      T_Complex* kernel_output_ptr = temp_kernel_fft.data();
+      std::span<T_Complex> kernel_output_span(
+          kernel_output_ptr, kernel_fft_size);
+      fft_status = plan_impl_ptr->rfft(kernel_input_span, kernel_output_span);
+    }
+
+    if (fft_status != Status::Success) {
+      throw std::runtime_error(
+          "Failed FFT of correlation kernel (template). Status: "
+          + std::to_string(static_cast<int>(fft_status)));
+    }
+
+    // Store the CONJUGATE of the kernel's FFT for correlation
+    kernel_fft_conj_.resize(kernel_fft_size);
+    for (size_t i = 0; i < kernel_fft_size; ++i) {
+      kernel_fft_conj_[i] = std::conj(temp_kernel_fft[i]);
+    }
+
+    // Allocate temporary buffers
+    try {
+      input_padded_ = std::make_unique<T[]>(fft_length_);
+      input_fft_ = std::make_unique<T_Complex[]>(
+          kernel_fft_size);  // Use kernel_fft_size
+      product_fft_ = std::make_unique<T_Complex[]>(
+          kernel_fft_size);  // Use kernel_fft_size
+      result_ifft_ = std::make_unique<T[]>(fft_length_);
+    }
+    catch (const std::bad_alloc& e) {
+      throw std::runtime_error(
+          "Failed to allocate temporary buffers for correlation plan: "
+          + std::string(e.what()));
+    }
+    if (!input_padded_ || !input_fft_ || !product_fft_ || !result_ifft_) {
+      throw std::runtime_error(
+          "Failed to allocate temporary buffers for correlation plan "
+          "(unexpected).");
+    }
+  }
+
+  // Execute method
+  template <typename T>
+  Status DefaultCorrelationPlanImpl<T>::execute(
+      std::span<const T> input, std::span<T> output) const
+  {
+    const size_t signal_len = input.size();
+    const size_t output_len_expected = get_output_length(signal_len);
+
+    // --- Input Validation ---
+    if (output.size() < output_len_expected) {
+      return Status::SizeMismatch;
+    }
+
+    // Define complex/real types and plan pointer types
+    using T_Complex = Detail::GetComplexT<T>;
+    using T_Real = Detail::GetRealT<T>;
+    using FFTPlanPtr = std::unique_ptr<FFTPlanImpl<T_Complex>>;
+    using RFFTPlanPtr = std::unique_ptr<RFFTPlanImpl<T_Real>>;
+
+    // Check for empty input/kernel early
+    if (signal_len == 0 || kernel_length_ == 0) {
+      std::fill(output.begin(), output.begin() + output_len_expected, T{});
       if (output.size() > output_len_expected) {
         std::fill(output.begin() + output_len_expected, output.end(), T{});
       }
       return Status::Success;
     }
-    template <typename T>
-    size_t DefaultCorrelationPlanImpl<T>::get_template_length() const
-    {
-      return template_length_;
+
+    // --- FFT Length Check ---
+    size_t required_fft_len = signal_len + kernel_length_ - 1;
+    if (fft_length_ < required_fft_len) {
+      return Status::InvalidArgument;
+    }  // Plan too small
+
+    // --- Prepare Buffers ---
+    std::memcpy(input_padded_.get(), input.data(), signal_len * sizeof(T));
+    std::fill(
+        input_padded_.get() + signal_len,
+        input_padded_.get() + fft_length_,
+        T{});
+
+    size_t input_fft_size = kernel_fft_conj_.size();
+    T_Complex* input_fft_ptr = input_fft_.get();
+    std::span<T_Complex> input_fft_span(input_fft_ptr, input_fft_size);
+    T_Complex* product_fft_ptr = product_fft_.get();
+    std::span<T_Complex> product_fft_span(
+        product_fft_ptr, kernel_fft_conj_.size());
+    T* result_ifft_ptr = result_ifft_.get();
+    std::span<T> result_ifft_span(result_ifft_ptr, fft_length_);
+
+    Status status = Status::Failure;
+
+    // --- Use if constexpr to separate logic for Real and Complex T ---
+    if constexpr (Detail::is_complex_v<T>) {
+      // --- T is Complex ---
+      // Retrieve the expected FFTPlanPtr
+      const auto* fft_plan_ptr_ptr
+          = std::get_if<FFTPlanPtr>(&fft_plan_impl_variant_);
+      if (!fft_plan_ptr_ptr || !*fft_plan_ptr_ptr)
+        return Status::InvalidOperation;
+      auto& plan_impl_ptr = *fft_plan_ptr_ptr;
+
+      // 1. FFT Input
+      const T_Complex* input_padded_ptr
+          = reinterpret_cast<const T_Complex*>(input_padded_.get());
+      std::span<const T_Complex> input_padded_complex_span(
+          input_padded_ptr, fft_length_);
+      status = plan_impl_ptr->fft(input_padded_complex_span, input_fft_span);
+      if (status != Status::Success) {
+        return status;
+      }
+
+      // 2. Multiply FFTs
+      const T_Complex* kernel_fft_conj_ptr = kernel_fft_conj_.data();
+      std::span<const T_Complex> kernel_fft_conj_span(
+          kernel_fft_conj_ptr, kernel_fft_conj_.size());
+      convolution_detail::complex_multiply(
+          std::span<const T_Complex>(input_fft_span),
+          kernel_fft_conj_span,
+          product_fft_span);
+
+      // 3. IFFT Result
+      const T_Complex* product_ptr = product_fft_.get();
+      std::span<const T_Complex> product_const_span(
+          product_ptr, product_fft_span.size());
+      T_Complex* result_ptr = reinterpret_cast<T_Complex*>(result_ifft_ptr);
+      std::span<T_Complex> result_complex_span(result_ptr, fft_length_);
+      status = plan_impl_ptr->ifft(product_const_span, result_complex_span);
+      if (status != Status::Success) {
+        return status;
+      }
     }
-    template <typename T>
-    ConvolutionMode DefaultCorrelationPlanImpl<T>::get_mode() const
-    {
-      return mode_;
-    }
-    template <typename T>
-    size_t DefaultCorrelationPlanImpl<T>::get_output_length(
-        size_t input_length) const
-    {
-      if (template_length_ == 0) return 0;
-      switch (mode_) { /* Calculate length based on mode */
-        case ConvolutionMode::Full:
-          return (input_length > SIZE_MAX - template_length_ + 1)
-                     ? SIZE_MAX
-                     : input_length + template_length_ - 1;
-        case ConvolutionMode::Same:
-          return input_length;
-        case ConvolutionMode::Valid:
-          return (input_length >= template_length_)
-                     ? (input_length - template_length_ + 1)
-                     : 0;
-        default:
-          return 0;
+    else {
+      // --- T is Real ---
+      // Retrieve the expected RFFTPlanPtr
+      const auto* rfft_plan_ptr_ptr
+          = std::get_if<RFFTPlanPtr>(&fft_plan_impl_variant_);
+      if (!rfft_plan_ptr_ptr || !*rfft_plan_ptr_ptr)
+        return Status::InvalidOperation;
+      auto& plan_impl_ptr = *rfft_plan_ptr_ptr;
+
+      // 1. RFFT Input
+      const T_Real* input_padded_ptr = input_padded_.get();
+      std::span<const T_Real> input_padded_real_span(
+          input_padded_ptr, fft_length_);
+      status = plan_impl_ptr->rfft(input_padded_real_span, input_fft_span);
+      if (status != Status::Success) {
+        return status;
+      }
+
+      // 2. Multiply FFTs
+      const T_Complex* kernel_fft_conj_ptr = kernel_fft_conj_.data();
+      std::span<const T_Complex> kernel_fft_conj_span(
+          kernel_fft_conj_ptr, kernel_fft_conj_.size());
+      convolution_detail::complex_multiply(
+          std::span<const T_Complex>(input_fft_span),
+          kernel_fft_conj_span,
+          product_fft_span);
+
+      // 3. IRFFT Result
+      const T_Complex* product_ptr = product_fft_.get();
+      std::span<const T_Complex> product_const_span(
+          product_ptr, product_fft_span.size());
+      // result_ifft_span is already std::span<T> where T is T_Real
+      status = plan_impl_ptr->irfft(product_const_span, result_ifft_span);
+      if (status != Status::Success) {
+        return status;
       }
     }
 
-    //--------------------------------------------------------------------------
-    // Explicit Template Instantiations
-    //--------------------------------------------------------------------------
-    template class OmniDSP::backend::DefaultConvolutionPlanImpl<float>;
-    template class OmniDSP::backend::DefaultConvolutionPlanImpl<double>;
-    template class OmniDSP::backend::DefaultConvolutionPlanImpl<float_c>;
-    template class OmniDSP::backend::DefaultConvolutionPlanImpl<double_c>;
-    template class OmniDSP::backend::DefaultCorrelationPlanImpl<float>;
-    template class OmniDSP::backend::DefaultCorrelationPlanImpl<double>;
-    template class OmniDSP::backend::DefaultCorrelationPlanImpl<float_c>;
-    template class OmniDSP::backend::DefaultCorrelationPlanImpl<double_c>;
+    // --- Extract Correct Output based on Type ---
+    // (Extraction logic remains the same)
+    size_t full_start_idx = 0;
+    size_t count = output_len_expected;
 
-  }  // namespace backend
-}  // namespace OmniDSP
+    switch (type_) {
+      case ConvolutionType::Full:
+        full_start_idx = 0;
+        count = signal_len + kernel_length_ - 1;
+        break;
+      case ConvolutionType::Same:
+        full_start_idx = (kernel_length_ - 1) / 2;
+        count = signal_len;
+        break;
+      case ConvolutionType::Valid:
+        full_start_idx
+            = 0;  // Note: Valid correlation starts at index 0 of full result
+        count = (signal_len >= kernel_length_)
+                    ? (signal_len - kernel_length_ + 1)
+                    : 0;
+        break;
+      default:
+        return Status::InvalidArgument;
+    }
 
-#endif  // HWY_ONCE
+    assert(count == output_len_expected);
+
+    size_t linear_corr_len = signal_len + kernel_length_ - 1;
+    if (full_start_idx >= linear_corr_len) {
+      count = 0;
+    }
+    else if (full_start_idx + count > linear_corr_len) {
+      count = linear_corr_len - full_start_idx;
+    }
+
+    count = std::min(count, output.size());
+
+    if (count > 0) {
+      if (full_start_idx + count <= fft_length_) {
+        std::memcpy(
+            output.data(),
+            result_ifft_.get() + full_start_idx,
+            count * sizeof(T));
+      }
+      else {
+        size_t safe_count = (full_start_idx < fft_length_)
+                                ? (fft_length_ - full_start_idx)
+                                : 0;
+        safe_count = std::min(safe_count, count);
+        if (safe_count > 0) {
+          std::memcpy(
+              output.data(),
+              result_ifft_.get() + full_start_idx,
+              safe_count * sizeof(T));
+        }
+        if (output_len_expected > safe_count) {
+          std::fill(
+              output.begin() + safe_count,
+              output.begin() + output_len_expected,
+              T{});
+        }
+      }
+    }
+
+    if (count < output_len_expected) {
+      std::fill(
+          output.begin() + count, output.begin() + output_len_expected, T{});
+    }
+    if (output.size() > output_len_expected) {
+      std::fill(output.begin() + output_len_expected, output.end(), T{});
+    }
+
+    return Status::Success;
+  }
+
+  // --- Getters (remain the same) ---
+  template <typename T>
+  size_t DefaultCorrelationPlanImpl<T>::get_template_length() const
+  {
+    return kernel_length_;
+  }
+  template <typename T>
+  ConvolutionType DefaultCorrelationPlanImpl<T>::get_type() const
+  {
+    return type_;
+  }
+  template <typename T>
+  ConvolutionMethod DefaultCorrelationPlanImpl<T>::get_method() const
+  {
+    return method_;
+  }
+  template <typename T>
+  size_t DefaultCorrelationPlanImpl<T>::get_output_length(
+      size_t input_length) const
+  {
+    // Same logic as convolution for output length calculation
+    if (kernel_length_ == 0)
+      return (type_ == ConvolutionType::Same ? input_length : 0);
+    switch (type_) {
+      case ConvolutionType::Full:
+        if (input_length
+            > std::numeric_limits<size_t>::max() - kernel_length_ + 1) {
+          throw std::length_error(
+              "Output length calculation overflow (Full mode)");
+        }
+        return input_length + kernel_length_ - 1;
+      case ConvolutionType::Same:
+        return input_length;
+      case ConvolutionType::Valid:
+        return (input_length >= kernel_length_)
+                   ? (input_length - kernel_length_ + 1)
+                   : 0;
+      default:
+        throw std::logic_error(
+            "Invalid ConvolutionType encountered in get_output_length");
+    }
+  }
+  template <typename T>
+  std::span<const T> DefaultCorrelationPlanImpl<T>::get_template() const
+  {
+    // Return span of the original, non-padded template
+    return std::span<const T>(original_kernel_);
+  }
+
+  //--------------------------------------------------------------------------
+  // Explicit Template Instantiations
+  //--------------------------------------------------------------------------
+  // Instantiate the plan implementation classes for supported types
+  template class DefaultConvolutionPlanImpl<F32>;
+  template class DefaultConvolutionPlanImpl<F64>;
+  template class DefaultConvolutionPlanImpl<C32>;
+  template class DefaultConvolutionPlanImpl<C64>;
+
+  template class DefaultCorrelationPlanImpl<F32>;
+  template class DefaultCorrelationPlanImpl<F64>;
+  template class DefaultCorrelationPlanImpl<C32>;
+  template class DefaultCorrelationPlanImpl<C64>;
+
+}  // namespace OmniDSP::backend

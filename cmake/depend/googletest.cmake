@@ -1,6 +1,8 @@
+
 # cmake/depend/googletest.cmake
 # ==============================
-# Fetches and configures GoogleTest using FetchContent.
+# Finds the pre-installed GoogleTest library using find_package.
+# Assumes GoogleTest is installed via Conda or system package manager.
 # This is typically needed only if C++ tests are being built
 # (i.e., OMNIDSP_BUILD_PYTHON_BINDINGS is OFF).
 #
@@ -9,28 +11,34 @@
 # ==============================
 
 # Add top-level configuration message
-message(STATUS "  Configuring GoogleTest dependency...")
+message(STATUS "   Configuring GoogleTest dependency...")
 
-# Fetch Google Test only if building C++ tests
+# Find Google Test only if building C++ tests
 if(NOT OMNIDSP_BUILD_PYTHON_BINDINGS)
-    # Adjust indentation for fetching message
-    message(STATUS "    Fetching GoogleTest v1.16.0 using FetchContent...")
-    FetchContent_Declare(
-      googletest
-      GIT_REPOSITORY https://github.com/google/googletest.git
-      GIT_TAG        v1.16.0 # Pin to a specific release tag for reproducibility
-      GIT_SHALLOW    TRUE
-    )
-    # Set GTest build options *before* FetchContent_MakeAvailable
-    # Prevent GTest from installing itself and building samples/gmock
-    set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
-    set(BUILD_GMOCK OFF CACHE BOOL "" FORCE) # Optionally disable gmock if only gtest is needed
-    set(BUILD_GTEST_SAMPLES OFF CACHE BOOL "" FORCE)
-    # Fetch, configure, build (if necessary), and make GTest targets available
-    FetchContent_MakeAvailable(googletest)
-    # Adjust indentation for made available message
-    message(STATUS "      Made googletest targets available (e.g., GTest::gtest).")
+    message(STATUS "     Finding pre-installed GoogleTest using find_package...")
+    # Find the pre-installed GoogleTest package provided by Conda/system.
+    # GoogleTest's CMake config files typically use 'GTest' as the package name.
+    # REQUIRED will cause CMake to error out if the package is not found.
+    find_package(GTest REQUIRED)
+
+    # Check if the package was found (somewhat redundant with REQUIRED)
+    if(GTest_FOUND)
+        message(STATUS "       Found pre-installed GoogleTest version ${GTEST_VERSION}")
+        # The necessary targets (like GTest::gtest, GTest::gmock) should now be available.
+    else()
+        # This part should not be reached if REQUIRED is used.
+        message(FATAL_ERROR "     Could not find required GoogleTest package. Please ensure it is installed in your Conda environment or system.")
+    endif()
+
+    # --- FetchContent and related configurations removed ---
+    # FetchContent_Declare(googletest ...)
+    # set(INSTALL_GTEST OFF ...)
+    # set(BUILD_GMOCK OFF ...)
+    # set(BUILD_GTEST_SAMPLES OFF ...)
+    # FetchContent_MakeAvailable(googletest)
+    # --- End Removed Section ---
+
     # Note: Linking against GTest targets should happen in tests/cpp/CMakeLists.txt.
 else()
-    message(STATUS "    Skipping GoogleTest FetchContent (Python bindings enabled).")
+    message(STATUS "     Skipping GoogleTest configuration (Python bindings enabled).")
 endif()

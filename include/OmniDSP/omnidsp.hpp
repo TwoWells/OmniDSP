@@ -1,5 +1,5 @@
 /**
- * @file omnidsp.h
+ * @file omnidsp.hpp
  * @brief Main public header file for the OmniDSP library, defining the main
  * OmniDSP class interface.
  */
@@ -20,7 +20,7 @@
 #include "convolution.hpp"
 #include "cqt.hpp"
 #include "fft.hpp"
-#include "filter.hpp"  // Includes FIRFilterPlan, IIRFilterPlan, FIRFilterSpec, IIRFilterSpec, SecondOrderSection
+#include "filter.hpp"  // Includes FIRFilterPlan, IIRFilterPlan, FIRFilterSpec, IIRFilterSpec, IIRFilterCoef
 #include "resample.hpp"  // Includes ResampleSpec
 
 // Include the generated export header
@@ -30,8 +30,11 @@ namespace OmniDSP {
 
   // Forward declaration for the implementation class (Pimpl idiom)
   namespace backend {
-    class OmniDSPImpl;
+    class AbstractBackend;  // Forward declare base backend interface
   }  // namespace backend
+
+  // Forward declare implementation class (Pimpl)
+  class OmniDSPImpl;
 
   /**
    * @brief Main class providing access to OmniDSP functionalities.
@@ -76,22 +79,30 @@ namespace OmniDSP {
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>> convolve(
         const std::vector<RealT<T>>& input,
         const std::vector<RealT<T>>& kernel,
-        ConvolutionType type) const;
+        ConvolutionType type,
+        ConvolutionMethod method
+        = ConvolutionMethod::Auto) const;  // Added method param
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>> convolve(
         const std::vector<ComplexT<T>>& input,
         const std::vector<ComplexT<T>>& kernel,
-        ConvolutionType type) const;
+        ConvolutionType type,
+        ConvolutionMethod method
+        = ConvolutionMethod::Auto) const;  // Added method param
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>> correlate(
         const std::vector<RealT<T>>& input,
         const std::vector<RealT<T>>& kernel,
-        ConvolutionType type) const;
+        ConvolutionType type,
+        ConvolutionMethod method
+        = ConvolutionMethod::Auto) const;  // Added method param
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>> correlate(
         const std::vector<ComplexT<T>>& input,
         const std::vector<ComplexT<T>>& kernel,
-        ConvolutionType type) const;
+        ConvolutionType type,
+        ConvolutionMethod method
+        = ConvolutionMethod::Auto) const;  // Added method param
     ///@}
 
     /** @name Fourier Transforms (One-Off) */
@@ -123,7 +134,7 @@ namespace OmniDSP {
         size_t length) const;
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>> gaussian_window(
-        size_t length, RealT<T> stddev) const;
+        size_t length, double stddev) const;  // Use double for param
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>> hamming_window(
         size_t length) const;
@@ -132,7 +143,7 @@ namespace OmniDSP {
         size_t length) const;
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>> kaiser_window(
-        size_t length, RealT<T> beta) const;
+        size_t length, double beta) const;  // Use double for param
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>> rectangular_window(
         size_t length) const;
@@ -165,7 +176,8 @@ namespace OmniDSP {
         RealT<T> min_freq,
         RealT<T> max_freq,
         int bins_per_octave,
-        const WindowSpec<T>& window_spec = WindowSpec<T>()) const;
+        const WindowSpec& window_spec
+        = WindowSpec()) const;  // Use non-templated WindowSpec
 
     /**
      * @brief Creates a plan for resampling signals.
@@ -182,13 +194,19 @@ namespace OmniDSP {
     template <typename T>
     [[nodiscard]] OmniExpected<std::unique_ptr<ConvolutionPlan<T>>>
     create_convolution_plan(
-        const std::vector<T>& kernel, ConvolutionType type) const;
+        const std::vector<T>& kernel,
+        ConvolutionType type,
+        ConvolutionMethod method
+        = ConvolutionMethod::Auto) const;  // Added method param
 
     /** @brief Creates a plan for 1D cross-correlation. */
     template <typename T>
     [[nodiscard]] OmniExpected<std::unique_ptr<CorrelationPlan<T>>>
     create_correlation_plan(
-        const std::vector<T>& kernel, ConvolutionType type) const;
+        const std::vector<T>& kernel,
+        ConvolutionType type,
+        ConvolutionMethod method
+        = ConvolutionMethod::Auto) const;  // Added method param
 
     /** @brief Creates a plan for FIR filtering. */
     template <typename T>
@@ -198,8 +216,8 @@ namespace OmniDSP {
     /** @brief Creates a plan for IIR filtering using Second-Order Sections. */
     template <typename T>  // T is typically real
     [[nodiscard]] OmniExpected<std::unique_ptr<IIRFilterPlan<T>>>
-    create_iir_filter_plan(
-        const std::vector<SecondOrderSection<T>>& sos_coefficients) const;
+    create_iir_filter_plan(const std::vector<IIRFilterCoef>& sos_coefficients)
+        const;  // *** UPDATED: Use IIRFilterCoef ***
 
     /** @} */  // End of PlanFactories group
 
@@ -208,24 +226,27 @@ namespace OmniDSP {
      * @brief Methods to design standard digital filters.
      * @{ */
     //-------------------------------------------------------------------------
-    // TODO: Add design_fir_filter and design_iir_filter declarations here
-    // Example:
-    // template <typename T> // T is real type
-    // [[nodiscard]] OmniExpected<std::vector<RealT<T>>> design_fir_filter(
-    //      const FIRFilterSpec<T>& spec) const;
-    // template <typename T> // T is real type
-    // [[nodiscard]] OmniExpected<std::vector<SecondOrderSection<T>>>
-    // design_iir_filter(
-    //      const IIRFilterSpec<T>& spec) const;
-    /** @} */  // End of FilterDesign group
+    /** @brief Designs an FIR filter based on the specification. */
+    template <typename T>  // T is real type (F32, F64)
+    [[nodiscard]] OmniExpected<std::vector<RealT<T>>> design_fir_filter(
+        const FIRFilterSpec& spec) const;  // Use non-templated FIRFilterSpec
+
+    /** @brief Designs an IIR filter based on the specification. */
+    template <typename T>  // T is real type (F32, F64)
+    [[nodiscard]] OmniExpected<
+        std::vector<IIRFilterCoef>>  // *** UPDATED: Return IIRFilterCoef ***
+    design_iir_filter(
+        const IIRFilterSpec& spec) const;  // Use non-templated IIRFilterSpec
+    /** @} */                              // End of FilterDesign group
 
    private:
     /** @brief Private constructor used by the static create factory function.
      */
-    OmniDSP(std::unique_ptr<backend::OmniDSPImpl> impl);
+    OmniDSP(std::unique_ptr<backend::AbstractBackend>
+                impl);  // Store AbstractBackend
 
     /** @brief Pointer to the implementation object (Pimpl idiom). */
-    std::unique_ptr<backend::OmniDSPImpl> pimpl_;
+    std::unique_ptr<backend::AbstractBackend> pimpl_;  // Store AbstractBackend
   };
 
   // Template method definitions for member functions are typically defined in

@@ -2,44 +2,31 @@
  * @file filter.cpp (default)
  * @brief Implements Default backend FIRFilterPlanImpl and IIRFilterPlanImpl
  * classes.
- * @details Provides portable filter implementations using standard C++ and
- * potentially leveraging other default backend components like
- * Highway-accelerated operations if applicable (e.g., for FFT-based FIR
- * filtering).
+ * @details Provides portable filter implementations using standard C++.
  */
 
-// Define HWY_TARGET_INCLUDE before including Highway headers if used (e.g., for
-// FFT Conv) #ifndef HWY_TARGET_INCLUDE #define HWY_TARGET_INCLUDE
-// "src/omnidsp/backend/default/filter.cpp" // Path to this file #endif #include
-// "hwy/foreach_target.h" // Must be first Highway include #include
-// "hwy/highway.h" #include "hwy/contrib/math/math-inl.h" #include
-// "hwy/contrib/complex/complex-inl.h"
+// Highway includes and definitions removed
 
-#include "OmniDSP/filter.hpp"  // Public filter interfaces and specs
+#include "filter.hpp"  // Includes DefaultFIRFilterPlanImpl/DefaultIIRFilterPlanImpl declarations
 
-#include <algorithm>  // For std::copy, std::fill, std::min
-#include <complex>    // For std::complex
-#include <iostream>   // For debug messages
-#include <numeric>    // For std::inner_product (direct FIR) or other algorithms
+#include <OmniDSP/filter.hpp>  // Public filter interfaces and specs (FIRFilterSpec, IIRFilterSpec, IIRFilterCoef)
+#include <algorithm>           // For std::copy, std::fill, std::min
+#include <complex>             // For std::complex
+#include <iostream>            // For debug messages
+#include <numeric>  // For std::inner_product (direct FIR) or other algorithms
+#include <span>
 #include <stdexcept>  // For std::runtime_error, std::invalid_argument
 #include <vector>
 
 #include "OmniDSP/core_types.hpp"  // Core types
-#include "backend.hpp"  // Corresponding header for Default backend declarations
+#include "backend.hpp"  // Corresponding header for Default backend declarations (needed?)
 
 // TODO: Include FFT plan headers if using FFT-based FIR filtering
-// #include "OmniDSP/fft.h"
-// #include "backend/default/fft.cpp" // Access to Default FFT implementation
-// details?
+// #include <OmniDSP/fft.hpp>
+// #include "fft.hpp" // Access to Default FFT implementation details?
 
-// Highway namespace alias within the compilation unit for the active target
-// HWY_BEFORE_NAMESPACE();
 namespace OmniDSP {
   namespace backend {
-    // namespace HWY_NAMESPACE { // Start Highway's target-specific namespace
-    // (if Highway used)
-
-    // namespace hn = hwy; // Alias for Highway types/functions
 
     // --- Helper Functions (if needed) ---
 
@@ -62,8 +49,8 @@ namespace OmniDSP {
         // A filter with no coefficients is generally invalid.
         throw std::invalid_argument("FIR filter coefficients cannot be empty.");
       }
-      std::cout << "Default FIRFilterPlanImpl created. Taps: "
-                << coefficients_.size() << std::endl;  // Debug
+      // std::cout << "Default FIRFilterPlanImpl created. Taps: "
+      //           << coefficients_.size() << std::endl;  // Debug
     }
 
     /**
@@ -72,8 +59,8 @@ namespace OmniDSP {
     template <typename T>
     DefaultFIRFilterPlanImpl<T>::~DefaultFIRFilterPlanImpl()
     {
-      std::cout << "Default FIRFilterPlanImpl destroyed."
-                << std::endl;  // Debug
+      // std::cout << "Default FIRFilterPlanImpl destroyed."
+      //           << std::endl;  // Debug
     }
 
     /**
@@ -103,10 +90,13 @@ namespace OmniDSP {
         return Status::SizeMismatch;
       }
       if (input.empty()) {
-        std::fill(
-            output.begin(),
-            output.begin() + output.size(),
-            T{0});  // Zero out if input is empty
+        // If input is empty, output should also be empty (or zeroed if larger)
+        size_t samples_to_zero
+            = std::min(input.size(), output.size());  // Should be 0
+        std::fill(output.begin(), output.begin() + samples_to_zero, T{0});
+        if (output.size() > samples_to_zero) {
+          std::fill(output.begin() + samples_to_zero, output.end(), T{0});
+        }
         return Status::Success;
       }
 
@@ -222,24 +212,53 @@ namespace OmniDSP {
 
     /**
      * @brief Constructor for the Default IIR filter plan implementation.
-     * @param sos_coefficients A vector of Second-Order Sections representing
-     * the filter.
+     * @param sos_coefficients A vector of IIRFilterCoef representing the filter
+     * sections.
      * @throws std::invalid_argument If sos_coefficients vector is empty.
      */
     template <typename T>
     DefaultIIRFilterPlanImpl<T>::DefaultIIRFilterPlanImpl(
-        const std::vector<SecondOrderSection<T>>& sos_coefficients)
-        : sos_coeffs_(sos_coefficients)
+        const std::vector<IIRFilterCoef>&
+            sos_coefficients)  // Use IIRFilterCoef
+    // : sos_coeffs_(sos_coefficients) // Don't store the double version
+    // directly
     {
-      if (sos_coeffs_.empty()) {
+      if (sos_coefficients.empty()) {
         throw std::invalid_argument("IIR SOS coefficients cannot be empty.");
       }
+
+      // Convert double coefficients from IIRFilterCoef to type T for internal
+      // use This avoids potential type issues during execution if T is float.
+      internal_coeffs_.reserve(sos_coefficients.size());
+      for (const auto& sos_double : sos_coefficients) {
+        InternalSOS<T> sos_t;
+        sos_t.b0 = static_cast<T>(sos_double.b0);
+        sos_t.b1 = static_cast<T>(sos_double.b1);
+        sos_t.b2 = static_cast<T>(sos_double.b2);
+        // Assume a0 is 1.0, if not, normalization should happen here or in
+        // design
+        if (std::abs(sos_double.a0 - 1.0)
+            > 1e-9) {  // Check if a0 is close to 1
+          // Optional: Normalize coefficients by a0 here if design doesn't
+          // guarantee it T a0_inv = T{1.0} / static_cast<T>(sos_double.a0);
+          // sos_t.b0 *= a0_inv; sos_t.b1 *= a0_inv; sos_t.b2 *= a0_inv;
+          // sos_t.a1 = static_cast<T>(sos_double.a1) * a0_inv;
+          // sos_t.a2 = static_cast<T>(sos_double.a2) * a0_inv;
+          // Alternatively, throw an error if a0 != 1 is unexpected
+          throw std::runtime_error(
+              "IIR SOS coefficient a0 is not 1.0 (normalization required).");
+        }
+        sos_t.a1 = static_cast<T>(sos_double.a1);
+        sos_t.a2 = static_cast<T>(sos_double.a2);
+        internal_coeffs_.push_back(sos_t);
+      }
+
       // Initialize state buffer: 2 state variables (delays) per SOS section
       // Layout: [s1_0, s2_0, s1_1, s2_1, ..., s1_N-1, s2_N-1] where N =
       // num_sections
-      state_.assign(sos_coeffs_.size() * 2, T{0});
-      std::cout << "Default IIRFilterPlanImpl created. Sections: "
-                << sos_coeffs_.size() << std::endl;  // Debug
+      state_.assign(internal_coeffs_.size() * 2, T{0});
+      // std::cout << "Default IIRFilterPlanImpl created. Sections: "
+      //           << internal_coeffs_.size() << std::endl;  // Debug
     }
 
     /**
@@ -248,8 +267,8 @@ namespace OmniDSP {
     template <typename T>
     DefaultIIRFilterPlanImpl<T>::~DefaultIIRFilterPlanImpl()
     {
-      std::cout << "Default IIRFilterPlanImpl destroyed."
-                << std::endl;  // Debug
+      // std::cout << "Default IIRFilterPlanImpl destroyed."
+      //           << std::endl;  // Debug
     }
 
     /**
@@ -265,7 +284,7 @@ namespace OmniDSP {
     Status DefaultIIRFilterPlanImpl<T>::execute(
         std::span<const T> input, std::span<T> output)
     {
-      if (sos_coeffs_.empty()) {
+      if (internal_coeffs_.empty()) {  // Check internal coefficients
         std::fill(output.begin(), output.end(), T{0});
         return Status::Success;  // No filtering if no sections
       }
@@ -276,38 +295,30 @@ namespace OmniDSP {
         return Status::SizeMismatch;
       }
       if (input.empty()) {
-        std::fill(
-            output.begin(),
-            output.begin() + output.size(),
-            T{0});  // Zero out if input is empty
+        // If input is empty, output should also be empty (or zeroed if larger)
+        size_t samples_to_zero
+            = std::min(input.size(), output.size());  // Should be 0
+        std::fill(output.begin(), output.begin() + samples_to_zero, T{0});
+        if (output.size() > samples_to_zero) {
+          std::fill(output.begin() + samples_to_zero, output.end(), T{0});
+        }
         return Status::Success;
       }
 
       // --- Filtering Logic: Transposed Direct Form II Cascade ---
-      // For each input sample x[n]:
-      //   input_to_section = x[n]
-      //   For each section k = 0 to num_sections-1:
-      //     y_n = input_to_section * b0_k + state1_k[n-1]  // Output of this
-      //     section's feed-forward part state1_k[n] = input_to_section * b1_k -
-      //     y_n
-      //     * a1_k + state2_k[n-1] // Update state 1 state2_k[n] =
-      //     input_to_section
-      //     * b2_k - y_n * a2_k               // Update state 2
-      //     input_to_section = y_n // Output of this section is input to next
-      //   output[n] = y_n // Final output after last section
-
-      size_t num_sections = sos_coeffs_.size();
+      size_t num_sections
+          = internal_coeffs_.size();  // Use internal coefficients
 
       for (size_t n = 0; n < input.size(); ++n) {
         T sample_in = input[n];
         T section_in_out = sample_in;  // Input to the first section
 
         for (size_t k = 0; k < num_sections; ++k) {
-          const auto& sos = sos_coeffs_[k];
+          const auto& sos = internal_coeffs_[k];  // Use internal coefficients
           T& s1 = state_[k * 2 + 0];  // Reference to state variable 1 (delay
-                                      // z^-1) for section k
+                                      // z^-1)
           T& s2 = state_[k * 2 + 1];  // Reference to state variable 2 (delay
-                                      // z^-2) for section k
+                                      // z^-2)
 
           // Calculate the output of this section
           T y_n = section_in_out * sos.b0 + s1;
@@ -353,7 +364,9 @@ namespace OmniDSP {
     template <typename T>
     size_t DefaultIIRFilterPlanImpl<T>::get_order() const
     {
-      return sos_coeffs_.empty() ? 0 : sos_coeffs_.size() * 2;
+      return internal_coeffs_.empty()
+                 ? 0
+                 : internal_coeffs_.size() * 2;  // Use internal coefficients
     }
 
     /**
@@ -364,7 +377,7 @@ namespace OmniDSP {
     template <typename T>
     size_t DefaultIIRFilterPlanImpl<T>::get_num_sections() const
     {
-      return sos_coeffs_.size();
+      return internal_coeffs_.size();  // Use internal coefficients
     }
 
     // --- Explicit Template Instantiations ---
@@ -380,24 +393,5 @@ namespace OmniDSP {
     template class DefaultIIRFilterPlanImpl<float>;
     template class DefaultIIRFilterPlanImpl<double>;
 
-    // } // namespace HWY_NAMESPACE (if Highway used)
   }  // namespace backend
 }  // namespace OmniDSP
-// HWY_AFTER_NAMESPACE(); (if Highway used)
-
-// #if HWY_ONCE // If Highway used
-// #include "hwy/foreach_target.h" // Need this for HWY_EXPORT
-// #include "hwy/highway.h"
-// #include "backend.h"
-// #include <vector>
-// #include <complex>
-
-// HWY_EXPORT(ExportedSimdFunction); // Export any SIMD functions defined above
-// if needed externally
-
-// // Need explicit instantiations outside the namespace for the final object
-// code namespace OmniDSP { namespace backend {
-//     // template class DefaultFIRFilterPlanImpl<float>; // Already done above
-// }
-// }
-// #endif // HWY_ONCE

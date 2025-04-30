@@ -22,9 +22,9 @@ include(FetchContent)
 # This allows downloaded sources to persist between clean builds.
 # Needs to be set *before* the first FetchContent_Declare call.
 # Using FORCE ensures that this path overwrites any previously cached default value.
-set(FETCHCONTENT_BASE_DIR ${CMAKE_SOURCE_DIR}/cmake/.cache CACHE PATH "Root directory for FetchContent downloads" FORCE)
-file(MAKE_DIRECTORY ${FETCHCONTENT_BASE_DIR}) # Ensure the directory exists
-message(STATUS "  FetchContent base directory set to: ${FETCHCONTENT_BASE_DIR}")
+# set(FETCHCONTENT_BASE_DIR ${CMAKE_SOURCE_DIR}/cmake/.cache CACHE PATH "Root directory for FetchContent downloads" FORCE)
+# file(MAKE_DIRECTORY ${FETCHCONTENT_BASE_DIR}) # Ensure the directory exists
+# message(STATUS "  FetchContent base directory set to: ${FETCHCONTENT_BASE_DIR}")
 
 
 # Create the depend directory if it doesn't exist (for the modules below)

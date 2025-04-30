@@ -19,11 +19,4 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF) # Prefer standard features over compiler extensions
 message(STATUS "Set CMAKE_CXX_STANDARD to ${CMAKE_CXX_STANDARD} (Required, No Extensions).")
 
-# Add specific definitions required for certain compilers/platforms
-if(MSVC)
-  # Add math defines globally for MSVC compiler (e.g., M_PI)
-  add_compile_definitions(_USE_MATH_DEFINES)
-  message(STATUS "MSVC detected, adding _USE_MATH_DEFINES compile definition.")
-endif()
-
 message(STATUS "Loaded compiler settings from cmake/compiler_settings.cmake")

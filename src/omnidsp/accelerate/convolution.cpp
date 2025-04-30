@@ -77,11 +77,11 @@ namespace OmniDSP {
       constexpr bool is_complex_v = is_complex<T>::value;
 
       template <typename T>
-      struct ValueType {
+      struct RealType {
         using type = T;
       };
       template <typename T>
-      struct ValueType<std::complex<T>> {
+      struct RealType<std::complex<T>> {
         using type = T;
       };
     }  // namespace Detail
@@ -224,8 +224,8 @@ namespace OmniDSP {
 
       // Buffers for FFT results (always complex)
       using Complex
-          = ComplexT<typename Detail::ValueType<T>::type>;  // Get underlying
-                                                            // complex type
+          = ComplexT<typename Detail::RealType<T>::type>;  // Get underlying
+                                                           // complex type
       std::vector<Complex> input_fft(
           current_fft_len);  // Allocate full size for simplicity, adjust if
                              // RFFT
@@ -252,7 +252,7 @@ namespace OmniDSP {
       product_fft.resize(
           input_fft.size());  // Match size of input_fft (N or N/2+1)
       // Determine underlying value type (float or double) for vDSP calls
-      using Value = typename Detail::ValueType<T>::type;
+      using Value = typename Detail::RealType<T>::type;
       if constexpr (std::is_same_v<Value, float>) {
         vDSP_zvmul(
             reinterpret_cast<const DSPComplex*>(input_fft.data()),
@@ -450,7 +450,7 @@ namespace OmniDSP {
       padded_template.resize(fft_length_, T{});  // Zero-pad
 
       Status fft_status;
-      using Complex = ComplexT<typename Detail::ValueType<T>::type>;
+      using Complex = ComplexT<typename Detail::RealType<T>::type>;
       std::vector<Complex> temp_template_fft;  // Temporary storage
 
       if constexpr (Detail::is_complex_v<T>) {
@@ -474,7 +474,7 @@ namespace OmniDSP {
 
       // --- CONJUGATE the result and store in template_fft_ ---
       template_fft_ = temp_template_fft;  // Copy
-      using Value = typename Detail::ValueType<T>::type;
+      using Value = typename Detail::RealType<T>::type;
       if constexpr (std::is_same_v<Value, float>) {
         vDSP_zvconj(
             reinterpret_cast<const DSPComplex*>(template_fft_.data()),
@@ -544,7 +544,7 @@ namespace OmniDSP {
       std::vector<T> input_padded(current_fft_len, T{});
       std::copy(input.begin(), input.end(), input_padded.begin());
 
-      using Complex = ComplexT<typename Detail::ValueType<T>::type>;
+      using Complex = ComplexT<typename Detail::RealType<T>::type>;
       std::vector<Complex> input_fft(current_fft_len);
       std::vector<Complex> product_fft(current_fft_len);
       std::vector<T> result_full_padded(current_fft_len);
@@ -567,7 +567,7 @@ namespace OmniDSP {
 
       // --- Multiply FFTs (Input * Conjugated(Template)) ---
       product_fft.resize(input_fft.size());
-      using Value = typename Detail::ValueType<T>::type;
+      using Value = typename Detail::RealType<T>::type;
       if constexpr (std::is_same_v<Value, float>) {
         vDSP_zvmul(
             reinterpret_cast<const DSPComplex*>(input_fft.data()),

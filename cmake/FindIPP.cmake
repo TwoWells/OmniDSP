@@ -2,10 +2,11 @@
 #
 # Finds the Intel(R) Integrated Performance Primitives (IPP) library.
 #
-# This module tries to find Intel IPP, assuming it might be installed
-# within a Conda environment (typically dynamic/shared libraries). It handles
-# differences between Windows and Linux installations found in Conda.
-# It considers specific library naming conventions for threading layers,
+# This module tries to find Intel IPP, searching standard locations,
+# user-provided hints (IPPROOT variable or environment variable), and
+# the active Conda environment prefix if the CONDA_PREFIX environment
+# variable is set. It handles differences between Windows and Linux installations,
+# considers specific library naming conventions for threading layers,
 # resolves inter-domain dependencies, and attempts to find required
 # Intel runtime libraries on Linux. It also adds the 'ipp' subdirectory
 # to the include path if component headers are located there.
@@ -13,9 +14,9 @@
 # Input Variables:
 #   IPPROOT             - Manually specify the root directory of the IPP installation.
 #                         Overrides environment variable IPPROOT.
-#   CONDA_PREFIX        - Environment variable usually set by Conda, pointing to the active environment.
-#                         This module will try to use this if set.
-#   ENV{IPPROOT}        - Environment variable specifying the IPP root directory. Used if IPPROOT is not set.
+#   ENV{CONDA_PREFIX}   - Environment variable usually set by Conda, pointing to the active environment.
+#                         This module will use this path in its search if set.
+#   ENV{IPPROOT}        - Environment variable specifying the IPP root directory. Used if IPPROOT CMake variable is not set.
 #
 # Output Variables:
 #   IPP_FOUND           - System has IPP and all REQUIRED components (and their dependencies).
@@ -31,12 +32,12 @@
 #
 # Options:
 #   IPP_USE_THREADING_LAYER - ON/OFF (Default: OFF) - Link against the IPP Threading Layer libraries
-#                             and enable necessary definitions.
-#                             Requires the selected threading runtime (OpenMP or TBB) to be found.
+#                         and enable necessary definitions.
+#                         Requires the selected threading runtime (OpenMP or TBB) to be found.
 #   IPP_THREADING_TYPE      - STRING (Default: "OpenMP") - Specify the threading layer to use.
-#                             Currently supports "OpenMP" or "TBB". Case-insensitive.
-#                             Influences which libraries are searched for (_tl_omp vs _tl_tbb)
-#                             and which dependency package is found (FindOpenMP vs FindTBB).
+#                         Currently supports "OpenMP" or "TBB". Case-insensitive.
+#                         Influences which libraries are searched for (_tl_omp vs _tl_tbb)
+#                         and which dependency package is found (FindOpenMP vs FindTBB).
 #
 # Components:
 #   Specify components (e.g., s, i, vm, cv) using find_package(IPP COMPONENTS s i ...).
@@ -61,13 +62,12 @@
 #     target_link_libraries(my_target PRIVATE IPP::IPP)
 #   endif()
 #
-# Notes on Conda & Linking:
-#   - Assumes dynamic libraries (.dll/.so) as commonly packaged by Conda.
+# Notes on Linking:
+#   - Assumes dynamic libraries (.dll/.so) primarily, as commonly packaged.
 #   - Does not explicitly handle static linking complexities (mt suffixes, .a/.lib differences).
-#   - Conda typically installs to $CONDA_PREFIX/lib (Linux) or $CONDA_PREFIX/Library/lib (Windows).
 #   - On Linux, IPP may depend on Intel runtime libs (libirc, libsvml, libimf).
-#     This script attempts to find them in the Conda prefix. Ensure the corresponding
-#     Intel runtime packages are installed in your Conda environment.
+#     This script attempts to find them. Ensure the corresponding
+#     Intel runtime packages are installed if needed.
 #
 # Runtime Performance Notes (OpenMP Affinity):
 #   For optimal performance with certain threaded signal processing functions
@@ -135,16 +135,16 @@ set(_IPP_DEP_cv "core;vm;s;i")   # Computer Vision
 set(_IPP_DEP_dc "core;vm;s")   # Data Compression
 set(_IPP_DEP_i  "core;vm;s")   # Image Processing
 set(_IPP_DEP_s  "core;vm")   # Signal Processing
-set(_IPP_DEP_vm "core")       # Vector Math
+set(_IPP_DEP_vm "core")        # Vector Math
 # Components without explicitly listed dependencies (assume they only depend on core)
 # These might need verification against specific IPP versions/docs if used.
-set(_IPP_DEP_cp "core")       # Cryptography Primitives (Guessing core only)
-set(_IPP_DEP_j  "core;i")     # JPEG (Guessing core+i)
-set(_IPP_DEP_m  "core;vm")    # Matrix (Guessing core+vm)
-set(_IPP_DEP_r  "core")       # Realistic Rendering (Guessing core only)
-set(_IPP_DEP_sc "core;s")     # Speech Coding (Guessing core+s)
-set(_IPP_DEP_sr "core;s")     # Speech Recognition (Guessing core+s)
-set(_IPP_DEP_gen "core;s")    # Generic Signal Processing (Guessing core+s)
+set(_IPP_DEP_cp "core")        # Cryptography Primitives (Guessing core only)
+set(_IPP_DEP_j  "core;i")      # JPEG (Guessing core+i)
+set(_IPP_DEP_m  "core;vm")     # Matrix (Guessing core+vm)
+set(_IPP_DEP_r  "core")        # Realistic Rendering (Guessing core only)
+set(_IPP_DEP_sc "core;s")      # Speech Coding (Guessing core+s)
+set(_IPP_DEP_sr "core;s")      # Speech Recognition (Guessing core+s)
+set(_IPP_DEP_gen "core;s")     # Generic Signal Processing (Guessing core+s)
 # Core depends on nothing else within IPP
 set(_IPP_DEP_core "")
 
@@ -173,11 +173,11 @@ function(IPP_RESOLVE_DEPENDENCIES _requested_components _out_resolved_list_var)
             IPP_DEBUG_MSG("Dependencies for '${current_comp_lower}': ${deps}")
             # Add dependencies to the work list if they aren't already resolved/processed
             foreach(dep ${deps})
-                 string(TOLOWER "${dep}" dep_lower)
-                 if(NOT ";${processed_marker};" MATCHES ";${dep_lower};")
-                     list(APPEND work_list ${dep_lower})
-                     IPP_DEBUG_MSG("Adding dependency '${dep_lower}' to work list.")
-                 endif()
+                string(TOLOWER "${dep}" dep_lower)
+                if(NOT ";${processed_marker};" MATCHES ";${dep_lower};")
+                    list(APPEND work_list ${dep_lower})
+                    IPP_DEBUG_MSG("Adding dependency '${dep_lower}' to work list.")
+                endif()
             endforeach()
         else()
              IPP_DEBUG_MSG("No defined dependencies for component '${current_comp_lower}'. Assuming only 'core'.")
@@ -204,25 +204,12 @@ elseif(DEFINED ENV{IPPROOT})
     IPP_DEBUG_MSG("Using environment variable IPPROOT: $ENV{IPPROOT}")
     list(APPEND _IPP_SEARCH_PATHS "$ENV{IPPROOT}")
 endif()
-# 3. Conda Environment Prefix
-set(_CONDA_PREFIX_ENV "$ENV{CONDA_PREFIX}")
-if(_CONDA_PREFIX_ENV)
-    IPP_DEBUG_MSG("Found CONDA_PREFIX environment variable: ${_CONDA_PREFIX_ENV}")
-    list(APPEND _IPP_SEARCH_PATHS "${_CONDA_PREFIX_ENV}")
+# 3. Conda Environment Prefix (if set)
+if(DEFINED ENV{CONDA_PREFIX})
+    IPP_DEBUG_MSG("Found CONDA_PREFIX environment variable: $ENV{CONDA_PREFIX}")
+    list(APPEND _IPP_SEARCH_PATHS "$ENV{CONDA_PREFIX}")
 else()
-    # Attempt to guess Conda prefix from CMake's location (less reliable)
-    get_filename_component(_CMAKE_COMMAND_DIR "${CMAKE_COMMAND}" DIRECTORY)
-    if(_CMAKE_COMMAND_DIR MATCHES "(.+)/bin$")
-        set(_GUESS_CONDA_PREFIX "${CMAKE_MATCH_1}")
-        if(EXISTS "${_GUESS_CONDA_PREFIX}/conda-meta")
-            IPP_DEBUG_MSG("Guessed CONDA_PREFIX from CMake location: ${_GUESS_CONDA_PREFIX}")
-            list(APPEND _IPP_SEARCH_PATHS "${_GUESS_CONDA_PREFIX}")
-        else()
-            IPP_DEBUG_MSG("CMake location ${_CMAKE_COMMAND_DIR} doesn't look like a standard Conda bin dir parent.")
-        endif()
-    else()
-       IPP_DEBUG_MSG("CONDA_PREFIX environment variable not set, and couldn't guess from CMake location.")
-    endif()
+    IPP_DEBUG_MSG("CONDA_PREFIX environment variable not set. Searching standard paths.")
 endif()
 # 4. Standard system paths (will be searched by find_path/find_library anyway)
 
@@ -231,7 +218,7 @@ set(_IPP_INCLUDE_SUBDIRS "include") # Default for Linux/macOS
 set(_IPP_LIB_SUBDIRS "lib")         # Default for Linux/macOS
 if(WIN32)
     # On Windows, Conda might use Library/include or just include
-    # Prefer Library/include but check both.
+    # Prefer Library/include but check both. Standard installs might use just 'include'.
     set(_IPP_INCLUDE_SUBDIRS "Library/include" "include")
     # Similarly for libraries, prefer Library/lib but check lib and bin (for DLLs)
     set(_IPP_LIB_SUBDIRS "Library/lib" "lib" "Library/bin" "bin")
@@ -406,22 +393,22 @@ foreach(_COMPONENT ${_IPP_ALL_REQUIRED_COMPONENTS})
         # Create IMPORTED target for the component library if possible
         if(NOT TARGET IPP::${_COMPONENT})
              # Check if the variable contains a valid library file path before creating target
-            if(EXISTS "${IPP_${_COMPONENT}_LIBRARY}")
-                add_library(IPP::${_COMPONENT} UNKNOWN IMPORTED) # UNKNOWN handles .so, .dll, .lib
-                set_target_properties(IPP::${_COMPONENT} PROPERTIES IMPORTED_LOCATION "${IPP_${_COMPONENT}_LIBRARY}")
-                # Interface includes/defines will be handled by the aggregate IPP::IPP target
-                IPP_DEBUG_MSG("Created imported target IPP::${_COMPONENT}")
-                list(APPEND _IPP_FOUND_LIB_TARGETS IPP::${_COMPONENT}) # Add target to list
-            else()
-                 IPP_DEBUG_MSG("Variable IPP_${_COMPONENT}_LIBRARY ('${IPP_${_COMPONENT}_LIBRARY}') does not point to an existing file. Cannot create target IPP::${_COMPONENT}.")
-                 set(IPP_${_COMPONENT}_LIBRARY "") # Clear the invalid variable
-            endif()
+             if(EXISTS "${IPP_${_COMPONENT}_LIBRARY}")
+                 add_library(IPP::${_COMPONENT} UNKNOWN IMPORTED) # UNKNOWN handles .so, .dll, .lib
+                 set_target_properties(IPP::${_COMPONENT} PROPERTIES IMPORTED_LOCATION "${IPP_${_COMPONENT}_LIBRARY}")
+                 # Interface includes/defines will be handled by the aggregate IPP::IPP target
+                 IPP_DEBUG_MSG("Created imported target IPP::${_COMPONENT}")
+                 list(APPEND _IPP_FOUND_LIB_TARGETS IPP::${_COMPONENT}) # Add target to list
+             else()
+                  IPP_DEBUG_MSG("Variable IPP_${_COMPONENT}_LIBRARY ('${IPP_${_COMPONENT}_LIBRARY}') does not point to an existing file. Cannot create target IPP::${_COMPONENT}.")
+                  set(IPP_${_COMPONENT}_LIBRARY "") # Clear the invalid variable
+             endif()
         else()
-            IPP_DEBUG_MSG("Target IPP::${_COMPONENT} already exists.")
-            # Ensure existing target is added to our list if not already there
-            if(NOT IPP::${_COMPONENT} IN_LIST _IPP_FOUND_LIB_TARGETS)
+             IPP_DEBUG_MSG("Target IPP::${_COMPONENT} already exists.")
+             # Ensure existing target is added to our list if not already there
+             if(NOT IPP::${_COMPONENT} IN_LIST _IPP_FOUND_LIB_TARGETS)
                  list(APPEND _IPP_FOUND_LIB_TARGETS IPP::${_COMPONENT})
-            endif()
+             endif()
         endif()
     else()
         IPP_DEBUG_MSG("Could NOT find component library '${_COMPONENT}' (Searched for: ${_LIB_NAMES}).")
@@ -461,13 +448,13 @@ if(IPP_INCLUDE_DIR AND UNIX AND NOT APPLE AND NOT WIN32)
             # Create target if it doesn't exist
             if(NOT TARGET IPP::${_RUNTIME_NAME})
                  if(EXISTS "${IPP_${_RUNTIME_NAME}_LIBRARY}")
-                    add_library(IPP::${_RUNTIME_NAME} UNKNOWN IMPORTED)
-                    set_target_properties(IPP::${_RUNTIME_NAME} PROPERTIES IMPORTED_LOCATION "${IPP_${_RUNTIME_NAME}_LIBRARY}")
-                    IPP_DEBUG_MSG("Created imported target IPP::${_RUNTIME_NAME}")
-                    list(APPEND _IPP_INTEL_RUNTIME_TARGETS IPP::${_RUNTIME_NAME})
+                     add_library(IPP::${_RUNTIME_NAME} UNKNOWN IMPORTED)
+                     set_target_properties(IPP::${_RUNTIME_NAME} PROPERTIES IMPORTED_LOCATION "${IPP_${_RUNTIME_NAME}_LIBRARY}")
+                     IPP_DEBUG_MSG("Created imported target IPP::${_RUNTIME_NAME}")
+                     list(APPEND _IPP_INTEL_RUNTIME_TARGETS IPP::${_RUNTIME_NAME})
                  else()
-                     IPP_DEBUG_MSG("Variable IPP_${_RUNTIME_NAME}_LIBRARY invalid, cannot create target.")
-                     set(IPP_${_RUNTIME_NAME}_LIBRARY "") # Clear invalid var
+                      IPP_DEBUG_MSG("Variable IPP_${_RUNTIME_NAME}_LIBRARY invalid, cannot create target.")
+                      set(IPP_${_RUNTIME_NAME}_LIBRARY "") # Clear invalid var
                  endif()
             else()
                  # Ensure existing target is added to our list
@@ -621,7 +608,7 @@ if(IPP_FOUND) # Use the final, refined FOUND status
     # Final status messages
     if(NOT IPP_FIND_QUIETLY)
         # Format lists nicely for printing
-        string(REPLACE ";" "\n    " _LIBS_STR "${IPP_LIBRARIES}")
+        string(REPLACE ";" "\n     " _LIBS_STR "${IPP_LIBRARIES}")
         # Format include dirs, potentially multiple paths now
         IPP_FORMAT_PATH_LIST_FOR_MESSAGE("${IPP_INCLUDE_DIRS}" _INCS_STR)
         string(REPLACE ";" ", " _DEFS_STR "${IPP_DEFINITIONS}")
@@ -629,34 +616,34 @@ if(IPP_FOUND) # Use the final, refined FOUND status
         string(REPLACE ";" ", " _FOUND_COMPONENTS_STR "${_IPP_FOUND_COMPONENTS}")
 
         message(STATUS "Found IPP: ${IPP_VERSION} (Found Components: ${_FOUND_COMPONENTS_STR})")
-        message(STATUS "  Includes: ${_INCS_STR}") # Now shows potentially multiple paths
-        message(STATUS "  Libraries (IPP_LIBRARIES):\n    ${_LIBS_STR}") # Print list line by line
+        message(STATUS "   Includes: ${_INCS_STR}") # Now shows potentially multiple paths
+        message(STATUS "   Libraries (IPP_LIBRARIES):\n     ${_LIBS_STR}") # Print list line by line
         if(IPP_DEFINITIONS)
-             message(STATUS "  Definitions: ${_DEFS_STR}")
+             message(STATUS "   Definitions: ${_DEFS_STR}")
         endif()
         if(IPP_USE_THREADING_LAYER) # Report status based on initial request vs final outcome
-            if(_IPP_THREADING_FOUND)
-                message(STATUS "  Threading Layer: Enabled (${IPP_THREADING_PACKAGE})")
-            else() # Should not happen if IPP_FOUND is true, but for completeness
-                message(STATUS "  Threading Layer: Requested but ${_IPP_THREADING_PACKAGE} NOT FOUND (Warning issued earlier)")
-            endif()
+             if(_IPP_THREADING_FOUND)
+                 message(STATUS "   Threading Layer: Enabled (${IPP_THREADING_PACKAGE})")
+             else() # Should not happen if IPP_FOUND is true, but for completeness
+                 message(STATUS "   Threading Layer: Requested but ${_IPP_THREADING_PACKAGE} NOT FOUND (Warning issued earlier)")
+             endif()
         else()
-            message(STATUS "  Threading Layer: Disabled")
+             message(STATUS "   Threading Layer: Disabled")
         endif()
          if(UNIX AND NOT APPLE AND NOT WIN32) # Linux runtime check report
-             if(NOT _IPP_INTEL_RUNTIME_LIBS) # Check if the list is empty
-                  message(STATUS "  Intel Runtime Libs (Linux): Some or all NOT found (irc, svml, imf). Linking may fail.")
-             else()
-                  # Check if all three were found
-                  list(LENGTH _IPP_INTEL_RUNTIME_LIBS _num_runtime_found)
-                  if(_num_runtime_found LESS 3)
-                       message(STATUS "  Intel Runtime Libs (Linux): Found some, but not all (irc, svml, imf). Linking may fail.")
-                  else()
-                       message(STATUS "  Intel Runtime Libs (Linux): Found and included.")
-                  endif()
-             endif()
+              if(NOT _IPP_INTEL_RUNTIME_LIBS) # Check if the list is empty
+                   message(STATUS "   Intel Runtime Libs (Linux): Some or all NOT found (irc, svml, imf). Linking may fail.")
+              else()
+                   # Check if all three were found
+                   list(LENGTH _IPP_INTEL_RUNTIME_LIBS _num_runtime_found)
+                   if(_num_runtime_found LESS 3)
+                        message(STATUS "   Intel Runtime Libs (Linux): Found some, but not all (irc, svml, imf). Linking may fail.")
+                   else()
+                        message(STATUS "   Intel Runtime Libs (Linux): Found and included.")
+                   endif()
+              endif()
          endif()
-         message(STATUS "  Link via target: target_link_libraries(... IPP::IPP)")
+          message(STATUS "   Link via target: target_link_libraries(... IPP::IPP)")
     endif()
 
 else()
@@ -731,9 +718,9 @@ unset(_INCS_STR)
 unset(_DEFS_STR)
 unset(_FOUND_COMPONENTS_STR)
 unset(_MISSING_COMPONENTS_STR)
-unset(_CONDA_PREFIX_ENV)
-unset(_CMAKE_COMMAND_DIR)
-unset(_GUESS_CONDA_PREFIX)
+# unset(_CONDA_PREFIX_ENV) # Keep this if you want to reference it in messages
+# unset(_CMAKE_COMMAND_DIR) # Keep this if you want to reference it in messages
+# unset(_GUESS_CONDA_PREFIX) # Keep this if you want to reference it in messages
 unset(_IPP_ALL_TARGETS)
 unset(_VERSION_PATH_DIRECT) # Clean up version check paths
 unset(_VERSION_PATH_SUBDIR) # Clean up version check paths

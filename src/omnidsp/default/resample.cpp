@@ -3,17 +3,36 @@
  * @brief Implements the Default backend ResamplePlanImpl class using standard
  * C++.
  * @details Provides a portable resampling implementation using polyphase FIR
- * filtering. The FIR filter is designed using the owner OmniDSPImpl instance.
+ * filtering. The FIR filter is designed using the owner AbstractBackend
+ * instance.
  */
 
-#include <algorithm>  // For std::copy, std::fill
+#include <OmniDSP/filter.hpp>  // For non-templated FIRFilterSpec, FilterType, etc.
+#include <OmniDSP/resample.hpp>  // For ResampleSpec definition
+#include <OmniDSP/window.hpp>    // For WindowSpec
+#include <algorithm>             // For std::copy, std::fill
+#include <cassert>               // For assert macro
 #include <cmath>      // For std::ceil, std::floor, std::min, std::max, std::abs
 #include <iostream>   // For debug messages
 #include <numeric>    // For std::gcd
+#include <span>       // For std::span
 #include <stdexcept>  // For std::runtime_error, std::invalid_argument
 #include <vector>
 
+#include "../interface/backend.hpp"  // For ResamplePlanImpl, AbstractBackend base classes
 #include "backend.hpp"  // Default backend declarations (includes DefaultResamplePlanImpl declaration)
+
+// Forward declare the DefaultResamplePlanImpl class within the namespace
+namespace OmniDSP {
+  namespace backend {
+    template <typename T>
+    class DefaultResamplePlanImpl;
+  }
+}  // namespace OmniDSP
+
+// Include the header that defines ResamplePlanImpl (if not already included via
+// backend.hpp) Assuming ResamplePlanImpl is defined in ../interface/backend.hpp
+// or similar #include "../interface/backend.hpp"
 
 namespace OmniDSP {
   namespace backend {
@@ -32,14 +51,16 @@ namespace OmniDSP {
       /**
        * @brief Constructor. Calculates factors, designs filter, initializes
        * state.
-       * @param owner Pointer to the OmniDSPImpl instance creating this plan.
+       * @param owner Pointer to the AbstractBackend instance creating this
+       * plan.
        * @param spec The resampling specification.
        * @throws std::invalid_argument If spec or owner is invalid.
        * @throws std::runtime_error If factor calculation or filter design
        * fails.
        */
       DefaultResamplePlanImpl(
-          const OmniDSPImpl* owner, const ResampleSpec& spec);
+          const AbstractBackend* owner,  // Use AbstractBackend*
+          const ResampleSpec& spec);
 
       /** @brief Destructor. */
       ~DefaultResamplePlanImpl() override;
@@ -71,7 +92,7 @@ namespace OmniDSP {
           double in_rate, double out_rate, size_t& L, size_t& M);
       /** @brief Designs the prototype filter using the owner backend. */
       Status design_filter(
-          const OmniDSPImpl* owner,
+          const AbstractBackend* owner,  // Use AbstractBackend*
           const ResampleSpec& spec,
           size_t L,
           size_t M);
@@ -83,12 +104,14 @@ namespace OmniDSP {
 
     template <typename T>
     DefaultResamplePlanImpl<T>::DefaultResamplePlanImpl(
-        const OmniDSPImpl* owner, const ResampleSpec& spec)
+        const AbstractBackend* owner,  // Use AbstractBackend*
+        const ResampleSpec& spec)
         : input_rate_(spec.input_rate), output_rate_(spec.output_rate)
     {
       if (!owner) {
         throw std::invalid_argument(
-            "DefaultResamplePlanImpl requires a valid owner OmniDSPImpl "
+            "DefaultResamplePlanImpl requires a valid owner "
+            "AbstractBackend "  // Changed message
             "pointer.");
       }
       if (!spec.validate()) {
@@ -111,10 +134,14 @@ namespace OmniDSP {
             "Failed to design prototype FIR filter for resampling.");
       }
 
-      // 3. Initialize state buffer (size = filter taps - 1)
+      // 3. Initialize state buffer
       size_t num_taps = prototype_filter_coeffs_.size();
       if (num_taps > 0) {
-        filter_state_.assign(num_taps - 1, T{0});
+        // State length should be related to the number of taps per branch
+        size_t num_branch_taps
+            = (num_taps + upsample_factor_L_ - 1) / upsample_factor_L_;
+        size_t state_len = (num_branch_taps > 0) ? num_branch_taps - 1 : 0;
+        filter_state_.assign(state_len, T{0});
       }
       else {
         // Handle case where filter design somehow resulted in zero taps (should
@@ -128,15 +155,18 @@ namespace OmniDSP {
       // 4. Initialize phase
       current_phase_ = 0;
 
-      std::cout << "Default ResamplePlanImpl created. L=" << upsample_factor_L_
-                << ", M=" << downsample_factor_M_ << ", Taps=" << num_taps
-                << std::endl;  // Debug
+      // Debug output (optional)
+      // std::cout << "Default ResamplePlanImpl created. L=" <<
+      // upsample_factor_L_
+      //           << ", M=" << downsample_factor_M_ << ", Taps=" << num_taps
+      //           << ", StateLen=" << filter_state_.size() << std::endl;
     }
 
     template <typename T>
     DefaultResamplePlanImpl<T>::~DefaultResamplePlanImpl()
     {
-      std::cout << "Default ResamplePlanImpl destroyed." << std::endl;  // Debug
+      // std::cout << "Default ResamplePlanImpl destroyed." << std::endl;  //
+      // Debug
     }
 
     template <typename T>
@@ -152,12 +182,22 @@ namespace OmniDSP {
       size_t output_len_required
           = get_output_length(input_len);  // Use estimate
 
-      if (output.size() < output_len_required) {
-        return Status::SizeMismatch;  // Output buffer too small
+      // Determine the actual number of samples we can write to the output
+      // buffer
+      size_t output_len_available = output.size();
+      size_t output_samples_to_generate
+          = std::min(output_len_required, output_len_available);
+
+      if (output_samples_to_generate == 0 && input_len == 0
+          && filter_state_.empty()) {
+        // Nothing to write and nothing to process (no input, no state)
+        return Status::Success;
       }
-      if (input_len == 0) {
-        std::fill(output.begin(), output.begin() + output_len_required, T{0});
-        return Status::Success;  // Handle empty input
+      if (output_samples_to_generate == 0
+          && (input_len > 0 || !filter_state_.empty())) {
+        // Output buffer is zero size, but there's work to do.
+        // We might still need to update the state.
+        // Or maybe return SizeMismatch? Let's proceed but write 0 samples.
       }
 
       // --- Polyphase Resampling Implementation (Direct FIR filtering approach)
@@ -165,7 +205,13 @@ namespace OmniDSP {
       const size_t L = upsample_factor_L_;
       const size_t M = downsample_factor_M_;
       const size_t num_taps = prototype_filter_coeffs_.size();
-      const size_t state_len = filter_state_.size();  // Should be num_taps - 1
+      const size_t state_len = filter_state_.size();
+      const size_t num_branch_taps
+          = (num_taps + L - 1) / L;  // Taps per polyphase branch
+
+      // Ensure state length matches calculation based on branch taps (for debug
+      // builds)
+      assert(state_len == ((num_branch_taps > 0) ? num_branch_taps - 1 : 0));
 
       // Combine state and new input into a single buffer for easier processing
       std::vector<T> work_buffer;
@@ -175,43 +221,20 @@ namespace OmniDSP {
       work_buffer.insert(work_buffer.end(), input.begin(), input.end());
 
       size_t output_idx = 0;
-      const size_t num_branch_taps
-          = (num_taps + L - 1) / L;  // Taps per polyphase branch
+      // size_t input_samples_consumed = 0; // Not strictly needed here
 
-      // Loop to generate output samples
-      while (output_idx < output_len_required) {
-        // Calculate the index in the *input* buffer corresponding to the
-        // *start* of the filter application for the current output sample. This
-        // requires knowing how many input samples are consumed per output
-        // sample on average (M/L), and considering the current phase offset.
-        // input_idx = floor(current_output_time * input_rate)
-        //           = floor( (output_idx * output_period) * input_rate )
-        //           = floor( (output_idx / output_rate) * input_rate )
-        //           = floor( output_idx * input_rate / output_rate )
-        //           = floor( output_idx * M / L )
-        // However, we need to account for the filter state and phase.
+      // Loop to generate output samples, up to the available output space
+      while (output_idx < output_samples_to_generate) {
+        // Calculate the base index in the work_buffer corresponding
+        // to the start of the filter application for this output sample.
+        size_t current_input_base_idx = current_phase_ / L;
 
-        // Alternative view: Advance time based on phase.
-        // Each output sample advances the phase accumulator by M.
-        // The index into the input buffer `work_buffer` needed depends on the
-        // current phase and the filter tap index.
-
-        // Calculate the index into the combined state+input buffer
-        // `work_buffer` corresponding to the *first tap* of the *current*
-        // polyphase filter branch.
-        size_t work_buffer_base_idx
-            = current_phase_ / L;  // Index of the input sample corresponding to
-                                   // phase 0 of this filter application
-
-        // Check if we have enough data in work_buffer to apply the filter
-        // The last needed sample is at work_buffer_base_idx + num_branch_taps -
-        // 1
-        if (work_buffer_base_idx + num_branch_taps > work_buffer.size()) {
-          // Not enough input samples + state to compute the full output length.
-          // This can happen if output_len_required was slightly overestimated
-          // or input ended. std::cerr << "Warning: Resampler execute stopping
-          // early. Input/State exhausted." << std::endl;
-          break;  // Stop producing output samples
+        // Check if we have enough data in work_buffer to apply the filter for
+        // this output sample The filter needs data up to index:
+        // current_input_base_idx + num_branch_taps - 1
+        if (current_input_base_idx + num_branch_taps > work_buffer.size()) {
+          // Not enough input samples + state to compute this output sample.
+          break;  // Stop producing output samples for this call
         }
 
         // Determine the polyphase filter branch index (phase)
@@ -224,12 +247,7 @@ namespace OmniDSP {
               = phase_index + n * L;  // Index into prototype filter
           if (proto_idx < num_taps) {
             // Index into the work buffer (state + input)
-            // The work buffer index corresponds to input sample index
-            // `work_buffer_base_idx + n` shifted by the state length.
-            size_t work_idx = work_buffer_base_idx + n;
-            // Access coefficient h[phase + n*L] and multiply by input
-            // x[floor(t/L)
-            // + n]
+            size_t work_idx = current_input_base_idx + n;
             sum += work_buffer[work_idx] * prototype_filter_coeffs_[proto_idx];
           }
         }
@@ -237,41 +255,41 @@ namespace OmniDSP {
         output[output_idx] = sum;  // Store the computed output sample
         output_idx++;
 
-        // Advance the current phase by M for the next output sample
+        // Advance the current phase accumulator by M for the next output sample
         current_phase_ += M;
-      }
+
+        // Track the highest index reached in the *original input* part of
+        // work_buffer input_samples_consumed = std::max(input_samples_consumed,
+        // (current_input_base_idx + num_branch_taps > state_len) ?
+        // (current_input_base_idx + num_branch_taps - state_len) : 0);
+
+      }  // End while loop for output samples
 
       // Update the filter state for the next call
-      // Determine how many input samples were effectively consumed
-      size_t consumed_input_samples
-          = current_phase_ / L;  // Base index for the *next* block
+      // The state consists of the last `state_len` samples from the work_buffer
+      // that were involved in the calculation.
+      if (state_len > 0) {
+        // Calculate the starting index in work_buffer for the state needed next
+        // time. This corresponds to the samples *after* the last fully consumed
+        // input sample. The base index for the *next* output sample would be
+        // current_phase_ / L. The state needed starts before that.
+        size_t next_input_base_idx = current_phase_ / L;
+        size_t state_start_idx = (next_input_base_idx >= state_len)
+                                     ? (next_input_base_idx - state_len)
+                                     : 0;
 
-      // The state needed for the next block consists of the last `state_len`
-      // samples from the portion of `work_buffer` that was used. The relevant
-      // part of work_buffer ends at index `consumed_input_samples +
-      // num_branch_taps - 1`
-      // ?? No. Simpler: The state should be the last `state_len` samples of the
-      // *original* input that were involved. Let's find the index in the
-      // *original input span* corresponding to the start of the state needed.
-      // Total samples processed in work_buffer = consumed_input_samples +
-      // (num_taps/L) approx?
+        // Ensure the state_start_idx is within the bounds of the work_buffer
+        state_start_idx = std::min(state_start_idx, work_buffer.size());
 
-      // Easier way: The state is the last `state_len` elements of the
-      // `work_buffer` that were *potentially* accessed. The highest index
-      // accessed in work_buffer was roughly `work_buffer_base_idx +
-      // num_branch_taps - 1` where work_buffer_base_idx was `(current_phase_ -
-      // M) / L` at the last step. Let's just copy the *last* `state_len`
-      // elements from the `work_buffer`.
-      size_t copy_start_idx = (work_buffer.size() >= state_len)
-                                  ? (work_buffer.size() - state_len)
-                                  : 0;
-      size_t num_to_copy = std::min(state_len, work_buffer.size());
+        size_t num_available_for_state = work_buffer.size() - state_start_idx;
+        size_t num_to_copy = std::min(state_len, num_available_for_state);
 
-      if (state_len > 0 && num_to_copy > 0) {
-        std::copy(
-            work_buffer.begin() + copy_start_idx,
-            work_buffer.begin() + copy_start_idx + num_to_copy,
-            filter_state_.begin());
+        if (num_to_copy > 0) {
+          std::copy(
+              work_buffer.begin() + state_start_idx,
+              work_buffer.begin() + state_start_idx + num_to_copy,
+              filter_state_.begin());
+        }
         // Zero pad if fewer than state_len samples were available to copy
         if (num_to_copy < state_len) {
           std::fill(
@@ -279,11 +297,12 @@ namespace OmniDSP {
         }
       }
 
-      // Adjust phase for the next block start, wrapping around L
-      current_phase_ = current_phase_ % L;
+      // Adjust phase accumulator for the next block start.
+      // Keep the accumulated phase, but use modulo L for indexing calculations.
+      // current_phase_ = current_phase_ % (L * M); // Optional bounding
 
-      // Zero out remaining output buffer if we stopped early or user provided
-      // larger buffer
+      // Zero out remaining part of the *user-provided* output buffer if we
+      // wrote fewer samples than the buffer size.
       if (output_idx < output.size()) {
         std::fill(output.begin() + output_idx, output.end(), T{0});
       }
@@ -315,26 +334,21 @@ namespace OmniDSP {
     size_t DefaultResamplePlanImpl<T>::get_output_length(
         size_t input_length) const
     {
-      if (input_rate_ <= 0.0 || upsample_factor_L_ == 0) return 0;
-      // Estimate based on ratio. Add 1 for potential ceiling effects.
-      // A more precise estimate might consider filter delay, but ceil is
-      // usually safe. Need to account for the state and phase. Effective input
-      // length = input_length + state_len Effective output samples =
-      // floor((input_length * L
-      // + current_phase_) / M) ? Needs refinement.
-      double ratio = output_rate_ / input_rate_;
-      // Add filter length contribution heuristic? (num_taps / L) / M ?
-      size_t filter_contribution
-          = (prototype_filter_coeffs_.size() + L - 1)
-            / L;  // Rough estimate of delay in output samples
-      size_t estimated_len = static_cast<size_t>(std::ceil(
-                                 static_cast<double>(input_length) * ratio))
-                             + filter_contribution;
+      if (input_rate_ <= 0.0 || upsample_factor_L_ == 0
+          || downsample_factor_M_ == 0)
+        return 0;
 
-      // Alternative simpler estimate:
-      // size_t estimated_len =
-      // static_cast<size_t>(std::ceil(static_cast<double>(input_length) *
-      // ratio)) + 1; // Add 1 for safety
+      // Estimate based on ratio.
+      double ratio = static_cast<double>(upsample_factor_L_)
+                     / static_cast<double>(downsample_factor_M_);
+      size_t estimated_len = static_cast<size_t>(
+          std::ceil(static_cast<double>(input_length) * ratio));
+
+      // Add a small constant (e.g., 1 or 2) to account for filter delay and
+      // phase alignment edge cases. A more precise estimate might involve
+      // num_taps, L, M, but a small constant is often sufficient for buffer
+      // allocation purposes. Let's use +2 for safety.
+      estimated_len += 2;
 
       return estimated_len;
     }
@@ -350,35 +364,124 @@ namespace OmniDSP {
       }
       // Use large integer base for approximation to find rational L/M
       const long long factor_base = 1LL << 32;  // Example large base
+      // Calculate target ratio * base, round to nearest integer
       long long num_approx
-          = static_cast<long long>(out_rate * factor_base / in_rate + 0.5);
-      if (num_approx == 0) num_approx = 1;  // Avoid zero upsample factor
+          = static_cast<long long>((out_rate / in_rate) * factor_base + 0.5);
+
+      if (num_approx == 0 && out_rate > 0)
+        num_approx = 1;  // Avoid zero upsample factor if output rate > 0
+      if (num_approx < 0)
+        return Status::Failure;  // Should not happen if rates > 0
 
       // Find greatest common divisor (GCD) - requires <numeric> in C++17
       long long common = std::gcd(num_approx, factor_base);
-      if (common == 0)
-        return Status::Failure;  // Should not happen if rates > 0
+
+      // Check for potential issues before division
+      if (common == 0) {
+        if (num_approx == 0 && factor_base == 0)
+          return Status::Failure;  // Should not happen
+        return Status::Failure;    // Unexpected GCD result
+      }
 
       L = static_cast<size_t>(num_approx / common);
       M = static_cast<size_t>(factor_base / common);
 
+      // Final check for zero factors
       if (L == 0 || M == 0) {
-        return Status::Failure;  // Calculation resulted in zero factor
+        if (out_rate > 0 && L == 0)
+          L = 1;  // Ensure L is at least 1 if output rate > 0
+        if (in_rate > 0 && M == 0)
+          M = 1;  // Ensure M is at least 1 if input rate > 0
+        if (L == 0 || M == 0)
+          return Status::Failure;  // Still zero after adjustment? Error.
       }
       return Status::Success;
     }
 
     template <typename T>
     Status DefaultResamplePlanImpl<T>::design_filter(
-        const OmniDSPImpl* owner, const ResampleSpec& spec, size_t L, size_t M)
+        const AbstractBackend* owner,  // Use AbstractBackend*
+        const ResampleSpec& spec,
+        size_t L,
+        size_t M)
     {
-      // Use the base class implementation provided in backend.h (via previous
-      // step) This requires the implementation to be available, typically by
-      // defining it in a shared .cpp file or ensuring backend.h includes its
-      // definition source. Assuming the definition from the previous step is
-      // accessible:
-      return ResamplePlanImpl<T>::design_prototype_filter(
-          owner, spec, prototype_filter_coeffs_, L, M);
+      if (!owner) return Status::InvalidArgument;
+
+      // 1. Determine filter specifications
+      double normalized_cutoff
+          = 1.0 / (2.0 * static_cast<double>(std::max(L, M)));
+
+      // Map quality to transition width / attenuation (Example values)
+      // TODO: Refine these mappings based on desired performance
+      // characteristics
+      double transition_width_factor = 0.1;  // Relative to cutoff
+      double stopband_attenuation_db = 60.0;
+      if (spec.quality <= 6) {  // Low quality example
+        transition_width_factor = 0.25;
+        stopband_attenuation_db = 40.0;
+      }
+      else if (spec.quality <= 12) {  // Medium quality example
+        transition_width_factor = 0.1;
+        stopband_attenuation_db = 60.0;
+      }
+      else {  // High quality example
+        transition_width_factor = 0.05;
+        stopband_attenuation_db = 80.0;
+      }
+      double transition_width = transition_width_factor * normalized_cutoff;
+
+      // 2. Create a non-templated FIRFilterSpec
+      FIRFilterSpec filter_spec;
+      filter_spec.type = FilterType::Lowpass;
+      filter_spec.order = 0;  // Let design method determine order
+      // *** CORRECTED: Assign double values directly ***
+      filter_spec.cutoff1 = normalized_cutoff;
+      filter_spec.sample_rate = 1.0;  // Normalized design
+      filter_spec.transition_width = transition_width;
+      filter_spec.stopband_attenuation_db = stopband_attenuation_db;
+      filter_spec.window = spec.window;  // Use WindowSpec from ResampleSpec
+
+      // 3. Call the owner's filter design method via AbstractBackend interface
+      //    Need to call the correct templated version (_f32 or _f64) based on T
+      OmniExpected<std::vector<T>> coeffs_expected;
+      if constexpr (std::is_same_v<T, float>) {
+        coeffs_expected = owner->design_fir_filter_f32(
+            filter_spec);  // Pass non-templated spec
+      }
+      else if constexpr (std::is_same_v<T, double>) {
+        coeffs_expected = owner->design_fir_filter_f64(
+            filter_spec);  // Pass non-templated spec
+      }
+      else {
+        // Should not happen due to ResamplePlan template constraint
+        return Status::InvalidArgument;
+      }
+
+      if (!coeffs_expected) {
+        std::cerr << "Error: Failed to design resampling filter using owner "
+                     "backend. Status: "
+                  << static_cast<int>(coeffs_expected.error()) << std::endl;
+        return coeffs_expected.error();
+      }
+      if (coeffs_expected.value().empty()) {
+        std::cerr
+            << "Error: Resampling filter design resulted in empty coefficients."
+            << std::endl;
+        return Status::Failure;  // Or specific error
+      }
+
+      // 4. Store and scale the coefficients
+      prototype_filter_coeffs_ = std::move(coeffs_expected.value());
+      T scale_factor = static_cast<T>(L);  // Scale by upsampling factor
+      for (T& coeff : prototype_filter_coeffs_) {
+        coeff *= scale_factor;
+      }
+
+      // std::cout << "Designed filter with " << prototype_filter_coeffs_.size()
+      // << " taps using window " << static_cast<int>(spec.window.type) <<
+      // std::endl; // Debug
+
+      return Status::Success;
     }
 
     //--------------------------------------------------------------------------

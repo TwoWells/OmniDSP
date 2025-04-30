@@ -1,61 +1,45 @@
 /**
- * @file window.h
+ * @file window.hpp
  * @brief Defines windowing function types and the WindowSpec class for
  * configuration.
- * @details Window functions are commonly used in signal processing for tasks
- * like spectral analysis (reducing spectral leakage) and FIR filter design.
- * This header provides the necessary types and structures to specify and
- * generate various standard window functions via the OmniDSP class.
  */
 
 #ifndef OMNIDSP_WINDOW_H
 #define OMNIDSP_WINDOW_H
 
-#include <cmath>        // For std::abs needed in operator==
+#include <algorithm>    // For std::fill, std::max
+#include <cmath>        // For std::abs, std::cos, std::sqrt, std::pow, std::exp
 #include <cstddef>      // For size_t
+#include <limits>       // For numeric_limits
+#include <numbers>      // *** ADDED: For std::numbers constants ***
 #include <optional>     // For optional parameters like beta
+#include <span>         // For std::span
 #include <stdexcept>    // For invalid_argument
+#include <string>       // For exception messages
 #include <string_view>  // For get_window_type_name
 
-#include "core_types.hpp"  // For RealT
+#include "OmniDSP/omnidsp_export.hpp"  // For OMNIDSP_EXPORT
+#include "core_types.hpp"              // For Status, F32, F64 etc.
 
 namespace OmniDSP {
 
   /**
    * @brief Enumeration of standard window function types supported by OmniDSP.
-   * @details Each enum value corresponds to a specific mathematical window
-   * function. The choice of window depends on the application requirements
-   * regarding trade-offs like main lobe width, side lobe attenuation, and
-   * scalloping loss.
    */
   enum class WindowType {
-    Rectangular,  ///< Rectangular (Boxcar/Dirichlet) window. Equivalent to no
-                  ///< window. Maximum spectral leakage.
-    Bartlett,     ///< Bartlett (triangular) window with non-zero endpoints.
-    Hann,     ///< Hann (or Hanning) window. Good frequency resolution, moderate
-              ///< leakage.
-    Hamming,  ///< Hamming window. Optimized to minimize the maximum (nearest)
-              ///< side lobe. Slightly wider main lobe than Hann.
-    Blackman,   ///< Blackman window. Better side lobe attenuation than
-                ///< Hann/Hamming, but wider main lobe.
-    Flattop,    ///< Flattop window. Very low amplitude error (flat top in
-                ///< frequency domain), but very wide main lobe. Good for
-                ///< amplitude measurements.
-    Gaussian,   ///< Gaussian window. Requires a standard deviation parameter
-                ///< (sigma). Time-frequency uncertainty principle applies.
-    Kaiser,     ///< Kaiser window. Flexible window defined by a shape parameter
-                ///< (beta). Can approximate many other windows. Good trade-off
-                ///< control.
-    Triangular  ///< Triangular window with zero endpoints (for length > 1).
-                ///< Similar to Bartlett but often defined with zero endpoints.
-                // Add others like Blackman-Harris, Nuttall, etc. if needed
+    Rectangular,
+    Bartlett,
+    Hann,
+    Hamming,
+    Blackman,
+    Flattop,
+    Gaussian,  // Requires stddev > 0
+    Kaiser,    // Requires beta >= 0
+    Triangular
   };
 
   /**
    * @brief Gets the string name corresponding to a WindowType enum value.
-   * @param type The window type enum value.
-   * @return A string_view representing the window name. Useful for logging or
-   * display.
    */
   inline std::string_view get_window_type_name(WindowType type) noexcept
   {
@@ -85,120 +69,160 @@ namespace OmniDSP {
 
   /**
    * @brief Specification class for creating a window function.
-   * @details This class encapsulates the type of window and any necessary
-   * parameters (like standard deviation for Gaussian or beta for Kaiser). It is
-   * used as input to OmniDSP window generation methods (e.g.,
-   * `OmniDSP::hann_window`, `OmniDSP::kaiser_window`) or within other
-   * specification objects like `FIRFilterSpec`. Provides static factory methods
-   * for creating specs for windows that require parameters.
-   * @tparam T The floating-point type (e.g., float, double) for window
-   * parameters.
+   * This version is non-templated and uses double for parameters.
    */
-  template <typename T>
-  class WindowSpec {
+  class OMNIDSP_EXPORT WindowSpec {  // Removed template<typename T>
    public:
     /**
-     * @brief Default constructor. Creates a specification for a Hann window.
+     * @brief Default constructor. Creates a specification for a Rectangular
+     * window.
      */
-    WindowSpec() : type_(WindowType::Hann) {}
+    WindowSpec() : type_(WindowType::Rectangular) {}
 
     /**
-     * @brief Constructor for basic window types that do not require parameters.
-     * @param type The desired window type (e.g., Hann, Hamming, Blackman,
-     * Rectangular, etc.).
-     * @throws std::invalid_argument if the specified type requires parameters
-     * (currently Gaussian or Kaiser). Use the static factory methods instead.
+     * @brief Constructor for window types that do not require parameters.
+     * @param type The desired window type (must NOT be Gaussian or Kaiser).
+     * @throws std::invalid_argument if the specified type requires parameters.
      */
     explicit WindowSpec(WindowType type) : type_(type)
     {
       if (type == WindowType::Gaussian || type == WindowType::Kaiser) {
-        // Ensure users employ the static methods for parameter validation.
         throw std::invalid_argument(
-            "Gaussian and Kaiser windows require parameters. Use "
-            "WindowSpec::Gaussian(stddev) or WindowSpec::Kaiser(beta).");
+             std::string(get_window_type_name(type)) +
+             " window requires a parameter. Use WindowSpec(WindowType, param) "
+             "or the static factory methods (Gaussian/Kaiser).");
+      }
+      // No parameters to store for these types
+    }
+
+    /**
+     * @brief Constructor for window types that require exactly one parameter.
+     * @param type The desired window type (must be Gaussian or Kaiser).
+     * @param param The parameter value (stddev for Gaussian, beta for Kaiser).
+     * @throws std::invalid_argument if the type is not Gaussian or Kaiser,
+     * or if the parameter value is invalid (stddev <= 0, beta < 0).
+     */
+    WindowSpec(WindowType type, double param)
+        : type_(type)  // Parameter is double
+    {
+      if (type == WindowType::Gaussian) {
+        if (param <= 0.0) {  // Compare with double literal
+          throw std::invalid_argument(
+              "Gaussian window standard deviation (param) must be positive.");
+        }
+        param_ = param;  // Store in the single optional param_
+      }
+      else if (type == WindowType::Kaiser) {
+        if (param < 0.0) {  // Compare with double literal
+          throw std::invalid_argument(
+              "Kaiser window beta parameter (param) must be non-negative.");
+        }
+        param_ = param;  // Store in the single optional param_
+      }
+      else {
+        throw std::invalid_argument(
+            std::string(get_window_type_name(type))
+            + " window does not take a parameter. Use WindowSpec(WindowType).");
       }
     }
 
     /**
      * @brief Static factory method to create a Gaussian window specification.
-     * @param stddev Standard deviation (sigma) parameter controlling the window
-     * width. Must be greater than 0. Smaller values result in a narrower window
-     * in time domain (wider in frequency domain).
+     * @param stddev Standard deviation (sigma). Must be > 0.
      * @return A WindowSpec object configured for a Gaussian window.
      * @throws std::invalid_argument if stddev is not positive.
      */
-    static WindowSpec<T> Gaussian(RealT<T> stddev)
+    static WindowSpec Gaussian(double stddev)  // Parameter is double
     {
-      if (stddev <= static_cast<RealT<T>>(0.0)) {
-        throw std::invalid_argument(
-            "Gaussian window standard deviation must be positive.");
-      }
-      // Use the private constructor to set the type and parameter
-      return WindowSpec<T>(WindowType::Gaussian, stddev, std::nullopt);
+      // Validation is handled by the two-parameter constructor
+      return WindowSpec(WindowType::Gaussian, stddev);
     }
 
     /**
      * @brief Static factory method to create a Kaiser window specification.
-     * @param beta Shape parameter beta. Must be non-negative (>= 0).
-     * Controls the trade-off between main lobe width and side lobe attenuation.
-     * beta=0 yields a Rectangular window. Larger beta increases side lobe
-     * attenuation but also widens the main lobe. Common values range from 4
-     * to 8.
+     * @param beta Shape parameter beta. Must be >= 0.
      * @return A WindowSpec object configured for a Kaiser window.
      * @throws std::invalid_argument if beta is negative.
      */
-    static WindowSpec<T> Kaiser(RealT<T> beta)
+    static WindowSpec Kaiser(double beta)  // Parameter is double
     {
-      if (beta < static_cast<RealT<T>>(0.0)) {
-        throw std::invalid_argument(
-            "Kaiser window beta parameter must be non-negative.");
-      }
-      // Use the private constructor to set the type and parameter
-      return WindowSpec<T>(WindowType::Kaiser, std::nullopt, beta);
+      // Validation is handled by the two-parameter constructor
+      return WindowSpec(WindowType::Kaiser, beta);
     }
 
     /**
      * @brief Gets the type of the window specified by this object.
-     * @return The WindowType enum value.
      */
-    WindowType get_type() const { return type_; }
+    [[nodiscard]] WindowType get_type() const noexcept { return type_; }
 
     /**
-     * @brief Gets the standard deviation parameter for the Gaussian window.
-     * @return An optional containing the standard deviation if the type is
-     * Gaussian, otherwise std::nullopt.
+     * @brief Gets the parameter value if the window type requires one (Gaussian
+     * or Kaiser).
+     * @return The parameter value (stddev or beta) as a double, or std::nullopt
+     * if not applicable or not set.
      */
-    std::optional<RealT<T>> get_stddev() const { return stddev_; }
+    [[nodiscard]] std::optional<double> get_param() const noexcept
+    {
+      return param_;
+    }
 
     /**
-     * @brief Gets the beta parameter for the Kaiser window.
-     * @return An optional containing the beta value if the type is Kaiser,
-     * otherwise std::nullopt.
+     * @brief Validates the WindowSpec consistency.
+     * @return True if the spec is valid (e.g., parameter present if required),
+     * false otherwise.
      */
-    std::optional<RealT<T>> get_beta() const { return beta_; }
+    [[nodiscard]] bool validate() const
+    {
+      switch (type_) {
+        case WindowType::Kaiser:
+        case WindowType::Gaussian:
+          // These types require a parameter.
+          return param_.has_value();
+        case WindowType::Rectangular:
+        case WindowType::Bartlett:
+        case WindowType::Hann:
+        case WindowType::Hamming:
+        case WindowType::Blackman:
+        case WindowType::Flattop:
+        case WindowType::Triangular:
+          // These types should not have a parameter set, but we can be lenient.
+          // Stricter validation could return !param_.has_value() here.
+          return true;
+        default:
+          return false;  // Unknown type
+      }
+    }
 
     /**
      * @brief Compares two WindowSpec objects for equality.
-     * @details Checks if both the type and relevant parameters (if any) match.
-     * Uses approximate comparison for floating-point parameters.
-     * @param other The WindowSpec object to compare against.
-     * @return True if the specifications are equivalent, false otherwise.
      */
-    bool operator==(const WindowSpec<T>& other) const
+    bool operator==(const WindowSpec& other) const noexcept
     {
+      // Basic type check
       if (type_ != other.type_) return false;
-      // Only compare parameters if they are relevant for the type
-      if (type_ == WindowType::Gaussian) {
-        // Both must have a value and they must be approximately equal
-        return stddev_.has_value() && other.stddev_.has_value()
-               && (std::abs(stddev_.value() - other.stddev_.value())
-                   < static_cast<RealT<T>>(1e-9));
-      }
-      if (type_ == WindowType::Kaiser) {
-        // Both must have a value and they must be approximately equal
-        return beta_.has_value() && other.beta_.has_value()
-               && (std::abs(beta_.value() - other.beta_.value())
-                   < static_cast<RealT<T>>(1e-9));
+
+      // Parameter check (only if type requires it)
+      if (type_ == WindowType::Gaussian || type_ == WindowType::Kaiser) {
+        // If one has value and other doesn't, they are not equal
+        if (param_.has_value() != other.param_.has_value()) return false;
+        // If both have values, compare them (handle potential floating point
+        // issues)
+        if (param_.has_value()) {
+          // Use a small relative epsilon for comparison
+          constexpr double epsilon = std::numeric_limits<double>::epsilon()
+                                     * 100;  // Adjust multiplier as needed
+          double diff = std::abs(param_.value() - other.param_.value());
+          double max_val = std::max(
+              std::abs(param_.value()), std::abs(other.param_.value()));
+          // Handle comparison near zero separately
+          if (max_val < epsilon) {
+            return diff < epsilon;
+          }
+          return diff <= epsilon * max_val;
+        }
+        // If neither has value (shouldn't happen if type requires param due to
+        // constructor checks, but safe)
+        return true;
       }
       // Types match and no parameters needed/relevant for this type
       return true;
@@ -206,34 +230,219 @@ namespace OmniDSP {
 
     /**
      * @brief Compares two WindowSpec objects for inequality.
-     * @param other The WindowSpec object to compare against.
-     * @return True if the specifications are different, false otherwise.
      */
-    bool operator!=(const WindowSpec<T>& other) const
+    bool operator!=(const WindowSpec& other) const noexcept
     {
       return !(*this == other);
     }
 
    private:
-    /**
-     * @brief Private constructor used internally by static factory methods.
-     * @param type The window type.
-     * @param stddev Optional standard deviation for Gaussian window.
-     * @param beta Optional beta parameter for Kaiser window.
-     */
-    explicit WindowSpec(
-        WindowType type,
-        std::optional<RealT<T>> stddev = std::nullopt,
-        std::optional<RealT<T>> beta = std::nullopt)
-        : type_(type), stddev_(stddev), beta_(beta)
-    {}
-
-    WindowType type_;  ///< The type of window function.
-    std::optional<RealT<T>> stddev_
-        = std::nullopt;  ///< Standard deviation (for Gaussian).
-    std::optional<RealT<T>> beta_
-        = std::nullopt;  ///< Shape parameter (for Kaiser).
+    WindowType type_;
+    std::optional<double> param_
+        = std::nullopt;  // Single parameter for Gaussian/Kaiser
   };
+
+  // --- Function Declarations (Example - If needed later) ---
+
+  /**
+   * @brief Generates window coefficients based on the specification.
+   *
+   * @tparam T The floating-point type (float or double) for the *output
+   * coefficients*.
+   * @param spec The non-templated window specification.
+   * @param length The desired length of the window.
+   * @param output The span to write the window coefficients into. Must have
+   * size `length`.
+   * @return Status indicating success or failure.
+   */
+  template <typename T>
+  Status generate_window(
+      const WindowSpec& spec, size_t length, std::span<T> output);
+
+  // Add declarations for any other window-related functions...
+
+  // --- Template Implementations (Example for generate_window - Keep details
+  // internal) ---
+
+  namespace Detail {  // Keep implementation details internal if possible
+
+    // Helper for Kaiser window calculation
+    inline double bessel_i0(double x)
+    {
+      double sum = 1.0;
+      double term = 1.0;
+      double x_half_sq = (x / 2.0) * (x / 2.0);
+      int k = 1;
+      // Iterate until term is negligible relative to sum or machine epsilon
+      while (std::abs(term)
+                 > std::abs(sum) * std::numeric_limits<double>::epsilon() * 10.0
+             && k < 100) {
+        term *= x_half_sq / (static_cast<double>(k) * static_cast<double>(k));
+        sum += term;
+        k++;
+      }
+      return sum;
+    }
+
+  }  // namespace Detail
+
+  template <typename T>
+  Status generate_window(
+      const WindowSpec& spec, size_t length, std::span<T> output)
+  {
+    if (length == 0) {
+      return Status::Success;  // Nothing to do
+    }
+    if (output.size() != length) {
+      return Status::SizeMismatch;
+    }
+    if (!spec.validate()) {
+      // This check ensures param is present if type is Kaiser/Gaussian
+      return Status::InvalidArgument;
+    }
+
+    const double N = static_cast<double>(length);
+    const double N_minus_1 = N - 1.0;  // Can be 0 if length is 1
+
+    // Pre-calculate common terms using std::numbers
+    constexpr double pi
+        = std::numbers::pi_v<double>;  // *** Use std::numbers ***
+    const double two_pi = 2.0 * pi;
+    const double four_pi = 4.0 * pi;
+    const double six_pi = 6.0 * pi;
+    const double eight_pi = 8.0 * pi;
+
+    for (size_t n = 0; n < length; ++n) {
+      double n_double = static_cast<double>(n);
+      T val = T{0.0};  // Initialize value for this point
+
+      switch (spec.get_type()) {
+        case WindowType::Rectangular:
+          val = T{1.0};
+          break;
+
+        case WindowType::Bartlett:
+        case WindowType::Triangular:  // Bartlett and Triangular are often the
+                                      // same for odd N
+          if (length == 1) {
+            val = T{1.0};
+          }
+          else {
+            // Avoid division by zero if N_minus_1 is 0 (length == 1)
+            double denom = N_minus_1 / 2.0;
+            val = static_cast<T>(
+                1.0 - std::abs(n_double - denom) / (denom > 0 ? denom : 1.0));
+          }
+          break;
+
+        case WindowType::Hann:
+          if (length == 1) {
+            val = T{1.0};
+          }
+          else {
+            val = static_cast<T>(
+                0.5 * (1.0 - std::cos(two_pi * n_double / N_minus_1)));
+          }
+          break;
+
+        case WindowType::Hamming:
+          if (length == 1) {
+            val = T{1.0};
+          }
+          else {
+            val = static_cast<T>(
+                0.54 - 0.46 * std::cos(two_pi * n_double / N_minus_1));
+          }
+          break;
+
+        case WindowType::Blackman:
+          if (length == 1) {
+            val = T{1.0};
+          }
+          else {
+            val = static_cast<T>(
+                0.42 - 0.50 * std::cos(two_pi * n_double / N_minus_1)
+                + 0.08
+                      * std::cos(
+                          four_pi * n_double / N_minus_1));  // Use four_pi
+          }
+          break;
+
+        case WindowType::Flattop:
+          // Standard coefficients for flat top window (e.g., from MATLAB)
+          if (length == 1) {
+            val = T{1.0};
+          }
+          else {
+            const double a0 = 0.21557895;
+            const double a1 = 0.41663158;
+            const double a2 = 0.277263158;
+            const double a3 = 0.083578947;
+            const double a4 = 0.006947368;
+            val = static_cast<T>(
+                a0 - a1 * std::cos(two_pi * n_double / N_minus_1)
+                + a2 * std::cos(four_pi * n_double / N_minus_1)  // Use four_pi
+                - a3 * std::cos(six_pi * n_double / N_minus_1)   // Use six_pi
+                + a4
+                      * std::cos(
+                          eight_pi * n_double / N_minus_1));  // Use eight_pi
+          }
+          break;
+
+        case WindowType::Kaiser: {
+          // Parameter should be present due to validate() check
+          double beta = spec.get_param().value();
+          if (length == 1) {
+            val = T{1.0};
+          }
+          else {
+            double term_sq = std::pow((2.0 * n_double / N_minus_1 - 1.0), 2.0);
+            // Ensure argument to sqrt is non-negative due to potential floating
+            // point issues
+            double sqrt_arg = std::max(0.0, 1.0 - term_sq);
+            double kaiser_arg = beta * std::sqrt(sqrt_arg);
+            double i0_beta = Detail::bessel_i0(beta);
+            // Avoid division by zero if i0_beta is somehow zero
+            val = (i0_beta > 0)
+                      ? static_cast<T>(Detail::bessel_i0(kaiser_arg) / i0_beta)
+                      : T{0.0};
+          }
+          break;
+        }
+
+        case WindowType::Gaussian: {
+          // Parameter should be present due to validate() check
+          // Assuming param = stddev (sigma)
+          double sigma = spec.get_param().value();
+          if (length == 1) {
+            val = T{1.0};
+          }
+          else {
+            double center = N_minus_1 / 2.0;
+            // Standard deviation relative to half window width is often used.
+            // Let's assume the parameter 'sigma' is this relative std dev.
+            // If sigma = 0.5, it reaches near zero at edges.
+            // double term = (n_double - center) / (sigma * center);
+            // Let's assume sigma is the parameter as defined in
+            // scipy.signal.windows.gaussian where the window is exp(-0.5 * ( (n
+            // - (N-1)/2) / (sigma * (N-1)/2) )**2)
+            double denom = sigma * center;
+            // Avoid division by zero if center is 0 (length == 1)
+            double term = (denom > 0) ? (n_double - center) / denom : 0.0;
+            val = static_cast<T>(std::exp(-0.5 * term * term));
+          }
+          break;
+        }
+
+        default:
+          return Status::InvalidArgument;  // Should not happen if enum is
+                                           // exhaustive
+      }
+      output[n] = val;
+    }
+
+    return Status::Success;
+  }
 
 }  // namespace OmniDSP
 

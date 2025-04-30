@@ -1,30 +1,48 @@
 # cmake/depend/highway.cmake
 # ===========================
-# Fetches and configures Google Highway using FetchContent.
+# Finds and configures the pre-installed Google Highway library using find_package.
+# Assumes Highway (e.g., libhwy 1.2.0) is installed via Conda or system package manager.
 # ===========================
 
-message(STATUS "  Configuring Google Highway dependency...")
+message(STATUS "   Configuring Google Highway dependency...")
 
-# Adjust indentation for fetching message
-message(STATUS "    Fetching Google Highway library using FetchContent...")
-FetchContent_Declare(
-  highway # Name for FetchContent internal tracking
-  GIT_REPOSITORY https://github.com/google/highway.git
-  GIT_TAG        1.2.0 # Use latest known tag 1.2.0
-  GIT_SHALLOW    TRUE  # Only download necessary history
-)
-# Set Highway build options *before* FetchContent_MakeAvailable
-set(HWY_ENABLE_TESTS OFF CACHE BOOL "" FORCE) # Don't build Highway's own tests
-# Fetch, configure, build (if necessary), and make Highway targets available
-FetchContent_MakeAvailable(highway)
+# --- Debugging ---
+# Print the CMAKE_PREFIX_PATH to verify Conda environment path is included
+# This should ideally contain C:/Users/mwell/anaconda3/envs/omnidsp-dev or similar
+# Ensure the Conda environment is activated *before* running CMake.
+message(STATUS "     CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH}")
+# --- End Debugging ---
 
-# Mark Highway includes as SYSTEM to suppress warnings from its headers
-# FetchContent_MakeAvailable doesn't directly support the SYSTEM keyword like add_subdirectory,
-# so we need to set the property on the directory afterwards if desired.
-# Check if the source directory variable is defined before setting the property
-if(DEFINED highway_SOURCE_DIR AND EXISTS ${highway_SOURCE_DIR})
-    set_property(DIRECTORY ${highway_SOURCE_DIR} PROPERTY SYSTEM TRUE)
+# Find the pre-installed Highway package provided by Conda
+# REQUIRED will cause CMake to error out if the package is not found.
+# Trying both 'HWY' and 'hwy' as package names, as case/naming can vary.
+
+# Try uppercase first quietly to avoid error messages if lowercase is the correct one.
+find_package(HWY 1.2.0 QUIET)
+
+# If uppercase wasn't found, try lowercase. Use REQUIRED here to fail if neither works.
+if(NOT HWY_FOUND)
+    message(STATUS "     Package 'HWY' not found. Trying lowercase 'hwy'...")
+    find_package(hwy 1.2.0 REQUIRED) # Try lowercase, REQUIRED will error if not found
+
+    # If lowercase is found, copy its variables to the uppercase equivalents for consistency
+    # in the rest of the script (e.g., checking HWY_FOUND).
+    if(hwy_FOUND)
+      set(HWY_FOUND TRUE)
+      set(HWY_VERSION ${hwy_VERSION}) # Copy version info
+      # Add any other variables needed from hwy_* to HWY_* if necessary
+    endif()
 endif()
-# Adjust indentation for made available message
-message(STATUS "      Made highway targets available (e.g., hwy::hwy).")
-# Highway should now provide the hwy::hwy target for linking.
+
+
+# Check if the package was found (either as HWY or hwy)
+if(HWY_FOUND)
+    message(STATUS "     Found pre-installed Google Highway version ${HWY_VERSION}")
+    # The necessary targets (like 'hwy') should now be available.
+else()
+    # This message is now reachable only if REQUIRED failed on the second try (hwy).
+    message(FATAL_ERROR "   Could not find required Google Highway package (libhwy >= 1.2.0) using name 'HWY' or 'hwy'. Please ensure it is installed in your active Conda environment ('${CMAKE_PREFIX_PATH}') and that the environment is activated before running CMake.")
+endif()
+
+# --- Workarounds removed ---
+# Assuming Conda package handles DLL exports correctly.

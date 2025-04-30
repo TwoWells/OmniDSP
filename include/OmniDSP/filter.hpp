@@ -1,11 +1,7 @@
 /**
- * @file filter.h
+ * @file filter.hpp
  * @brief Defines the public API for FIR and IIR filter design and execution
  * Plans.
- * @details Provides interfaces for creating and using filter plans, which
- * encapsulate filter coefficients and state for efficient processing. Filter
- * design parameters are specified using spec structs, and plans are created via
- * factory methods on the main OmniDSP class.
  */
 
 #ifndef OMNIDSP_FILTER_H
@@ -13,309 +9,251 @@
 
 #include <complex>
 #include <cstddef>
-#include <memory>    // For std::unique_ptr
-#include <optional>  // For optional parameters in specs
-#include <span>      // For input/output views (requires C++20)
+#include <memory>
+#include <optional>
+#include <span>
+#include <utility>  // For std::move
 #include <vector>
 
-#include "core_types.hpp"  // Core types like RealT, ComplexT, Status, OmniExpected
-#include "window.hpp"      // Include WindowSpec for FIR filter design
-
-// Include the generated export header for DLL support
 #include "OmniDSP/omnidsp_export.hpp"
+#include "core_types.hpp"
+#include "window.hpp"  // Include for non-templated WindowSpec
+
+// Forward declare backend Impl classes
+namespace OmniDSP::backend {
+  template <typename T>
+  class FIRFilterPlanImpl;
+  template <typename T>
+  class IIRFilterPlanImpl;
+}  // namespace OmniDSP::backend
 
 namespace OmniDSP {
 
-  // Forward declare the main OmniDSP class (needed for friend declaration)
-  class OmniDSP;
+  class OmniDSPImpl;  // Forward declare instead of including full omnidsp.hpp
+                      // if possible
 
-  // Forward declarations for implementation classes (Pimpl idiom)
-  namespace backend {
-    template <typename T>
-    class FIRFilterPlanImpl;
-    template <typename T>
-    class IIRFilterPlanImpl;
-  }  // namespace backend
+  /** @brief Enumeration of standard filter types. */
+  enum class FilterType { Lowpass, Highpass, Bandpass, Bandstop };
 
-  /**
-   * @brief Enumeration of standard filter types.
-   */
-  enum class FilterType {
-    Lowpass,
-    Highpass,
-    Bandpass,
-    Bandstop
-    // Could add others like Differentiator, Hilbert later
-  };
+  /** @brief Specification for designing an FIR filter. (Non-Templated) */
+  struct OMNIDSP_EXPORT FIRFilterSpec {
+    FilterType type = FilterType::Lowpass;
+    size_t order = 0;          ///< Desired filter order (0 for automatic).
+    double sample_rate = 1.0;  ///< Sample rate for cutoff freq interpretation
+                               ///< (often normalized to 1.0). Use double.
+    double cutoff1 = 0.0;      ///< Primary cutoff frequency (normalized 0.0 to
+                               ///< 0.5). Use double.
+    std::optional<double> cutoff2
+        = std::nullopt;  ///< Secondary cutoff frequency for bandpass/bandstop.
+                         ///< Use double.
+    WindowSpec window;   ///< Use non-templated WindowSpec.
+    // Optional parameters for specific design methods (e.g., Parks-McClellan)
+    std::optional<double> transition_width
+        = std::nullopt;  ///< Desired transition width (normalized). Use double.
+    std::optional<double> stopband_attenuation_db
+        = std::nullopt;  ///< Desired stopband attenuation in dB. Use double.
 
-  /**
-   * @brief Specification for designing an FIR filter.
-   * @details Used as input to OmniDSP::design_fir_filter or
-   * OmniDSP::create_fir_filter_plan. Currently supports window-based design.
-   * @tparam T The floating-point type (e.g., float, double).
-   */
-  template <typename T>
-  struct FIRFilterSpec {
-    FilterType type = FilterType::Lowpass;  ///< The desired filter type.
-    size_t order = 0;  ///< Filter order (number of taps - 1). Must be > 0.
-    RealT<T> sample_rate
-        = 0.0;  ///< Sample rate of the signal to be filtered (Hz). Must be > 0.
-    RealT<T> cutoff1 = 0.0;  ///< Primary cutoff frequency (Hz). For Low/High
-                             ///< pass. Must be > 0 and < sample_rate/2.
-    std::optional<RealT<T>> cutoff2
-        = std::nullopt;    ///< Secondary cutoff frequency (Hz). For
-                           ///< Bandpass/Bandstop. Must be > 0 and <
-                           ///< sample_rate/2.
-    WindowSpec<T> window;  ///< Specification for the window function (e.g.,
-                           ///< Hann, Kaiser with beta). Defaults to Hann.
-
-    // Add validation method?
-    bool validate() const
+    /**
+     * @brief Validates the FIR filter specification.
+     * @return True if the spec is valid, false otherwise.
+     */
+    [[nodiscard]] bool validate() const
     {
-      if (order == 0 || sample_rate <= 0.0 || cutoff1 <= 0.0
-          || cutoff1 >= sample_rate / 2.0) {
-        return false;
-      }
+      if (sample_rate <= 0.0) return false;
+      // Allow cutoff1 to be exactly 0 for DC blocking (highpass) or similar?
+      // Check design methods. For now, keep strict > 0 check.
+      if (cutoff1 <= 0.0 || cutoff1 >= 0.5 * sample_rate)
+        return false;  // Cutoff must be within (0, Nyquist)
+
       if (type == FilterType::Bandpass || type == FilterType::Bandstop) {
-        if (!cutoff2.has_value() || cutoff2.value() <= 0.0
-            || cutoff2.value() >= sample_rate / 2.0
-            || cutoff2.value() <= cutoff1) {
-          // Ensure cutoff2 exists, is valid, and > cutoff1 for band filters
+        if (!cutoff2.has_value()) return false;  // Need second cutoff
+        if (cutoff2.value() <= 0.0 || cutoff2.value() >= 0.5 * sample_rate)
           return false;
-        }
+        if (cutoff2.value() <= cutoff1)
+          return false;  // Ensure cutoff2 > cutoff1
       }
       else {
-        if (cutoff2.has_value()) {
-          // Cutoff2 should not be set for low/high pass
-          return false;
-        }
+        // For low/high pass, cutoff2 should not be set
+        if (cutoff2.has_value()) return false;
       }
-      // Add validation for window parameters if needed (e.g., Kaiser beta)
+      // Validate window spec
+      if (!window.validate()) return false;
+
+      // Add validation for transition_width and stopband_attenuation_db if
+      // needed
+      if (transition_width.has_value() && transition_width.value() <= 0.0)
+        return false;
+      if (stopband_attenuation_db.has_value()
+          && stopband_attenuation_db.value() <= 0.0)
+        return false;
+
       return true;
     }
   };
 
   /**
    * @brief Represents coefficients for a single second-order section (SOS) of
-   * an IIR filter.
-   * @details IIR filters are typically implemented as a cascade of SOS for
-   * better numerical stability. Transfer function: H(z) = (b0 + b1*z^-1 +
-   * b2*z^-2) / (1
-   * + a1*z^-1 + a2*z^-2) Note the convention: a0 is implicitly 1.
-   * @tparam T The floating-point type (e.g., float, double).
+   * an IIR filter. Part of the "Coef" category representing design results.
    */
-  template <typename T>
-  struct SecondOrderSection {
-    RealT<T> b0 = 1.0;  ///< Numerator coefficient b0.
-    RealT<T> b1 = 0.0;  ///< Numerator coefficient b1.
-    RealT<T> b2 = 0.0;  ///< Numerator coefficient b2.
-    RealT<T> a1 = 0.0;  ///< Denominator coefficient a1 (a0 is implicitly 1).
-    RealT<T> a2 = 0.0;  ///< Denominator coefficient a2.
+  struct OMNIDSP_EXPORT
+      IIRFilterCoef {  // *** RENAMED from SecondOrderSection ***
+    double b0 = 1.0;
+    double b1 = 0.0;
+    double b2 = 0.0;  // Numerator coefficients. Use double.
+    double a0 = 1.0;
+    double a1 = 0.0;
+    double a2 = 0.0;  // Denominator coefficients (a0 usually normalized to 1).
+                      // Use double.
   };
 
   /**
-   * @brief Specification for designing an IIR filter.
-   * @details Used as input to OmniDSP::design_iir_filter or
-   * OmniDSP::create_iir_filter_plan. Specifies parameters for common IIR filter
-   * types like Butterworth or Chebyshev. The design result is typically
-   * represented as a series of Second-Order Sections (SOS).
-   * @tparam T The floating-point type (e.g., float, double).
+   * @brief Type alias for FIR filter coefficients.
+   * Part of the "Coef" category representing design results.
+   * @tparam T The coefficient data type (F32 or F64).
    */
   template <typename T>
-  struct IIRFilterSpec {
-    // TODO: Define IIR filter design parameters. Examples:
-    // enum class IIRDesignType { Butterworth, ChebyshevI, ChebyshevII, Elliptic
-    // }; IIRDesignType design = IIRDesignType::Butterworth;
-    FilterType type = FilterType::Lowpass;  ///< The desired filter type
-                                            ///< (Lowpass, Highpass, etc.).
-    size_t order = 0;                       ///< Filter order. Must be > 0.
-    RealT<T> sample_rate
-        = 0.0;  ///< Sample rate of the signal to be filtered (Hz). Must be > 0.
-    RealT<T> cutoff1 = 0.0;  ///< Primary cutoff frequency (Hz). Must be > 0 and
-                             ///< < sample_rate/2.
-    std::optional<RealT<T>> cutoff2
-        = std::nullopt;  ///< Secondary cutoff frequency (Hz) for
-                         ///< Bandpass/Bandstop. Must be > 0 and <
-                         ///< sample_rate/2.
-    // std::optional<RealT<T>> passband_ripple_db = std::nullopt; // For
-    // Chebyshev I, Elliptic std::optional<RealT<T>> stopband_attenuation_db =
-    // std::nullopt;
-    // // For Chebyshev II, Elliptic
+  using FIRFilterCoef = std::vector<T>;  // Conceptually useful alias
 
-    // Add validation method?
-    bool validate() const
+  /** @brief Specification for designing an IIR filter. (Non-Templated) */
+  struct OMNIDSP_EXPORT IIRFilterSpec {
+    FilterType type = FilterType::Lowpass;
+    size_t order = 0;  ///< Filter order (must be > 0).
+    double sample_rate
+        = 1.0;  ///< Sample rate for cutoff freq interpretation. Use double.
+    double cutoff1 = 0.0;  ///< Primary cutoff frequency (normalized 0.0 to
+                           ///< 0.5). Use double.
+    std::optional<double> cutoff2
+        = std::nullopt;  ///< Secondary cutoff frequency for bandpass/bandstop.
+                         ///< Use double.
+    // Optional parameters for specific design methods (e.g., ripple)
+    std::optional<double> passband_ripple_db = std::nullopt;  ///< Use double.
+    std::optional<double> stopband_attenuation_db
+        = std::nullopt;  ///< Use double. For Chebyshev II / Elliptic
+
+    /**
+     * @brief Validates the IIR filter specification.
+     * @return True if the spec is valid, false otherwise.
+     */
+    [[nodiscard]] bool validate() const
     {
-      if (order == 0 || sample_rate <= 0.0 || cutoff1 <= 0.0
-          || cutoff1 >= sample_rate / 2.0) {
-        return false;
-      }
+      if (order == 0) return false;  // IIR order must be specified
+      if (sample_rate <= 0.0) return false;
+      if (cutoff1 <= 0.0 || cutoff1 >= 0.5 * sample_rate) return false;
+
       if (type == FilterType::Bandpass || type == FilterType::Bandstop) {
-        if (!cutoff2.has_value() || cutoff2.value() <= 0.0
-            || cutoff2.value() >= sample_rate / 2.0
-            || cutoff2.value() <= cutoff1) {
+        if (!cutoff2.has_value()) return false;
+        if (cutoff2.value() <= 0.0 || cutoff2.value() >= 0.5 * sample_rate)
           return false;
-        }
+        if (cutoff2.value() <= cutoff1) return false;
       }
       else {
         if (cutoff2.has_value()) return false;
       }
-      // Add checks for ripple/attenuation if those parameters are added
+      // Add validation for ripple/attenuation if needed
+      if (passband_ripple_db.has_value() && passband_ripple_db.value() <= 0.0)
+        return false;
+      if (stopband_attenuation_db.has_value()
+          && stopband_attenuation_db.value() <= 0.0)
+        return false;
+
       return true;
     }
   };
 
-  /**
-   * @brief Plan object for executing Finite Impulse Response (FIR) filters.
-   * @details Encapsulates the filter coefficients and potentially state (for
-   * overlap-add/save) for efficient execution. Created via
-   * OmniDSP::create_fir_filter_plan. Uses the Pimpl idiom to hide
-   * backend-specific implementation details. This class is non-copyable but
-   * movable.
-   * @tparam T The data type for filtering (e.g., float, double,
-   * std::complex<float>).
-   */
-  template <typename T>
+  /** @brief Plan object for executing Finite Impulse Response (FIR) filters. */
+  template <typename T>  // Keep Plan templated on data type T
   class OMNIDSP_EXPORT FIRFilterPlan {
-    friend class OmniDSP;  // Allow OmniDSP factory methods to call private
-                           // constructor
+    friend class OmniDSPImpl;  // Allow OmniDSPImpl to access private
+                               // constructor
 
    public:
-    /** @brief Destructor. */
     ~FIRFilterPlan();
-    /** @brief Move constructor. */
     FIRFilterPlan(FIRFilterPlan&& other) noexcept;
-    /** @brief Move assignment operator. */
     FIRFilterPlan& operator=(FIRFilterPlan&& other) noexcept;
-    /** @brief Deleted copy constructor. */
     FIRFilterPlan(const FIRFilterPlan&) = delete;
-    /** @brief Deleted copy assignment operator. */
     FIRFilterPlan& operator=(const FIRFilterPlan&) = delete;
 
-    /**
-     * @brief Applies the FIR filter to an input signal.
-     * @details Filtering may be implemented using direct convolution, FFT
-     * convolution, or overlap-add/save methods depending on the backend and
-     * plan configuration. This method maintains the filter state between calls
-     * for continuous processing.
-     * @param input A span representing the input signal segment.
-     * @param output A span representing the output buffer. Must be large enough
-     * to hold the corresponding output segment (typically same size as input).
-     * @return Status::Success on success, or an error code on failure.
-     * @note The output span must be pre-allocated.
-     */
     [[nodiscard]] Status execute(std::span<const T> input, std::span<T> output);
-
-    /**
-     * @brief Resets the internal state of the filter.
-     * @details Call this if processing discontinuous segments of data.
-     * @return Status::Success on success.
-     */
     Status reset();
-
-    /**
-     * @brief Gets the order of the FIR filter.
-     * @return The filter order (number of taps - 1).
-     */
     size_t get_order() const;
+    size_t get_num_taps() const;  // num_taps = order + 1
 
     /**
-     * @brief Gets the number of taps in the FIR filter.
-     * @return The number of filter taps (coefficients).
+     * @brief Public static helper for factory methods to create instances.
+     * @param pimpl A unique_ptr to the backend-specific implementation object.
+     * @return A unique_ptr to the newly created public FIRFilterPlan. Returns
+     * nullptr if pimpl is null.
      */
-    size_t get_num_taps() const;
-
-    // Potentially add: get_coefficients(), get_latency() ?
+    static std::unique_ptr<FIRFilterPlan<T>> create_from_impl(
+        std::unique_ptr<backend::FIRFilterPlanImpl<T>> pimpl)
+    {
+      if (!pimpl) {
+        return nullptr;
+      }
+      // Use private constructor via helper struct or make constructor
+      // public/protected For simplicity here, assume constructor is accessible
+      // or use a factory pattern
+      return std::unique_ptr<FIRFilterPlan<T>>(
+          new FIRFilterPlan<T>(std::move(pimpl)));
+    }
 
    private:
-    /**
-     * @brief Private constructor, called ONLY by OmniDSP factory methods.
-     * @param pimpl A unique_ptr to the backend-specific implementation.
-     */
+    /** @brief Private constructor, called ONLY by create_from_impl or friend
+     * OmniDSPImpl. */
     explicit FIRFilterPlan(
         std::unique_ptr<backend::FIRFilterPlanImpl<T>> pimpl);
 
-    /** @brief Pointer to the implementation object (Pimpl idiom). */
     std::unique_ptr<backend::FIRFilterPlanImpl<T>> pimpl_;
   };
 
-  /**
-   * @brief Plan object for executing Infinite Impulse Response (IIR) filters.
-   * @details Encapsulates the filter coefficients (typically as Second-Order
-   * Sections, SOS) and state for efficient execution. Created via
-   * OmniDSP::create_iir_filter_plan. Uses the Pimpl idiom to hide
-   * backend-specific implementation details. This class is non-copyable but
-   * movable.
-   * @tparam T The data type for filtering (e.g., float, double). Note: IIR
-   * filtering is typically only defined for real signals. Complex IIR filtering
-   * is less common.
+  /** @brief Plan object for executing Infinite Impulse Response (IIR) filters.
    */
-  template <typename T>
+  template <typename T>  // Keep Plan templated on data type T
   class OMNIDSP_EXPORT IIRFilterPlan {
-    friend class OmniDSP;  // Allow OmniDSP factory methods to call private
-                           // constructor
+    static_assert(
+        !Detail::is_complex_v<T>,
+        "IIRFilterPlan typically requires a real type (F32 or F64).");
+    friend class OmniDSPImpl;  // Allow OmniDSPImpl to access private
+                               // constructor
 
    public:
-    /** @brief Destructor. */
     ~IIRFilterPlan();
-    /** @brief Move constructor. */
     IIRFilterPlan(IIRFilterPlan&& other) noexcept;
-    /** @brief Move assignment operator. */
     IIRFilterPlan& operator=(IIRFilterPlan&& other) noexcept;
-    /** @brief Deleted copy constructor. */
     IIRFilterPlan(const IIRFilterPlan&) = delete;
-    /** @brief Deleted copy assignment operator. */
     IIRFilterPlan& operator=(const IIRFilterPlan&) = delete;
 
-    /**
-     * @brief Applies the IIR filter (cascade of SOS) to an input signal.
-     * @details This method maintains the filter state (delay elements for each
-     * SOS) between calls for continuous processing.
-     * @param input A span representing the input signal segment.
-     * @param output A span representing the output buffer. Must be large enough
-     * to hold the corresponding output segment (typically same size as input).
-     * @return Status::Success on success, or an error code on failure.
-     * @note The output span must be pre-allocated.
-     */
     [[nodiscard]] Status execute(std::span<const T> input, std::span<T> output);
-
-    /**
-     * @brief Resets the internal state of the filter (delay elements).
-     * @details Call this if processing discontinuous segments of data.
-     * @return Status::Success on success.
-     */
     Status reset();
-
-    /**
-     * @brief Gets the order of the IIR filter.
-     * @return The filter order.
-     */
     size_t get_order() const;
-
-    /**
-     * @brief Gets the number of second-order sections used in the filter
-     * implementation.
-     * @return The number of SOS.
-     */
     size_t get_num_sections() const;
 
-    // Potentially add: get_sos_coefficients(), get_latency() ?
+    /**
+     * @brief Public static helper for factory methods to create instances.
+     * @param pimpl A unique_ptr to the backend-specific implementation object.
+     * @return A unique_ptr to the newly created public IIRFilterPlan. Returns
+     * nullptr if pimpl is null.
+     */
+    static std::unique_ptr<IIRFilterPlan<T>> create_from_impl(
+        std::unique_ptr<backend::IIRFilterPlanImpl<T>> pimpl)
+    {
+      if (!pimpl) {
+        return nullptr;
+      }
+      return std::unique_ptr<IIRFilterPlan<T>>(
+          new IIRFilterPlan<T>(std::move(pimpl)));
+    }
 
    private:
-    /**
-     * @brief Private constructor, called ONLY by OmniDSP factory methods.
-     * @param pimpl A unique_ptr to the backend-specific implementation.
-     */
+    /** @brief Private constructor, called ONLY by create_from_impl or friend
+     * OmniDSPImpl. */
     explicit IIRFilterPlan(
         std::unique_ptr<backend::IIRFilterPlanImpl<T>> pimpl);
 
-    /** @brief Pointer to the implementation object (Pimpl idiom). */
     std::unique_ptr<backend::IIRFilterPlanImpl<T>> pimpl_;
   };
 
-  // --- Template Implementations (Definitions) ---
-  // Definitions for template class methods (constructors, destructors, move
-  // ops, execute, getters) MUST be provided in the corresponding .cpp file
-  // (e.g., filter.cpp or potentially fir_filter.cpp / iir_filter.cpp).
+  // Definitions MUST be provided in a .cpp file
 
 }  // namespace OmniDSP
 
