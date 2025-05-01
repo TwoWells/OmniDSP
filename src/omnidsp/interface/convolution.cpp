@@ -4,11 +4,9 @@
  * forwarding calls to backend implementations.
  */
 
-#include "OmniDSP/convolution.hpp"  // Corresponding header
+#include <OmniDSP/convolution.hpp>  // Corresponding header
 
-// Include Pimpl interface definition
-// #include "backend/backend.hpp"
-
+// Include the backend interface definition which declares the Impl classes
 #include <memory>  // For std::unique_ptr
 #include <numeric>  // For std::max, std::min (potentially used in get_output_length)
 #include <span>
@@ -16,45 +14,12 @@
 #include <utility>    // For std::move
 #include <vector>
 
+#include "backend.hpp"  // Defines backend::ConvolutionPlanImpl, backend::CorrelationPlanImpl
+
+// Include core types for F32, F64 etc. used in instantiations
+#include <OmniDSP/core_types.hpp>
+
 namespace OmniDSP {
-  namespace backend {
-
-    /**
-     * @brief Abstract base class defining the interface for Convolution Plan
-     * implementations (Pimpl).
-     * @tparam T The data type (e.g., float, std::complex<float>).
-     */
-    template <typename T>
-    class ConvolutionPlanImpl {
-     public:
-      virtual ~ConvolutionPlanImpl() = default;
-      virtual Status execute(
-          std::span<const T> input, std::span<T> output) const
-          = 0;
-      virtual size_t get_kernel_length() const = 0;
-      virtual ConvolutionType get_type() const = 0;
-      virtual size_t get_output_length(size_t input_length) const = 0;
-    };
-
-    /**
-     * @brief Abstract base class defining the interface for Correlation Plan
-     * implementations (Pimpl).
-     * @tparam T The data type (e.g., float, std::complex<float>).
-     */
-    template <typename T>
-    class CorrelationPlanImpl {
-     public:
-      virtual ~CorrelationPlanImpl() = default;
-      virtual Status execute(
-          std::span<const T> input, std::span<T> output) const
-          = 0;
-      virtual size_t get_template_length() const
-          = 0;  // Renamed from kernel for clarity
-      virtual ConvolutionType get_type() const = 0;
-      virtual size_t get_output_length(size_t input_length) const = 0;
-    };
-
-  }  // namespace backend
 
   //--------------------------------------------------------------------------
   // ConvolutionPlan Method Definitions
@@ -90,7 +55,7 @@ namespace OmniDSP {
     if (!pimpl_) {
       return Status::InvalidOperation;
     }
-    // TODO: Add size checks for output based on get_output_length?
+    // Add size checks for robustness?
     // size_t expected_len = get_output_length(input.size());
     // if (output.size() < expected_len) return Status::SizeMismatch;
     return pimpl_->execute(input, output);
@@ -115,6 +80,18 @@ namespace OmniDSP {
     return pimpl_->get_type();
   }
 
+  // *** ADDED Definition ***
+  template <typename T>
+  ConvolutionMethod ConvolutionPlan<T>::get_method_hint() const
+  {
+    if (!pimpl_) {
+      throw std::runtime_error(
+          "Invalid ConvolutionPlan instance in get_method_hint.");
+    }
+    // Assumes ConvolutionPlanImpl has a get_method() method
+    return pimpl_->get_method();
+  }
+
   template <typename T>
   size_t ConvolutionPlan<T>::get_output_length(size_t input_length) const
   {
@@ -122,9 +99,19 @@ namespace OmniDSP {
       throw std::runtime_error(
           "Invalid ConvolutionPlan instance in get_output_length.");
     }
-    // Forward calculation to implementation, which knows the kernel length and
-    // mode.
     return pimpl_->get_output_length(input_length);
+  }
+
+  // *** ADDED Definition ***
+  template <typename T>
+  std::span<const T> ConvolutionPlan<T>::get_kernel() const
+  {
+    if (!pimpl_) {
+      throw std::runtime_error(
+          "Invalid ConvolutionPlan instance in get_kernel.");
+    }
+    // Assumes ConvolutionPlanImpl has a get_kernel() method
+    return pimpl_->get_kernel();
   }
 
   //--------------------------------------------------------------------------
@@ -161,7 +148,7 @@ namespace OmniDSP {
     if (!pimpl_) {
       return Status::InvalidOperation;
     }
-    // TODO: Add size checks for output based on get_output_length?
+    // Add size checks?
     // size_t expected_len = get_output_length(input.size());
     // if (output.size() < expected_len) return Status::SizeMismatch;
     return pimpl_->execute(input, output);
@@ -186,6 +173,18 @@ namespace OmniDSP {
     return pimpl_->get_type();
   }
 
+  // *** ADDED Definition ***
+  template <typename T>
+  ConvolutionMethod CorrelationPlan<T>::get_method_hint() const
+  {
+    if (!pimpl_) {
+      throw std::runtime_error(
+          "Invalid CorrelationPlan instance in get_method_hint.");
+    }
+    // Assumes CorrelationPlanImpl has a get_method() method
+    return pimpl_->get_method();
+  }
+
   template <typename T>
   size_t CorrelationPlan<T>::get_output_length(size_t input_length) const
   {
@@ -193,15 +192,24 @@ namespace OmniDSP {
       throw std::runtime_error(
           "Invalid CorrelationPlan instance in get_output_length.");
     }
-    // Forward calculation to implementation.
     return pimpl_->get_output_length(input_length);
+  }
+
+  // *** ADDED Definition ***
+  template <typename T>
+  std::span<const T> CorrelationPlan<T>::get_template() const
+  {
+    if (!pimpl_) {
+      throw std::runtime_error(
+          "Invalid CorrelationPlan instance in get_template.");
+    }
+    // Assumes CorrelationPlanImpl has a get_template() method
+    return pimpl_->get_template();
   }
 
   //--------------------------------------------------------------------------
   // Explicit Template Instantiations
   //--------------------------------------------------------------------------
-  // Instantiate templates for common types (float, double, complex) to ensure
-  // code generation.
 
   // ConvolutionPlan Instantiations
   template class ConvolutionPlan<F32>;

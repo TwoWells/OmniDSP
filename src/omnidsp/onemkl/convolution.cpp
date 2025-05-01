@@ -4,662 +4,1002 @@
  * classes, using internal oneMKL FFT plans (DFTI) for FFT operations.
  */
 
-#include "OmniDSP/core_types.hpp"  // For Status, ConvolutionType etc.
-#include "backend.hpp"             // oneMKL backend declarations
+#include "convolution.hpp"  // Include the corresponding header file
 
-// Include MKL header
+#ifdef OMNIDSP_USE_ONEMKL  // Compile guard
+
+// Include MKL header for VML and DFTI status codes/helpers
 #include <mkl.h>
 
-#include <algorithm>  // For std::reverse, std::copy
-#include <cmath>      // For log2, ceil, etc.
+#include <algorithm>  // For std::reverse, std::copy, std::min
+#include <cassert>    // For assert
+#include <cmath>      // For log2, ceil, etc. (used by next_power_of_two)
 #include <complex>
+#include <cstring>   // For std::memcpy
 #include <iostream>  // For debug/error messages
-#include <memory>    // For std::unique_ptr
-#include <numeric>   // For std::max, std::min
+#include <limits>    // For std::numeric_limits
+#include <memory>    // For std::unique_ptr, std::make_unique
+#include <numeric>   // For std::max, std::min (if needed)
 #include <span>
-#include <stdexcept>    // For std::runtime_error, std::invalid_argument
+#include <stdexcept>  // For std::runtime_error, std::invalid_argument, std::length_error
 #include <type_traits>  // For std::is_same_v
+#include <variant>      // For std::variant
 #include <vector>
 
-namespace OmniDSP {
-  namespace backend {
+// Include necessary OmniDSP headers
+#include <OmniDSP/convolution.hpp>
+#include <OmniDSP/core_types.hpp>
 
-    // Helper function from onemkl/backend.cpp (or move to common utility)
-    inline Status mkl_status_to_omnidsp_status(MKL_LONG status)
-    {
-      if (status == DFTI_NO_ERROR) {
-        return Status::Success;
-      }
-      std::cerr << "MKL Error: " << DftiErrorMessage(status) << std::endl;
-      if (status == DFTI_MEMORY_ERROR) return Status::AllocationError;
-      if (status == DFTI_INVALID_CONFIGURATION) return Status::InvalidArgument;
-      if (status == DFTI_INCONSISTENT_CONFIGURATION)
-        return Status::InvalidArgument;
-      if (status == DFTI_NUMBER_OF_THREADS_ERROR) return Status::BackendError;
-      return Status::BackendError;
+#include "../interface/backend.hpp"  // For AbstractBackend
+#include "fft.hpp"  // Include header for OneMKLFFTPlanImpl, OneMKLRFFTPlanImpl
+
+namespace OmniDSP::backend {
+
+  // Helper function from onemkl/backend.cpp (or move to common utility)
+  // Ensure this helper is available
+  inline Status mkl_status_to_omnidsp_status(MKL_LONG status)
+  {
+    if (status == DFTI_NO_ERROR) {
+      return Status::Success;
     }
+    std::cerr << "MKL DFTI Error: " << DftiErrorMessage(status)
+              << " (Code: " << status << ")" << std::endl;
+    if (status == DFTI_MEMORY_ERROR) return Status::AllocationError;
+    if (status == DFTI_INVALID_CONFIGURATION) return Status::InvalidArgument;
+    if (status == DFTI_INCONSISTENT_CONFIGURATION)
+      return Status::InvalidArgument;
+    if (status == DFTI_NUMBER_OF_THREADS_ERROR) return Status::BackendError;
+    if (status == DFTI_UNIMPLEMENTED) return Status::UnsupportedFeature;
+    return Status::BackendError;
+  }
 
-    // Helper function to calculate next power of two (move to common utility?)
+  // Helper function to calculate next power of two (move to common utility?)
+  // Copied from default/convolution.cpp - ensure consistency or use common
+  // header
+  namespace convolution_detail {  // Internal namespace
     inline size_t next_power_of_two(size_t n)
     {
-      if (n == 0) return 1;
-      size_t result = 1;
-      while (result < n) {
-        result <<= 1;
-        if (result == 0) return size_t(-1);  // Overflow
+      if (n == 0) return 0;  // Return 0 for input 0
+      if ((n > 0) && ((n & (n - 1)) == 0)) {
+        return n;
       }
-      return result;
+      if (n > (std::numeric_limits<size_t>::max() / 2U)) {
+        if (n == (~(std::numeric_limits<size_t>::max() >> 1))) return n;
+        return 0;  // Indicate overflow
+      }
+      size_t power = 1;
+      while (power < n) {
+        if (power > (std::numeric_limits<size_t>::max() / 2U)) return 0;
+        power <<= 1;
+      }
+      return power;
+    }
+  }  // namespace convolution_detail
+
+  //--------------------------------------------------------------------------
+  // OneMKLConvolutionPlanImpl Method Definitions
+  //--------------------------------------------------------------------------
+
+  template <typename T>
+  OneMKLConvolutionPlanImpl<T>::OneMKLConvolutionPlanImpl(
+      const AbstractBackend* owner,  // Needs owner to create sub-plans
+      const std::vector<T>& kernel,
+      ConvolutionType type,
+      ConvolutionMethod method)
+      : type_(type),
+        method_(method),  // Store method hint
+        original_kernel_(kernel),
+        kernel_length_(kernel.size()),
+        fft_length_(0),             // Will be set below
+        mkl_status_(DFTI_NO_ERROR)  // Initialize MKL status
+  {
+    if (!owner) {
+      throw std::invalid_argument(
+          "OneMKLConvolutionPlanImpl requires a valid owner AbstractBackend "
+          "pointer.");
+    }
+    if (kernel_length_ == 0) {
+      throw std::invalid_argument("Convolution kernel cannot be empty.");
     }
 
-    // Forward declare the concrete FFT plan impls needed internally
-    // Assumes these are defined in onemkl/fft.cpp or similar
-    template <typename T_Complex>
-    class OneMKLFFTPlanImpl;  // Expects complex type
-    template <typename T_Real>
-    class OneMKLRFFTPlanImpl;  // Expects real type
+    // --- Determine FFT length (using a simple heuristic for now) ---
+    // A more sophisticated approach might consider input length hints if
+    // available or use different lengths based on 'method' hint.
+    size_t min_fft_len
+        = kernel_length_ * 2 - 1;  // Minimum length for linear convolution
+    fft_length_ = convolution_detail::next_power_of_two(min_fft_len);
+    if (fft_length_ == 0) {  // Check for overflow from next_power_of_two
+      throw std::length_error(
+          "Calculated FFT length for convolution plan exceeds limits.");
+    }
+    if constexpr (!Detail::is_complex_v<T>) {  // Real FFT
+      if (fft_length_ < 2) fft_length_ = 2;  // MKL DFTI requires N>=2 for real
+    }
 
-    // Helper type traits (move to common utility?)
-    namespace Detail {
-      template <typename T>
-      struct is_complex : std::false_type {};
-      template <typename T>
-      struct is_complex<std::complex<T>> : std::true_type {};
-      template <typename T>
-      constexpr bool is_complex_v = is_complex<T>::value;
-
-      template <typename T>
-      struct RealType {
-        using type = T;
-      };
-      template <typename T>
-      struct RealType<std::complex<T>> {
-        using type = T;
-      };
-    }  // namespace Detail
-
-    //--------------------------------------------------------------------------
-    // OneMKLConvolutionPlanImpl Method Definitions
-    //--------------------------------------------------------------------------
-
-    template <typename T>
-    OneMKLConvolutionPlanImpl<T>::OneMKLConvolutionPlanImpl(
-        const std::vector<T>& kernel, ConvolutionMode mode)
-        : mode_(mode),
-          kernel_length_(kernel.size()),
-          mkl_status_(DFTI_NO_ERROR)  // Initialize MKL status
-    {
-      if (kernel_length_ == 0) {
-        throw std::invalid_argument("Convolution kernel cannot be empty.");
+    // --- Create internal FFT plan using the owner backend ---
+    // This ensures we use the oneMKL FFT plan if called from OneMKLBackend
+    Status fft_plan_status = Status::Failure;
+    if constexpr (Detail::is_complex_v<T>) {  // Complex data -> Complex FFT
+                                              // plan
+      auto plan_expected = owner->create_fft_plan_c32(
+          fft_length_);  // Assuming T is C32 or C64
+      if (!plan_expected) {
+        fft_plan_status = plan_expected.error();
       }
-
-      // --- Strategy: FFT-based Convolution using internal oneMKL FFT Plan ---
-      fft_length_
-          = next_power_of_two(kernel_length_ * 2);  // Placeholder strategy
-      if (fft_length_ == size_t(-1)) {
-        throw std::length_error(
-            "Calculated FFT length for convolution plan exceeds limits.");
-      }
-
-      // --- Create internal FFT plan ---
-      try {
-        if constexpr (Detail::is_complex_v<T>) {  // T is std::complex<Real>
-          internal_fft_plan_
-              = std::make_unique<OneMKLFFTPlanImpl<T>>(fft_length_);
-          // Check status from FFT plan constructor
-          if (internal_fft_plan_->mkl_status_ != DFTI_NO_ERROR) {
-            mkl_status_ = internal_fft_plan_->mkl_status_;  // Store error
-            throw std::runtime_error(
-                "Failed to create internal oneMKL FFT plan for "
-                "ConvolutionPlan.");
+      else {
+        // Move the concrete OneMKLFFTPlanImpl pointer into the variant
+        // We need to downcast or know the concrete type returned by the owner
+        // Assuming owner IS OneMKLBackend here, which is slightly fragile.
+        // A better approach might involve dynamic_cast or a type query on the
+        // backend. For now, assume owner->create_fft_plan_c32 returns a plan
+        // wrapping OneMKLFFTPlanImpl. This requires the public Plan's pimpl()
+        // accessor or similar.
+        // *** This part is tricky without modifying public Plan API or using
+        // dynamic_cast ***
+        // *** Simplified approach: Recreate the plan directly here (less ideal)
+        // ***
+        try {
+          fft_plan_impl_variant_
+              .emplace<std::unique_ptr<OneMKLFFTPlanImpl<T_Complex>>>(
+                  std::make_unique<OneMKLFFTPlanImpl<T_Complex>>(fft_length_));
+          // Check the status of the newly created plan
+          auto* plan_ptr_ptr
+              = std::get_if<std::unique_ptr<OneMKLFFTPlanImpl<T_Complex>>>(
+                  &fft_plan_impl_variant_);
+          if (plan_ptr_ptr && *plan_ptr_ptr) {
+            mkl_status_ = (*plan_ptr_ptr)->mkl_status_;
+            if (mkl_status_ == DFTI_NO_ERROR) fft_plan_status = Status::Success;
           }
         }
-        else {  // T is Real (float or double)
-          internal_rfft_plan_
-              = std::make_unique<OneMKLRFFTPlanImpl<T>>(fft_length_);
-          if (internal_rfft_plan_->mkl_status_ != DFTI_NO_ERROR) {
-            mkl_status_ = internal_rfft_plan_->mkl_status_;
-            throw std::runtime_error(
-                "Failed to create internal oneMKL RFFT plan for "
-                "ConvolutionPlan.");
-          }
+        catch (...) { /* handle exceptions */
+          fft_plan_status = Status::Failure;
         }
       }
-      catch (const std::exception& e) {
-        // Catch potential bad_alloc or runtime_error from FFT plan creation
-        mkl_status_
-            = DFTI_MEMORY_ERROR;  // Assume allocation error or setup error
-        throw std::runtime_error(
-            "Failed to create internal FFT plan for ConvolutionPlan: "
-            + std::string(e.what()));
-      }
-      catch (...) {
-        mkl_status_ = DFTI_INTERNAL_ERROR;  // Generic internal error
-        throw std::runtime_error(
-            "Unknown error creating internal FFT plan for ConvolutionPlan.");
-      }
-
-      // --- Prepare and FFT the kernel using the internal plan ---
-      std::vector<T> padded_kernel = kernel;
-      std::reverse(
-          padded_kernel.begin(),
-          padded_kernel.end());                // Reverse for convolution
-      padded_kernel.resize(fft_length_, T{});  // Zero-pad
-
-      Status fft_status = Status::Success;
-      if constexpr (Detail::is_complex_v<T>) {  // Complex Kernel -> Complex FFT
-        kernel_fft_.resize(fft_length_);
-        fft_status = internal_fft_plan_->fft(padded_kernel, kernel_fft_);
-      }
-      else {                          // Real Kernel -> Real FFT
-        using Complex = ComplexT<T>;  // Get the corresponding complex type
-        kernel_fft_.resize(fft_length_ / 2 + 1);
-        fft_status = internal_rfft_plan_->rfft(padded_kernel, kernel_fft_);
-      }
-
-      if (fft_status != Status::Success) {
-        // Store the MKL status if available from the failed FFT operation
-        // (Assuming FFTPlanImpl methods might update mkl_status_ on failure)
-        // mkl_status_ = internal_fft_plan_ ? internal_fft_plan_->mkl_status_ :
-        // internal_rfft_plan_->mkl_status_;
-        throw std::runtime_error(
-            "Failed to compute FFT of kernel during ConvolutionPlan creation. "
-            "Status: "
-            + std::string(get_status_string(fft_status)));
-      }
-
-      std::cout << "oneMKL ConvPlanImpl created. Kernel Len: " << kernel_length_
-                << ", FFT Len: " << fft_length_ << std::endl;  // Debug
     }
-
-    template <typename T>
-    OneMKLConvolutionPlanImpl<T>::~OneMKLConvolutionPlanImpl()
-    {
-      // unique_ptr members (internal_fft_plan_ / internal_rfft_plan_) handle
-      // cleanup automatically This includes freeing the DFTI descriptor via the
-      // FFT plan destructors.
-      std::cout << "oneMKL ConvPlanImpl destroyed." << std::endl;  // Debug
-    }
-
-    template <typename T>
-    Status OneMKLConvolutionPlanImpl<T>::execute(
-        std::span<const T> input, std::span<T> output) const
-    {
-      // Check if plan was properly initialized
-      if constexpr (Detail::is_complex_v<T>) {
-        if (!internal_fft_plan_) return Status::InvalidOperation;
+    else {  // Real data -> Real FFT plan
+      auto plan_expected = owner->create_rfft_plan_f32(
+          fft_length_);  // Assuming T is F32 or F64
+      if (!plan_expected) {
+        fft_plan_status = plan_expected.error();
       }
       else {
-        if (!internal_rfft_plan_) return Status::InvalidOperation;
-      }
-
-      size_t input_len = input.size();
-      size_t full_output_len = input_len + kernel_length_ - 1;
-      size_t current_fft_len = fft_length_;
-
-      // --- FFT Length Handling ---
-      size_t required_fft_len_for_linear = next_power_of_two(full_output_len);
-      if (current_fft_len < required_fft_len_for_linear) {
-        std::cerr
-            << "Warning: Convolution plan's internal FFT length ("
-            << current_fft_len
-            << ") is too small for full linear convolution with input size ("
-            << input_len
-            << "). Result will be circular. Overlap-Add/Save not implemented "
-               "in skeleton."
-            << std::endl;
-      }
-      if (input_len > current_fft_len) {
-        std::cerr << "Error: Input size (" << input_len
-                  << ") exceeds convolution plan's internal FFT length ("
-                  << current_fft_len << "). Overlap-Add/Save not implemented."
-                  << std::endl;
-        return Status::InvalidArgument;
-      }
-
-      // --- Allocate temporary buffers ---
-      std::vector<T> input_padded(current_fft_len, T{});
-      std::copy(input.begin(), input.end(), input_padded.begin());
-
-      using Complex = ComplexT<typename Detail::RealType<T>::type>;
-      std::vector<Complex> input_fft(current_fft_len);
-      std::vector<Complex> product_fft(current_fft_len);
-      std::vector<T> result_full_padded(current_fft_len);
-
-      // --- Perform FFT on input using internal plan ---
-      Status status;
-      if constexpr (Detail::is_complex_v<T>) {
-        input_fft.resize(current_fft_len);
-        status = internal_fft_plan_->fft(input_padded, input_fft);
-      }
-      else {
-        input_fft.resize(current_fft_len / 2 + 1);
-        status = internal_rfft_plan_->rfft(input_padded, input_fft);
-      }
-      if (status != Status::Success) return status;
-
-      // --- Multiply FFTs (Input * Kernel) using MKL VML ---
-      product_fft.resize(input_fft.size());
-      using Value = typename Detail::RealType<T>::type;
-      MKL_LONG n_mul = static_cast<MKL_LONG>(
-          product_fft.size());  // Number of complex elements to multiply
-
-      if constexpr (std::is_same_v<Value, float>) {
-        vcMul(
-            n_mul,
-            reinterpret_cast<const MKL_Complex8*>(input_fft.data()),
-            reinterpret_cast<const MKL_Complex8*>(kernel_fft_.data()),
-            reinterpret_cast<MKL_Complex8*>(product_fft.data()));
-      }
-      else {  // double
-        vzMul(
-            n_mul,
-            reinterpret_cast<const MKL_Complex16*>(input_fft.data()),
-            reinterpret_cast<const MKL_Complex16*>(kernel_fft_.data()),
-            reinterpret_cast<MKL_Complex16*>(product_fft.data()));
-      }
-      // TODO: Check VML status? VML usually doesn't return status codes
-      // directly, but might have error handlers or check input validity.
-
-      // --- Inverse FFT using internal plan ---
-      result_full_padded.resize(current_fft_len);
-      if constexpr (Detail::is_complex_v<T>) {
-        status = internal_fft_plan_->ifft(product_fft, result_full_padded);
-      }
-      else {
-        status = internal_rfft_plan_->irfft(product_fft, result_full_padded);
-      }
-      if (status != Status::Success) return status;
-
-      // --- Extract Correct Output based on Mode ---
-      size_t output_len = get_output_length(input_len);
-      if (output.size() < output_len) {
-        return Status::SizeMismatch;
-      }
-      if (full_output_len > result_full_padded.size()) {
-        return Status::Failure;  // Error in length calculation or FFT
-      }
-
-      switch (mode_) {
-        case ConvolutionMode::Full:
-          std::copy(
-              result_full_padded.begin(),
-              result_full_padded.begin() + full_output_len,
-              output.begin());
-          break;
-        case ConvolutionMode::Same: {
-          size_t start = (kernel_length_ - 1) / 2;
-          if (start + input_len > full_output_len) return Status::Failure;
-          std::copy(
-              result_full_padded.begin() + start,
-              result_full_padded.begin() + start + input_len,
-              output.begin());
-        } break;
-        case ConvolutionType::Valid: {
-          size_t start = kernel_length_ - 1;
-          size_t valid_len = (input_len >= kernel_length_)
-                                 ? (input_len - kernel_length_ + 1)
-                                 : 0;
-          if (valid_len > output_len) return Status::Failure;
-          if (start + valid_len > full_output_len) return Status::Failure;
-          if (valid_len > 0) {
-            std::copy(
-                result_full_padded.begin() + start,
-                result_full_padded.begin() + start + valid_len,
-                output.begin());
+        // *** Similar casting/recreation issue as above ***
+        // *** Simplified approach: Recreate the plan directly here ***
+        try {
+          fft_plan_impl_variant_
+              .emplace<std::unique_ptr<OneMKLRFFTPlanImpl<T_Real>>>(
+                  std::make_unique<OneMKLRFFTPlanImpl<T_Real>>(fft_length_));
+          auto* plan_ptr_ptr
+              = std::get_if<std::unique_ptr<OneMKLRFFTPlanImpl<T_Real>>>(
+                  &fft_plan_impl_variant_);
+          if (plan_ptr_ptr && *plan_ptr_ptr) {
+            mkl_status_ = (*plan_ptr_ptr)->mkl_status_;
+            if (mkl_status_ == DFTI_NO_ERROR) fft_plan_status = Status::Success;
           }
-        } break;
-        default:
-          return Status::InvalidArgument;  // Should not happen
+        }
+        catch (...) { /* handle exceptions */
+          fft_plan_status = Status::Failure;
+        }
       }
+    }
 
-      if (output.size() > output_len) {
-        std::fill(output.begin() + output_len, output.end(), T{});
+    if (fft_plan_status != Status::Success) {
+      throw std::runtime_error(
+          "Failed to create internal FFT plan for ConvolutionPlan. Status: "
+          + std::to_string(static_cast<int>(fft_plan_status)));
+    }
+
+    // --- Prepare and FFT the kernel using the internal plan ---
+    std::vector<T> padded_kernel = original_kernel_;
+    std::reverse(
+        padded_kernel.begin(), padded_kernel.end());  // Reverse for convolution
+    padded_kernel.resize(fft_length_, T{});           // Zero-pad
+
+    Status kernel_fft_status = Status::Failure;
+    size_t kernel_fft_size = 0;
+
+    // Visit the variant to call the correct FFT function
+    std::visit(
+        [&](auto&& plan_ptr)
+        {
+          using PlanPtrT = std::decay_t<decltype(plan_ptr)>;
+          if constexpr (!std::is_same_v<
+                            PlanPtrT,
+                            std::monostate>) {  // Check if variant holds a
+                                                // valid plan
+            if (!plan_ptr) return;  // Should not happen if status was Success
+
+            if constexpr (std::is_same_v<
+                              PlanPtrT,
+                              std::unique_ptr<OneMKLFFTPlanImpl<T_Complex>>>) {
+              kernel_fft_size = fft_length_;
+              kernel_fft_.resize(kernel_fft_size);
+              const T_Complex* kernel_input_ptr
+                  = reinterpret_cast<const T_Complex*>(padded_kernel.data());
+              std::span<const T_Complex> kernel_input_span(
+                  kernel_input_ptr, fft_length_);
+              kernel_fft_status = plan_ptr->fft(
+                  kernel_input_span, std::span<T_Complex>(kernel_fft_));
+            }
+            else if constexpr (std::is_same_v<
+                                   PlanPtrT,
+                                   std::unique_ptr<
+                                       OneMKLRFFTPlanImpl<T_Real>>>) {
+              kernel_fft_size = fft_length_ / 2 + 1;
+              kernel_fft_.resize(kernel_fft_size);
+              const T_Real* kernel_input_ptr = padded_kernel.data();
+              std::span<const T_Real> kernel_input_span(
+                  kernel_input_ptr, fft_length_);
+              kernel_fft_status = plan_ptr->rfft(
+                  kernel_input_span, std::span<T_Complex>(kernel_fft_));
+            }
+          }
+        },
+        fft_plan_impl_variant_);
+
+    if (kernel_fft_status != Status::Success) {
+      throw std::runtime_error(
+          "Failed to compute FFT of kernel during ConvolutionPlan creation. "
+          "Status: "
+          + std::string(get_status_string(kernel_fft_status)));
+    }
+
+    // Allocate temporary buffers
+    try {
+      input_padded_ = std::make_unique<T[]>(fft_length_);
+      input_fft_ = std::make_unique<T_Complex[]>(kernel_fft_size);
+      product_fft_ = std::make_unique<T_Complex[]>(kernel_fft_size);
+      result_ifft_ = std::make_unique<T[]>(fft_length_);
+    }
+    catch (const std::bad_alloc& e) {
+      throw std::runtime_error(
+          "Failed to allocate temporary buffers for convolution plan: "
+          + std::string(e.what()));
+    }
+    if (!input_padded_ || !input_fft_ || !product_fft_ || !result_ifft_) {
+      throw std::runtime_error(
+          "Failed to allocate temporary buffers for convolution plan "
+          "(unexpected).");
+    }
+
+    // std::cout << "oneMKL ConvPlanImpl created. Kernel Len: " <<
+    // kernel_length_ << ", FFT Len: " << fft_length_ << std::endl; // Debug
+  }
+
+  // Destructor Implementation
+  template <typename T>
+  OneMKLConvolutionPlanImpl<T>::~OneMKLConvolutionPlanImpl()
+  {
+    // unique_ptr members handle cleanup automatically
+    // std::cout << "oneMKL ConvPlanImpl destroyed." << std::endl; // Debug
+  }
+
+  // Execute Method Implementation
+  template <typename T>
+  Status OneMKLConvolutionPlanImpl<T>::execute(
+      std::span<const T> input, std::span<T> output) const
+  {
+    // --- Input Validation and Setup ---
+    if (std::holds_alternative<std::monostate>(fft_plan_impl_variant_)) {
+      return Status::InvalidOperation;  // Plan not initialized correctly
+    }
+    const size_t input_len = input.size();
+    const size_t output_len_expected = get_output_length(input_len);
+    const size_t full_conv_len = input_len + kernel_length_ - 1;
+    const size_t current_fft_len = fft_length_;
+
+    if (output.size() < output_len_expected) {
+      return Status::SizeMismatch;
+    }
+    if (input_len == 0 || kernel_length_ == 0) {  // Handle empty input/kernel
+      std::fill(output.begin(), output.begin() + output_len_expected, T{0});
+      if (output.size() > output_len_expected) {
+        std::fill(output.begin() + output_len_expected, output.end(), T{0});
       }
-
       return Status::Success;
     }
-
-    template <typename T>
-    size_t OneMKLConvolutionPlanImpl<T>::get_kernel_length() const
-    {
-      return kernel_length_;
+    if (current_fft_len < full_conv_len) {
+      std::cerr
+          << "Warning: Convolution plan's internal FFT length ("
+          << current_fft_len
+          << ") is too small for full linear convolution with input size ("
+          << input_len << "). Result will be circular." << std::endl;
+      // Proceeding with circular convolution
+    }
+    if (input_len > current_fft_len) {
+      std::cerr << "Error: Input size (" << input_len
+                << ") exceeds convolution plan's internal FFT length ("
+                << current_fft_len << "). Overlap-Add/Save not implemented."
+                << std::endl;
+      return Status::InvalidArgument;  // Or SizeMismatch?
     }
 
-    template <typename T>
-    ConvolutionType OneMKLConvolutionPlanImpl<T>::get_mode() const
-    {
-      return mode_;
+    // --- Prepare Buffers ---
+    std::memcpy(input_padded_.get(), input.data(), input_len * sizeof(T));
+    std::fill(
+        input_padded_.get() + input_len,
+        input_padded_.get() + current_fft_len,
+        T{0});
+
+    size_t input_fft_size = kernel_fft_.size();
+    T_Complex* input_fft_ptr = input_fft_.get();
+    std::span<T_Complex> input_fft_span(input_fft_ptr, input_fft_size);
+    T_Complex* product_fft_ptr = product_fft_.get();
+    std::span<T_Complex> product_fft_span(product_fft_ptr, kernel_fft_.size());
+    T* result_ifft_ptr = result_ifft_.get();
+    std::span<T> result_ifft_span(result_ifft_ptr, current_fft_len);
+
+    Status status = Status::Failure;
+
+    // --- FFT Input, Multiply, IFFT using Visitor ---
+    std::visit(
+        [&](auto&& plan_ptr)
+        {
+          using PlanPtrT = std::decay_t<decltype(plan_ptr)>;
+          if constexpr (!std::is_same_v<PlanPtrT, std::monostate>) {
+            if (!plan_ptr) {
+              status = Status::InvalidOperation;
+              return;
+            }  // Plan pointer is null
+
+            // 1. FFT Input
+            if constexpr (std::is_same_v<
+                              PlanPtrT,
+                              std::unique_ptr<OneMKLFFTPlanImpl<T_Complex>>>) {
+              const T_Complex* input_padded_ptr
+                  = reinterpret_cast<const T_Complex*>(input_padded_.get());
+              std::span<const T_Complex> input_padded_complex_span(
+                  input_padded_ptr, current_fft_len);
+              status = plan_ptr->fft(input_padded_complex_span, input_fft_span);
+            }
+            else if constexpr (std::is_same_v<
+                                   PlanPtrT,
+                                   std::unique_ptr<
+                                       OneMKLRFFTPlanImpl<T_Real>>>) {
+              const T_Real* input_padded_ptr = input_padded_.get();
+              std::span<const T_Real> input_padded_real_span(
+                  input_padded_ptr, current_fft_len);
+              status = plan_ptr->rfft(input_padded_real_span, input_fft_span);
+            }
+            if (status != Status::Success) return;  // Exit visitor on error
+
+            // 2. Multiply FFTs (Input * Kernel) using MKL VML
+            MKL_LONG n_mul = static_cast<MKL_LONG>(product_fft_span.size());
+            if constexpr (std::is_same_v<T_Real, float>) {
+              vcMul(
+                  n_mul,
+                  reinterpret_cast<const MKL_Complex8*>(input_fft_ptr),
+                  reinterpret_cast<const MKL_Complex8*>(kernel_fft_.data()),
+                  reinterpret_cast<MKL_Complex8*>(product_fft_ptr));
+            }
+            else {  // double
+              vzMul(
+                  n_mul,
+                  reinterpret_cast<const MKL_Complex16*>(input_fft_ptr),
+                  reinterpret_cast<const MKL_Complex16*>(kernel_fft_.data()),
+                  reinterpret_cast<MKL_Complex16*>(product_fft_ptr));
+            }
+            // VML status check? Assume success for now.
+
+            // 3. Inverse FFT
+            const T_Complex* product_ptr = product_fft_.get();
+            std::span<const T_Complex> product_const_span(
+                product_ptr, product_fft_span.size());
+            if constexpr (std::is_same_v<
+                              PlanPtrT,
+                              std::unique_ptr<OneMKLFFTPlanImpl<T_Complex>>>) {
+              T_Complex* result_ptr
+                  = reinterpret_cast<T_Complex*>(result_ifft_ptr);
+              std::span<T_Complex> result_complex_span(
+                  result_ptr, current_fft_len);
+              status = plan_ptr->ifft(product_const_span, result_complex_span);
+            }
+            else if constexpr (std::is_same_v<
+                                   PlanPtrT,
+                                   std::unique_ptr<
+                                       OneMKLRFFTPlanImpl<T_Real>>>) {
+              // result_ifft_span is already std::span<T> where T is T_Real
+              status = plan_ptr->irfft(product_const_span, result_ifft_span);
+            }
+            // status is now set by the IFFT/IRFFT call
+          }
+          else {
+            status = Status::InvalidOperation;  // Variant holds monostate
+          }
+        },
+        fft_plan_impl_variant_);
+
+    if (status != Status::Success) return status;
+
+    // --- Extract Correct Output based on Type ---
+    // (Extraction logic remains the same as default/convolution.cpp)
+    size_t full_start_idx = 0;
+    size_t count = output_len_expected;
+
+    switch (type_) {
+      case ConvolutionType::Full:
+        full_start_idx = 0;
+        count = input_len + kernel_length_ - 1;
+        break;
+      case ConvolutionType::Same:
+        full_start_idx = (kernel_length_ - 1) / 2;
+        count = input_len;
+        break;
+      case ConvolutionType::Valid:
+        full_start_idx = kernel_length_ - 1;
+        count = (input_len >= kernel_length_) ? (input_len - kernel_length_ + 1)
+                                              : 0;
+        break;
+      default:
+        return Status::InvalidArgument;
     }
 
-    template <typename T>
-    size_t OneMKLConvolutionPlanImpl<T>::get_output_length(
-        size_t input_length) const
-    {
-      if (kernel_length_ == 0) return 0;
-      switch (mode_) {
-        case ConvolutionType::Full:
-          if (input_length > SIZE_MAX - kernel_length_ + 1) return SIZE_MAX;
-          return input_length + kernel_length_ - 1;
-        case ConvolutionType::Same:
-          return input_length;
-        case ConvolutionType::Valid:
-          return (input_length >= kernel_length_)
-                     ? (input_length - kernel_length_ + 1)
-                     : 0;
-        default:
-          return 0;
+    assert(count == output_len_expected);
+
+    size_t linear_conv_len = input_len + kernel_length_ - 1;
+    if (full_start_idx >= linear_conv_len) {
+      count = 0;
+    }
+    else if (full_start_idx + count > linear_conv_len) {
+      count = linear_conv_len - full_start_idx;
+    }
+
+    count = std::min(count, output.size());
+
+    if (count > 0) {
+      if (full_start_idx + count <= current_fft_len) {
+        std::memcpy(
+            output.data(),
+            result_ifft_.get() + full_start_idx,
+            count * sizeof(T));
+      }
+      else {
+        // This case indicates an issue, either FFT length was too small or
+        // indexing error
+        size_t safe_count = (full_start_idx < current_fft_len)
+                                ? (current_fft_len - full_start_idx)
+                                : 0;
+        safe_count = std::min(safe_count, count);
+        if (safe_count > 0) {
+          std::memcpy(
+              output.data(),
+              result_ifft_.get() + full_start_idx,
+              safe_count * sizeof(T));
+        }
+        if (output_len_expected > safe_count) {
+          std::fill(
+              output.begin() + safe_count,
+              output.begin() + output_len_expected,
+              T{0});
+        }
+        std::cerr << "Warning: Convolution result truncated due to "
+                     "insufficient FFT length or indexing issue."
+                  << std::endl;
       }
     }
 
-    //--------------------------------------------------------------------------
-    // OneMKLCorrelationPlanImpl Method Definitions
-    //--------------------------------------------------------------------------
+    // Zero out remaining part of user buffer if necessary
+    if (count < output_len_expected) {
+      std::fill(
+          output.begin() + count, output.begin() + output_len_expected, T{0});
+    }
+    if (output.size() > output_len_expected) {
+      std::fill(output.begin() + output_len_expected, output.end(), T{0});
+    }
 
-    template <typename T>
-    OneMKLCorrelationPlanImpl<T>::OneMKLCorrelationPlanImpl(
-        const std::vector<T>& kernel, ConvolutionType mode)
-        : mode_(mode),
-          template_length_(kernel.size()),
-          mkl_status_(DFTI_NO_ERROR)
-    {
-      if (template_length_ == 0) {
-        throw std::invalid_argument("Correlation template cannot be empty.");
-      }
-      fft_length_
-          = next_power_of_two(template_length_ * 2);  // Placeholder strategy
-      if (fft_length_ == size_t(-1)) {
-        throw std::length_error(
-            "Calculated FFT length for correlation plan exceeds limits.");
-      }
+    return Status::Success;
+  }
 
-      // --- Create internal FFT plan ---
+  // Getters
+  template <typename T>
+  size_t OneMKLConvolutionPlanImpl<T>::get_kernel_length() const
+  {
+    return kernel_length_;
+  }
+  template <typename T>
+  ConvolutionType OneMKLConvolutionPlanImpl<T>::get_type() const
+  {
+    return type_;
+  }
+  template <typename T>
+  ConvolutionMethod OneMKLConvolutionPlanImpl<T>::get_method() const
+  {
+    return method_;
+  }
+  template <typename T>
+  size_t OneMKLConvolutionPlanImpl<T>::get_output_length(
+      size_t input_length) const
+  {
+    if (kernel_length_ == 0)
+      return (type_ == ConvolutionType::Same ? input_length : 0);
+    switch (type_) {
+      case ConvolutionType::Full:
+        if (input_length
+            > std::numeric_limits<size_t>::max() - kernel_length_ + 1) {
+          throw std::length_error(
+              "Output length calculation overflow (Full mode)");
+        }
+        return input_length + kernel_length_ - 1;
+      case ConvolutionType::Same:
+        return input_length;
+      case ConvolutionType::Valid:
+        return (input_length >= kernel_length_)
+                   ? (input_length - kernel_length_ + 1)
+                   : 0;
+      default:
+        throw std::logic_error(
+            "Invalid ConvolutionType encountered in get_output_length");
+    }
+  }
+  template <typename T>
+  std::span<const T> OneMKLConvolutionPlanImpl<T>::get_kernel() const
+  {
+    return std::span<const T>(original_kernel_);
+  }
+
+  //--------------------------------------------------------------------------
+  // OneMKLCorrelationPlanImpl Method Definitions
+  //--------------------------------------------------------------------------
+  template <typename T>
+  OneMKLCorrelationPlanImpl<T>::OneMKLCorrelationPlanImpl(
+      const AbstractBackend* owner,
+      const std::vector<T>& kernel,  // Template
+      ConvolutionType type,
+      ConvolutionMethod method)
+      : type_(type),
+        method_(method),
+        original_kernel_(kernel),
+        kernel_length_(kernel.size()),  // Template length
+        fft_length_(0),
+        mkl_status_(DFTI_NO_ERROR)
+  {
+    if (!owner) {
+      throw std::invalid_argument(
+          "OneMKLCorrelationPlanImpl requires a valid owner AbstractBackend "
+          "pointer.");
+    }
+    if (kernel_length_ == 0) {
+      throw std::invalid_argument("Correlation template cannot be empty.");
+    }
+
+    // --- Determine FFT length ---
+    size_t min_fft_len = kernel_length_ * 2 - 1;
+    fft_length_ = convolution_detail::next_power_of_two(min_fft_len);
+    if (fft_length_ == 0) {
+      throw std::length_error(
+          "Calculated FFT length for correlation plan exceeds limits.");
+    }
+    if constexpr (!Detail::is_complex_v<T>) {  // Real FFT
+      if (fft_length_ < 2) fft_length_ = 2;
+    }
+
+    // --- Create internal FFT plan ---
+    Status fft_plan_status = Status::Failure;
+    if constexpr (Detail::is_complex_v<T>) {
       try {
-        if constexpr (Detail::is_complex_v<T>) {
-          internal_fft_plan_
-              = std::make_unique<OneMKLFFTPlanImpl<T>>(fft_length_);
-          if (internal_fft_plan_->mkl_status_ != DFTI_NO_ERROR) {
-            mkl_status_ = internal_fft_plan_->mkl_status_;
-            throw std::runtime_error(
-                "Failed to create internal oneMKL FFT plan for "
-                "CorrelationPlan.");
-          }
+        fft_plan_impl_variant_
+            .emplace<std::unique_ptr<OneMKLFFTPlanImpl<T_Complex>>>(
+                std::make_unique<OneMKLFFTPlanImpl<T_Complex>>(fft_length_));
+        auto* plan_ptr_ptr
+            = std::get_if<std::unique_ptr<OneMKLFFTPlanImpl<T_Complex>>>(
+                &fft_plan_impl_variant_);
+        if (plan_ptr_ptr && *plan_ptr_ptr) {
+          mkl_status_ = (*plan_ptr_ptr)->mkl_status_;
+          if (mkl_status_ == DFTI_NO_ERROR) fft_plan_status = Status::Success;
         }
-        else {
-          internal_rfft_plan_
-              = std::make_unique<OneMKLRFFTPlanImpl<T>>(fft_length_);
-          if (internal_rfft_plan_->mkl_status_ != DFTI_NO_ERROR) {
-            mkl_status_ = internal_rfft_plan_->mkl_status_;
-            throw std::runtime_error(
-                "Failed to create internal oneMKL RFFT plan for "
-                "CorrelationPlan.");
-          }
-        }
-      }
-      catch (const std::exception& e) {
-        mkl_status_ = DFTI_MEMORY_ERROR;
-        throw std::runtime_error(
-            "Failed to create internal FFT plan for CorrelationPlan: "
-            + std::string(e.what()));
       }
       catch (...) {
-        mkl_status_ = DFTI_INTERNAL_ERROR;
-        throw std::runtime_error(
-            "Unknown error creating internal FFT plan for CorrelationPlan.");
+        fft_plan_status = Status::Failure;
       }
-
-      // --- Prepare and FFT the template (NO reversal) ---
-      std::vector<T> padded_template = kernel;
-      padded_template.resize(fft_length_, T{});  // Zero-pad
-
-      Status fft_status = Status::Success;
-      using Complex = ComplexT<typename Detail::RealType<T>::type>;
-      std::vector<Complex> temp_template_fft;  // Temporary storage
-
-      if constexpr (Detail::is_complex_v<T>) {
-        temp_template_fft.resize(fft_length_);
-        fft_status
-            = internal_fft_plan_->fft(padded_template, temp_template_fft);
+    }
+    else {
+      try {
+        fft_plan_impl_variant_
+            .emplace<std::unique_ptr<OneMKLRFFTPlanImpl<T_Real>>>(
+                std::make_unique<OneMKLRFFTPlanImpl<T_Real>>(fft_length_));
+        auto* plan_ptr_ptr
+            = std::get_if<std::unique_ptr<OneMKLRFFTPlanImpl<T_Real>>>(
+                &fft_plan_impl_variant_);
+        if (plan_ptr_ptr && *plan_ptr_ptr) {
+          mkl_status_ = (*plan_ptr_ptr)->mkl_status_;
+          if (mkl_status_ == DFTI_NO_ERROR) fft_plan_status = Status::Success;
+        }
       }
-      else {
-        temp_template_fft.resize(fft_length_ / 2 + 1);
-        fft_status
-            = internal_rfft_plan_->rfft(padded_template, temp_template_fft);
+      catch (...) {
+        fft_plan_status = Status::Failure;
       }
-
-      if (fft_status != Status::Success) {
-        throw std::runtime_error(
-            "Failed to compute FFT of template during CorrelationPlan "
-            "creation. "
-            "Status: "
-            + std::string(get_status_string(fft_status)));
-      }
-
-      // --- CONJUGATE the result and store in template_fft_conj_ ---
-      template_fft_conj_ = temp_template_fft;  // Copy
-      using Value = typename Detail::RealType<T>::type;
-      MKL_LONG n_conj = static_cast<MKL_LONG>(template_fft_conj_.size());
-      if constexpr (std::is_same_v<Value, float>) {
-        vcConj(
-            n_conj,
-            reinterpret_cast<const MKL_Complex8*>(template_fft_conj_.data()),
-            reinterpret_cast<MKL_Complex8*>(
-                template_fft_conj_.data()));  // In-place conjugate
-      }
-      else {  // double
-        vzConj(
-            n_conj,
-            reinterpret_cast<const MKL_Complex16*>(template_fft_conj_.data()),
-            reinterpret_cast<MKL_Complex16*>(
-                template_fft_conj_.data()));  // In-place conjugate
-      }
-      // TODO: Check VML status?
-
-      std::cout << "oneMKL CorrPlanImpl created. Template Len: "
-                << template_length_ << ", FFT Len: " << fft_length_
-                << std::endl;  // Debug
+    }
+    if (fft_plan_status != Status::Success) {
+      throw std::runtime_error(
+          "Failed to create internal FFT plan for CorrelationPlan. Status: "
+          + std::to_string(static_cast<int>(fft_plan_status)));
     }
 
-    template <typename T>
-    OneMKLCorrelationPlanImpl<T>::~OneMKLCorrelationPlanImpl()
-    {
-      // unique_ptr members handle cleanup
-      std::cout << "oneMKL CorrPlanImpl destroyed." << std::endl;  // Debug
-    }
+    // --- Prepare and FFT the template (NO reversal) ---
+    std::vector<T> padded_template = original_kernel_;
+    padded_template.resize(fft_length_, T{});  // Zero-pad
 
-    template <typename T>
-    Status OneMKLCorrelationPlanImpl<T>::execute(
-        std::span<const T> input, std::span<T> output) const
-    {
-      // Check if plan was properly initialized
-      if constexpr (Detail::is_complex_v<T>) {
-        if (!internal_fft_plan_) return Status::InvalidOperation;
-      }
-      else {
-        if (!internal_rfft_plan_) return Status::InvalidOperation;
-      }
+    Status kernel_fft_status = Status::Failure;
+    size_t kernel_fft_size = 0;
+    std::vector<T_Complex> temp_kernel_fft;  // Temp storage
 
-      size_t input_len = input.size();
-      size_t full_output_len = input_len + template_length_ - 1;
-      size_t current_fft_len = fft_length_;
-
-      // --- FFT Length Handling ---
-      size_t required_fft_len_for_linear = next_power_of_two(full_output_len);
-      if (current_fft_len < required_fft_len_for_linear) {
-        std::cerr
-            << "Warning: Correlation plan's internal FFT length ("
-            << current_fft_len
-            << ") is too small for full linear correlation with input size ("
-            << input_len
-            << "). Result will be circular. Overlap-Add/Save not implemented "
-               "in skeleton."
-            << std::endl;
-      }
-      if (input_len > current_fft_len) {
-        std::cerr << "Error: Input size (" << input_len
-                  << ") exceeds correlation plan's internal FFT length ("
-                  << current_fft_len << "). Overlap-Add/Save not implemented."
-                  << std::endl;
-        return Status::InvalidArgument;
-      }
-
-      // --- Allocate temporary buffers ---
-      std::vector<T> input_padded(current_fft_len, T{});
-      std::copy(input.begin(), input.end(), input_padded.begin());
-
-      using Complex = ComplexT<typename Detail::RealType<T>::type>;
-      std::vector<Complex> input_fft(current_fft_len);
-      std::vector<Complex> product_fft(current_fft_len);
-      std::vector<T> result_full_padded(current_fft_len);
-
-      // --- Perform FFT on input ---
-      Status status;
-      if constexpr (Detail::is_complex_v<T>) {
-        input_fft.resize(current_fft_len);
-        status = internal_fft_plan_->fft(input_padded, input_fft);
-      }
-      else {
-        input_fft.resize(current_fft_len / 2 + 1);
-        status = internal_rfft_plan_->rfft(input_padded, input_fft);
-      }
-      if (status != Status::Success) return status;
-
-      // --- Multiply FFTs (Input * Conjugated(Template)) ---
-      product_fft.resize(input_fft.size());
-      using Value = typename Detail::RealType<T>::type;
-      MKL_LONG n_mul = static_cast<MKL_LONG>(product_fft.size());
-      if constexpr (std::is_same_v<Value, float>) {
-        vcMul(
-            n_mul,
-            reinterpret_cast<const MKL_Complex8*>(input_fft.data()),
-            reinterpret_cast<const MKL_Complex8*>(
-                template_fft_conj_.data()),  // Use pre-conjugated template FFT
-            reinterpret_cast<MKL_Complex8*>(product_fft.data()));
-      }
-      else {  // double
-        vzMul(
-            n_mul,
-            reinterpret_cast<const MKL_Complex16*>(input_fft.data()),
-            reinterpret_cast<const MKL_Complex16*>(
-                template_fft_conj_.data()),  // Use pre-conjugated template FFT
-            reinterpret_cast<MKL_Complex16*>(product_fft.data()));
-      }
-
-      // --- Inverse FFT ---
-      result_full_padded.resize(current_fft_len);
-      if constexpr (Detail::is_complex_v<T>) {
-        status = internal_fft_plan_->ifft(product_fft, result_full_padded);
-      }
-      else {
-        status = internal_rfft_plan_->irfft(product_fft, result_full_padded);
-      }
-      if (status != Status::Success) return status;
-
-      // --- Extract Correct Output based on Mode ---
-      size_t output_len = get_output_length(input_len);
-      if (output.size() < output_len) {
-        return Status::SizeMismatch;
-      }
-      if (full_output_len > result_full_padded.size()) {
-        return Status::Failure;
-      }
-
-      // Correlation output indices differ slightly from convolution for 'same'
-      // and 'valid'
-      switch (mode_) {
-        case ConvolutionType::Full:
-          std::copy(
-              result_full_padded.begin(),
-              result_full_padded.begin() + full_output_len,
-              output.begin());
-          break;
-        case ConvolutionType::Same: {
-          size_t start = (full_output_len > input_len)
-                             ? (full_output_len - input_len) / 2
-                             : 0;
-          size_t count = std::min(input_len, full_output_len);
-          if (start + count > full_output_len) return Status::Failure;
-          std::copy(
-              result_full_padded.begin() + start,
-              result_full_padded.begin() + start + count,
-              output.begin());
-        } break;
-        case ConvolutionType::Valid: {
-          size_t start = 0;  // Valid correlation starts at index 0
-          size_t valid_len = (input_len >= template_length_)
-                                 ? (input_len - template_length_ + 1)
-                                 : 0;
-          if (valid_len > output_len) return Status::Failure;
-          if (start + valid_len > full_output_len) return Status::Failure;
-          if (valid_len > 0) {
-            std::copy(
-                result_full_padded.begin() + start,
-                result_full_padded.begin() + start + valid_len,
-                output.begin());
+    std::visit(
+        [&](auto&& plan_ptr)
+        {
+          using PlanPtrT = std::decay_t<decltype(plan_ptr)>;
+          if constexpr (!std::is_same_v<PlanPtrT, std::monostate>) {
+            if (!plan_ptr) return;
+            if constexpr (std::is_same_v<
+                              PlanPtrT,
+                              std::unique_ptr<OneMKLFFTPlanImpl<T_Complex>>>) {
+              kernel_fft_size = fft_length_;
+              temp_kernel_fft.resize(kernel_fft_size);
+              const T_Complex* kernel_input_ptr
+                  = reinterpret_cast<const T_Complex*>(padded_template.data());
+              std::span<const T_Complex> kernel_input_span(
+                  kernel_input_ptr, fft_length_);
+              kernel_fft_status = plan_ptr->fft(
+                  kernel_input_span, std::span<T_Complex>(temp_kernel_fft));
+            }
+            else if constexpr (std::is_same_v<
+                                   PlanPtrT,
+                                   std::unique_ptr<
+                                       OneMKLRFFTPlanImpl<T_Real>>>) {
+              kernel_fft_size = fft_length_ / 2 + 1;
+              temp_kernel_fft.resize(kernel_fft_size);
+              const T_Real* kernel_input_ptr = padded_template.data();
+              std::span<const T_Real> kernel_input_span(
+                  kernel_input_ptr, fft_length_);
+              kernel_fft_status = plan_ptr->rfft(
+                  kernel_input_span, std::span<T_Complex>(temp_kernel_fft));
+            }
           }
-        } break;
-        default:
-          return Status::InvalidArgument;
-      }
+        },
+        fft_plan_impl_variant_);
 
-      if (output.size() > output_len) {
-        std::fill(output.begin() + output_len, output.end(), T{});
-      }
+    if (kernel_fft_status != Status::Success) {
+      throw std::runtime_error(
+          "Failed to compute FFT of template during CorrelationPlan creation. "
+          "Status: "
+          + std::string(get_status_string(kernel_fft_status)));
+    }
 
+    // --- CONJUGATE the result and store in kernel_fft_conj_ ---
+    kernel_fft_conj_.resize(kernel_fft_size);
+    MKL_LONG n_conj = static_cast<MKL_LONG>(kernel_fft_size);
+    if constexpr (std::is_same_v<T_Real, float>) {
+      vcConj(
+          n_conj,
+          reinterpret_cast<const MKL_Complex8*>(temp_kernel_fft.data()),
+          reinterpret_cast<MKL_Complex8*>(kernel_fft_conj_.data()));
+    }
+    else {  // double
+      vzConj(
+          n_conj,
+          reinterpret_cast<const MKL_Complex16*>(temp_kernel_fft.data()),
+          reinterpret_cast<MKL_Complex16*>(kernel_fft_conj_.data()));
+    }
+    // VML status check? Assume success.
+
+    // Allocate temporary buffers
+    try {
+      input_padded_ = std::make_unique<T[]>(fft_length_);
+      input_fft_ = std::make_unique<T_Complex[]>(kernel_fft_size);
+      product_fft_ = std::make_unique<T_Complex[]>(kernel_fft_size);
+      result_ifft_ = std::make_unique<T[]>(fft_length_);
+    }
+    catch (const std::bad_alloc& e) {
+      throw std::runtime_error(
+          "Failed to allocate temporary buffers for correlation plan: "
+          + std::string(e.what()));
+    }
+    if (!input_padded_ || !input_fft_ || !product_fft_ || !result_ifft_) {
+      throw std::runtime_error(
+          "Failed to allocate temporary buffers for correlation plan "
+          "(unexpected).");
+    }
+
+    // std::cout << "oneMKL CorrPlanImpl created. Template Len: " <<
+    // kernel_length_ << ", FFT Len: " << fft_length_ << std::endl; // Debug
+  }
+
+  // Destructor Implementation
+  template <typename T>
+  OneMKLCorrelationPlanImpl<T>::~OneMKLCorrelationPlanImpl()
+  {
+    // unique_ptr members handle cleanup
+    // std::cout << "oneMKL CorrPlanImpl destroyed." << std::endl; // Debug
+  }
+
+  // Execute Method Implementation
+  template <typename T>
+  Status OneMKLCorrelationPlanImpl<T>::execute(
+      std::span<const T> input, std::span<T> output) const
+  {
+    // --- Input Validation and Setup ---
+    if (std::holds_alternative<std::monostate>(fft_plan_impl_variant_)) {
+      return Status::InvalidOperation;
+    }
+    const size_t input_len = input.size();
+    const size_t output_len_expected = get_output_length(input_len);
+    const size_t full_corr_len = input_len + kernel_length_ - 1;
+    const size_t current_fft_len = fft_length_;
+
+    if (output.size() < output_len_expected) {
+      return Status::SizeMismatch;
+    }
+    if (input_len == 0 || kernel_length_ == 0) {
+      std::fill(output.begin(), output.begin() + output_len_expected, T{0});
+      if (output.size() > output_len_expected) {
+        std::fill(output.begin() + output_len_expected, output.end(), T{0});
+      }
       return Status::Success;
     }
-
-    template <typename T>
-    size_t OneMKLCorrelationPlanImpl<T>::get_template_length() const
-    {
-      return template_length_;
+    if (current_fft_len < full_corr_len) {
+      std::cerr
+          << "Warning: Correlation plan's internal FFT length ("
+          << current_fft_len
+          << ") is too small for full linear correlation with input size ("
+          << input_len << "). Result will be circular." << std::endl;
+    }
+    if (input_len > current_fft_len) {
+      std::cerr << "Error: Input size (" << input_len
+                << ") exceeds correlation plan's internal FFT length ("
+                << current_fft_len << "). Overlap-Add/Save not implemented."
+                << std::endl;
+      return Status::InvalidArgument;
     }
 
-    template <typename T>
-    ConvolutionType OneMKLCorrelationPlanImpl<T>::get_mode() const
-    {
-      return mode_;
+    // --- Prepare Buffers ---
+    std::memcpy(input_padded_.get(), input.data(), input_len * sizeof(T));
+    std::fill(
+        input_padded_.get() + input_len,
+        input_padded_.get() + current_fft_len,
+        T{0});
+
+    size_t input_fft_size = kernel_fft_conj_.size();
+    T_Complex* input_fft_ptr = input_fft_.get();
+    std::span<T_Complex> input_fft_span(input_fft_ptr, input_fft_size);
+    T_Complex* product_fft_ptr = product_fft_.get();
+    std::span<T_Complex> product_fft_span(
+        product_fft_ptr, kernel_fft_conj_.size());
+    T* result_ifft_ptr = result_ifft_.get();
+    std::span<T> result_ifft_span(result_ifft_ptr, current_fft_len);
+
+    Status status = Status::Failure;
+
+    // --- FFT Input, Multiply, IFFT using Visitor ---
+    std::visit(
+        [&](auto&& plan_ptr)
+        {
+          using PlanPtrT = std::decay_t<decltype(plan_ptr)>;
+          if constexpr (!std::is_same_v<PlanPtrT, std::monostate>) {
+            if (!plan_ptr) {
+              status = Status::InvalidOperation;
+              return;
+            }
+
+            // 1. FFT Input
+            if constexpr (std::is_same_v<
+                              PlanPtrT,
+                              std::unique_ptr<OneMKLFFTPlanImpl<T_Complex>>>) {
+              const T_Complex* input_padded_ptr
+                  = reinterpret_cast<const T_Complex*>(input_padded_.get());
+              std::span<const T_Complex> input_padded_complex_span(
+                  input_padded_ptr, current_fft_len);
+              status = plan_ptr->fft(input_padded_complex_span, input_fft_span);
+            }
+            else if constexpr (std::is_same_v<
+                                   PlanPtrT,
+                                   std::unique_ptr<
+                                       OneMKLRFFTPlanImpl<T_Real>>>) {
+              const T_Real* input_padded_ptr = input_padded_.get();
+              std::span<const T_Real> input_padded_real_span(
+                  input_padded_ptr, current_fft_len);
+              status = plan_ptr->rfft(input_padded_real_span, input_fft_span);
+            }
+            if (status != Status::Success) return;
+
+            // 2. Multiply FFTs (Input * Conjugated(Template)) using MKL VML
+            MKL_LONG n_mul = static_cast<MKL_LONG>(product_fft_span.size());
+            if constexpr (std::is_same_v<T_Real, float>) {
+              vcMul(
+                  n_mul,
+                  reinterpret_cast<const MKL_Complex8*>(input_fft_ptr),
+                  reinterpret_cast<const MKL_Complex8*>(
+                      kernel_fft_conj_.data()),
+                  reinterpret_cast<MKL_Complex8*>(product_fft_ptr));
+            }
+            else {  // double
+              vzMul(
+                  n_mul,
+                  reinterpret_cast<const MKL_Complex16*>(input_fft_ptr),
+                  reinterpret_cast<const MKL_Complex16*>(
+                      kernel_fft_conj_.data()),
+                  reinterpret_cast<MKL_Complex16*>(product_fft_ptr));
+            }
+            // VML status check? Assume success.
+
+            // 3. Inverse FFT
+            const T_Complex* product_ptr = product_fft_.get();
+            std::span<const T_Complex> product_const_span(
+                product_ptr, product_fft_span.size());
+            if constexpr (std::is_same_v<
+                              PlanPtrT,
+                              std::unique_ptr<OneMKLFFTPlanImpl<T_Complex>>>) {
+              T_Complex* result_ptr
+                  = reinterpret_cast<T_Complex*>(result_ifft_ptr);
+              std::span<T_Complex> result_complex_span(
+                  result_ptr, current_fft_len);
+              status = plan_ptr->ifft(product_const_span, result_complex_span);
+            }
+            else if constexpr (std::is_same_v<
+                                   PlanPtrT,
+                                   std::unique_ptr<
+                                       OneMKLRFFTPlanImpl<T_Real>>>) {
+              status = plan_ptr->irfft(product_const_span, result_ifft_span);
+            }
+            // status is now set by the IFFT/IRFFT call
+          }
+          else {
+            status = Status::InvalidOperation;
+          }
+        },
+        fft_plan_impl_variant_);
+
+    if (status != Status::Success) return status;
+
+    // --- Extract Correct Output based on Type ---
+    // (Extraction logic remains the same as default/convolution.cpp)
+    size_t full_start_idx = 0;
+    size_t count = output_len_expected;
+
+    switch (type_) {
+      case ConvolutionType::Full:
+        full_start_idx = 0;
+        count = input_len + kernel_length_ - 1;
+        break;
+      case ConvolutionType::Same:
+        full_start_idx = (kernel_length_ - 1) / 2;
+        count = input_len;
+        break;
+      case ConvolutionType::Valid:
+        full_start_idx = 0;  // Valid correlation starts at index 0
+        count = (input_len >= kernel_length_) ? (input_len - kernel_length_ + 1)
+                                              : 0;
+        break;
+      default:
+        return Status::InvalidArgument;
     }
 
-    template <typename T>
-    size_t OneMKLCorrelationPlanImpl<T>::get_output_length(
-        size_t input_length) const
-    {
-      // Same logic as convolution output length
-      if (template_length_ == 0) return 0;
-      switch (mode_) {
-        case ConvolutionType::Full:
-          if (input_length > SIZE_MAX - template_length_ + 1) return SIZE_MAX;
-          return input_length + template_length_ - 1;
-        case ConvolutionType::Same:
-          return input_length;
-        case ConvolutionType::Valid:
-          return (input_length >= template_length_)
-                     ? (input_length - template_length_ + 1)
-                     : 0;
-        default:
-          return 0;
+    assert(count == output_len_expected);
+
+    size_t linear_corr_len = input_len + kernel_length_ - 1;
+    if (full_start_idx >= linear_corr_len) {
+      count = 0;
+    }
+    else if (full_start_idx + count > linear_corr_len) {
+      count = linear_corr_len - full_start_idx;
+    }
+
+    count = std::min(count, output.size());
+
+    if (count > 0) {
+      if (full_start_idx + count <= current_fft_len) {
+        std::memcpy(
+            output.data(),
+            result_ifft_.get() + full_start_idx,
+            count * sizeof(T));
+      }
+      else {
+        size_t safe_count = (full_start_idx < current_fft_len)
+                                ? (current_fft_len - full_start_idx)
+                                : 0;
+        safe_count = std::min(safe_count, count);
+        if (safe_count > 0) {
+          std::memcpy(
+              output.data(),
+              result_ifft_.get() + full_start_idx,
+              safe_count * sizeof(T));
+        }
+        if (output_len_expected > safe_count) {
+          std::fill(
+              output.begin() + safe_count,
+              output.begin() + output_len_expected,
+              T{0});
+        }
+        std::cerr << "Warning: Correlation result truncated due to "
+                     "insufficient FFT length or indexing issue."
+                  << std::endl;
       }
     }
 
-    //--------------------------------------------------------------------------
-    // Explicit Template Instantiations
-    //--------------------------------------------------------------------------
+    if (count < output_len_expected) {
+      std::fill(
+          output.begin() + count, output.begin() + output_len_expected, T{0});
+    }
+    if (output.size() > output_len_expected) {
+      std::fill(output.begin() + output_len_expected, output.end(), T{0});
+    }
 
-    // Define complex types for brevity
-    using float_c = OmniDSP::ComplexT<float>;
-    using double_c = OmniDSP::ComplexT<double>;
+    return Status::Success;
+  }
 
-    // OneMKLConvolutionPlanImpl Instantiations
-    template class OmniDSP::backend::OneMKLConvolutionPlanImpl<float>;
-    template class OmniDSP::backend::OneMKLConvolutionPlanImpl<double>;
-    template class OmniDSP::backend::OneMKLConvolutionPlanImpl<float_c>;
-    template class OmniDSP::backend::OneMKLConvolutionPlanImpl<double_c>;
+  // Getters
+  template <typename T>
+  size_t OneMKLCorrelationPlanImpl<T>::get_template_length() const
+  {
+    return kernel_length_;
+  }
+  template <typename T>
+  ConvolutionType OneMKLCorrelationPlanImpl<T>::get_type() const
+  {
+    return type_;
+  }
+  template <typename T>
+  ConvolutionMethod OneMKLCorrelationPlanImpl<T>::get_method() const
+  {
+    return method_;
+  }
+  template <typename T>
+  size_t OneMKLCorrelationPlanImpl<T>::get_output_length(
+      size_t input_length) const
+  {
+    // Same logic as convolution
+    if (kernel_length_ == 0)
+      return (type_ == ConvolutionType::Same ? input_length : 0);
+    switch (type_) {
+      case ConvolutionType::Full:
+        if (input_length
+            > std::numeric_limits<size_t>::max() - kernel_length_ + 1) {
+          throw std::length_error(
+              "Output length calculation overflow (Full mode)");
+        }
+        return input_length + kernel_length_ - 1;
+      case ConvolutionType::Same:
+        return input_length;
+      case ConvolutionType::Valid:
+        return (input_length >= kernel_length_)
+                   ? (input_length - kernel_length_ + 1)
+                   : 0;
+      default:
+        throw std::logic_error(
+            "Invalid ConvolutionType encountered in get_output_length");
+    }
+  }
+  template <typename T>
+  std::span<const T> OneMKLCorrelationPlanImpl<T>::get_template() const
+  {
+    return std::span<const T>(original_kernel_);
+  }
 
-    // OneMKLCorrelationPlanImpl Instantiations
-    template class OmniDSP::backend::OneMKLCorrelationPlanImpl<float>;
-    template class OmniDSP::backend::OneMKLCorrelationPlanImpl<double>;
-    template class OmniDSP::backend::OneMKLCorrelationPlanImpl<float_c>;
-    template class OmniDSP::backend::OneMKLCorrelationPlanImpl<double_c>;
+  template <typename T>
+  ConvolutionMethod OneMKLConvolutionPlanImpl<T>::get_method() const
+  {
+    return method_;
+  }
 
-  }  // namespace backend
-}  // namespace OmniDSP
+  template <typename T>
+  ConvolutionMethod OneMKLCorrelationPlanImpl<T>::get_method() const
+  {
+    return method_;
+  }
+
+  //--------------------------------------------------------------------------
+  // Explicit Template Instantiations
+  //--------------------------------------------------------------------------
+  // OneMKLConvolutionPlanImpl Instantiations
+  template class OmniDSP::backend::OneMKLConvolutionPlanImpl<F32>;
+  template class OmniDSP::backend::OneMKLConvolutionPlanImpl<F64>;
+  template class OmniDSP::backend::OneMKLConvolutionPlanImpl<C32>;
+  template class OmniDSP::backend::OneMKLConvolutionPlanImpl<C64>;
+
+  // OneMKLCorrelationPlanImpl Instantiations
+  template class OmniDSP::backend::OneMKLCorrelationPlanImpl<F32>;
+  template class OmniDSP::backend::OneMKLCorrelationPlanImpl<F64>;
+  template class OmniDSP::backend::OneMKLCorrelationPlanImpl<C32>;
+  template class OmniDSP::backend::OneMKLCorrelationPlanImpl<C64>;
+
+}  // namespace OmniDSP::backend
+
+#endif  // OMNIDSP_USE_ONEMKL

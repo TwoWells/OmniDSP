@@ -4,68 +4,52 @@
  * OmniDSP class interface.
  */
 
-#ifndef OMNIDSP_H
-#define OMNIDSP_H
+#ifndef OMNIDSP_HPP
+#define OMNIDSP_HPP
 
-#include <complex>      // For std::complex parameter and return types
-#include <cstddef>      // For size_t
-#include <memory>       // For std::unique_ptr (Pimpl and Plan factories)
-#include <string_view>  // Potentially for future parameters
-#include <vector>       // For std::vector parameter and return types
+#include <complex>
+#include <cstddef>
+#include <expected>
+#include <memory>
+#include <stdexcept>
+#include <string_view>
+#include <type_traits>
+#include <utility>  // For std::move
+#include <vector>
 
-// Include core types first, as they are used throughout the interface.
-#include "core_types.hpp"
-
-// Include Plan interface definitions
+#include "OmniDSP/omnidsp_export.hpp"
 #include "convolution.hpp"
+#include "core_types.hpp"
 #include "cqt.hpp"
 #include "fft.hpp"
-#include "filter.hpp"  // Includes FIRFilterPlan, IIRFilterPlan, FIRFilterSpec, IIRFilterSpec, IIRFilterCoef
-#include "resample.hpp"  // Includes ResampleSpec
+#include "filter.hpp"
+#include "resample.hpp"
+#include "window.hpp"
 
-// Include the generated export header
-#include "OmniDSP/omnidsp_export.hpp"
+// Include the backend interface definition - needed for pimpl_ type
+#include "../src/omnidsp/interface/backend.hpp"  // Adjust path as needed
 
 namespace OmniDSP {
 
-  // Forward declaration for the implementation class (Pimpl idiom)
-  namespace backend {
-    class AbstractBackend;  // Forward declare base backend interface
-  }  // namespace backend
-
-  // Forward declare implementation class (Pimpl)
-  class OmniDSPImpl;
+  // Helper for static_assert in constexpr if
+  template <typename T>
+  struct always_false : std::false_type {};
 
   /**
    * @brief Main class providing access to OmniDSP functionalities.
-   * @details This class acts as the primary entry point for using the library.
-   * It manages the selected backend and provides methods for performing common
-   * DSP operations directly or creating stateful Plan objects for optimized
-   * repeated operations.
-   * Use the static OmniDSP::create() factory function to instantiate this
-   * class. This class is non-copyable but movable.
    */
   class OMNIDSP_EXPORT OmniDSP {
    public:
-    /**
-     * @brief Factory function to create an OmniDSP instance.
-     * @param backend The desired computation backend. Defaults to
-     * Backend::Default.
-     * @return An OmniExpected<OmniDSP> containing the created instance on
-     * success, or a Status error code.
-     */
     [[nodiscard]] static OmniExpected<OmniDSP> create(
         Backend backend = Backend::Default);
 
-    ~OmniDSP();                                    // Destructor
-    OmniDSP(OmniDSP&& other) noexcept;             // Move constructor
-    OmniDSP& operator=(OmniDSP&& other) noexcept;  // Move assignment
+    ~OmniDSP();
+    OmniDSP(OmniDSP&& other) noexcept;
+    OmniDSP& operator=(OmniDSP&& other) noexcept;
 
-    // Delete Copy Semantics
     OmniDSP(const OmniDSP&) = delete;
     OmniDSP& operator=(const OmniDSP&) = delete;
 
-    /** @brief Gets the backend currently used by this OmniDSP instance. */
     Backend get_backend() const;
 
     //-------------------------------------------------------------------------
@@ -75,34 +59,31 @@ namespace OmniDSP {
 
     /** @name Convolution and Correlation */
     ///@{
+    // *** Default argument ONLY in the declaration within the class ***
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>> convolve(
         const std::vector<RealT<T>>& input,
         const std::vector<RealT<T>>& kernel,
         ConvolutionType type,
-        ConvolutionMethod method
-        = ConvolutionMethod::Auto) const;  // Added method param
+        ConvolutionMethod method = ConvolutionMethod::Auto) const;
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>> convolve(
         const std::vector<ComplexT<T>>& input,
         const std::vector<ComplexT<T>>& kernel,
         ConvolutionType type,
-        ConvolutionMethod method
-        = ConvolutionMethod::Auto) const;  // Added method param
+        ConvolutionMethod method = ConvolutionMethod::Auto) const;
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<RealT<T>>> correlate(
         const std::vector<RealT<T>>& input,
         const std::vector<RealT<T>>& kernel,
         ConvolutionType type,
-        ConvolutionMethod method
-        = ConvolutionMethod::Auto) const;  // Added method param
+        ConvolutionMethod method = ConvolutionMethod::Auto) const;
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>> correlate(
         const std::vector<ComplexT<T>>& input,
         const std::vector<ComplexT<T>>& kernel,
         ConvolutionType type,
-        ConvolutionMethod method
-        = ConvolutionMethod::Auto) const;  // Added method param
+        ConvolutionMethod method = ConvolutionMethod::Auto) const;
     ///@}
 
     /** @name Fourier Transforms (One-Off) */
@@ -117,38 +98,38 @@ namespace OmniDSP {
     [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>> rfft(
         const std::vector<RealT<T>>& input) const;
     template <typename T>
-    [[nodiscard]] OmniExpected<std::vector<RealT<T>>> irfft(
-        const std::vector<ComplexT<T>>& input, size_t output_length) const;
+    [[nodiscard]] OmniExpected<std::vector<T>> irfft(  // T is REAL type
+        const std::vector<ComplexT<T>>& input,
+        size_t output_length) const;
     ///@}
 
     /** @name Window Coefficient Generation */
     ///@{
-    template <typename T>
-    [[nodiscard]] OmniExpected<std::vector<RealT<T>>> bartlett_window(
+    template <typename T>  // T is REAL type
+    [[nodiscard]] OmniExpected<std::vector<T>> bartlett_window(
         size_t length) const;
-    template <typename T>
-    [[nodiscard]] OmniExpected<std::vector<RealT<T>>> blackman_window(
+    template <typename T>  // T is REAL type
+    [[nodiscard]] OmniExpected<std::vector<T>> blackman_window(
         size_t length) const;
-    template <typename T>
-    [[nodiscard]] OmniExpected<std::vector<RealT<T>>> flattop_window(
+    template <typename T>  // T is REAL type
+    [[nodiscard]] OmniExpected<std::vector<T>> flattop_window(
         size_t length) const;
-    template <typename T>
-    [[nodiscard]] OmniExpected<std::vector<RealT<T>>> gaussian_window(
-        size_t length, double stddev) const;  // Use double for param
-    template <typename T>
-    [[nodiscard]] OmniExpected<std::vector<RealT<T>>> hamming_window(
+    template <typename T>  // T is REAL type
+    [[nodiscard]] OmniExpected<std::vector<T>> gaussian_window(
+        size_t length, double stddev) const;
+    template <typename T>  // T is REAL type
+    [[nodiscard]] OmniExpected<std::vector<T>> hamming_window(
         size_t length) const;
-    template <typename T>
-    [[nodiscard]] OmniExpected<std::vector<RealT<T>>> hann_window(
+    template <typename T>  // T is REAL type
+    [[nodiscard]] OmniExpected<std::vector<T>> hann_window(size_t length) const;
+    template <typename T>  // T is REAL type
+    [[nodiscard]] OmniExpected<std::vector<T>> kaiser_window(
+        size_t length, double beta) const;
+    template <typename T>  // T is REAL type
+    [[nodiscard]] OmniExpected<std::vector<T>> rectangular_window(
         size_t length) const;
-    template <typename T>
-    [[nodiscard]] OmniExpected<std::vector<RealT<T>>> kaiser_window(
-        size_t length, double beta) const;  // Use double for param
-    template <typename T>
-    [[nodiscard]] OmniExpected<std::vector<RealT<T>>> rectangular_window(
-        size_t length) const;
-    template <typename T>
-    [[nodiscard]] OmniExpected<std::vector<RealT<T>>> triangular_window(
+    template <typename T>  // T is REAL type
+    [[nodiscard]] OmniExpected<std::vector<T>> triangular_window(
         size_t length) const;
     ///@}
     /** @} */  // End of DspOps group
@@ -158,67 +139,42 @@ namespace OmniDSP {
      * @brief Methods to create optimized Plan objects for repeated operations.
      * @{ */
     //-------------------------------------------------------------------------
-
-    /** @brief Creates a plan for complex-to-complex FFTs. */
+    // *** Default argument ONLY in the declaration within the class ***
     template <typename T>  // T is complex type
     [[nodiscard]] OmniExpected<std::unique_ptr<FFTPlan<T>>> create_fft_plan(
         size_t length) const;
-
-    /** @brief Creates a plan for real-to-complex FFTs. */
     template <typename T>  // T is real type
     [[nodiscard]] OmniExpected<std::unique_ptr<RFFTPlan<T>>> create_rfft_plan(
         size_t length) const;
-
-    /** @brief Creates a plan for Constant-Q Transforms (CQTs). */
     template <typename T>  // T is real type
     [[nodiscard]] OmniExpected<std::unique_ptr<CQTPlan<T>>> create_cqt_plan(
         RealT<T> sample_rate,
         RealT<T> min_freq,
         RealT<T> max_freq,
         int bins_per_octave,
-        const WindowSpec& window_spec
-        = WindowSpec()) const;  // Use non-templated WindowSpec
-
-    /**
-     * @brief Creates a plan for resampling signals.
-     * @tparam T The floating-point type (e.g., float, double).
-     * @param spec The ResampleSpec defining input/output rates and quality.
-     * @return An OmniExpected containing a unique_ptr to the ResamplePlan
-     * interface on success, or a Status error code.
-     */
-    template <typename T>
+        const WindowSpec& window_spec = WindowSpec()) const;
+    template <typename T>  // T is real type
     [[nodiscard]] OmniExpected<std::unique_ptr<ResamplePlan<T>>>
     create_resample_plan(const ResampleSpec& spec) const;
-
-    /** @brief Creates a plan for 1D convolution. */
-    template <typename T>
+    template <typename T>  // T can be REAL or COMPLEX
     [[nodiscard]] OmniExpected<std::unique_ptr<ConvolutionPlan<T>>>
     create_convolution_plan(
         const std::vector<T>& kernel,
         ConvolutionType type,
-        ConvolutionMethod method
-        = ConvolutionMethod::Auto) const;  // Added method param
-
-    /** @brief Creates a plan for 1D cross-correlation. */
-    template <typename T>
+        ConvolutionMethod method = ConvolutionMethod::Auto) const;
+    template <typename T>  // T can be REAL or COMPLEX
     [[nodiscard]] OmniExpected<std::unique_ptr<CorrelationPlan<T>>>
     create_correlation_plan(
         const std::vector<T>& kernel,
         ConvolutionType type,
-        ConvolutionMethod method
-        = ConvolutionMethod::Auto) const;  // Added method param
-
-    /** @brief Creates a plan for FIR filtering. */
-    template <typename T>
+        ConvolutionMethod method = ConvolutionMethod::Auto) const;
+    template <typename T>  // T can be REAL or COMPLEX
     [[nodiscard]] OmniExpected<std::unique_ptr<FIRFilterPlan<T>>>
     create_fir_filter_plan(const std::vector<T>& coefficients) const;
-
-    /** @brief Creates a plan for IIR filtering using Second-Order Sections. */
     template <typename T>  // T is typically real
     [[nodiscard]] OmniExpected<std::unique_ptr<IIRFilterPlan<T>>>
-    create_iir_filter_plan(const std::vector<IIRFilterCoef>& sos_coefficients)
-        const;  // *** UPDATED: Use IIRFilterCoef ***
-
+    create_iir_filter_plan(
+        const std::vector<IIRFilterCoef>& sos_coefficients) const;
     /** @} */  // End of PlanFactories group
 
     //-------------------------------------------------------------------------
@@ -226,36 +182,541 @@ namespace OmniDSP {
      * @brief Methods to design standard digital filters.
      * @{ */
     //-------------------------------------------------------------------------
-    /** @brief Designs an FIR filter based on the specification. */
-    template <typename T>  // T is real type (F32, F64)
-    [[nodiscard]] OmniExpected<std::vector<RealT<T>>> design_fir_filter(
-        const FIRFilterSpec& spec) const;  // Use non-templated FIRFilterSpec
-
-    /** @brief Designs an IIR filter based on the specification. */
-    template <typename T>  // T is real type (F32, F64)
-    [[nodiscard]] OmniExpected<
-        std::vector<IIRFilterCoef>>  // *** UPDATED: Return IIRFilterCoef ***
-    design_iir_filter(
-        const IIRFilterSpec& spec) const;  // Use non-templated IIRFilterSpec
-    /** @} */                              // End of FilterDesign group
+    template <typename T>  // T is real type
+    [[nodiscard]] OmniExpected<std::vector<T>> design_fir_filter(
+        const FIRFilterSpec& spec) const;
+    template <typename T>  // T is real type
+    [[nodiscard]] OmniExpected<std::vector<IIRFilterCoef>> design_iir_filter(
+        const IIRFilterSpec& spec) const;
+    /** @} */  // End of FilterDesign group
 
    private:
-    /** @brief Private constructor used by the static create factory function.
-     */
-    OmniDSP(std::unique_ptr<backend::AbstractBackend>
-                impl);  // Store AbstractBackend
-
-    /** @brief Pointer to the implementation object (Pimpl idiom). */
-    std::unique_ptr<backend::AbstractBackend> pimpl_;  // Store AbstractBackend
+    OmniDSP(std::unique_ptr<backend::AbstractBackend> impl);
+    std::unique_ptr<backend::AbstractBackend> pimpl_;
   };
 
-  // Template method definitions for member functions are typically defined in
-  // the header file itself (if simple and not dependent on Impl) or in a
-  // separate
-  // "-inl.h" header file included at the end of this header, or explicitly
-  // instantiated in a .cpp file. Since these depend on pimpl_, their
-  // definitions MUST be in omnidsp.cpp.
+  //--------------------------------------------------------------------------
+  // Template Method Definitions (Defined in Header)
+  //--------------------------------------------------------------------------
+
+  // --- DSP Operations ---
+  // *** Default argument REMOVED from definition ***
+  template <typename T>
+  [[nodiscard]] inline OmniExpected<std::vector<RealT<T>>> OmniDSP::convolve(
+      const std::vector<RealT<T>>& input,
+      const std::vector<RealT<T>>& kernel,
+      ConvolutionType type,
+      ConvolutionMethod method) const
+  {
+    if (!pimpl_) throw std::runtime_error("Invalid OmniDSP instance");
+    if constexpr (std::is_same_v<T, F32>) {
+      return pimpl_->convolve_f32(input, kernel, type, method);
+    }
+    else if constexpr (std::is_same_v<T, F64>) {
+      return pimpl_->convolve_f64(input, kernel, type, method);
+    }
+    else {
+      static_assert(always_false<T>::value, "Unsupported real type");
+    }
+  }
+
+  // *** Default argument REMOVED from definition ***
+  template <typename T>
+  [[nodiscard]] inline OmniExpected<std::vector<ComplexT<T>>> OmniDSP::convolve(
+      const std::vector<ComplexT<T>>& input,
+      const std::vector<ComplexT<T>>& kernel,
+      ConvolutionType type,
+      ConvolutionMethod method) const
+  {
+    if (!pimpl_) throw std::runtime_error("Invalid OmniDSP instance");
+    if constexpr (std::is_same_v<T, C32>) {
+      return pimpl_->convolve_c32(input, kernel, type, method);
+    }
+    else if constexpr (std::is_same_v<T, C64>) {
+      return pimpl_->convolve_c64(input, kernel, type, method);
+    }
+    else {
+      static_assert(always_false<T>::value, "Unsupported complex type");
+    }
+  }
+
+  // *** Default argument REMOVED from definition ***
+  template <typename T>
+  [[nodiscard]] inline OmniExpected<std::vector<RealT<T>>> OmniDSP::correlate(
+      const std::vector<RealT<T>>& input,
+      const std::vector<RealT<T>>& kernel,
+      ConvolutionType type,
+      ConvolutionMethod method) const
+  {
+    if (!pimpl_) throw std::runtime_error("Invalid OmniDSP instance");
+    if constexpr (std::is_same_v<T, F32>) {
+      return pimpl_->correlate_f32(input, kernel, type, method);
+    }
+    else if constexpr (std::is_same_v<T, F64>) {
+      return pimpl_->correlate_f64(input, kernel, type, method);
+    }
+    else {
+      static_assert(always_false<T>::value, "Unsupported real type");
+    }
+  }
+
+  // *** Default argument REMOVED from definition ***
+  template <typename T>
+  [[nodiscard]] inline OmniExpected<std::vector<ComplexT<T>>>
+  OmniDSP::correlate(
+      const std::vector<ComplexT<T>>& input,
+      const std::vector<ComplexT<T>>& kernel,
+      ConvolutionType type,
+      ConvolutionMethod method) const
+  {
+    if (!pimpl_) throw std::runtime_error("Invalid OmniDSP instance");
+    if constexpr (std::is_same_v<T, C32>) {
+      return pimpl_->correlate_c32(input, kernel, type, method);
+    }
+    else if constexpr (std::is_same_v<T, C64>) {
+      return pimpl_->correlate_c64(input, kernel, type, method);
+    }
+    else {
+      static_assert(always_false<T>::value, "Unsupported complex type");
+    }
+  }
+
+  // --- One-off FFTs ---
+  template <typename T>
+  [[nodiscard]] inline OmniExpected<std::vector<ComplexT<T>>> OmniDSP::fft(
+      const std::vector<ComplexT<T>>& input) const
+  {
+    if (!pimpl_) throw std::runtime_error("Invalid OmniDSP instance");
+    if constexpr (std::is_same_v<T, C32>) {
+      return pimpl_->fft_c32(input);
+    }
+    else if constexpr (std::is_same_v<T, C64>) {
+      return pimpl_->fft_c64(input);
+    }
+    else {
+      static_assert(always_false<T>::value, "Unsupported complex type");
+    }
+  }
+
+  template <typename T>
+  [[nodiscard]] inline OmniExpected<std::vector<ComplexT<T>>> OmniDSP::ifft(
+      const std::vector<ComplexT<T>>& input) const
+  {
+    if (!pimpl_) throw std::runtime_error("Invalid OmniDSP instance");
+    if constexpr (std::is_same_v<T, C32>) {
+      return pimpl_->ifft_c32(input);
+    }
+    else if constexpr (std::is_same_v<T, C64>) {
+      return pimpl_->ifft_c64(input);
+    }
+    else {
+      static_assert(always_false<T>::value, "Unsupported complex type");
+    }
+  }
+
+  template <typename T>
+  [[nodiscard]] inline OmniExpected<std::vector<ComplexT<T>>> OmniDSP::rfft(
+      const std::vector<RealT<T>>& input) const
+  {
+    if (!pimpl_) throw std::runtime_error("Invalid OmniDSP instance");
+    if constexpr (std::is_same_v<T, F32>) {
+      return pimpl_->rfft_f32(input);
+    }
+    else if constexpr (std::is_same_v<T, F64>) {
+      return pimpl_->rfft_f64(input);
+    }
+    else {
+      static_assert(always_false<T>::value, "Unsupported real type");
+    }
+  }
+
+  template <typename T>
+  [[nodiscard]] inline OmniExpected<std::vector<T>> OmniDSP::irfft(
+      const std::vector<ComplexT<T>>& input, size_t output_length) const
+  {
+    if (!pimpl_) throw std::runtime_error("Invalid OmniDSP instance");
+    if constexpr (std::is_same_v<T, F32>) {
+      return pimpl_->irfft_c32(input, output_length);
+    }
+    else if constexpr (std::is_same_v<T, F64>) {
+      return pimpl_->irfft_c64(input, output_length);
+    }
+    else {
+      static_assert(always_false<T>::value, "Unsupported real type");
+    }
+  }
+
+  // --- Window Generation ---
+  template <typename T>
+  [[nodiscard]] inline OmniExpected<std::vector<T>> OmniDSP::bartlett_window(
+      size_t length) const
+  {
+    if (!pimpl_) throw std::runtime_error("Invalid OmniDSP instance");
+    std::vector<T> output(length);
+    Status status;
+    if constexpr (std::is_same_v<T, F32>) {
+      status = pimpl_->bartlett_window_f32(length, output);
+    }
+    else if constexpr (std::is_same_v<T, F64>) {
+      status = pimpl_->bartlett_window_f64(length, output);
+    }
+    else {
+      static_assert(always_false<T>::value, "Unsupported type");
+    }
+    if (status != Status::Success) return std::unexpected(status);
+    return output;
+  }
+  template <typename T>
+  [[nodiscard]] inline OmniExpected<std::vector<T>> OmniDSP::blackman_window(
+      size_t length) const
+  {
+    if (!pimpl_) throw std::runtime_error("Invalid OmniDSP instance");
+    std::vector<T> output(length);
+    Status status;
+    if constexpr (std::is_same_v<T, F32>) {
+      status = pimpl_->blackman_window_f32(length, output);
+    }
+    else if constexpr (std::is_same_v<T, F64>) {
+      status = pimpl_->blackman_window_f64(length, output);
+    }
+    else {
+      static_assert(always_false<T>::value, "Unsupported type");
+    }
+    if (status != Status::Success) return std::unexpected(status);
+    return output;
+  }
+  template <typename T>
+  [[nodiscard]] inline OmniExpected<std::vector<T>> OmniDSP::flattop_window(
+      size_t length) const
+  {
+    if (!pimpl_) throw std::runtime_error("Invalid OmniDSP instance");
+    std::vector<T> output(length);
+    Status status;
+    if constexpr (std::is_same_v<T, F32>) {
+      status = pimpl_->flattop_window_f32(length, output);
+    }
+    else if constexpr (std::is_same_v<T, F64>) {
+      status = pimpl_->flattop_window_f64(length, output);
+    }
+    else {
+      static_assert(always_false<T>::value, "Unsupported type");
+    }
+    if (status != Status::Success) return std::unexpected(status);
+    return output;
+  }
+  template <typename T>
+  [[nodiscard]] inline OmniExpected<std::vector<T>> OmniDSP::gaussian_window(
+      size_t length, double stddev) const
+  {
+    if (!pimpl_) throw std::runtime_error("Invalid OmniDSP instance");
+    std::vector<T> output(length);
+    Status status;
+    if constexpr (std::is_same_v<T, F32>) {
+      status = pimpl_->gaussian_window_f32(length, stddev, output);
+    }
+    else if constexpr (std::is_same_v<T, F64>) {
+      status = pimpl_->gaussian_window_f64(length, stddev, output);
+    }
+    else {
+      static_assert(always_false<T>::value, "Unsupported type");
+    }
+    if (status != Status::Success) return std::unexpected(status);
+    return output;
+  }
+  template <typename T>
+  [[nodiscard]] inline OmniExpected<std::vector<T>> OmniDSP::hamming_window(
+      size_t length) const
+  {
+    if (!pimpl_) throw std::runtime_error("Invalid OmniDSP instance");
+    std::vector<T> output(length);
+    Status status;
+    if constexpr (std::is_same_v<T, F32>) {
+      status = pimpl_->hamming_window_f32(length, output);
+    }
+    else if constexpr (std::is_same_v<T, F64>) {
+      status = pimpl_->hamming_window_f64(length, output);
+    }
+    else {
+      static_assert(always_false<T>::value, "Unsupported type");
+    }
+    if (status != Status::Success) return std::unexpected(status);
+    return output;
+  }
+  template <typename T>
+  [[nodiscard]] inline OmniExpected<std::vector<T>> OmniDSP::hann_window(
+      size_t length) const
+  {
+    if (!pimpl_) throw std::runtime_error("Invalid OmniDSP instance");
+    std::vector<T> output(length);
+    Status status;
+    if constexpr (std::is_same_v<T, F32>) {
+      status = pimpl_->hann_window_f32(length, output);
+    }
+    else if constexpr (std::is_same_v<T, F64>) {
+      status = pimpl_->hann_window_f64(length, output);
+    }
+    else {
+      static_assert(always_false<T>::value, "Unsupported type");
+    }
+    if (status != Status::Success) return std::unexpected(status);
+    return output;
+  }
+  template <typename T>
+  [[nodiscard]] inline OmniExpected<std::vector<T>> OmniDSP::kaiser_window(
+      size_t length, double beta) const
+  {
+    if (!pimpl_) throw std::runtime_error("Invalid OmniDSP instance");
+    std::vector<T> output(length);
+    Status status;
+    if constexpr (std::is_same_v<T, F32>) {
+      status = pimpl_->kaiser_window_f32(length, beta, output);
+    }
+    else if constexpr (std::is_same_v<T, F64>) {
+      status = pimpl_->kaiser_window_f64(length, beta, output);
+    }
+    else {
+      static_assert(always_false<T>::value, "Unsupported type");
+    }
+    if (status != Status::Success) return std::unexpected(status);
+    return output;
+  }
+  template <typename T>
+  [[nodiscard]] inline OmniExpected<std::vector<T>> OmniDSP::rectangular_window(
+      size_t length) const
+  {
+    if (!pimpl_) throw std::runtime_error("Invalid OmniDSP instance");
+    std::vector<T> output(length);
+    Status status;
+    if constexpr (std::is_same_v<T, F32>) {
+      status = pimpl_->rectangular_window_f32(length, output);
+    }
+    else if constexpr (std::is_same_v<T, F64>) {
+      status = pimpl_->rectangular_window_f64(length, output);
+    }
+    else {
+      static_assert(always_false<T>::value, "Unsupported type");
+    }
+    if (status != Status::Success) return std::unexpected(status);
+    return output;
+  }
+  template <typename T>
+  [[nodiscard]] inline OmniExpected<std::vector<T>> OmniDSP::triangular_window(
+      size_t length) const
+  {
+    if (!pimpl_) throw std::runtime_error("Invalid OmniDSP instance");
+    std::vector<T> output(length);
+    Status status;
+    if constexpr (std::is_same_v<T, F32>) {
+      status = pimpl_->triangular_window_f32(length, output);
+    }
+    else if constexpr (std::is_same_v<T, F64>) {
+      status = pimpl_->triangular_window_f64(length, output);
+    }
+    else {
+      static_assert(always_false<T>::value, "Unsupported type");
+    }
+    if (status != Status::Success) return std::unexpected(status);
+    return output;
+  }
+
+  // --- Plan Factories ---
+  // *** Default argument REMOVED from definition ***
+  template <typename T>
+  [[nodiscard]] inline OmniExpected<std::unique_ptr<FFTPlan<T>>>
+  OmniDSP::create_fft_plan(size_t length) const
+  {
+    if (!pimpl_) throw std::runtime_error("Invalid OmniDSP instance");
+    if constexpr (std::is_same_v<T, C32>) {
+      return pimpl_->create_fft_plan_c32(length);
+    }
+    else if constexpr (std::is_same_v<T, C64>) {
+      return pimpl_->create_fft_plan_c64(length);
+    }
+    else {
+      static_assert(always_false<T>::value, "Unsupported complex type");
+    }
+  }
+
+  template <typename T>
+  [[nodiscard]] inline OmniExpected<std::unique_ptr<RFFTPlan<T>>>
+  OmniDSP::create_rfft_plan(size_t length) const
+  {
+    if (!pimpl_) throw std::runtime_error("Invalid OmniDSP instance");
+    if constexpr (std::is_same_v<T, F32>) {
+      return pimpl_->create_rfft_plan_f32(length);
+    }
+    else if constexpr (std::is_same_v<T, F64>) {
+      return pimpl_->create_rfft_plan_f64(length);
+    }
+    else {
+      static_assert(always_false<T>::value, "Unsupported real type");
+    }
+  }
+
+  // *** Default argument REMOVED from definition ***
+  template <typename T>
+  [[nodiscard]] inline OmniExpected<std::unique_ptr<CQTPlan<T>>>
+  OmniDSP::create_cqt_plan(
+      RealT<T> sample_rate,
+      RealT<T> min_freq,
+      RealT<T> max_freq,
+      int bins_per_octave,
+      const WindowSpec& window_spec) const
+  {
+    if (!pimpl_) throw std::runtime_error("Invalid OmniDSP instance");
+    if constexpr (std::is_same_v<T, F32>) {
+      return pimpl_->create_cqt_plan_f32(
+          sample_rate, min_freq, max_freq, bins_per_octave, window_spec);
+    }
+    else if constexpr (std::is_same_v<T, F64>) {
+      return pimpl_->create_cqt_plan_f64(
+          sample_rate, min_freq, max_freq, bins_per_octave, window_spec);
+    }
+    else {
+      static_assert(always_false<T>::value, "Unsupported real type");
+    }
+  }
+
+  template <typename T>
+  [[nodiscard]] inline OmniExpected<std::unique_ptr<ResamplePlan<T>>>
+  OmniDSP::create_resample_plan(const ResampleSpec& spec) const
+  {
+    if (!pimpl_) throw std::runtime_error("Invalid OmniDSP instance");
+    if constexpr (std::is_same_v<T, F32>) {
+      return pimpl_->create_resample_plan_f32(spec);
+    }
+    else if constexpr (std::is_same_v<T, F64>) {
+      return pimpl_->create_resample_plan_f64(spec);
+    }
+    else {
+      static_assert(always_false<T>::value, "Unsupported real type");
+    }
+  }
+
+  // *** Default argument REMOVED from definition ***
+  template <typename T>
+  [[nodiscard]] inline OmniExpected<std::unique_ptr<ConvolutionPlan<T>>>
+  OmniDSP::create_convolution_plan(
+      const std::vector<T>& kernel,
+      ConvolutionType type,
+      ConvolutionMethod method) const
+  {
+    if (!pimpl_) throw std::runtime_error("Invalid OmniDSP instance");
+    if constexpr (std::is_same_v<T, F32>) {
+      return pimpl_->create_convolution_plan_f32(kernel, type, method);
+    }
+    else if constexpr (std::is_same_v<T, F64>) {
+      return pimpl_->create_convolution_plan_f64(kernel, type, method);
+    }
+    else if constexpr (std::is_same_v<T, C32>) {
+      return pimpl_->create_convolution_plan_c32(kernel, type, method);
+    }
+    else if constexpr (std::is_same_v<T, C64>) {
+      return pimpl_->create_convolution_plan_c64(kernel, type, method);
+    }
+    else {
+      static_assert(always_false<T>::value, "Unsupported type");
+    }
+  }
+
+  // *** Default argument REMOVED from definition ***
+  template <typename T>
+  [[nodiscard]] inline OmniExpected<std::unique_ptr<CorrelationPlan<T>>>
+  OmniDSP::create_correlation_plan(
+      const std::vector<T>& kernel,
+      ConvolutionType type,
+      ConvolutionMethod method) const
+  {
+    if (!pimpl_) throw std::runtime_error("Invalid OmniDSP instance");
+    if constexpr (std::is_same_v<T, F32>) {
+      return pimpl_->create_correlation_plan_f32(kernel, type, method);
+    }
+    else if constexpr (std::is_same_v<T, F64>) {
+      return pimpl_->create_correlation_plan_f64(kernel, type, method);
+    }
+    else if constexpr (std::is_same_v<T, C32>) {
+      return pimpl_->create_correlation_plan_c32(kernel, type, method);
+    }
+    else if constexpr (std::is_same_v<T, C64>) {
+      return pimpl_->create_correlation_plan_c64(kernel, type, method);
+    }
+    else {
+      static_assert(always_false<T>::value, "Unsupported type");
+    }
+  }
+
+  template <typename T>
+  [[nodiscard]] inline OmniExpected<std::unique_ptr<FIRFilterPlan<T>>>
+  OmniDSP::create_fir_filter_plan(const std::vector<T>& coefficients) const
+  {
+    if (!pimpl_) throw std::runtime_error("Invalid OmniDSP instance");
+    if constexpr (std::is_same_v<T, F32>) {
+      return pimpl_->create_fir_filter_plan_f32(coefficients);
+    }
+    else if constexpr (std::is_same_v<T, F64>) {
+      return pimpl_->create_fir_filter_plan_f64(coefficients);
+    }
+    else if constexpr (std::is_same_v<T, C32>) {
+      return pimpl_->create_fir_filter_plan_c32(coefficients);
+    }
+    else if constexpr (std::is_same_v<T, C64>) {
+      return pimpl_->create_fir_filter_plan_c64(coefficients);
+    }
+    else {
+      static_assert(always_false<T>::value, "Unsupported type");
+    }
+  }
+
+  template <typename T>
+  [[nodiscard]] inline OmniExpected<std::unique_ptr<IIRFilterPlan<T>>>
+  OmniDSP::create_iir_filter_plan(
+      const std::vector<IIRFilterCoef>& sos_coefficients) const
+  {
+    if (!pimpl_) throw std::runtime_error("Invalid OmniDSP instance");
+    if constexpr (std::is_same_v<T, F32>) {
+      return pimpl_->create_iir_filter_plan_f32(sos_coefficients);
+    }
+    else if constexpr (std::is_same_v<T, F64>) {
+      return pimpl_->create_iir_filter_plan_f64(sos_coefficients);
+    }
+    else {
+      static_assert(always_false<T>::value, "Unsupported type");
+    }
+  }
+
+  // --- Filter Design Methods ---
+  template <typename T>
+  [[nodiscard]] inline OmniExpected<std::vector<T>> OmniDSP::design_fir_filter(
+      const FIRFilterSpec& spec) const
+  {
+    if (!pimpl_) throw std::runtime_error("Invalid OmniDSP instance");
+    if constexpr (std::is_same_v<T, F32>) {
+      return pimpl_->design_fir_filter_f32(spec);
+    }
+    else if constexpr (std::is_same_v<T, F64>) {
+      return pimpl_->design_fir_filter_f64(spec);
+    }
+    else {
+      static_assert(always_false<T>::value, "Unsupported type");
+    }
+  }
+
+  template <typename T>
+  [[nodiscard]] inline OmniExpected<std::vector<IIRFilterCoef>>
+  OmniDSP::design_iir_filter(const IIRFilterSpec& spec) const
+  {
+    if (!pimpl_) throw std::runtime_error("Invalid OmniDSP instance");
+    if constexpr (std::is_same_v<T, F32>) {
+      return pimpl_->design_iir_filter_f32(spec);
+    }
+    else if constexpr (std::is_same_v<T, F64>) {
+      return pimpl_->design_iir_filter_f64(spec);
+    }
+    else {
+      static_assert(always_false<T>::value, "Unsupported type");
+    }
+  }
 
 }  // namespace OmniDSP
 
-#endif  // OMNIDSP_H
+#endif  // OMNIDSP_HPP

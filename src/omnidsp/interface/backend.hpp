@@ -1,13 +1,13 @@
 /**
- * @file backend.h
+ * @file backend.hpp
  * @brief Defines the abstract base class interface for backend implementations.
  * @details Concrete backend implementations (DefaultBackend, AccelerateBackend,
  * OneMKLBackend) must inherit from the abstract base classes defined here
  * (AbstractBackend, *PlanImpl).
  */
 
-#ifndef OMNIDSP_BACKEND_H
-#define OMNIDSP_BACKEND_H
+#ifndef OMNIDSP_BACKEND_HPP  // Changed guard name convention
+#define OMNIDSP_BACKEND_HPP
 
 #include <complex>
 #include <cstddef>  // For size_t
@@ -16,8 +16,6 @@
 #include <vector>
 
 // Include core library types and specifications
-// #include <OmniDSP/omnidsp.hpp>   // Avoid including the main header here if
-// possible
 #include <OmniDSP/convolution.hpp>  // Includes ConvolutionType, ConvolutionMethod
 #include <OmniDSP/core_types.hpp>  // Includes Status, Backend, OmniExpected, F32, C32, F64, C64, Vec aliases, GetComplexT etc.
 #include <OmniDSP/filter.hpp>  // Includes FIRFilterSpec, IIRFilterSpec, IIRFilterCoef
@@ -25,7 +23,6 @@
 #include <OmniDSP/window.hpp>    // Includes WindowSpec, WindowType
 
 // Forward declare public Plan classes from the OmniDSP namespace
-// (These might not be strictly necessary here, but good practice)
 namespace OmniDSP {
   template <typename T>
   class FFTPlan;
@@ -43,201 +40,149 @@ namespace OmniDSP {
   class FIRFilterPlan;
   template <typename T>
   class IIRFilterPlan;
-  class OmniDSPImpl;  // Forward declare if needed by AbstractBackend (e.g.,
-                      // friend?)
+  class OmniDSPImpl;
 }  // namespace OmniDSP
 
 namespace OmniDSP {
   namespace backend {
 
-    // Forward declare the main backend implementation base class
     class AbstractBackend;
 
     //--------------------------------------------------------------------------
     // Plan Implementation Interfaces (Abstract Base Classes)
     //--------------------------------------------------------------------------
-    // These define the common interface for *all* backend implementations of a
-    // specific plan type.
 
     /** @brief Interface for complex-to-complex FFT plan implementations. */
-    template <typename T>  // T is complex type here (e.g., C32, C64)
+    template <typename T>
     class FFTPlanImpl {
      public:
       virtual ~FFTPlanImpl() = default;
-      /** @brief Executes the forward FFT. */
       [[nodiscard]] virtual Status fft(
           std::span<const T> input, std::span<T> output) const
           = 0;
-      /** @brief Executes the inverse FFT. */
       [[nodiscard]] virtual Status ifft(
           std::span<const T> input, std::span<T> output) const
           = 0;
-      /** @brief Gets the length (size) of the FFT. */
       virtual size_t get_length() const = 0;
     };
 
     /** @brief Interface for real-to-complex/complex-to-real FFT plan
      * implementations. */
-    template <typename T>  // T is real type here (e.g., F32, F64)
+    template <typename T>
     class RFFTPlanImpl {
      public:
-      using Complex = Detail::GetComplexT<T>;  // Use type trait from core_types
+      using Complex = Detail::GetComplexT<T>;
       virtual ~RFFTPlanImpl() = default;
-      /** @brief Executes the forward real-to-complex FFT. */
       [[nodiscard]] virtual Status rfft(
           std::span<const T> input, std::span<Complex> output) const
           = 0;
-      /** @brief Executes the inverse complex-to-real FFT. */
       [[nodiscard]] virtual Status irfft(
           std::span<const Complex> input, std::span<T> output) const
           = 0;
-      /** @brief Gets the length (size) of the real data. */
       virtual size_t get_length() const = 0;
     };
 
     /** @brief Interface for resampling plan implementations. */
-    template <typename T>  // T is real type here (F32, F64)
+    template <typename T>
     class ResamplePlanImpl {
      public:
       virtual ~ResamplePlanImpl() = default;
-      /** @brief Processes a chunk of input data. */
       [[nodiscard]] virtual Status execute(
           std::span<const T> input, std::span<T> output)
-          = 0;  // Not const, stateful
-      /** @brief Resets the internal state of the resampler. */
-      [[nodiscard]] virtual Status reset() = 0;  // Not const, stateful
-      /** @brief Gets the input sample rate. */
+          = 0;
+      [[nodiscard]] virtual Status reset() = 0;
       virtual double get_input_rate() const = 0;
-      /** @brief Gets the output sample rate. */
       virtual double get_output_rate() const = 0;
-      /** @brief Calculates the expected output length for a given input length.
-       */
       virtual size_t get_output_length(size_t input_length) const = 0;
     };
 
     /** @brief Interface for convolution plan implementations. */
-    template <typename T>  // T can be F32, F64, C32, C64
+    template <typename T>
     class ConvolutionPlanImpl {
      public:
       virtual ~ConvolutionPlanImpl() = default;
-      /** @brief Executes the convolution operation. */
       [[nodiscard]] virtual Status execute(
           std::span<const T> input, std::span<T> output) const
           = 0;
-      /** @brief Gets the length of the convolution kernel. */
       virtual size_t get_kernel_length() const = 0;
-      /** @brief Gets the convolution type (boundary handling). */
       virtual ConvolutionType get_type() const = 0;
-      /** @brief Calculates the expected output length for a given input length.
-       */
       virtual size_t get_output_length(size_t input_length) const = 0;
-      /** @brief Gets the convolution kernel used by the plan. */
-      virtual std::span<const T> get_kernel() const = 0;
-      /** @brief Gets the convolution method hint used when creating this plan.
-       */
-      virtual ConvolutionMethod get_method() const = 0;
+      // *** ADDED pure virtual functions ***
+      [[nodiscard]] virtual std::span<const T> get_kernel() const = 0;
+      [[nodiscard]] virtual ConvolutionMethod get_method() const = 0;
     };
 
     /** @brief Interface for correlation plan implementations. */
-    template <typename T>  // T can be F32, F64, C32, C64
+    template <typename T>
     class CorrelationPlanImpl {
      public:
       virtual ~CorrelationPlanImpl() = default;
-      /** @brief Executes the correlation operation. */
       [[nodiscard]] virtual Status execute(
           std::span<const T> input, std::span<T> output) const
           = 0;
-      /** @brief Gets the length of the correlation template. */
       virtual size_t get_template_length() const = 0;
-      /** @brief Gets the correlation type (boundary handling). */
       virtual ConvolutionType get_type() const = 0;
-      /** @brief Calculates the expected output length for a given input length.
-       */
       virtual size_t get_output_length(size_t input_length) const = 0;
-      /** @brief Gets the correlation template used by the plan. */
-      virtual std::span<const T> get_template() const = 0;
-      /** @brief Gets the correlation method hint used when creating this plan.
-       */
-      virtual ConvolutionMethod get_method() const = 0;
+      // *** ADDED pure virtual functions ***
+      [[nodiscard]] virtual std::span<const T> get_template() const = 0;
+      [[nodiscard]] virtual ConvolutionMethod get_method() const = 0;
     };
 
     /** @brief Interface for FIR filter plan implementations. */
-    template <typename T>  // T can be F32, F64, C32, C64
+    template <typename T>
     class FIRFilterPlanImpl {
      public:
       virtual ~FIRFilterPlanImpl() = default;
-      /** @brief Processes a chunk of input data. */
       [[nodiscard]] virtual Status execute(
           std::span<const T> input, std::span<T> output)
-          = 0;  // Not const, stateful
-      /** @brief Resets the internal state (delay line) of the filter. */
-      [[nodiscard]] virtual Status reset() = 0;  // Not const, stateful
-      /** @brief Gets the filter order (length - 1). */
+          = 0;
+      [[nodiscard]] virtual Status reset() = 0;
       virtual size_t get_order() const = 0;
-      /** @brief Gets the number of filter coefficients (taps). */
       virtual size_t get_num_taps() const = 0;
-      // virtual std::span<const T> get_coefficients() const = 0; // Consider
-      // adding?
+      // [[nodiscard]] virtual std::span<const T> get_coefficients() const = 0;
+      // // Optional
     };
 
     /** @brief Interface for IIR filter plan implementations. */
-    template <typename T>  // T is typically real (F32, F64)
+    template <typename T>
     class IIRFilterPlanImpl {
      public:
       virtual ~IIRFilterPlanImpl() = default;
-      /** @brief Processes a chunk of input data. */
       [[nodiscard]] virtual Status execute(
           std::span<const T> input, std::span<T> output)
-          = 0;  // Not const, stateful
-      /** @brief Resets the internal state (delay lines) of the filter. */
-      [[nodiscard]] virtual Status reset() = 0;  // Not const, stateful
-      /** @brief Gets the filter order (maximum of numerator/denominator
-       * orders). */
+          = 0;
+      [[nodiscard]] virtual Status reset() = 0;
       virtual size_t get_order() const = 0;
-      /** @brief Gets the number of second-order sections. */
       virtual size_t get_num_sections() const = 0;
       // virtual const std::vector<IIRFilterCoef>& get_sections() const = 0; //
-      // Consider adding? Use IIRFilterCoef
+      // Optional
     };
 
     /** @brief Interface for Constant-Q Transform (CQT) plan implementations. */
-    template <typename T>  // T is real type here (F32, F64)
+    template <typename T>
     class CQTPlanImpl {
      public:
-      using Complex = Detail::GetComplexT<T>;  // Use type trait from core_types
+      using Complex = Detail::GetComplexT<T>;
       virtual ~CQTPlanImpl() = default;
-      /** @brief Executes the CQT on an input signal. */
       [[nodiscard]] virtual Status execute(
           std::span<const T> input, std::span<Complex> output) const
           = 0;
-      /** @brief Gets the number of frequency bins in the CQT output. */
       virtual size_t get_num_bins() const = 0;
-      /** @brief Calculates the number of output time frames for a given input
-       * length. */
       virtual size_t get_num_output_frames(size_t input_length) const = 0;
-      /** @brief Gets the hop length (number of samples between frames). */
       virtual size_t get_hop_length() const = 0;
-      // Add other relevant getters? e.g., get_sample_rate(), get_min_freq(),
-      // get_max_freq() etc.
     };
 
     //--------------------------------------------------------------------------
     // Main Backend Implementation Interface (Abstract Base Class)
     //--------------------------------------------------------------------------
-
-    /**
-     * @brief Abstract base class defining the interface for backend
-     * implementations. Defines the factory methods for creating Plan objects
-     * and potentially optimized one-off operations.
-     */
     class AbstractBackend {
      public:
       virtual ~AbstractBackend() = default;
-      /** @brief Returns the identifier for this backend implementation. */
-      virtual Backend get_backend() const = 0;  // Pure virtual
+      virtual Backend get_backend() const = 0;
 
       // === Virtual methods corresponding to OmniDSP public API ===
-
+      // ... (One-off operations, Window Generation, Plan Factories, Filter
+      // Design) ...
       // --- DSP Operations (One-off) ---
       [[nodiscard]] virtual OmniExpected<F32Vec> convolve_f32(
           const F32Vec& input,
@@ -313,7 +258,6 @@ namespace OmniDSP {
           = 0;
 
       // --- Window Generation (One-off) ---
-      // Public API methods taking span output
       [[nodiscard]] virtual Status bartlett_window_f32(
           size_t length, std::span<F32> output) const
           = 0;
@@ -370,7 +314,6 @@ namespace OmniDSP {
           = 0;
 
       // --- Plan Factories ---
-      // These return the PUBLIC Plan interfaces (e.g., FFTPlan<C32>)
       [[nodiscard]] virtual OmniExpected<std::unique_ptr<FFTPlan<C32>>>
       create_fft_plan_c32(size_t length) const = 0;
       [[nodiscard]] virtual OmniExpected<std::unique_ptr<FFTPlan<C64>>>
@@ -477,12 +420,7 @@ namespace OmniDSP {
       design_iir_filter_f64(const IIRFilterSpec& spec) const = 0;
 
       // --- Internal Helpers ---
-      // *** REMOVED: Internal implementation factories are NOT part of the
-      // abstract interface ***
-
-      // Internal window generation helper (UPDATED SIGNATURE)
-      // Pure virtual, MUST be implemented by each backend.
-      // Writes directly to the output span.
+      // Internal window generation helper
       [[nodiscard]] virtual Status generate_window_f32(
           const WindowSpec& spec, std::span<F32> output) const
           = 0;
@@ -491,7 +429,6 @@ namespace OmniDSP {
           = 0;
 
      protected:
-      // Add protected default constructor if needed by derived classes
       AbstractBackend() = default;
 
     };  // class AbstractBackend
@@ -499,4 +436,4 @@ namespace OmniDSP {
   }  // namespace backend
 }  // namespace OmniDSP
 
-#endif  // OMNIDSP_BACKEND_H
+#endif  // OMNIDSP_BACKEND_HPP

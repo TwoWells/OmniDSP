@@ -1,12 +1,12 @@
 /**
  * @file fft.cpp
- * @brief Implements the FFTPlan and RFFTPlan class methods, forwarding calls to
- * backend implementations.
+ * @brief Implements the public FFTPlan and RFFTPlan class methods, forwarding
+ * calls to the backend implementation pointer (pimpl).
  */
 
-#include "OmniDSP/fft.hpp"  // Corresponding header
-                            //
-// Include the backend interface definition which declares the Impl classes
+#include <OmniDSP/fft.hpp>  // Corresponding header for public Plan classes
+
+// Include the backend interface definition which declares the Impl interfaces
 #include <memory>  // For std::unique_ptr
 #include <span>
 #include <stdexcept>  // For std::runtime_error
@@ -15,62 +15,20 @@
 
 #include "backend.hpp"
 
+// Include core types for aliases like C32, F32 etc. used in instantiations
+#include <OmniDSP/core_types.hpp>
+
 namespace OmniDSP {
-  namespace backend {
-
-    /**
-     * @brief Abstract base class defining the interface for complex FFT Plan
-     * implementations (Pimpl).
-     * @tparam T The floating-point type (e.g., float, double).
-     */
-    template <typename T>
-    class FFTPlanImpl {
-     public:
-      virtual ~FFTPlanImpl() = default;
-      virtual Status fft(
-          std::span<const ComplexT<T>> input,
-          std::span<ComplexT<T>> output) const
-          = 0;
-      virtual Status ifft(
-          std::span<const ComplexT<T>> input,
-          std::span<ComplexT<T>> output) const
-          = 0;
-      virtual size_t get_length() const = 0;
-    };
-
-    /**
-     * @brief Abstract base class defining the interface for real FFT Plan
-     * implementations (Pimpl).
-     * @tparam T The floating-point type (e.g., float, double).
-     */
-    template <typename T>
-    class RFFTPlanImpl {
-     public:
-      virtual ~RFFTPlanImpl() = default;
-      virtual Status rfft(
-          std::span<const RealT<T>> input, std::span<ComplexT<T>> output) const
-          = 0;
-      virtual Status irfft(
-          std::span<const ComplexT<T>> input, std::span<RealT<T>> output) const
-          = 0;
-      virtual size_t get_length() const = 0;
-    };
-
-    // Define explicit instantiations for the Impl interfaces if needed,
-    // though usually not required for abstract classes.
-
-  }  // namespace backend
 
   //--------------------------------------------------------------------------
   // FFTPlan Method Definitions
   //--------------------------------------------------------------------------
 
-  template <typename T>
+  // Constructor - Takes the backend implementation pointer
+  template <typename T>  // T is Complex type (C32, C64)
   FFTPlan<T>::FFTPlan(std::unique_ptr<backend::FFTPlanImpl<T>> pimpl)
       : pimpl_(std::move(pimpl))
   {
-    // Constructor body can be empty, initialization is done via member
-    // initializer list
     if (!pimpl_) {
       // This should ideally be caught by the factory creating the Impl
       throw std::runtime_error("FFTPlan created with null implementation.");
@@ -92,36 +50,46 @@ namespace OmniDSP {
   template <typename T>
   FFTPlan<T>& FFTPlan<T>::operator=(FFTPlan&& other) noexcept = default;
 
-  template <typename T>
+  // fft Method - Uses template parameter T
+  template <typename T>  // T is Complex type (C32, C64)
   [[nodiscard]] Status FFTPlan<T>::fft(
-      std::span<const ComplexT<T>> input, std::span<ComplexT<T>> output) const
-  {
-    if (!pimpl_) {
-      // Should not happen if constructor validates, but defensive check
-      return Status::InvalidOperation;  // Or another appropriate error
-    }
-    // TODO: Add size checks: input.size() == get_length(), output.size() ==
-    // get_length() ?
-    return pimpl_->fft(input, output);
-  }
-
-  template <typename T>
-  [[nodiscard]] Status FFTPlan<T>::ifft(
-      std::span<const ComplexT<T>> input, std::span<ComplexT<T>> output) const
+      std::span<const T> input, std::span<T> output) const
   {
     if (!pimpl_) {
       return Status::InvalidOperation;
     }
-    // TODO: Add size checks: input.size() == get_length(), output.size() ==
-    // get_length() ?
+    // Add size checks against get_length() for robustness
+    if (input.size() != get_length() || output.size() != get_length()) {
+      return Status::SizeMismatch;
+    }
+    return pimpl_->fft(input, output);
+  }
+
+  // ifft Method - Uses template parameter T
+  template <typename T>  // T is Complex type (C32, C64)
+  [[nodiscard]] Status FFTPlan<T>::ifft(
+      std::span<const T> input, std::span<T> output) const
+  {
+    if (!pimpl_) {
+      return Status::InvalidOperation;
+    }
+    // Add size checks against get_length() for robustness
+    if (input.size() != get_length() || output.size() != get_length()) {
+      return Status::SizeMismatch;
+    }
+    // Note: Scaling (1/N) is typically handled by the user or backend
+    // implementation
     return pimpl_->ifft(input, output);
   }
 
-  template <typename T>
+  // get_length Method
+  template <typename T>  // T is Complex type (C32, C64)
   size_t FFTPlan<T>::get_length() const
   {
     if (!pimpl_) {
-      return 0;  // Or throw? A plan should always have an impl if constructed.
+      // Or throw? Plan should be valid if constructed.
+      throw std::runtime_error(
+          "Attempted to get length from an invalid FFTPlan.");
     }
     return pimpl_->get_length();
   }
@@ -130,7 +98,8 @@ namespace OmniDSP {
   // RFFTPlan Method Definitions
   //--------------------------------------------------------------------------
 
-  template <typename T>
+  // Constructor - Takes the backend implementation pointer
+  template <typename T>  // T is REAL type (F32, F64)
   RFFTPlan<T>::RFFTPlan(std::unique_ptr<backend::RFFTPlanImpl<T>> pimpl)
       : pimpl_(std::move(pimpl))
   {
@@ -153,35 +122,53 @@ namespace OmniDSP {
   template <typename T>
   RFFTPlan<T>& RFFTPlan<T>::operator=(RFFTPlan&& other) noexcept = default;
 
-  template <typename T>
+  // rfft Method - Uses T (Real) and ComplexT<T>
+  template <typename T>  // T is REAL type (F32, F64)
   [[nodiscard]] Status RFFTPlan<T>::rfft(
-      std::span<const RealT<T>> input, std::span<ComplexT<T>> output) const
+      std::span<const T> input,
+      std::span<Complex> output) const  // Use Complex alias
   {
     if (!pimpl_) {
       return Status::InvalidOperation;
     }
-    // TODO: Add size checks: input.size() == get_length(), output.size() ==
-    // get_length()/2 + 1 ?
+    // Add size checks against get_length() for robustness
+    size_t N = get_length();
+    if (N == 0 && (input.empty() && output.empty()))
+      return Status::Success;  // Allow empty case
+    if (N == 0 || input.size() != N || output.size() != (N / 2 + 1)) {
+      return Status::SizeMismatch;
+    }
     return pimpl_->rfft(input, output);
   }
 
-  template <typename T>
+  // irfft Method - Uses ComplexT<T> and T (Real)
+  template <typename T>  // T is REAL type (F32, F64)
   [[nodiscard]] Status RFFTPlan<T>::irfft(
-      std::span<const ComplexT<T>> input, std::span<RealT<T>> output) const
+      std::span<const Complex> input,
+      std::span<T> output) const  // Use Complex alias
   {
     if (!pimpl_) {
       return Status::InvalidOperation;
     }
-    // TODO: Add size checks: output.size() == get_length(), input.size() ==
-    // get_length()/2 + 1 ?
+    // Add size checks against get_length() for robustness
+    size_t N = get_length();
+    if (N == 0 && (input.empty() && output.empty()))
+      return Status::Success;  // Allow empty case
+    if (N == 0 || output.size() != N || input.size() != (N / 2 + 1)) {
+      return Status::SizeMismatch;
+    }
+    // Note: Scaling (1/N) is typically handled by the user or backend
+    // implementation
     return pimpl_->irfft(input, output);
   }
 
-  template <typename T>
+  // get_length Method
+  template <typename T>  // T is REAL type (F32, F64)
   size_t RFFTPlan<T>::get_length() const
   {
     if (!pimpl_) {
-      return 0;
+      throw std::runtime_error(
+          "Attempted to get length from an invalid RFFTPlan.");
     }
     return pimpl_->get_length();
   }
@@ -190,24 +177,14 @@ namespace OmniDSP {
   // Explicit Template Instantiations
   //--------------------------------------------------------------------------
   // Instantiate templates for common types (float, double) to ensure code
-  // generation.
+  // generation for the public Plan classes.
 
-  // Define complex types for brevity
-  using float_c = ComplexT<float>;
-  using double_c = ComplexT<double>;
+  // FFTPlan Instantiations (for Complex types C32, C64)
+  template class FFTPlan<C32>;
+  template class FFTPlan<C64>;
 
-  // FFTPlan Instantiations
-  template class FFTPlan<float_c>;
-  template class FFTPlan<double_c>;
-
-  // RFFTPlan Instantiations
-  template class RFFTPlan<float>;
-  template class RFFTPlan<double>;
-
-  // Note: If method definitions were not defaulted (e.g., custom move logic),
-  // they would also need explicit instantiations if defined in the .cpp file.
-  // Since we used =default for destructor/move ops, instantiating the class is
-  // sufficient. The execute/getter methods are implicitly instantiated with the
-  // class.
+  // RFFTPlan Instantiations (for Real types F32, F64)
+  template class RFFTPlan<F32>;
+  template class RFFTPlan<F64>;
 
 }  // namespace OmniDSP

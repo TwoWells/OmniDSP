@@ -1,30 +1,7 @@
 # ==============================================================================
 # cmake/backend/onemkl.cmake
 # ==============================================================================
-#
-# Brief Description:
-#   Configures the 'omnidsp_backend_onemkl' OBJECT library target if the
-#   Intel oneMKL and IPP libraries are found and the backend is enabled.
-#
-# Variables Read:
-#   - CMAKE_SOURCE_DIR, PROJECT_BINARY_DIR (CMake Built-in)
-#   - APPLE (CMake Built-in)
-#   - OMNIDSP_ENABLE_ONEMKL (Option, dependent on NOT APPLE)
-#   - ENV{MKLROOT} (Environment Variable)
-#   - CMAKE_CURRENT_LIST_DIR (CMake Built-in)
-#   - MKL::MKL, IPP::core, IPP::s targets (Expected from find_package)
-#   - IPP_INCLUDE_DIRS (Variable potentially set by FindIPP.cmake)
-#
-# Variables Set (in Caller's Scope via include()):
-#   - OMNIDSP_SELECTED_BACKEND_TARGETS (Appends 'omnidsp_backend_onemkl' if configured)
-#
-# Targets Defined:
-#   - omnidsp_backend_onemkl (OBJECT Library, if configured successfully)
-#
-# Modules Included:
-#   - CMakeDependentOption, FindMKL, FindIPP
-#
-# ==============================================================================
+# Finds dependencies and sets variables for the oneMKL backend.
 
 include(CMakeDependentOption)
 
@@ -34,121 +11,67 @@ cmake_dependent_option(
     ON "NOT APPLE" OFF
 )
 
+# Initialize output variables in the current scope (which is the includer's scope)
+set(OMNIDSP_HAS_ONEMKL FALSE)
+set(ONEMKL_BACKEND_SOURCES "")
+set(ONEMKL_BACKEND_INCLUDE_DIRS "")
+set(ONEMKL_BACKEND_LINK_LIBS "")
+
 if(OMNIDSP_ENABLE_ONEMKL)
     message(STATUS "  Attempting to configure oneMKL backend...")
 
+    # Find MKL and IPP (IPP::IPP is the key target we need from FindIPP)
     find_package(MKL HINTS ENV MKLROOT QUIET)
-    find_package(IPP COMPONENTS s QUIET) # Assumes FindIPP.cmake provides IPP::core, IPP::s
+    # Requesting 's' component ensures FindIPP checks for core and signal libs
+    # and defines IPP::IPP if successful.
+    find_package(IPP COMPONENTS s QUIET)
 
-    if(TARGET MKL::MKL AND TARGET IPP::core AND TARGET IPP::s)
-        message(STATUS "    Found oneMKL (MKL::MKL) and IPP (IPP::core, IPP::s). Configuring target.")
+    # Check if the required dependency targets exist
+    if(TARGET MKL::MKL AND TARGET IPP::IPP)
+        message(STATUS "      Found oneMKL (MKL::MKL) and IPP (IPP::IPP). Enabling backend.")
 
-        add_library(omnidsp_backend_onemkl OBJECT)
-
-        set(OMNIDSP_ONEMKL_BACKEND_SRC_DIR ${CMAKE_SOURCE_DIR}/src/omnidsp/onemkl)
-        message(STATUS "      oneMKL backend source directory: ${OMNIDSP_ONEMKL_BACKEND_SRC_DIR}")
-
-        target_sources(omnidsp_backend_onemkl
-            PRIVATE
-                "${OMNIDSP_ONEMKL_BACKEND_SRC_DIR}/backend.cpp"
-                "${OMNIDSP_ONEMKL_BACKEND_SRC_DIR}/fft.cpp"
-                "${OMNIDSP_ONEMKL_BACKEND_SRC_DIR}/window.cpp"
-                "${OMNIDSP_ONEMKL_BACKEND_SRC_DIR}/convolution.cpp"
-                "${OMNIDSP_ONEMKL_BACKEND_SRC_DIR}/resample.cpp"
+        # --- Set Backend Source Files ---
+        set(ONEMKL_BACKEND_SOURCES
+            "${PROJECT_SOURCE_DIR}/src/omnidsp/onemkl/backend.cpp"
+            "${PROJECT_SOURCE_DIR}/src/omnidsp/onemkl/fft.cpp"
+            "${PROJECT_SOURCE_DIR}/src/omnidsp/onemkl/window.cpp"
+            "${PROJECT_SOURCE_DIR}/src/omnidsp/onemkl/convolution.cpp"
+            "${PROJECT_SOURCE_DIR}/src/omnidsp/onemkl/resample.cpp"
+            "${PROJECT_SOURCE_DIR}/src/omnidsp/onemkl/filter.cpp"
+            # PARENT_SCOPE removed
         )
 
-        # --- Get Include Directories from Dependencies ---
-        set(MKL_INCLUDES "")
-        set(IPP_INCLUDES "") # Consolidate IPP includes
-
-        # MKL Includes
+        # --- Set Backend Include Directories ---
+        set(TEMP_ONEMKL_INCLUDES "")
+        # Get MKL Includes
         if(TARGET MKL::MKL)
             get_target_property(MKL_INCLUDES MKL::MKL INTERFACE_INCLUDE_DIRECTORIES)
-            if(NOT MKL_INCLUDES) # Check if property was empty or not found
-                 message(WARNING "DEBUG oneMKL.cmake: MKL::MKL INTERFACE_INCLUDE_DIRECTORIES not set/empty. Check FindMKL.")
-                 set(MKL_INCLUDES "") # Ensure it's empty if property failed
-            else()
-                 message(STATUS "DEBUG oneMKL.cmake: Retrieved MKL_INCLUDES: ${MKL_INCLUDES}")
-            endif()
-        else()
-            message(WARNING "DEBUG oneMKL.cmake: MKL::MKL target not found.")
-        endif()
-
-        # IPP Includes (Check target properties first, then fallback to IPP_INCLUDE_DIRS)
-        if(TARGET IPP::core)
-             get_target_property(TEMP_IPP_CORE_INCLUDES IPP::core INTERFACE_INCLUDE_DIRECTORIES)
-             if(TEMP_IPP_CORE_INCLUDES)
-                 list(APPEND IPP_INCLUDES ${TEMP_IPP_CORE_INCLUDES})
-                 message(STATUS "DEBUG oneMKL.cmake: Retrieved IPP_CORE_INCLUDES from property: ${TEMP_IPP_CORE_INCLUDES}")
-             endif()
-        else()
-             message(WARNING "DEBUG oneMKL.cmake: IPP::core target not found.")
-        endif()
-        if(TARGET IPP::s)
-             get_target_property(TEMP_IPP_S_INCLUDES IPP::s INTERFACE_INCLUDE_DIRECTORIES)
-              if(TEMP_IPP_S_INCLUDES)
-                 list(APPEND IPP_INCLUDES ${TEMP_IPP_S_INCLUDES})
-                 message(STATUS "DEBUG oneMKL.cmake: Retrieved IPP_S_INCLUDES from property: ${TEMP_IPP_S_INCLUDES}")
-             endif()
-        else()
-              message(WARNING "DEBUG oneMKL.cmake: IPP::s target not found.")
-        endif()
-
-        # Fallback/Primary check for IPP_INCLUDE_DIRS variable if properties were empty
-        if(NOT IPP_INCLUDES)
-            if(DEFINED IPP_INCLUDE_DIRS AND IPP_INCLUDE_DIRS)
-                 message(STATUS "DEBUG oneMKL.cmake: IPP target properties did not provide includes. Falling back to IPP_INCLUDE_DIRS: ${IPP_INCLUDE_DIRS}")
-                 set(IPP_INCLUDES ${IPP_INCLUDE_DIRS})
-            else()
-                 message(WARNING "DEBUG oneMKL.cmake: IPP target properties did not provide includes, AND IPP_INCLUDE_DIRS is not defined/empty.")
+            if(MKL_INCLUDES)
+                list(APPEND TEMP_ONEMKL_INCLUDES ${MKL_INCLUDES})
             endif()
         endif()
-        # Remove duplicates if properties and variable both added paths
-        if(IPP_INCLUDES)
-            list(REMOVE_DUPLICATES IPP_INCLUDES)
-            message(STATUS "DEBUG oneMKL.cmake: Final IPP_INCLUDES: ${IPP_INCLUDES}")
+        # Get IPP Includes (from aggregate target)
+        if(TARGET IPP::IPP)
+             get_target_property(IPP_INCLUDES IPP::IPP INTERFACE_INCLUDE_DIRECTORIES)
+             if(IPP_INCLUDES)
+                 list(APPEND TEMP_ONEMKL_INCLUDES ${IPP_INCLUDES})
+             endif()
         endif()
+        list(REMOVE_DUPLICATES TEMP_ONEMKL_INCLUDES)
+        set(ONEMKL_BACKEND_INCLUDE_DIRS ${TEMP_ONEMKL_INCLUDES}) # PARENT_SCOPE removed
 
+        # --- Set Backend Link Libraries/Targets ---
+        set(ONEMKL_BACKEND_LINK_LIBS MKL::MKL IPP::IPP) # PARENT_SCOPE removed
 
-        # --- Backend Include Directories ---
-        message(STATUS "DEBUG oneMKL.cmake: Using MKL_INCLUDES='${MKL_INCLUDES}'")
-        message(STATUS "DEBUG oneMKL.cmake: Using IPP_INCLUDES='${IPP_INCLUDES}'")
-
-        target_include_directories(omnidsp_backend_onemkl
-            PUBLIC # Public headers needed by consumers (main include dir)
-                $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
-
-            PRIVATE # Private headers needed only to compile this backend's sources
-                ${OMNIDSP_ONEMKL_BACKEND_SRC_DIR}
-                # Add path to generated export header
-                ${PROJECT_BINARY_DIR}/include # Or CMAKE_BINARY_DIR
-
-                # Explicitly add include directories from MKL and IPP targets/variables
-                ${MKL_INCLUDES}
-                ${IPP_INCLUDES} # Use the consolidated list
-        )
-
-        target_compile_definitions(omnidsp_backend_onemkl
-            INTERFACE # Propagated to the main library target
-                OMNIDSP_USE_ONEMKL=1 # Indicate this backend is active
-        )
-
-        # Link MKL and IPP targets. INTERFACE ensures the main 'omnidsp'
-        # library also links against them (important for shared libs).
-        # The include paths are now handled explicitly above for OBJECT lib compilation.
-        target_link_libraries(omnidsp_backend_onemkl
-            INTERFACE
-                MKL::MKL
-                IPP::core
-                IPP::s
-        )
-
-        list(APPEND OMNIDSP_SELECTED_BACKEND_TARGETS "omnidsp_backend_onemkl")
-        message(STATUS "    Configured oneMKL backend target: omnidsp_backend_onemkl")
+        # --- Signal Success ---
+        set(OMNIDSP_HAS_ONEMKL TRUE) # PARENT_SCOPE removed
+        message(STATUS "      oneMKL backend configured.")
 
     else()
-        message(WARNING "oneMKL backend enabled (OMNIDSP_ENABLE_ONEMKL=ON), but required libraries (MKL::MKL, IPP::core, IPP::s) were not found. Disabling this backend.")
+        message(WARNING "oneMKL backend enabled (OMNIDSP_ENABLE_ONEMKL=ON), but required libraries (MKL::MKL, IPP::IPP) were not found. Disabling this backend.")
+        # OMNIDSP_HAS_ONEMKL remains FALSE
     endif()
 else()
     message(STATUS "  oneMKL backend disabled (OMNIDSP_ENABLE_ONEMKL=OFF or platform is Apple).")
+    # OMNIDSP_HAS_ONEMKL remains FALSE
 endif()
