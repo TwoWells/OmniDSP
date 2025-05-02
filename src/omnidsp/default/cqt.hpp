@@ -27,8 +27,8 @@ namespace OmniDSP::backend {
   template <typename T>  // T is real type (F32, F64)
   class DefaultCQTPlanImpl final : public CQTPlanImpl<T> {
    public:
-    using Real = T;                          // Alias for clarity
-    using Complex = Detail::GetComplexT<T>;  // Use type trait
+    using Real = T;                         // Alias for clarity
+    using Complex = Utils::GetComplexT<T>;  // Use type trait
 
     /**
      * @brief Constructs a DefaultCQTPlanImpl.

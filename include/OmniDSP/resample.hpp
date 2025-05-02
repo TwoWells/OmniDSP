@@ -68,7 +68,7 @@ namespace OmniDSP {
   template <typename T>  // T is REAL type here
   class OMNIDSP_EXPORT ResamplePlan {
     static_assert(
-        !Detail::is_complex_v<T>,
+        !Utils::is_complex_v<T>,
         "ResamplePlan requires a real type (F32 or F64).");
     friend class OmniDSPImpl;  // Allow OmniDSPImpl to access private
                                // constructor

@@ -6,8 +6,6 @@
 #ifndef OMNIDSP_ONEMKL_RESAMPLE_HPP
 #define OMNIDSP_ONEMKL_RESAMPLE_HPP
 
-#ifdef OMNIDSP_USE_ONEMKL  // Compile guard
-
 #include <ipps.h>  // IPP Signal Processing header
 
 #include <OmniDSP/core_types.hpp>
@@ -17,7 +15,7 @@
 #include <span>
 #include <vector>
 
-#include "../interface/backend.hpp"  // Base ResamplePlanImpl interface
+#include "../interface/backend.hpp"  // Base ResamplePlanImpl interface and AbstractBackend
 
 namespace OmniDSP::backend {
 
@@ -29,19 +27,23 @@ namespace OmniDSP::backend {
   template <typename T>  // T is real type here (F32, F64)
   class OneMKLResamplePlanImpl final : public ResamplePlanImpl<T> {
     static_assert(
-        !Detail::is_complex_v<T>,
+        !Utils::is_complex_v<T>,
         "OneMKLResamplePlanImpl requires a real type.");
 
    public:
     /**
      * @brief Constructor. Initializes IPP resampler state.
+     * @param owner Pointer to the backend instance creating this plan (needed
+     * for filter design). Must not be null.
      * @param spec The resampling specification.
-     * @throws std::invalid_argument If spec is invalid.
+     * @throws std::invalid_argument If spec is invalid or owner is null.
      * @throws std::runtime_error If IPP state allocation or initialization
-     * fails.
+     * fails, or filter design fails.
      * @throws std::bad_alloc If memory allocation fails.
      */
-    explicit OneMKLResamplePlanImpl(const ResampleSpec& spec);
+    // *** UPDATED: Added owner parameter ***
+    explicit OneMKLResamplePlanImpl(
+        const AbstractBackend* owner, const ResampleSpec& spec);
 
     /**
      * @brief Destructor. Frees the IPP resampler state.
@@ -64,6 +66,8 @@ namespace OmniDSP::backend {
 
    private:
     // --- Configuration ---
+    const AbstractBackend*
+        owner_backend_;  // *** ADDED: Non-owning pointer to owner ***
     double input_rate_;
     double output_rate_;
     int quality_;  // Store quality factor used
@@ -84,5 +88,4 @@ namespace OmniDSP::backend {
 
 }  // namespace OmniDSP::backend
 
-#endif  // OMNIDSP_USE_ONEMKL
 #endif  // OMNIDSP_ONEMKL_RESAMPLE_HPP

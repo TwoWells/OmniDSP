@@ -6,8 +6,6 @@
 #ifndef OMNIDSP_ONEMKL_FFT_HPP
 #define OMNIDSP_ONEMKL_FFT_HPP
 
-#ifdef OMNIDSP_USE_ONEMKL  // Compile guard
-
 #include <mkl.h>  // Include MKL header for DFTI types
 
 #include <OmniDSP/core_types.hpp>  // For Status, RealT, ComplexT etc.
@@ -28,7 +26,7 @@ namespace OmniDSP::backend {
   template <typename T>  // T is complex type here (C32, C64)
   class OneMKLFFTPlanImpl final : public FFTPlanImpl<T> {
     static_assert(
-        Detail::is_complex_v<T>, "OneMKLFFTPlanImpl requires a complex type.");
+        Utils::is_complex_v<T>, "OneMKLFFTPlanImpl requires a complex type.");
     using Real = typename T::value_type;  // Get underlying real type
 
    public:
@@ -80,8 +78,8 @@ namespace OmniDSP::backend {
   template <typename T>  // T is real type here (F32, F64)
   class OneMKLRFFTPlanImpl final : public RFFTPlanImpl<T> {
     static_assert(
-        !Detail::is_complex_v<T>, "OneMKLRFFTPlanImpl requires a real type.");
-    using Complex = Detail::GetComplexT<T>;  // Corresponding complex type
+        !Utils::is_complex_v<T>, "OneMKLRFFTPlanImpl requires a real type.");
+    using Complex = Utils::GetComplexT<T>;  // Corresponding complex type
 
    public:
     /**
@@ -125,5 +123,4 @@ namespace OmniDSP::backend {
 
 }  // namespace OmniDSP::backend
 
-#endif  // OMNIDSP_USE_ONEMKL
 #endif  // OMNIDSP_ONEMKL_FFT_HPP

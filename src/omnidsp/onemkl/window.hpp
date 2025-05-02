@@ -7,8 +7,6 @@
 #ifndef OMNIDSP_ONEMKL_WINDOW_HPP
 #define OMNIDSP_ONEMKL_WINDOW_HPP
 
-#ifdef OMNIDSP_USE_ONEMKL  // Compile guard
-
 #include <OmniDSP/core_types.hpp>  // For Status, F32, F64
 #include <span>                    // For std::span
 
@@ -24,13 +22,15 @@ namespace OmniDSP::backend {
   [[nodiscard]] Status generate_blackman_window_onemkl(std::span<F32> output);
   [[nodiscard]] Status generate_blackman_window_onemkl(std::span<F64> output);
 
-  [[nodiscard]] Status generate_flattop_window_onemkl(std::span<F32> output);
-  [[nodiscard]] Status generate_flattop_window_onemkl(std::span<F64> output);
+  // *** REMOVED Flattop declarations ***
+  // [[nodiscard]] Status generate_flattop_window_onemkl(std::span<F32> output);
+  // [[nodiscard]] Status generate_flattop_window_onemkl(std::span<F64> output);
 
-  [[nodiscard]] Status generate_gaussian_window_onemkl(
-      double stddev, std::span<F32> output);
-  [[nodiscard]] Status generate_gaussian_window_onemkl(
-      double stddev, std::span<F64> output);
+  // *** REMOVED Gaussian declarations ***
+  // [[nodiscard]] Status generate_gaussian_window_onemkl(
+  //     double stddev, std::span<F32> output);
+  // [[nodiscard]] Status generate_gaussian_window_onemkl(
+  //     double stddev, std::span<F64> output);
 
   [[nodiscard]] Status generate_hamming_window_onemkl(std::span<F32> output);
   [[nodiscard]] Status generate_hamming_window_onemkl(std::span<F64> output);
@@ -53,5 +53,4 @@ namespace OmniDSP::backend {
 
 }  // namespace OmniDSP::backend
 
-#endif  // OMNIDSP_USE_ONEMKL
 #endif  // OMNIDSP_ONEMKL_WINDOW_HPP

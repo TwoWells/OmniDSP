@@ -34,8 +34,9 @@ namespace OmniDSP {
    */
   template <typename T>  // T is COMPLEX type here (C32, C64)
   class OMNIDSP_EXPORT FFTPlan {
+    // *** UPDATED Namespace ***
     static_assert(
-        Detail::is_complex_v<T>,
+        Utils::is_complex_v<T>,
         "FFTPlan requires a complex type (C32 or C64).");
     // Only OmniDSP needs friend access if it calls the private constructor
     // directly
@@ -89,10 +90,11 @@ namespace OmniDSP {
    */
   template <typename T>  // T is the REAL type here (F32, F64)
   class OMNIDSP_EXPORT RFFTPlan {
+    // *** UPDATED Namespace ***
     static_assert(
-        !Detail::is_complex_v<T>,
-        "RFFTPlan requires a real type (F32 or F64).");
-    using Complex = Detail::GetComplexT<T>;
+        !Utils::is_complex_v<T>, "RFFTPlan requires a real type (F32 or F64).");
+    // *** UPDATED Namespace ***
+    using Complex = Utils::GetComplexT<T>;
     // Only OmniDSP needs friend access if it calls the private constructor
     // directly
     friend class OmniDSP;

@@ -1,5 +1,6 @@
-#ifndef OMNIDSP_DETAIL_HWY_UTILS_HPP
-#define OMNIDSP_DETAIL_HWY_UTILS_HPP
+// *** UPDATED Include Guard ***
+#ifndef OMNIDSP_UTILS_HWY_UTILS_HPP
+#define OMNIDSP_UTILS_HWY_UTILS_HPP
 
 // Provides helper functions for Highway, potentially backporting
 // features or providing common complex operations.
@@ -14,7 +15,8 @@
 // allowing correct use of target-specific operations via the 'hn' alias.
 HWY_BEFORE_NAMESPACE();
 namespace OmniDSP {
-  namespace backend {
+  // *** UPDATED Namespace ***
+  namespace Utils {
     namespace HWY_NAMESPACE {  // Target-specific namespace
 
       // Alias for Highway types/functions within the current target's namespace
@@ -60,9 +62,10 @@ namespace OmniDSP {
       }
 
     }  // namespace HWY_NAMESPACE
-  }  // namespace backend
+  }  // namespace Utils
 }  // namespace OmniDSP
 HWY_AFTER_NAMESPACE();
 // *** END OF TARGET-SPECIFIC HELPERS ***
 
-#endif  // OMNIDSP_DETAIL_HWY_UTILS_HPP
+// *** UPDATED Include Guard ***
+#endif  // OMNIDSP_UTILS_HWY_UTILS_HPP

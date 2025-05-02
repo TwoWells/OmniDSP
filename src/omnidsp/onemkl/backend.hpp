@@ -8,9 +8,6 @@
 #ifndef OMNIDSP_ONEMKL_BACKEND_HPP
 #define OMNIDSP_ONEMKL_BACKEND_HPP
 
-// Only compile this file if oneMKL backend is enabled via CMake
-#ifdef OMNIDSP_USE_ONEMKL  // << Ensure this CMake flag name is correct
-
 #include <memory>  // For std::unique_ptr
 #include <span>    // For std::span
 #include <vector>  // For vector types
@@ -28,7 +25,7 @@
 // Include the headers declaring the oneMKL Plan implementations
 #include "convolution.hpp"
 #include "fft.hpp"
-#include "filter.hpp"  // *** ADDED: Include the new filter header ***
+#include "filter.hpp"
 #include "resample.hpp"
 #include "window.hpp"
 
@@ -64,14 +61,19 @@ namespace OmniDSP::backend {
         size_t length, std::span<F32> output) const override;
     [[nodiscard]] Status blackman_window_f64(
         size_t length, std::span<F64> output) const override;
-    [[nodiscard]] Status flattop_window_f32(
-        size_t length, std::span<F32> output) const override;
-    [[nodiscard]] Status flattop_window_f64(
-        size_t length, std::span<F64> output) const override;
-    [[nodiscard]] Status gaussian_window_f32(
-        size_t length, double stddev, std::span<F32> output) const override;
-    [[nodiscard]] Status gaussian_window_f64(
-        size_t length, double stddev, std::span<F64> output) const override;
+
+    // *** REMOVED override for flattop ***
+    // [[nodiscard]] Status flattop_window_f32(
+    //     size_t length, std::span<F32> output) const override;
+    // [[nodiscard]] Status flattop_window_f64(
+    //     size_t length, std::span<F64> output) const override;
+
+    // *** REMOVED override for gaussian ***
+    // [[nodiscard]] Status gaussian_window_f32(
+    //     size_t length, double stddev, std::span<F32> output) const override;
+    // [[nodiscard]] Status gaussian_window_f64(
+    //     size_t length, double stddev, std::span<F64> output) const override;
+
     [[nodiscard]] Status hamming_window_f32(
         size_t length, std::span<F32> output) const override;
     [[nodiscard]] Status hamming_window_f64(
@@ -186,5 +188,4 @@ namespace OmniDSP::backend {
 
 }  // namespace OmniDSP::backend
 
-#endif  // OMNIDSP_USE_ONEMKL
 #endif  // OMNIDSP_ONEMKL_BACKEND_HPP

@@ -14,6 +14,7 @@
 #include <cstddef>      // For size_t
 #include <expected>     // Include for std::expected (requires C++23)
 #include <string_view>  // For get_status_string
+#include <type_traits>  // For type traits used in Utils namespace
 #include <utility>      // For std::unexpect
 #include <vector>
 
@@ -203,10 +204,8 @@ namespace OmniDSP {
     }
   }
 
-  // --- Utility Namespace (Optional) ---
-  // Could contain small helper functions or constants used across modules,
-  // if they don't fit better elsewhere.
-  namespace Detail {
+  // *** UPDATED Namespace ***
+  namespace Utils {
     // Type trait to check if a type is std::complex
     template <typename T>
     struct is_complex : std::false_type {};
@@ -225,24 +224,29 @@ namespace OmniDSP {
       using type = T;
     };
     template <typename T>
-
     using GetRealT = typename RealType<T>::type;
 
-    template <typename T>
-    struct ComplexType;
-    template <>
-    struct ComplexType<F32> {
-      using type = C32;
-    };
-    template <>
-    struct ComplexType<F64> {
-      using type = C64;
+    // Helper struct to get corresponding complex type from a REAL type
+    template <typename T_Real>
+    struct ComplexTypeHelper {
+      static_assert(
+          std::is_floating_point_v<T_Real>,
+          "ComplexTypeHelper requires a real floating-point type.");
+      using type = std::complex<T_Real>;
     };
 
+    // Get corresponding complex type from ANY type T (real or complex)
+    // If T is already complex, returns T.
+    // If T is real, returns std::complex<T>.
     template <typename T>
-    using GetComplexT = typename ComplexType<GetRealT<T>>::type;
+    using GetComplexT = std::conditional_t<
+        is_complex_v<T>,  // Check if T is already complex
+        T,                // If yes, return T itself
+        typename ComplexTypeHelper<GetRealT<T>>::type  // If no, get real type,
+                                                       // then find complex type
+        >;
 
-  }  // namespace Detail
+  }  // namespace Utils
 
 }  // namespace OmniDSP
 

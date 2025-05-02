@@ -18,7 +18,7 @@
 
 // Include OmniDSP headers
 #include <OmniDSP/convolution.hpp>  // For ConvolutionType, ConvolutionMethod
-#include <OmniDSP/core_types.hpp>   // For Status, F32, C32, etc., Detail::*
+#include <OmniDSP/core_types.hpp>   // For Status, F32, C32, etc., Utils::*
 
 #include "../interface/backend.hpp"  // For AbstractBackend and FFTPlanImpl base classes (FFTPlanImpl, RFFTPlanImpl)
 
@@ -114,9 +114,9 @@ namespace OmniDSP::backend {
     }
 
     // Define complex type
-    using T_Complex = Detail::GetComplexT<T>;
+    using T_Complex = Utils::GetComplexT<T>;
     // Define real type
-    using T_Real = Detail::GetRealT<T>;
+    using T_Real = Utils::GetRealT<T>;
     // Define the specific plan pointer types we expect in the variant
     using FFTPlanPtr = std::unique_ptr<FFTPlanImpl<T_Complex>>;
     using RFFTPlanPtr = std::unique_ptr<RFFTPlanImpl<T_Real>>;
@@ -130,7 +130,7 @@ namespace OmniDSP::backend {
         padded_kernel.begin(), padded_kernel.end());  // Reverse for convolution
 
     // --- Use if constexpr to separate logic for Real and Complex T ---
-    if constexpr (Detail::is_complex_v<T>) {
+    if constexpr (Utils::is_complex_v<T>) {
       // --- T is Complex (C32, C64) ---
       // Expect FFTPlanPtr in the variant
       const auto* fft_plan_ptr_ptr
@@ -235,8 +235,8 @@ namespace OmniDSP::backend {
     }
 
     // Define complex/real types and plan pointer types
-    using T_Complex = Detail::GetComplexT<T>;
-    using T_Real = Detail::GetRealT<T>;
+    using T_Complex = Utils::GetComplexT<T>;
+    using T_Real = Utils::GetRealT<T>;
     using FFTPlanPtr = std::unique_ptr<FFTPlanImpl<T_Complex>>;
     using RFFTPlanPtr = std::unique_ptr<RFFTPlanImpl<T_Real>>;
 
@@ -273,7 +273,7 @@ namespace OmniDSP::backend {
     Status status = Status::Failure;
 
     // --- Use if constexpr to separate logic for Real and Complex T ---
-    if constexpr (Detail::is_complex_v<T>) {
+    if constexpr (Utils::is_complex_v<T>) {
       // --- T is Complex ---
       // Retrieve the expected FFTPlanPtr
       const auto* fft_plan_ptr_ptr
@@ -505,8 +505,8 @@ namespace OmniDSP::backend {
     }
 
     // Define complex/real types and plan pointer types
-    using T_Complex = Detail::GetComplexT<T>;
-    using T_Real = Detail::GetRealT<T>;
+    using T_Complex = Utils::GetComplexT<T>;
+    using T_Real = Utils::GetRealT<T>;
     using FFTPlanPtr = std::unique_ptr<FFTPlanImpl<T_Complex>>;
     using RFFTPlanPtr = std::unique_ptr<RFFTPlanImpl<T_Real>>;
 
@@ -519,7 +519,7 @@ namespace OmniDSP::backend {
     std::vector<T> padded_kernel = original_kernel_;
 
     // --- Use if constexpr to separate logic for Real and Complex T ---
-    if constexpr (Detail::is_complex_v<T>) {
+    if constexpr (Utils::is_complex_v<T>) {
       // --- T is Complex ---
       // Expect FFTPlanPtr
       const auto* fft_plan_ptr_ptr
@@ -631,8 +631,8 @@ namespace OmniDSP::backend {
     }
 
     // Define complex/real types and plan pointer types
-    using T_Complex = Detail::GetComplexT<T>;
-    using T_Real = Detail::GetRealT<T>;
+    using T_Complex = Utils::GetComplexT<T>;
+    using T_Real = Utils::GetRealT<T>;
     using FFTPlanPtr = std::unique_ptr<FFTPlanImpl<T_Complex>>;
     using RFFTPlanPtr = std::unique_ptr<RFFTPlanImpl<T_Real>>;
 
@@ -670,7 +670,7 @@ namespace OmniDSP::backend {
     Status status = Status::Failure;
 
     // --- Use if constexpr to separate logic for Real and Complex T ---
-    if constexpr (Detail::is_complex_v<T>) {
+    if constexpr (Utils::is_complex_v<T>) {
       // --- T is Complex ---
       // Retrieve the expected FFTPlanPtr
       const auto* fft_plan_ptr_ptr

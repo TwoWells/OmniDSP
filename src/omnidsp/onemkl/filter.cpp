@@ -6,8 +6,6 @@
 
 #include "filter.hpp"  // Include the corresponding header file
 
-#ifdef OMNIDSP_USE_ONEMKL  // Compile guard
-
 #include <ipps.h>       // IPP Signal Processing header
 #include <mkl_types.h>  // For MKL types if needed indirectly
 
@@ -22,27 +20,10 @@
 #include <OmniDSP/core_types.hpp>
 #include <OmniDSP/filter.hpp>
 
-namespace OmniDSP::backend {
+// Include the onemkl utility header
+#include "utils.hpp"
 
-  // Helper function from onemkl/backend.cpp (or move to common utility)
-  inline Status ipp_status_to_omnidsp_status(IppStatus status)
-  {
-    // ... (implementation remains the same) ...
-    if (status == ippStsNoErr) {
-      return Status::Success;
-    }
-    std::cerr << "IPP Error: " << ippGetStatusString(status)
-              << " (Code: " << status << ")" << std::endl;
-    if (status == ippStsNullPtrErr || status == ippStsSizeErr
-        || status == ippStsStepErr || status == ippStsBadArgErr
-        || status == ippStsOutOfRangeErr) {
-      return Status::InvalidArgument;
-    }
-    if (status == ippStsMemAllocErr) {
-      return Status::AllocationError;
-    }
-    return Status::BackendError;
-  }
+namespace OmniDSP::backend {
 
   //--------------------------------------------------------------------------
   // OneMKLFIRFilterPlanImpl Method Definitions
@@ -165,10 +146,11 @@ namespace OmniDSP::backend {
     }
 
     IppStatus status = ippStsErr;
-    constexpr IppDataType data_type = IppwDataType<T>;
-    if (static_cast<int>(data_type) == -1) {
-      throw std::invalid_argument("Unsupported data type for IPP IIR filter.");
-    }
+    // constexpr IppDataType data_type = IppwDataType<T>; // Not needed directly
+    // for GetStateSize dispatcher if (static_cast<int>(data_type) == -1) {
+    //   throw std::invalid_argument("Unsupported data type for IPP IIR
+    //   filter.");
+    // }
     int num_biquads = static_cast<int>(num_sections_);
 
     // 1. Prepare taps in IPP format
@@ -189,11 +171,15 @@ namespace OmniDSP::backend {
     }
 
     // 2. Get state buffer size
-    status = ippsIIRGetStateSize_BiQuad(
-        num_biquads, data_type, &state_size_bytes_);
+    // *** CORRECTED: Use the new ipp_dispatch template ***
+    status = ipp_dispatch::ippsIIRGetStateSize_BiQuad<T>(
+        num_biquads, &state_size_bytes_);
+    // *** END CORRECTION ***
+
     if (status != ippStsNoErr) {
       throw std::runtime_error(
-          "IPP Error (ippsIIRGetStateSize_BiQuad): "
+          "IPP Error (ippsIIRGetStateSize_BiQuad_...): "  // Updated error
+                                                          // message slightly
           + std::string(ippGetStatusString(status)));
     }
 
@@ -202,14 +188,10 @@ namespace OmniDSP::backend {
     if (!p_state_raw) {
       throw std::bad_alloc();
     }
-    // *** Assign the raw pointer cast to the correctly typed pointer ***
-    // *** NOTE: We still store the pointer as IppwIIRState<T>* ***
     p_state_ = reinterpret_cast<IppwIIRState<T>*>(p_state_raw);
 
     // 4. Initialize state using the dispatch helper
     T* p_taps_nonconst = taps_interleaved_.data();
-    // *** Pass the ADDRESS OF the state pointer (&p_state_) ***
-    // *** And pass nullptr for pBuf ***
     status = ipp_dispatch::ippsIIRInit_BiQuad<T>(
         &p_state_,  // Pass address of the pointer
         p_taps_nonconst,
@@ -225,20 +207,12 @@ namespace OmniDSP::backend {
           "IPP Error (ippsIIRInit_BiQuad): "
           + std::string(ippGetStatusString(status)));
     }
-    // Note: If ippsIIRInit_BiQuad actually allocates memory and modifies
-    // the pointer pointed to by ppState, our p_state_ member now holds
-    // the IPP-allocated address. The ippsFree in the destructor should
-    // still work correctly. However, the initial ippsMalloc_8u call
-    // might be redundant if InitAlloc is implicitly happening. This needs
-    // careful testing or clarification from IPP examples/docs for Init.
   }
 
   // Destructor
   template <typename T>
   OneMKLIIRFilterPlanImpl<T>::~OneMKLIIRFilterPlanImpl()
   {
-    // Assuming p_state_ holds the pointer to the memory block (either
-    // allocated by us via ippsMalloc or potentially by IPP via InitAlloc)
     ippsFree(p_state_);  // Free the state buffer using the stored pointer
   }
 
@@ -256,7 +230,6 @@ namespace OmniDSP::backend {
     T* p_src = const_cast<T*>(input.data());
     T* p_dst = output.data();
 
-    // *** Pass p_state_ directly to ippsIIR (expects IppsIIRState*) ***
     status = ipp_dispatch::ippsIIR<T>(
         p_src,
         p_dst,
@@ -278,8 +251,6 @@ namespace OmniDSP::backend {
     // Delay line size is 2 * numBiquads
     std::vector<T> zero_delay_line(num_biquads * 2, T{0});
 
-    // *** Pass p_state_ directly to ippsIIRSetDlyLine (expects IppsIIRState*)
-    // ***
     status = ipp_dispatch::ippsIIRSetDlyLine<T>(
         p_state_,  // Pass the pointer directly
         zero_delay_line.data());
@@ -309,5 +280,3 @@ namespace OmniDSP::backend {
   template class OneMKLIIRFilterPlanImpl<F64>;
 
 }  // namespace OmniDSP::backend
-
-#endif  // OMNIDSP_USE_ONEMKL

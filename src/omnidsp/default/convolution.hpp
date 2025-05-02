@@ -32,9 +32,11 @@ namespace OmniDSP::backend {
   template <typename T>
   class DefaultConvolutionPlanImpl final : public ConvolutionPlanImpl<T> {
     // Define complex type corresponding to T
-    using T_Complex = Detail::GetComplexT<T>;
+    // *** UPDATED Namespace ***
+    using T_Complex = Utils::GetComplexT<T>;
     // Define real type corresponding to T
-    using T_Real = Detail::GetRealT<T>;
+    // *** UPDATED Namespace ***
+    using T_Real = Utils::GetRealT<T>;
 
    public:  // <-- Make variant public
     // Define the variant type to hold a pointer to the appropriate base FFT
@@ -111,9 +113,11 @@ namespace OmniDSP::backend {
   template <typename T>
   class DefaultCorrelationPlanImpl final : public CorrelationPlanImpl<T> {
     // Define complex type corresponding to T
-    using T_Complex = Detail::GetComplexT<T>;
+    // *** UPDATED Namespace ***
+    using T_Complex = Utils::GetComplexT<T>;
     // Define real type corresponding to T
-    using T_Real = Detail::GetRealT<T>;
+    // *** UPDATED Namespace ***
+    using T_Real = Utils::GetRealT<T>;
 
    public:  // <-- Make variant public
     // Define the variant type to hold a pointer to the appropriate base FFT

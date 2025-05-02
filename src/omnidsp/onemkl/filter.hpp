@@ -7,8 +7,6 @@
 #ifndef OMNIDSP_ONEMKL_FILTER_HPP
 #define OMNIDSP_ONEMKL_FILTER_HPP
 
-#ifdef OMNIDSP_USE_ONEMKL  // Compile guard
-
 #include <ipps.h>  // IPP Signal Processing header
 
 #include <OmniDSP/core_types.hpp>
@@ -101,8 +99,7 @@ namespace OmniDSP::backend {
 
   // --- IPP Function Dispatch Templates (using new aliases) ---
   namespace ipp_dispatch {
-
-    // ... (ippsFIRSRInit and ippsFIRSR remain the same) ...
+    // FIR
     template <typename T>
     inline IppStatus ippsFIRSRInit(
         const T* pTaps, int tapsLen, IppAlgType algType, IppwFIRSpec<T>* pSpec);
@@ -223,8 +220,26 @@ namespace OmniDSP::backend {
           pBuf);
     }
 
-    // ippsIIRInit_BiQuad
-    // *** UPDATED Template Declaration: Takes ppState** and pBuf ***
+    // IIR
+    // *** ADDED Dispatcher for ippsIIRGetStateSize_BiQuad ***
+    template <typename T>
+    inline IppStatus ippsIIRGetStateSize_BiQuad(int numBq, int* pBufferSize);
+    template <>
+    inline IppStatus ippsIIRGetStateSize_BiQuad<F32>(
+        int numBq, int* pBufferSize)
+    {
+      return ippsIIRGetStateSize_BiQuad_32f(numBq, pBufferSize);
+    }
+    template <>
+    inline IppStatus ippsIIRGetStateSize_BiQuad<F64>(
+        int numBq, int* pBufferSize)
+    {
+      return ippsIIRGetStateSize_BiQuad_64f(numBq, pBufferSize);
+    }
+    // Note: Complex versions (32fc, 64fc) are omitted as IIR is only templated
+    // for Real types F32, F64
+    // *** END ADDITION ***
+
     template <typename T>
     inline IppStatus ippsIIRInit_BiQuad(
         IppwIIRState<T>** ppState,
@@ -232,9 +247,6 @@ namespace OmniDSP::backend {
         int numBq,
         const T* pDlyLine,
         Ipp8u* pBuf);
-
-    // *** UPDATED Specializations: Match the 5-argument signature with
-    // ppState** ***
     template <>
     inline IppStatus ippsIIRInit_BiQuad<F32>(
         IppwIIRState<F32>** ppState,
@@ -243,7 +255,6 @@ namespace OmniDSP::backend {
         const F32* pDlyLine,
         Ipp8u* pBuf)
     {
-      // Call the actual IPP function which expects IppsIIRState_32f**
       return ippsIIRInit_BiQuad_32f(ppState, pTaps, numBq, pDlyLine, pBuf);
     }
     template <>
@@ -254,15 +265,12 @@ namespace OmniDSP::backend {
         const F64* pDlyLine,
         Ipp8u* pBuf)
     {
-      // Call the actual IPP function which expects IppsIIRState_64f**
       return ippsIIRInit_BiQuad_64f(ppState, pTaps, numBq, pDlyLine, pBuf);
     }
 
-    // ippsIIR (signature remains correct)
     template <typename T>
     inline IppStatus ippsIIR(
         const T* pSrc, T* pDst, int len, IppwIIRState<T>* pState);
-    // ... specializations ...
     template <>
     inline IppStatus ippsIIR<F32>(
         const F32* pSrc, F32* pDst, int len, IppwIIRState<F32>* pState)
@@ -276,11 +284,9 @@ namespace OmniDSP::backend {
       return ippsIIR_64f(pSrc, pDst, len, pState);
     }
 
-    // ippsIIRSetDlyLine (signature remains correct)
     template <typename T>
     inline IppStatus ippsIIRSetDlyLine(
         IppwIIRState<T>* pState, const T* pDlyLine);
-    // ... specializations ...
     template <>
     inline IppStatus ippsIIRSetDlyLine<F32>(
         IppwIIRState<F32>* pState, const F32* pDlyLine)
@@ -296,15 +302,63 @@ namespace OmniDSP::backend {
 
   }  // namespace ipp_dispatch
 
-  // ... (Rest of the class definitions remain the same) ...
+  /**
+   * @brief oneMKL implementation for FIR filter plans using IPP FIRSR.
+   * @tparam T Data type (F32, F64, C32, C64).
+   */
   template <typename T>
   class OneMKLFIRFilterPlanImpl final : public FIRFilterPlanImpl<T> {
-    // ... members ...
+   public:
+    explicit OneMKLFIRFilterPlanImpl(const std::vector<T>& coefficients);
+    ~OneMKLFIRFilterPlanImpl() override;
+
+    OneMKLFIRFilterPlanImpl(const OneMKLFIRFilterPlanImpl&) = delete;
+    OneMKLFIRFilterPlanImpl& operator=(const OneMKLFIRFilterPlanImpl&) = delete;
+    OneMKLFIRFilterPlanImpl(OneMKLFIRFilterPlanImpl&&) = delete;
+    OneMKLFIRFilterPlanImpl& operator=(OneMKLFIRFilterPlanImpl&&) = delete;
+
+    [[nodiscard]] Status execute(
+        std::span<const T> input, std::span<T> output) override;
+    [[nodiscard]] Status reset() override;
+    size_t get_order() const override;
+    size_t get_num_taps() const override;
+
+   private:
+    std::vector<T> coefficients_;
+    size_t num_taps_;
+    size_t order_;
+    Ipp8u* p_spec_ = nullptr;
+    Ipp8u* p_buffer_ = nullptr;
+    int spec_size_ = 0;
+    int buffer_size_ = 0;
   };
 
+  /**
+   * @brief oneMKL implementation for IIR filter plans using IPP IIR Biquad.
+   * @tparam T Real data type (F32 or F64).
+   */
   template <typename T>  // T is real type here (F32, F64)
   class OneMKLIIRFilterPlanImpl final : public IIRFilterPlanImpl<T> {
-    // ... members ...
+    static_assert(
+        !Utils::is_complex_v<T>,
+        "OneMKLIIRFilterPlanImpl requires a real type.");
+
+   public:
+    explicit OneMKLIIRFilterPlanImpl(
+        const std::vector<IIRFilterCoef>& sos_coefficients);
+    ~OneMKLIIRFilterPlanImpl() override;
+
+    OneMKLIIRFilterPlanImpl(const OneMKLIIRFilterPlanImpl&) = delete;
+    OneMKLIIRFilterPlanImpl& operator=(const OneMKLIIRFilterPlanImpl&) = delete;
+    OneMKLIIRFilterPlanImpl(OneMKLIIRFilterPlanImpl&&) = delete;
+    OneMKLIIRFilterPlanImpl& operator=(OneMKLIIRFilterPlanImpl&&) = delete;
+
+    [[nodiscard]] Status execute(
+        std::span<const T> input, std::span<T> output) override;
+    [[nodiscard]] Status reset() override;
+    size_t get_order() const override;
+    size_t get_num_sections() const override;
+
    private:
     size_t num_sections_;
     size_t order_;
@@ -315,5 +369,4 @@ namespace OmniDSP::backend {
 
 }  // namespace OmniDSP::backend
 
-#endif  // OMNIDSP_USE_ONEMKL
 #endif  // OMNIDSP_ONEMKL_FILTER_HPP

@@ -264,7 +264,7 @@ namespace OmniDSP {
   // --- Template Implementations (Example for generate_window - Keep details
   // internal) ---
 
-  namespace Detail {  // Keep implementation details internal if possible
+  namespace Utils {  // Keep implementation details internal if possible
 
     // Helper for Kaiser window calculation
     inline double bessel_i0(double x)
@@ -284,7 +284,7 @@ namespace OmniDSP {
       return sum;
     }
 
-  }  // namespace Detail
+  }  // namespace Utils
 
   template <typename T>
   Status generate_window(
@@ -401,10 +401,10 @@ namespace OmniDSP {
             // point issues
             double sqrt_arg = std::max(0.0, 1.0 - term_sq);
             double kaiser_arg = beta * std::sqrt(sqrt_arg);
-            double i0_beta = Detail::bessel_i0(beta);
+            double i0_beta = Utils::bessel_i0(beta);
             // Avoid division by zero if i0_beta is somehow zero
             val = (i0_beta > 0)
-                      ? static_cast<T>(Detail::bessel_i0(kaiser_arg) / i0_beta)
+                      ? static_cast<T>(Utils::bessel_i0(kaiser_arg) / i0_beta)
                       : T{0.0};
           }
           break;

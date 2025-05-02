@@ -33,9 +33,11 @@ namespace OmniDSP {
    */
   template <typename T>  // T is real type here
   class OMNIDSP_EXPORT CQTPlan {
+    // *** UPDATED Namespace ***
     static_assert(
-        !Detail::is_complex_v<T>, "CQTPlan requires a real type (F32 or F64).");
-    using Complex = Detail::GetComplexT<T>;
+        !Utils::is_complex_v<T>, "CQTPlan requires a real type (F32 or F64).");
+    // *** UPDATED Namespace ***
+    using Complex = Utils::GetComplexT<T>;
     friend class OmniDSP;  // Keep friend for OmniDSP if needed
     // Removed friend declarations for AbstractBackend and DefaultBackend
 

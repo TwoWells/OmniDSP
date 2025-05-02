@@ -92,9 +92,10 @@ namespace OmniDSP::backend {
   template <typename T_Real>  // T_Real will be F32 or F64
   class DefaultRFFTPlanImpl final : public RFFTPlanImpl<T_Real> {
     // Define complex type corresponding to T_Real
-    // Use the Detail::GetComplexT from core_types.hpp as seen in
+    // Use the Utils::GetComplexT from core_types.hpp as seen in
     // interface/backend.hpp
-    using T_Complex = Detail::GetComplexT<T_Real>;
+    // *** UPDATED Namespace ***
+    using T_Complex = Utils::GetComplexT<T_Real>;
 
    public:
     /**

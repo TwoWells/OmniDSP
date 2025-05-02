@@ -175,8 +175,9 @@ namespace OmniDSP {
    */
   template <typename T>  // Keep Plan templated on data type T
   class OMNIDSP_EXPORT IIRFilterPlan {
+    // *** UPDATED Namespace ***
     static_assert(
-        !Detail::is_complex_v<T>,
+        !Utils::is_complex_v<T>,
         "IIRFilterPlan typically requires a real type (F32 or F64).");
     friend class OmniDSPImpl;  // Allow OmniDSPImpl to access private
                                // constructor

@@ -52,6 +52,24 @@ include(cmake/depend.cmake)
 file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/cmake/backend)
 include(cmake/backend.cmake)
 
+# --- Generate Configuration Header ---
+# Ensure OMNIDSP_HAS_* variables are treated as boolean for #cmakedefine
+# (CMake automatically handles ON/TRUE/1 as defined, OFF/FALSE/0/NOTFOUND as undefined)
+# No explicit conversion needed here if variables are set correctly (e.g., TRUE/FALSE)
+
+# Configure the header file based on the template
+configure_file(
+    cmake/omnidsp_config.h.in                   # Input template file
+    ${PROJECT_BINARY_DIR}/include/OmniDSP/omnidsp_config.h # Output file location
+)
+
+# Ensure the binary include directory is available for finding the generated header
+# This should already be part of target_include_directories for the omnidsp target
+# Example (if not already done in target_definitions.cmake):
+# target_include_directories(omnidsp PUBLIC $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>)
+
+message(STATUS "Generated omnidsp_config.h in ${PROJECT_BINARY_DIR}/include/OmniDSP")
+
 # --- Include Standard CMake Modules ---
 # GNUInstallDirs is needed *before* installation.cmake
 include(GNUInstallDirs)

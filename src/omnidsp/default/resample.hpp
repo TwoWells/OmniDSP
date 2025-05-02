@@ -120,7 +120,9 @@ namespace OmniDSP::backend {
     void design_filter();            // Designs the prototype FIR filter
     void build_polyphase_filters();  // Decomposes the prototype into polyphase
                                      // components
-    size_t calculate_max_output(size_t input_len);  // Internal calculation
+    // *** ADDED const qualifier to match definition ***
+    size_t calculate_max_output(
+        size_t input_len) const;  // Internal calculation
   };
 
   // --- Explicit Template Instantiations (Declaration) ---

@@ -17,10 +17,12 @@ set(OMNIDSP_CORE_HEADERS
     ${PROJECT_SOURCE_DIR}/include/OmniDSP/resample.hpp
     ${PROJECT_SOURCE_DIR}/include/OmniDSP/filter.hpp
     ${PROJECT_SOURCE_DIR}/include/OmniDSP/window.hpp
-    ${PROJECT_BINARY_DIR}/include/OmniDSP/omnidsp_export.hpp # Generated export header
+    # Do NOT add generated headers like omnidsp_config.h or omnidsp_export.h here
 )
 set(OMNIDSP_CORE_SOURCES
     ${PROJECT_SOURCE_DIR}/src/omnidsp/omnidsp.cpp
+    # Utilities files implement common helper methods
+    ${PROJECT_SOURCE_DIR}/src/omnidsp/utils/resample.cpp
     # Interface files implement the public Plan classes
     ${PROJECT_SOURCE_DIR}/src/omnidsp/interface/fft.cpp
     ${PROJECT_SOURCE_DIR}/src/omnidsp/interface/cqt.cpp
@@ -39,13 +41,12 @@ add_library(omnidsp ${OMNIDSP_LIBRARY_TYPE} "") # Start with no sources
 target_sources(omnidsp PRIVATE ${OMNIDSP_CORE_SOURCES})
 
 # --- Add Backend Sources Conditionally ---
-# Include sources based on CMake variables set by backend config files
 message(STATUS "  Adding sources from selected backends:")
 if(OMNIDSP_HAS_DEFAULT)
     target_sources(omnidsp PRIVATE ${DEFAULT_BACKEND_SOURCES})
     message(STATUS "    Added Default backend sources.")
 endif()
-if(OMNIDSP_HAS_ACCELERATE) # Assumes ACCELERATE_BACKEND_SOURCES is set in accelerate.cmake
+if(OMNIDSP_HAS_ACCELERATE)
     target_sources(omnidsp PRIVATE ${ACCELERATE_BACKEND_SOURCES})
     message(STATUS "    Added Accelerate backend sources.")
 endif()
@@ -64,11 +65,14 @@ target_include_directories(omnidsp
         # Public headers needed by users of the library
         $<INSTALL_INTERFACE:include>
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
-        $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include> # For generated export header
+        # Add binary dir PUBLICLY so consumers find generated export header
+        $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>
 
     PRIVATE
         # Core internal include directory
         ${PROJECT_SOURCE_DIR}/src/omnidsp # Allows includes like "interface/backend.hpp"
+        # *** ADDED: Explicitly add binary include dir for target's own sources ***
+        ${PROJECT_BINARY_DIR}/include # Ensures omnidsp.cpp finds omnidsp_config.h
 
         # Add backend-specific include directories conditionally using generator expressions
         $<$<BOOL:${OMNIDSP_HAS_DEFAULT}>:${DEFAULT_BACKEND_INCLUDE_DIRS}>
@@ -104,13 +108,13 @@ target_compile_definitions(omnidsp
         # Public definitions needed by users of the library
 
     PRIVATE
-        # Add core compile definitions (set in compiler_settings.cmake or elsewhere)
+        # Add core compile definitions
         ${OMNIDSP_COMPILE_DEFINITIONS}
 
-        # Define OMNIDSP_SHARED_DEFINE if building shared libs, used by omnidsp_export.hpp
+        # Define OMNIDSP_SHARED_DEFINE if building shared libs
         $<$<BOOL:${BUILD_SHARED_LIBS}>:OMNIDSP_SHARED_DEFINE>
 
-        # Add backend-specific compile definitions conditionally using generator expressions
+        # Add backend-specific compile definitions conditionally
         $<$<BOOL:${OMNIDSP_HAS_DEFAULT}>:OMNIDSP_BACKEND_DEFAULT=1>
         $<$<BOOL:${OMNIDSP_HAS_ACCELERATE}>:OMNIDSP_BACKEND_ACCELERATE=1>
         $<$<BOOL:${OMNIDSP_HAS_ONEMKL}>:OMNIDSP_BACKEND_ONEMKL=1>
@@ -122,8 +126,8 @@ target_compile_definitions(omnidsp
 #--------------------------------------------------------------------------
 include(GenerateExportHeader)
 generate_export_header(omnidsp
-    BASE_NAME OMNIDSP # Used in macro names (e.g., OMNIDSP_EXPORT)
-    EXPORT_FILE_NAME include/OmniDSP/omnidsp_export.hpp # Output location relative to CMAKE_BINARY_DIR
+    BASE_NAME OMNIDSP
+    EXPORT_FILE_NAME include/OmniDSP/omnidsp_export.hpp # Output relative to CMAKE_BINARY_DIR
 )
 
 message(STATUS "Defined 'omnidsp' target with sources and dependencies.")
