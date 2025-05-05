@@ -33,7 +33,7 @@
 
 ### **Default Backend Highway Refactor**
 
-- \[x\] **Build System:** Ensure Highway dependency is correctly found/configured in CMake (`cmake/depend/highway.cmake`) and linked to the `DefaultBackend`. _(Completed)_
+- \[x] **Build System:** Ensure Highway dependency is correctly found/configured in CMake (`cmake/depend/highway.cmake`) and linked to the `DefaultBackend`. _(Completed)_
 - \[ \] **Incremental Refactoring:** _(Approach incrementally, benchmark each step)_
   - \[ \] Refactor simpler functions first (e.g., window generation helpers in `default/window.cpp`, basic math within filters).
   - \[ \] Refactor core filtering loops (FIR/IIR in `default/filter.cpp`, polyphase in `default/resample.cpp`).
@@ -43,6 +43,15 @@
 - \[ \] **Utilities:** Review/update `src/omnidsp/utils/hwy.hpp` with any necessary helper functions for the refactoring.
 - \[ \] **Testing:** Add specific tests comparing Highway implementations against non-SIMD results within the Default backend.
 - \[ \] **Benchmarking:** Benchmark Highway-enabled Default backend against the pure C++ version and other backends.
+
+### **Intel IPP Backend Enhancements** _(Medium-to-High Priority)_
+
+- \[ \] **Arbitrary Length FFT/DFT:** Modify `IntelIPPFFTPlanImpl` and `IntelIPPRFFTPlanImpl` (`intelipp/fft.cpp`) to use `ippsDFT*` functions when the length is not a power of two, allowing `FFTPlan`/`RFFTPlan` to support arbitrary lengths with this backend.
+- \[ \] **DCT Implementation:** Implement `IntelIPPDCTPlanImpl` using IPP DCT routines (`src/omnidsp/intelipp/dct.cpp` - New files). _(See DCT/DST Module)_
+- \[ \] **DST Implementation:** Implement `IntelIPPDSTPlanImpl` using IPP RFFT routines (`src/omnidsp/intelipp/dst.cpp` - New files). _(See DCT/DST Module)_
+- \[ \] **DWT Implementation:** Implement `IntelIPPDWTPlanImpl` using IPP Wavelet routines (`src/omnidsp/intelipp/dwt.cpp` - New files). _(See DWT/DHT Module)_
+- \[ \] **DHT Implementation:** Implement `IntelIPPDHTPlanImpl` using IPP Hilbert routines (`src/omnidsp/intelipp/dht.cpp` - New files). _(See DWT/DHT Module)_
+- \[ \] **Convolution/Correlation:** Implement `IntelIPPConvolutionPlanImpl` / `IntelIPPCorrelationPlanImpl` (Optional optimization, possibly using IPP's own Conv/Corr).
 
 ### **CQT Module**
 
@@ -54,7 +63,6 @@
 ### **Convolution / Correlation Module**
 
 - \[ \] Implement 'same' and 'full' modes correctly in one-off `convolve_*`/`correlate_*` methods in `DefaultBackend` (`default/backend.cpp`). _(Plan implementations handle this, but one-off functions need review)_.
-- \[ \] Implement `IntelIPPConvolutionPlanImpl` / `IntelIPPCorrelationPlanImpl` (Optional optimization).
 - \[ \] **Implement oneMKL Convolution/Correlation Plans:** _(Optional optimization)_
   - \[ \] Create `src/omnidsp/onemkl/convolution.hpp` and `src/omnidsp/onemkl/convolution.cpp`.
   - \[ \] Implement `OneMKLConvolutionPlanImpl` using `vslConvNewTask1D`, `vslsConvExec1D`, `vslConvDeleteTask` (and `d` variants).
@@ -67,13 +75,36 @@
 
 - \[ \] Design `STFTPlan` interface (consider using `FFTPlan` or `RFFTPlan` internally).
 - \[ \] Implement `DefaultSTFTPlanImpl` (`default/stft.cpp` - New file).
-- \[x\] ~~Implement `OneMKLSTFTPlanImpl`~~ _(Inherited from Default)_.
-- \[x\] ~~Implement `IntelIPPSTFTPlanImpl`~~ _(Inherited from Default)_.
+- \[x] ~~Implement `OneMKLSTFTPlanImpl`~~ _(Inherited from Default)_.
+- \[x] ~~Implement `IntelIPPSTFTPlanImpl`~~ _(Inherited from Default)_.
 - \[ \] Implement `abstract::AbstractBackend::create_stft_plan_*` factory methods (pure virtual).
 - \[ \] Implement factory methods in `DefaultBackend` and other relevant backends.
 - \[ \] Include inverse STFT (ISTFT) capability.
 - \[ \] Add Python bindings for STFT/ISTFT.
 - \[ \] Add tests for STFT module.
+
+### **DCT/DST Module** _(Medium Priority)_
+
+- \[ \] Design public `DCTPlan` / `DSTPlan` interfaces (consider different types I-IV).
+- \[ \] Define `abstract::DCTPlanImpl` / `abstract::DSTPlanImpl` interfaces.
+- \[ \] Implement `DefaultDCTPlanImpl` / `DefaultDSTPlanImpl` (likely using FFT-based algorithms).
+- \[ \] Implement `OneMKLDCTPlanImpl` / `OneMKLDSTPlanImpl` using oneMKL Trigonometric Transform routines (`src/omnidsp/onemkl/dct_dst.cpp` - New files).
+- \[ \] Implement `IntelIPPDCTPlanImpl` _(See IPP Enhancements)_.
+- \[ \] Implement `IntelIPPDSTPlanImpl` _(See IPP Enhancements)_.
+- \[ \] Add `create_dct_plan_*` / `create_dst_plan_*` factory methods to `AbstractBackend` (pure virtual).
+- \[ \] Implement factory methods in `DefaultBackend`, `OneMKLBackend`, and `IntelIPPBackend`.
+- \[ \] Add Python bindings for DCT/DST.
+- \[ \] Add tests for DCT/DST module, comparing backends.
+
+### **DWT/DHT Module** _(Low-to-Medium Priority)_
+
+- \[ \] Design `DWTPlan` / `DHTPlan` interfaces.
+- \[ \] Define `abstract::DWTPlanImpl` / `abstract::DHTPlanImpl` interfaces.
+- \[ \] Implement Default versions (likely complex or using FFT).
+- \[ \] Implement `IntelIPPDWTPlanImpl` _(See IPP Enhancements)_.
+- \[ \] Implement `IntelIPPDHTPlanImpl` _(See IPP Enhancements)_.
+- \[ \] Add factory methods to `AbstractBackend` and relevant backends.
+- \[ \] Add Python bindings and tests.
 
 ## **Python Bindings (omnidsp_py)**
 
@@ -102,10 +133,11 @@
   - \[ \] Add tests for Filter module (once implemented).
   - \[ \] Add tests for STFT module (once implemented).
   - \[ \] Add specific tests for Convolution/Correlation modes ('same'/'full') in one-off functions.
-  - \[ \] Add tests specifically for the IntelIPP backend implementations (FFT, Filter, Resample, Window).
+  - \[ \] Add tests specifically for the IntelIPP backend implementations (FFT/DFT, Filter, Resample, Window, **DCT**, **DWT**, **DHT**).
   - \[ \] Increase parameter coverage for existing tests (edge cases, different lengths, zero-length, etc.).
+  - \[ \] Test arbitrary FFT lengths for IPP backend.
 - **Correctness:**
-  - \[ \] Add backend-specific tests to verify optimized implementations (Accelerate FFT, IntelIPP\*, OneMKL FFT, **OneMKL Conv/Corr**) against the default/reference results.
+  - \[ \] Add backend-specific tests to verify optimized implementations (Accelerate FFT, IntelIPP\*, OneMKL FFT, **OneMKL Conv/Corr**, **OneMKL DCT/DST**) against the default/reference results.
   - \[ \] Test inherited methods for optimized backends (ensure fallback to `DefaultBackend` works correctly and uses correct sub-plans).
   - \[ \] Test backend fallback logic (e.g., unsupported FFT lengths for Accelerate/oneMKL).
 - **Performance:**
