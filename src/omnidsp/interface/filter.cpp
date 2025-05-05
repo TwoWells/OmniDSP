@@ -29,7 +29,7 @@ namespace OmniDSP {
    */
   template <typename T>
   FIRFilterPlan<T>::FIRFilterPlan(
-      std::unique_ptr<backend::FIRFilterPlanImpl<T>> pimpl)
+      std::unique_ptr<abstract::FIRFilterPlanImpl<T>> pimpl)
       : pimpl_(std::move(pimpl))
   {
     if (!pimpl_) {
@@ -148,7 +148,7 @@ namespace OmniDSP {
    */
   template <typename T>
   IIRFilterPlan<T>::IIRFilterPlan(
-      std::unique_ptr<backend::IIRFilterPlanImpl<T>> pimpl)
+      std::unique_ptr<abstract::IIRFilterPlanImpl<T>> pimpl)
       : pimpl_(std::move(pimpl))
   {
     if (!pimpl_) {

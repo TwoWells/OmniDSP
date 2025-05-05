@@ -34,6 +34,6 @@ endif()
 set(DEFAULT_BACKEND_LINK_LIBS ${TEMP_DEFAULT_LINK_LIBS})
 
 # --- Signal Success and Set Config Variables ---
-set(OMNIDSP_HAS_DEFAULT TRUE)
-set(OMNIDSP_HAS_BACKEND_DEFAULT_VALUE 1)
+set(OMNIDSP_ENABLED_DEFAULT TRUE)
+set(OMNIDSP_ENABLED_BACKEND_DEFAULT 1)
 message(STATUS "      Default backend configured.")

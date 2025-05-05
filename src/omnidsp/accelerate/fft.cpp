@@ -18,7 +18,7 @@
 // helpers
 #include <OmniDSP/core_types.hpp>
 
-namespace OmniDSP::backend {
+namespace OmniDSP::accelerate {
 
   //--------------------------------------------------------------------------
   // Helper Functions
@@ -364,4 +364,4 @@ namespace OmniDSP::backend {
   template class AccelerateRFFTPlanImpl<F32>;
   template class AccelerateRFFTPlanImpl<F64>;
 
-}  // namespace OmniDSP::backend
+}  // namespace OmniDSP::accelerate

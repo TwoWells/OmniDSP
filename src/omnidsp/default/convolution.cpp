@@ -22,7 +22,8 @@
 
 #include "../interface/backend.hpp"  // For AbstractBackend and FFTPlanImpl base classes (FFTPlanImpl, RFFTPlanImpl)
 
-namespace OmniDSP::backend {
+namespace OmniDSP::default
+{
 
   //--------------------------------------------------------------------------
   // Helper Functions (Standard C++) - Keep from original file
@@ -97,7 +98,7 @@ namespace OmniDSP::backend {
 
   template <typename T>  // T can be F32, F64, C32, C64
   DefaultConvolutionPlanImpl<T>::DefaultConvolutionPlanImpl(
-      FFTPlanImplVariant&& fft_plan_variant,  // Accept the FFT plan variant
+      FFTPlanImplVariant && fft_plan_variant,  // Accept the FFT plan variant
       const std::vector<T>& kernel,
       ConvolutionType type,
       ConvolutionMethod method)
@@ -114,12 +115,12 @@ namespace OmniDSP::backend {
     }
 
     // Define complex type
-    using T_Complex = Utils::GetComplexT<T>;
+    using T_Complex = Utils::GetComplexType<T>;
     // Define real type
-    using T_Real = Utils::GetRealT<T>;
+    using T_Real = Utils::GetRealType<T>;
     // Define the specific plan pointer types we expect in the variant
-    using FFTPlanPtr = std::unique_ptr<FFTPlanImpl<T_Complex>>;
-    using RFFTPlanPtr = std::unique_ptr<RFFTPlanImpl<T_Real>>;
+    using FFTPlanPtr = std::unique_ptr<abstract::FFTPlanImpl<T_Complex>>;
+    using RFFTPlanPtr = std::unique_ptr<abstract::RFFTPlanImpl<T_Real>>;
 
     Status fft_status = Status::Failure;
     size_t kernel_fft_size = 0;
@@ -130,7 +131,7 @@ namespace OmniDSP::backend {
         padded_kernel.begin(), padded_kernel.end());  // Reverse for convolution
 
     // --- Use if constexpr to separate logic for Real and Complex T ---
-    if constexpr (Utils::is_complex_v<T>) {
+    if constexpr (Utils::IsComplex_v<T>) {
       // --- T is Complex (C32, C64) ---
       // Expect FFTPlanPtr in the variant
       const auto* fft_plan_ptr_ptr
@@ -235,10 +236,10 @@ namespace OmniDSP::backend {
     }
 
     // Define complex/real types and plan pointer types
-    using T_Complex = Utils::GetComplexT<T>;
-    using T_Real = Utils::GetRealT<T>;
-    using FFTPlanPtr = std::unique_ptr<FFTPlanImpl<T_Complex>>;
-    using RFFTPlanPtr = std::unique_ptr<RFFTPlanImpl<T_Real>>;
+    using T_Complex = Utils::GetComplexType<T>;
+    using T_Real = Utils::GetRealType<T>;
+    using FFTPlanPtr = std::unique_ptr<abstract::FFTPlanImpl<T_Complex>>;
+    using RFFTPlanPtr = std::unique_ptr<abstract::RFFTPlanImpl<T_Real>>;
 
     // Check for empty input/kernel early
     if (signal_len == 0 || kernel_length_ == 0) {
@@ -273,7 +274,7 @@ namespace OmniDSP::backend {
     Status status = Status::Failure;
 
     // --- Use if constexpr to separate logic for Real and Complex T ---
-    if constexpr (Utils::is_complex_v<T>) {
+    if constexpr (Utils::IsComplex_v<T>) {
       // --- T is Complex ---
       // Retrieve the expected FFTPlanPtr
       const auto* fft_plan_ptr_ptr
@@ -444,8 +445,8 @@ namespace OmniDSP::backend {
     return method_;
   }
   template <typename T>
-  size_t DefaultConvolutionPlanImpl<T>::get_output_length(
-      size_t input_length) const
+  size_t DefaultConvolutionPlanImpl<T>::get_output_length(size_t input_length)
+      const
   {
     if (kernel_length_ == 0)
       return (
@@ -486,7 +487,7 @@ namespace OmniDSP::backend {
 
   template <typename T>  // T can be F32, F64, C32, C64
   DefaultCorrelationPlanImpl<T>::DefaultCorrelationPlanImpl(
-      FFTPlanImplVariant&& fft_plan_variant,  // Accept the FFT plan variant
+      FFTPlanImplVariant && fft_plan_variant,  // Accept the FFT plan variant
       const std::vector<T>& kernel,  // This is the 'template' for correlation
       ConvolutionType
           type,  // Using ConvolutionType enum for mode (Full, Same, Valid)
@@ -505,10 +506,10 @@ namespace OmniDSP::backend {
     }
 
     // Define complex/real types and plan pointer types
-    using T_Complex = Utils::GetComplexT<T>;
-    using T_Real = Utils::GetRealT<T>;
-    using FFTPlanPtr = std::unique_ptr<FFTPlanImpl<T_Complex>>;
-    using RFFTPlanPtr = std::unique_ptr<RFFTPlanImpl<T_Real>>;
+    using T_Complex = Utils::GetComplexType<T>;
+    using T_Real = Utils::GetRealType<T>;
+    using FFTPlanPtr = std::unique_ptr<abstract::FFTPlanImpl<T_Complex>>;
+    using RFFTPlanPtr = std::unique_ptr<abstract::RFFTPlanImpl<T_Real>>;
 
     Status fft_status = Status::Failure;
     size_t kernel_fft_size = 0;
@@ -519,7 +520,7 @@ namespace OmniDSP::backend {
     std::vector<T> padded_kernel = original_kernel_;
 
     // --- Use if constexpr to separate logic for Real and Complex T ---
-    if constexpr (Utils::is_complex_v<T>) {
+    if constexpr (Utils::IsComplex_v<T>) {
       // --- T is Complex ---
       // Expect FFTPlanPtr
       const auto* fft_plan_ptr_ptr
@@ -631,10 +632,10 @@ namespace OmniDSP::backend {
     }
 
     // Define complex/real types and plan pointer types
-    using T_Complex = Utils::GetComplexT<T>;
-    using T_Real = Utils::GetRealT<T>;
-    using FFTPlanPtr = std::unique_ptr<FFTPlanImpl<T_Complex>>;
-    using RFFTPlanPtr = std::unique_ptr<RFFTPlanImpl<T_Real>>;
+    using T_Complex = Utils::GetComplexType<T>;
+    using T_Real = Utils::GetRealType<T>;
+    using FFTPlanPtr = std::unique_ptr<abstract::FFTPlanImpl<T_Complex>>;
+    using RFFTPlanPtr = std::unique_ptr<abstract::RFFTPlanImpl<T_Real>>;
 
     // Check for empty input/kernel early
     if (signal_len == 0 || kernel_length_ == 0) {
@@ -670,7 +671,7 @@ namespace OmniDSP::backend {
     Status status = Status::Failure;
 
     // --- Use if constexpr to separate logic for Real and Complex T ---
-    if constexpr (Utils::is_complex_v<T>) {
+    if constexpr (Utils::IsComplex_v<T>) {
       // --- T is Complex ---
       // Retrieve the expected FFTPlanPtr
       const auto* fft_plan_ptr_ptr
@@ -839,8 +840,8 @@ namespace OmniDSP::backend {
     return method_;
   }
   template <typename T>
-  size_t DefaultCorrelationPlanImpl<T>::get_output_length(
-      size_t input_length) const
+  size_t DefaultCorrelationPlanImpl<T>::get_output_length(size_t input_length)
+      const
   {
     // Same logic as convolution for output length calculation
     if (kernel_length_ == 0)
@@ -885,4 +886,4 @@ namespace OmniDSP::backend {
   template class DefaultCorrelationPlanImpl<C32>;
   template class DefaultCorrelationPlanImpl<C64>;
 
-}  // namespace OmniDSP::backend
+}  // namespace OmniDSP::default

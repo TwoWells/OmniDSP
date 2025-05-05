@@ -41,7 +41,7 @@ namespace OmniDSP {
   class OmniDSPImpl;
 }  // namespace OmniDSP
 
-namespace OmniDSP::backend {
+namespace OmniDSP::abstract {
 
   class AbstractBackend;
 
@@ -64,7 +64,7 @@ namespace OmniDSP::backend {
   template <typename T>
   class RFFTPlanImpl {
    public:
-    using Complex = Utils::GetComplexT<T>; /* *** UPDATED Namespace *** */
+    using Complex = Utils::GetComplexType<T>; /* *** UPDATED Namespace *** */
     virtual ~RFFTPlanImpl() = default;
     [[nodiscard]] virtual Status rfft(
         std::span<const T> input, std::span<Complex> output) const
@@ -137,7 +137,7 @@ namespace OmniDSP::backend {
   template <typename T>
   class CQTPlanImpl {
    public:
-    using Complex = Utils::GetComplexT<T>; /* *** UPDATED Namespace *** */
+    using Complex = Utils::GetComplexType<T>; /* *** UPDATED Namespace *** */
     virtual ~CQTPlanImpl() = default;
     [[nodiscard]] virtual Status execute(
         std::span<const T> input, std::span<Complex> output) const
@@ -406,9 +406,10 @@ namespace OmniDSP::backend {
   // as long as they aren't *called* without the definition being linked)
   std::unique_ptr<AbstractBackend> create_accelerate_backend();
   std::unique_ptr<AbstractBackend> create_onemkl_backend();
+  std::unique_ptr<AbstractBackend> create_intelipp_backend();
 
   // Add declarations for other potential backends here...
 
-}  // namespace OmniDSP::backend
+}  // namespace OmniDSP::abstract
 
 #endif  // OMNIDSP_BACKEND_HPP

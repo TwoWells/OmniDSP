@@ -14,7 +14,7 @@
 #include <utility>    // For std::move
 #include <vector>
 
-#include "backend.hpp"  // Defines backend::ConvolutionPlanImpl, backend::CorrelationPlanImpl
+#include "backend.hpp"  // Defines abstract::ConvolutionPlanImpl, abstract::CorrelationPlanImpl
 
 // Include core types for F32, F64 etc. used in instantiations
 #include <OmniDSP/core_types.hpp>
@@ -27,7 +27,7 @@ namespace OmniDSP {
 
   template <typename T>
   ConvolutionPlan<T>::ConvolutionPlan(
-      std::unique_ptr<backend::ConvolutionPlanImpl<T>> pimpl)
+      std::unique_ptr<abstract::ConvolutionPlanImpl<T>> pimpl)
       : pimpl_(std::move(pimpl))
   {
     if (!pimpl_) {
@@ -120,7 +120,7 @@ namespace OmniDSP {
 
   template <typename T>
   CorrelationPlan<T>::CorrelationPlan(
-      std::unique_ptr<backend::CorrelationPlanImpl<T>> pimpl)
+      std::unique_ptr<abstract::CorrelationPlanImpl<T>> pimpl)
       : pimpl_(std::move(pimpl))
   {
     if (!pimpl_) {

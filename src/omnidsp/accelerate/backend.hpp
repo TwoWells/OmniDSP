@@ -21,7 +21,7 @@
 // Include the header declaring the Accelerate FFT plan implementations
 #include "fft.hpp"  // Assumes this file exists and declares Accelerate*FFTPlanImpl
 
-namespace OmniDSP::backend {
+namespace OmniDSP::accelerate {
 
   //--------------------------------------------------------------------------
   // Accelerate Main Backend Implementation Class
@@ -65,7 +65,8 @@ namespace OmniDSP::backend {
     // (Unlikely needed if only overriding plan factories)
   };
 
-}  // namespace backend
-}  // namespace OmniDSP
+  std::unique_ptr<abstract::AbstractBackend>
+  abstract::create_accelerate_backend();
+}  // namespace OmniDSP::accelerate
 
 #endif  // OMNIDSP_ACCELERATE_BACKEND_HPP

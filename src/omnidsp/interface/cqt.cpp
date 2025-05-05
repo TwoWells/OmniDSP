@@ -12,7 +12,7 @@
 #include <stdexcept>  // For std::runtime_error
 #include <utility>    // For std::move
 
-#include "backend.hpp"  // Defines backend::CQTPlanImpl
+#include "backend.hpp"  // Defines abstract::CQTPlanImpl
 
 // Include core types for aliases like F32, F64 used in instantiations
 #include <OmniDSP/core_types.hpp>
@@ -30,7 +30,7 @@ namespace OmniDSP {
    * @throws std::runtime_error if pimpl is null.
    */
   template <typename T>  // T is REAL type
-  CQTPlan<T>::CQTPlan(std::unique_ptr<backend::CQTPlanImpl<T>> pimpl)
+  CQTPlan<T>::CQTPlan(std::unique_ptr<abstract::CQTPlanImpl<T>> pimpl)
       : pimpl_(std::move(pimpl))
   {
     if (!pimpl_) {

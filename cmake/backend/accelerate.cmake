@@ -9,6 +9,8 @@ set(OMNIDSP_HAS_BACKEND_ACCELERATE_VALUE 0) # Default to 0
 set(ACCELERATE_BACKEND_SOURCES "")
 set(ACCELERATE_BACKEND_INCLUDE_DIRS "")
 set(ACCELERATE_BACKEND_LINK_LIBS "")
+# Define the variable for omnidsp_config.h
+set(OMNIDSP_ENABLED_BACKEND_ACCELERATE 0)
 
 # Check if the backend is enabled via the option set in cmake/backend.cmake
 if(NOT OMNIDSP_ENABLE_ACCELERATE)
@@ -28,6 +30,8 @@ message(STATUS "  Attempting to configure Accelerate backend...")
 find_framework(Accelerate REQUIRED)
 
 if(Accelerate_FOUND)
+    # Define the variable for omnidsp_config.h
+    set(OMNIDSP_ENABLED_BACKEND_ACCELERATE 1)
     message(STATUS "      Found Accelerate framework. Enabling backend.")
 
     # --- Set Backend Source Files ---

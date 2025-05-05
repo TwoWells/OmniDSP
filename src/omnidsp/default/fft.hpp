@@ -14,8 +14,9 @@
 // Removed Highway includes for standard C++ version
 // #include <hwy/aligned_allocator.h>
 
-// Corrected namespace to OmniDSP::backend
-namespace OmniDSP::backend {
+// Corrected namespace to OmniDSP::default
+namespace OmniDSP::default
+{
 
   // --- Default Backend FFT Plan Implementations (Standard C++) ---
   // Inherit from internal Impl classes defined in ../interface/backend.hpp
@@ -28,7 +29,7 @@ namespace OmniDSP::backend {
    * @tparam T_Complex Complex type (e.g., C32 or C64).
    */
   template <typename T_Complex>  // T_Complex will be C32 or C64
-  class DefaultFFTPlanImpl final : public FFTPlanImpl<T_Complex> {
+  class DefaultFFTPlanImpl final : public abstract::FFTPlanImpl<T_Complex> {
     // Infer scalar type T from T_Complex (assuming T_Complex is
     // std::complex<T>)
     using T = typename T_Complex::value_type;
@@ -90,12 +91,12 @@ namespace OmniDSP::backend {
    * @tparam T_Real Real type (e.g., F32 or F64).
    */
   template <typename T_Real>  // T_Real will be F32 or F64
-  class DefaultRFFTPlanImpl final : public RFFTPlanImpl<T_Real> {
+  class DefaultRFFTPlanImpl final : public abstract::RFFTPlanImpl<T_Real> {
     // Define complex type corresponding to T_Real
-    // Use the Utils::GetComplexT from core_types.hpp as seen in
+    // Use the Utils::GetComplexType from core_types.hpp as seen in
     // interface/backend.hpp
     // *** UPDATED Namespace ***
-    using T_Complex = Utils::GetComplexT<T_Real>;
+    using T_Complex = Utils::GetComplexType<T_Real>;
 
    public:
     /**
@@ -157,6 +158,6 @@ namespace OmniDSP::backend {
         packed_buffer_;  // Buffer for N/2 complex data (used in RFFT/IRFFT)
   };
 
-}  // namespace OmniDSP::backend
+}  // namespace OmniDSP::default
 
 #endif  // OMNIDSP_DEFAULT_FFT_HPP

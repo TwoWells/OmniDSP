@@ -25,7 +25,7 @@
 // *** ADDED: Include the new utility header ***
 #include "utils.hpp"
 
-namespace OmniDSP::backend {
+namespace OmniDSP::onemkl {
 
   // *** REMOVED mkl_status_to_omnidsp_status helper (now in utils.hpp) ***
 
@@ -48,7 +48,7 @@ namespace OmniDSP::backend {
     // *** Call helper from utils.hpp ***
     DFTI_CONFIG_VALUE precision;
     try {
-      precision = get_dfti_precision<RealType>();
+      precision = utils::get_dfti_precision<RealType>();
     }
     catch (const std::logic_error&
                e) {  // Catch potential error if static_assert fails somehow
@@ -117,7 +117,7 @@ namespace OmniDSP::backend {
         const_cast<void*>(static_cast<const void*>(input.data())),
         const_cast<void*>(static_cast<void*>(output.data())));
     // *** Use helper from utils.hpp ***
-    return mkl_status_to_omnidsp_status(status);
+    return utils::mkl_status_to_omnidsp_status(status);
   }
 
   // ifft Method Implementation
@@ -135,7 +135,7 @@ namespace OmniDSP::backend {
         const_cast<void*>(static_cast<const void*>(input.data())),
         const_cast<void*>(static_cast<void*>(output.data())));
     // *** Use helper from utils.hpp ***
-    return mkl_status_to_omnidsp_status(status);
+    return utils::mkl_status_to_omnidsp_status(status);
   }
 
   // get_length Method Implementation
@@ -164,7 +164,7 @@ namespace OmniDSP::backend {
     DFTI_CONFIG_VALUE precision;
     try {
       // *** Call helper from utils.hpp ***
-      precision = get_dfti_precision<T>();  // T is already Real here
+      precision = utils::get_dfti_precision<T>();  // T is already Real here
     }
     catch (const std::logic_error& e) {
       throw std::invalid_argument(
@@ -259,7 +259,7 @@ namespace OmniDSP::backend {
         const_cast<void*>(static_cast<const void*>(input.data())),
         const_cast<void*>(static_cast<void*>(output.data())));
     // *** Use helper from utils.hpp ***
-    return mkl_status_to_omnidsp_status(status);
+    return utils::mkl_status_to_omnidsp_status(status);
   }
 
   // irfft Method Implementation
@@ -279,7 +279,7 @@ namespace OmniDSP::backend {
         const_cast<void*>(static_cast<const void*>(input.data())),
         const_cast<void*>(static_cast<void*>(output.data())));
     // *** Use helper from utils.hpp ***
-    return mkl_status_to_omnidsp_status(status);
+    return utils::mkl_status_to_omnidsp_status(status);
   }
 
   // get_length Method Implementation
@@ -297,4 +297,4 @@ namespace OmniDSP::backend {
   template class OneMKLRFFTPlanImpl<F32>;
   template class OneMKLRFFTPlanImpl<F64>;
 
-}  // namespace OmniDSP::backend
+}  // namespace OmniDSP::onemkl

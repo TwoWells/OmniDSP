@@ -12,7 +12,8 @@
 #include <cstddef>                 // For size_t
 #include <span>                    // For std::span
 
-namespace OmniDSP::backend {
+namespace OmniDSP::default
+{
 
   // --- Default Window Generation Helper Functions (Span-based Output) ---
   // These implement the actual window calculations used by
@@ -100,6 +101,6 @@ namespace OmniDSP::backend {
   extern template Status kaiser_window<F32>(F32 beta, std::span<F32> output);
   extern template Status kaiser_window<F64>(F64 beta, std::span<F64> output);
 
-}  // namespace OmniDSP::backend
+}  // namespace OmniDSP::default
 
 #endif  // OMNIDSP_DEFAULT_WINDOW_HPP

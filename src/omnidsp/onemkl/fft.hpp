@@ -17,16 +17,16 @@
 
 #include "../interface/backend.hpp"  // Base PlanImpl interfaces
 
-namespace OmniDSP::backend {
+namespace OmniDSP::onemkl {
 
   /**
    * @brief oneMKL implementation for complex-to-complex FFT plans using DFTI.
    * @tparam T Complex type (e.g., C32, C64).
    */
   template <typename T>  // T is complex type here (C32, C64)
-  class OneMKLFFTPlanImpl final : public FFTPlanImpl<T> {
+  class OneMKLFFTPlanImpl final : public abstract::FFTPlanImpl<T> {
     static_assert(
-        Utils::is_complex_v<T>, "OneMKLFFTPlanImpl requires a complex type.");
+        Utils::IsComplex_v<T>, "OneMKLFFTPlanImpl requires a complex type.");
     using Real = typename T::value_type;  // Get underlying real type
 
    public:
@@ -76,10 +76,10 @@ namespace OmniDSP::backend {
    * @tparam T Real type (e.g., F32, F64).
    */
   template <typename T>  // T is real type here (F32, F64)
-  class OneMKLRFFTPlanImpl final : public RFFTPlanImpl<T> {
+  class OneMKLRFFTPlanImpl final : public abstract::RFFTPlanImpl<T> {
     static_assert(
-        !Utils::is_complex_v<T>, "OneMKLRFFTPlanImpl requires a real type.");
-    using Complex = Utils::GetComplexT<T>;  // Corresponding complex type
+        !Utils::IsComplex_v<T>, "OneMKLRFFTPlanImpl requires a real type.");
+    using Complex = Utils::GetComplexType<T>;  // Corresponding complex type
 
    public:
     /**
@@ -121,6 +121,6 @@ namespace OmniDSP::backend {
     // mutable MKL_LONG last_mkl_status_ = DFTI_NO_ERROR;
   };
 
-}  // namespace OmniDSP::backend
+}  // namespace OmniDSP::onemkl
 
 #endif  // OMNIDSP_ONEMKL_FFT_HPP

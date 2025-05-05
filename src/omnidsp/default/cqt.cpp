@@ -31,7 +31,8 @@
 #include "OmniDSP/resample.hpp"  // Needed for internal ResamplePlan interface and ResampleSpec
 #include "OmniDSP/window.hpp"  // Needed for non-templated WindowSpec and window generation
 
-namespace OmniDSP::backend {
+namespace OmniDSP::default
+{
 
   // Helper function to calculate the next power of two
   inline size_t next_power_of_two(size_t n)
@@ -65,10 +66,10 @@ namespace OmniDSP::backend {
 
   template <typename T>
   DefaultCQTPlanImpl<T>::DefaultCQTPlanImpl(
-      const AbstractBackend* owner,  // Use AbstractBackend
-      Real sample_rate,              // Use Real alias
-      Real min_freq,                 // Use Real alias
-      Real max_freq,                 // Use Real alias
+      const abstract::AbstractBackend* owner,  // Use AbstractBackend
+      Real sample_rate,                        // Use Real alias
+      Real min_freq,                           // Use Real alias
+      Real max_freq,                           // Use Real alias
       int bins_per_octave,
       const WindowSpec& window_spec)
       : owner_(owner),
@@ -523,4 +524,4 @@ namespace OmniDSP::backend {
   template class DefaultCQTPlanImpl<float>;
   template class DefaultCQTPlanImpl<double>;
 
-}  // namespace OmniDSP::backend
+}  // namespace OmniDSP::default

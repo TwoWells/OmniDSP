@@ -18,10 +18,10 @@
 #include "window.hpp"
 
 // Forward declare backend Impl class
-namespace OmniDSP::backend {
+namespace OmniDSP::abstract {
   template <typename T>
   class CQTPlanImpl;
-}  // namespace OmniDSP::backend
+}  // namespace OmniDSP::abstract
 
 namespace OmniDSP {
 
@@ -35,9 +35,9 @@ namespace OmniDSP {
   class OMNIDSP_EXPORT CQTPlan {
     // *** UPDATED Namespace ***
     static_assert(
-        !Utils::is_complex_v<T>, "CQTPlan requires a real type (F32 or F64).");
+        !Utils::IsComplex_v<T>, "CQTPlan requires a real type (F32 or F64).");
     // *** UPDATED Namespace ***
-    using Complex = Utils::GetComplexT<T>;
+    using Complex = Utils::GetComplexType<T>;
     friend class OmniDSP;  // Keep friend for OmniDSP if needed
     // Removed friend declarations for AbstractBackend and DefaultBackend
 
@@ -61,7 +61,7 @@ namespace OmniDSP {
      * if pimpl is null.
      */
     static std::unique_ptr<CQTPlan<T>> create_from_impl(
-        std::unique_ptr<backend::CQTPlanImpl<T>> pimpl)
+        std::unique_ptr<abstract::CQTPlanImpl<T>> pimpl)
     {
       if (!pimpl) {
         return nullptr;
@@ -71,11 +71,11 @@ namespace OmniDSP {
 
    private:
     /** @brief Private constructor, called by create_from_impl. */
-    explicit CQTPlan(std::unique_ptr<backend::CQTPlanImpl<T>> pimpl);
+    explicit CQTPlan(std::unique_ptr<abstract::CQTPlanImpl<T>> pimpl);
 
     // Removed the private static helper and MakeUniqueEnabler struct
 
-    std::unique_ptr<backend::CQTPlanImpl<T>> pimpl_;
+    std::unique_ptr<abstract::CQTPlanImpl<T>> pimpl_;
   };
 
   // Definitions MUST be provided in a .cpp file

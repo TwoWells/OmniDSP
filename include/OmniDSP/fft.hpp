@@ -16,13 +16,14 @@
 #include "OmniDSP/omnidsp_export.hpp"
 #include "core_types.hpp"
 
-// Forward declare backend Impl classes
-namespace OmniDSP::backend {
+// Forward declare backend Impl class
+namespace OmniDSP::abstract {
   template <typename T>
   class FFTPlanImpl;
+
   template <typename T>
   class RFFTPlanImpl;
-}  // namespace OmniDSP::backend
+}  // namespace OmniDSP::abstract
 
 namespace OmniDSP {
 
@@ -36,8 +37,7 @@ namespace OmniDSP {
   class OMNIDSP_EXPORT FFTPlan {
     // *** UPDATED Namespace ***
     static_assert(
-        Utils::is_complex_v<T>,
-        "FFTPlan requires a complex type (C32 or C64).");
+        Utils::IsComplex_v<T>, "FFTPlan requires a complex type (C32 or C64).");
     // Only OmniDSP needs friend access if it calls the private constructor
     // directly
     friend class OmniDSP;
@@ -65,7 +65,7 @@ namespace OmniDSP {
      * if pimpl is null.
      */
     static std::unique_ptr<FFTPlan<T>> create_from_impl(
-        std::unique_ptr<backend::FFTPlanImpl<T>> pimpl)
+        std::unique_ptr<abstract::FFTPlanImpl<T>> pimpl)
     {
       if (!pimpl) {
         return nullptr;  // Or handle error appropriately
@@ -77,11 +77,11 @@ namespace OmniDSP {
 
    private:
     /** @brief Private constructor, called by create_from_impl. */
-    explicit FFTPlan(std::unique_ptr<backend::FFTPlanImpl<T>> pimpl);
+    explicit FFTPlan(std::unique_ptr<abstract::FFTPlanImpl<T>> pimpl);
 
     // Removed the private static helper and MakeUniqueEnabler struct
 
-    std::unique_ptr<backend::FFTPlanImpl<T>> pimpl_;
+    std::unique_ptr<abstract::FFTPlanImpl<T>> pimpl_;
   };
 
   /**
@@ -92,9 +92,9 @@ namespace OmniDSP {
   class OMNIDSP_EXPORT RFFTPlan {
     // *** UPDATED Namespace ***
     static_assert(
-        !Utils::is_complex_v<T>, "RFFTPlan requires a real type (F32 or F64).");
+        !Utils::IsComplex_v<T>, "RFFTPlan requires a real type (F32 or F64).");
     // *** UPDATED Namespace ***
-    using Complex = Utils::GetComplexT<T>;
+    using Complex = Utils::GetComplexType<T>;
     // Only OmniDSP needs friend access if it calls the private constructor
     // directly
     friend class OmniDSP;
@@ -122,7 +122,7 @@ namespace OmniDSP {
      * nullptr if pimpl is null.
      */
     static std::unique_ptr<RFFTPlan<T>> create_from_impl(
-        std::unique_ptr<backend::RFFTPlanImpl<T>> pimpl)
+        std::unique_ptr<abstract::RFFTPlanImpl<T>> pimpl)
     {
       if (!pimpl) {
         return nullptr;
@@ -132,11 +132,11 @@ namespace OmniDSP {
 
    private:
     /** @brief Private constructor, called by create_from_impl. */
-    explicit RFFTPlan(std::unique_ptr<backend::RFFTPlanImpl<T>> pimpl);
+    explicit RFFTPlan(std::unique_ptr<abstract::RFFTPlanImpl<T>> pimpl);
 
     // Removed the private static helper and MakeUniqueEnabler struct
 
-    std::unique_ptr<backend::RFFTPlanImpl<T>> pimpl_;
+    std::unique_ptr<abstract::RFFTPlanImpl<T>> pimpl_;
   };
 
   // Definitions MUST be provided in a .cpp file

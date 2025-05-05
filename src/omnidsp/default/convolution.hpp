@@ -14,14 +14,15 @@
 
 // Forward declare FFT plan impl BASE classes used internally
 // These are defined in interface/backend.hpp
-namespace OmniDSP::backend {
-  template <typename T_Complex>
-  class FFTPlanImpl;
-  template <typename T_Real>
-  class RFFTPlanImpl;
-}  // namespace OmniDSP::backend
+// namespace OmniDSP::backend {
+//   template <typename T_Complex>
+//   class FFTPlanImpl;
+//   template <typename T_Real>
+//   class RFFTPlanImpl;
+// }  // namespace OmniDSP::backend
 
-namespace OmniDSP::backend {
+namespace OmniDSP::default
+{
 
   /**
    * @brief Default backend implementation for Convolution Plan (Standard C++).
@@ -30,20 +31,21 @@ namespace OmniDSP::backend {
    * @tparam T Data type (F32, F64, C32, C64).
    */
   template <typename T>
-  class DefaultConvolutionPlanImpl final : public ConvolutionPlanImpl<T> {
+  class DefaultConvolutionPlanImpl final
+      : public abstract::ConvolutionPlanImpl<T> {
     // Define complex type corresponding to T
     // *** UPDATED Namespace ***
-    using T_Complex = Utils::GetComplexT<T>;
+    using T_Complex = Utils::GetComplexType<T>;
     // Define real type corresponding to T
     // *** UPDATED Namespace ***
-    using T_Real = Utils::GetRealT<T>;
+    using T_Real = Utils::GetRealType<T>;
 
    public:  // <-- Make variant public
     // Define the variant type to hold a pointer to the appropriate base FFT
     // plan implementation
     using FFTPlanImplVariant = std::variant<
-        std::unique_ptr<FFTPlanImpl<T_Complex>>,  // For complex T
-        std::unique_ptr<RFFTPlanImpl<T_Real>>     // For real T
+        std::unique_ptr<abstract::FFTPlanImpl<T_Complex>>,  // For complex T
+        std::unique_ptr<abstract::RFFTPlanImpl<T_Real>>     // For real T
         >;
 
     // public constructor and methods remain here
@@ -111,20 +113,21 @@ namespace OmniDSP::backend {
    * @tparam T Data type (F32, F64, C32, C64).
    */
   template <typename T>
-  class DefaultCorrelationPlanImpl final : public CorrelationPlanImpl<T> {
+  class DefaultCorrelationPlanImpl final
+      : public abstract::CorrelationPlanImpl<T> {
     // Define complex type corresponding to T
     // *** UPDATED Namespace ***
-    using T_Complex = Utils::GetComplexT<T>;
+    using T_Complex = Utils::GetComplexType<T>;
     // Define real type corresponding to T
     // *** UPDATED Namespace ***
-    using T_Real = Utils::GetRealT<T>;
+    using T_Real = Utils::GetRealType<T>;
 
    public:  // <-- Make variant public
     // Define the variant type to hold a pointer to the appropriate base FFT
     // plan implementation
     using FFTPlanImplVariant = std::variant<
-        std::unique_ptr<FFTPlanImpl<T_Complex>>,  // For complex T
-        std::unique_ptr<RFFTPlanImpl<T_Real>>     // For real T
+        std::unique_ptr<abstract::FFTPlanImpl<T_Complex>>,  // For complex T
+        std::unique_ptr<abstract::RFFTPlanImpl<T_Real>>     // For real T
         >;
 
     // public constructor and methods remain here
@@ -198,32 +201,40 @@ namespace OmniDSP::backend {
 
   // --- Backend Factory Function Declarations (Implementation in backend.cpp)
   // --- These declarations remain unchanged (match AbstractBackend)
-  [[nodiscard]] OmniExpected<std::unique_ptr<ConvolutionPlanImpl<F32>>>
+  [[nodiscard]] OmniExpected<
+      std::unique_ptr<abstract::ConvolutionPlanImpl<F32>>>
   create_default_convolution_plan_impl_f32(
       const F32Vec& kernel, ConvolutionType type, ConvolutionMethod method);
-  [[nodiscard]] OmniExpected<std::unique_ptr<ConvolutionPlanImpl<F64>>>
+  [[nodiscard]] OmniExpected<
+      std::unique_ptr<abstract::ConvolutionPlanImpl<F64>>>
   create_default_convolution_plan_impl_f64(
       const F64Vec& kernel, ConvolutionType type, ConvolutionMethod method);
-  [[nodiscard]] OmniExpected<std::unique_ptr<ConvolutionPlanImpl<C32>>>
+  [[nodiscard]] OmniExpected<
+      std::unique_ptr<abstract::ConvolutionPlanImpl<C32>>>
   create_default_convolution_plan_impl_c32(
       const C32Vec& kernel, ConvolutionType type, ConvolutionMethod method);
-  [[nodiscard]] OmniExpected<std::unique_ptr<ConvolutionPlanImpl<C64>>>
+  [[nodiscard]] OmniExpected<
+      std::unique_ptr<abstract::ConvolutionPlanImpl<C64>>>
   create_default_convolution_plan_impl_c64(
       const C64Vec& kernel, ConvolutionType type, ConvolutionMethod method);
 
-  [[nodiscard]] OmniExpected<std::unique_ptr<CorrelationPlanImpl<F32>>>
+  [[nodiscard]] OmniExpected<
+      std::unique_ptr<abstract::CorrelationPlanImpl<F32>>>
   create_default_correlation_plan_impl_f32(
       const F32Vec& kernel, ConvolutionType type, ConvolutionMethod method);
-  [[nodiscard]] OmniExpected<std::unique_ptr<CorrelationPlanImpl<F64>>>
+  [[nodiscard]] OmniExpected<
+      std::unique_ptr<abstract::CorrelationPlanImpl<F64>>>
   create_default_correlation_plan_impl_f64(
       const F64Vec& kernel, ConvolutionType type, ConvolutionMethod method);
-  [[nodiscard]] OmniExpected<std::unique_ptr<CorrelationPlanImpl<C32>>>
+  [[nodiscard]] OmniExpected<
+      std::unique_ptr<abstract::CorrelationPlanImpl<C32>>>
   create_default_correlation_plan_impl_c32(
       const C32Vec& kernel, ConvolutionType type, ConvolutionMethod method);
-  [[nodiscard]] OmniExpected<std::unique_ptr<CorrelationPlanImpl<C64>>>
+  [[nodiscard]] OmniExpected<
+      std::unique_ptr<abstract::CorrelationPlanImpl<C64>>>
   create_default_correlation_plan_impl_c64(
       const C64Vec& kernel, ConvolutionType type, ConvolutionMethod method);
 
-}  // namespace OmniDSP::backend
+}  // namespace OmniDSP::default
 
 #endif  // OMNIDSP_DEFAULT_CONVOLUTION_HPP

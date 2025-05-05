@@ -12,7 +12,7 @@
 #include <stdexcept>  // For std::runtime_error
 #include <utility>    // For std::move
 
-#include "backend.hpp"  // Defines backend::ResamplePlanImpl
+#include "backend.hpp"  // Defines abstract::ResamplePlanImpl
 
 // Include core types for aliases F32, F64 used in instantiations
 #include <OmniDSP/core_types.hpp>
@@ -31,7 +31,7 @@ namespace OmniDSP {
    */
   template <typename T>  // T is REAL type
   ResamplePlan<T>::ResamplePlan(
-      std::unique_ptr<backend::ResamplePlanImpl<T>> pimpl)
+      std::unique_ptr<abstract::ResamplePlanImpl<T>> pimpl)
       : pimpl_(std::move(pimpl))
   {
     if (!pimpl_) {

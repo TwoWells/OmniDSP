@@ -12,10 +12,11 @@
 #include <stdexcept>  // For std::logic_error, std::invalid_argument
 #include <vector>
 
-// Include core_types to ensure Utils::GetComplexT is available
+// Include core_types to ensure Utils::GetComplexType is available
 #include <OmniDSP/core_types.hpp>
 
-namespace OmniDSP::backend {
+namespace OmniDSP::default
+{
 
   //-----------------------------------------------------------------------------
   // Internal Helper Functions (Standard C++)
@@ -202,7 +203,7 @@ namespace OmniDSP::backend {
       : n_(n), cfft_plan_(n / 2)  // Initialize CFFT plan for size N/2
   {
     // Use the alias defined in the header (matches base class)
-    using T_Complex = Utils::GetComplexT<T_Real>;
+    using T_Complex = Utils::GetComplexType<T_Real>;
     if (n < 2 || (n & (n - 1)) != 0) {
       throw std::invalid_argument("RFFT size must be a power of 2 and >= 2.");
     }
@@ -231,7 +232,7 @@ namespace OmniDSP::backend {
   {
     // using T_Complex = std::complex<T_Real>; // Original incorrect definition
     // Use the alias defined in the header (matches base class)
-    using T_Complex = Utils::GetComplexT<T_Real>;
+    using T_Complex = Utils::GetComplexType<T_Real>;
     size_t expected_output_size = half_n_ + 1;
     if (input.size() < n_ || output.size() < expected_output_size) {
       return Status::SizeMismatch;
@@ -289,7 +290,7 @@ namespace OmniDSP::backend {
   {
     // using T_Complex = std::complex<T_Real>; // Original incorrect definition
     // Use the alias defined in the header (matches base class)
-    using T_Complex = Utils::GetComplexT<T_Real>;
+    using T_Complex = Utils::GetComplexType<T_Real>;
     size_t expected_input_size = half_n_ + 1;
     if (input.size() < expected_input_size || output.size() < n_) {
       return Status::SizeMismatch;
@@ -364,4 +365,4 @@ namespace OmniDSP::backend {
   template class DefaultRFFTPlanImpl<F32>;  // float
   template class DefaultRFFTPlanImpl<F64>;  // double
 
-}  // namespace OmniDSP::backend
+}  // namespace OmniDSP::default

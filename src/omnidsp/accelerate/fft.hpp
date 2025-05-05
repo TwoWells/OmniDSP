@@ -17,7 +17,7 @@
 
 #include "../interface/backend.hpp"  // Base PlanImpl interfaces
 
-namespace OmniDSP::backend {
+namespace OmniDSP::accelerate {
 
   // --- Constants ---
   // Maximum length supported by vDSP_DFT_Interleaved_CreateSetup (for the
@@ -32,7 +32,7 @@ namespace OmniDSP::backend {
   template <typename T>  // T is complex type here (C32, C64)
   class AccelerateFFTPlanImpl final : public FFTPlanImpl<T> {
     static_assert(
-        Utils::is_complex_v<T>,
+        Utils::IsComplex_v<T>,
         "AccelerateFFTPlanImpl requires a complex type.");
     using Real = typename T::value_type;
 
@@ -77,9 +77,8 @@ namespace OmniDSP::backend {
   template <typename T>  // T is real type here (F32, F64)
   class AccelerateRFFTPlanImpl final : public RFFTPlanImpl<T> {
     static_assert(
-        !Utils::is_complex_v<T>,
-        "AccelerateRFFTPlanImpl requires a real type.");
-    using Complex = Utils::GetComplexT<T>;
+        !Utils::IsComplex_v<T>, "AccelerateRFFTPlanImpl requires a real type.");
+    using Complex = Utils::GetComplexType<T>;
 
     using vDSP_DFT_Setup_Type = typename std::conditional<
         std::is_same_v<T, float>,
@@ -115,6 +114,6 @@ namespace OmniDSP::backend {
     vDSP_DFT_Setup_Type fft_setup_inverse_ = nullptr;
   };
 
-}  // namespace OmniDSP::backend
+}  // namespace OmniDSP::accelerate
 
 #endif  // OMNIDSP_ACCELERATE_FFT_HPP

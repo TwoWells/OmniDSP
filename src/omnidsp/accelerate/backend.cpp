@@ -23,7 +23,7 @@
 // Include DefaultBackend header for fallback
 #include "../default/backend.hpp"
 
-namespace OmniDSP::backend {
+namespace OmniDSP::accelerate {
 
   //--------------------------------------------------------------------------
   // AccelerateBackend Method Definitions
@@ -198,9 +198,15 @@ namespace OmniDSP::backend {
   template OmniExpected<std::unique_ptr<RFFTPlan<F64>>>
       AccelerateBackend::create_rfft_plan_f64(size_t) const;
 
-  // *** ADDED Factory Function Definition ***
+}  // namespace OmniDSP::accelerate
+
+// *** ADDED Factory Function Definition (Outside namespace) ***
+// This function needs to be defined in the global OmniDSP::abstract namespace
+// as declared in interface/backend.hpp
+namespace OmniDSP::abstract {
   std::unique_ptr<AbstractBackend> create_accelerate_backend()
   {
-    return std::make_unique<AccelerateBackend>();
+    // Use the concrete class from the accelerate namespace
+    return std::make_unique<::OmniDSP::accelerate::AccelerateBackend>();
   }
-}  // namespace OmniDSP::backend
+}  // namespace OmniDSP::abstract

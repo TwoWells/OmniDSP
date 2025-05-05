@@ -25,7 +25,8 @@
 #include "../utils/resample.hpp"
 #include "backend.hpp"  // Default backend declarations (includes DefaultResamplePlanImpl declaration)
 
-namespace OmniDSP::backend {
+namespace OmniDSP::default
+{
 
   //--------------------------------------------------------------------------
   // DefaultResamplePlanImpl Method Implementations
@@ -33,7 +34,7 @@ namespace OmniDSP::backend {
 
   template <typename T>
   DefaultResamplePlanImpl<T>::DefaultResamplePlanImpl(
-      const AbstractBackend* owner,  // Use AbstractBackend*
+      const abstract::AbstractBackend* owner,  // Use AbstractBackend*
       const ResampleSpec& spec)
       : owner_backend_(owner),     // Initialize owner
         spec_(spec),               // Initialize spec
@@ -241,8 +242,8 @@ namespace OmniDSP::backend {
   }
 
   template <typename T>
-  size_t DefaultResamplePlanImpl<T>::get_output_length(
-      size_t input_length) const
+  size_t DefaultResamplePlanImpl<T>::get_output_length(size_t input_length)
+      const
   {
     return calculate_max_output(input_length);  // Call internal helper
   }
@@ -429,8 +430,8 @@ namespace OmniDSP::backend {
   }
 
   template <typename T>
-  size_t DefaultResamplePlanImpl<T>::calculate_max_output(
-      size_t input_len) const
+  size_t DefaultResamplePlanImpl<T>::calculate_max_output(size_t input_len)
+      const
   {
     if (spec_.input_rate <= 0.0 || interpolation_factor_ == 0
         || decimation_factor_ == 0)
@@ -469,4 +470,4 @@ namespace OmniDSP::backend {
   template class DefaultResamplePlanImpl<float>;
   template class DefaultResamplePlanImpl<double>;
 
-}  // namespace OmniDSP::backend
+}  // namespace OmniDSP::default

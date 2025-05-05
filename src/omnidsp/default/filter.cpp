@@ -22,7 +22,8 @@
 #include "OmniDSP/core_types.hpp"  // Core types
 #include "window.hpp"  // For default backend window generation helpers
 
-namespace OmniDSP::backend {
+namespace OmniDSP::default
+{
 
   // --- Filter Design Helper Functions (Internal Linkage within Backend) ---
   // Moved OUT of anonymous namespace to allow explicit instantiation
@@ -125,38 +126,37 @@ namespace OmniDSP::backend {
     Status window_status;
     switch (spec.window.get_type()) {
       case WindowType::Bartlett:
-        window_status = backend::bartlett_window(std::span<T>(window_coeffs));
+        window_status = bartlett_window(std::span<T>(window_coeffs));
         break;
       case WindowType::Blackman:
-        window_status = backend::blackman_window(std::span<T>(window_coeffs));
+        window_status = blackman_window(std::span<T>(window_coeffs));
         break;
       case WindowType::Flattop:
-        window_status = backend::flattop_window(std::span<T>(window_coeffs));
+        window_status = flattop_window(std::span<T>(window_coeffs));
         break;
       case WindowType::Hamming:
-        window_status = backend::hamming_window(std::span<T>(window_coeffs));
+        window_status = hamming_window(std::span<T>(window_coeffs));
         break;
       case WindowType::Hann:
-        window_status = backend::hann_window(std::span<T>(window_coeffs));
+        window_status = hann_window(std::span<T>(window_coeffs));
         break;
       case WindowType::Rectangular:
-        window_status
-            = backend::rectangular_window(std::span<T>(window_coeffs));
+        window_status = rectangular_window(std::span<T>(window_coeffs));
         break;
       case WindowType::Triangular:
-        window_status = backend::triangular_window(std::span<T>(window_coeffs));
+        window_status = triangular_window(std::span<T>(window_coeffs));
         break;
       case WindowType::Gaussian:
         if (!spec.window.get_param().has_value())
           return std::unexpected(Status::InvalidArgument);
-        window_status = backend::gaussian_window(
+        window_status = gaussian_window(
             static_cast<T>(spec.window.get_param().value()),
             std::span<T>(window_coeffs));
         break;
       case WindowType::Kaiser:
         if (!spec.window.get_param().has_value())
           return std::unexpected(Status::InvalidArgument);
-        window_status = backend::kaiser_window(
+        window_status = kaiser_window(
             static_cast<T>(spec.window.get_param().value()),
             std::span<T>(window_coeffs));
         break;
@@ -403,4 +403,4 @@ namespace OmniDSP::backend {
       const FIRFilterSpec& spec);
   // No instantiation needed for non-template generate_iir_filter_coeffs
 
-}  // namespace OmniDSP::backend
+}  // namespace OmniDSP::default

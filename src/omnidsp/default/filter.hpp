@@ -16,7 +16,8 @@
 
 #include "../interface/backend.hpp"  // Base PlanImpl interfaces
 
-namespace OmniDSP::backend {
+namespace OmniDSP::default
+{
 
   /**
    * @brief Default backend implementation for an FIR Filter Plan.
@@ -24,7 +25,7 @@ namespace OmniDSP::backend {
    * @tparam T The data type (F32, F64, C32, C64).
    */
   template <typename T>
-  class DefaultFIRFilterPlanImpl final : public FIRFilterPlanImpl<T> {
+  class DefaultFIRFilterPlanImpl final : public abstract::FIRFilterPlanImpl<T> {
    public:
     /**
      * @brief Constructs a DefaultFIRFilterPlanImpl.
@@ -98,7 +99,7 @@ namespace OmniDSP::backend {
    * @tparam T The data type (typically F32 or F64).
    */
   template <typename T>  // T is typically real (F32, F64)
-  class DefaultIIRFilterPlanImpl final : public IIRFilterPlanImpl<T> {
+  class DefaultIIRFilterPlanImpl final : public abstract::IIRFilterPlanImpl<T> {
    private:
     // Private struct to hold coefficients of the correct type T
     template <typename Type>
@@ -194,6 +195,6 @@ namespace OmniDSP::backend {
   extern template class DefaultIIRFilterPlanImpl<F32>;
   extern template class DefaultIIRFilterPlanImpl<F64>;
 
-}  // namespace OmniDSP::backend
+}  // namespace OmniDSP::default
 
 #endif  // OMNIDSP_DEFAULT_FILTER_HPP

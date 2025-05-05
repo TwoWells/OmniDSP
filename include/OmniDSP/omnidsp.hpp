@@ -61,27 +61,27 @@ namespace OmniDSP {
     ///@{
     // *** Default argument ONLY in the declaration within the class ***
     template <typename T>
-    [[nodiscard]] OmniExpected<std::vector<RealT<T>>> convolve(
-        const std::vector<RealT<T>>& input,
-        const std::vector<RealT<T>>& kernel,
+    [[nodiscard]] OmniExpected<std::vector<Utils::GetRealType<T>>> convolve(
+        const std::vector<Utils::GetRealType<T>>& input,
+        const std::vector<Utils::GetRealType<T>>& kernel,
         ConvolutionType type,
         ConvolutionMethod method = ConvolutionMethod::Auto) const;
     template <typename T>
-    [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>> convolve(
-        const std::vector<ComplexT<T>>& input,
-        const std::vector<ComplexT<T>>& kernel,
+    [[nodiscard]] OmniExpected<std::vector<Utils::GetComplexType<T>>> convolve(
+        const std::vector<Utils::GetComplexType<T>>& input,
+        const std::vector<Utils::GetComplexType<T>>& kernel,
         ConvolutionType type,
         ConvolutionMethod method = ConvolutionMethod::Auto) const;
     template <typename T>
-    [[nodiscard]] OmniExpected<std::vector<RealT<T>>> correlate(
-        const std::vector<RealT<T>>& input,
-        const std::vector<RealT<T>>& kernel,
+    [[nodiscard]] OmniExpected<std::vector<Utils::GetRealType<T>>> correlate(
+        const std::vector<Utils::GetRealType<T>>& input,
+        const std::vector<Utils::GetRealType<T>>& kernel,
         ConvolutionType type,
         ConvolutionMethod method = ConvolutionMethod::Auto) const;
     template <typename T>
-    [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>> correlate(
-        const std::vector<ComplexT<T>>& input,
-        const std::vector<ComplexT<T>>& kernel,
+    [[nodiscard]] OmniExpected<std::vector<Utils::GetComplexType<T>>> correlate(
+        const std::vector<Utils::GetComplexType<T>>& input,
+        const std::vector<Utils::GetComplexType<T>>& kernel,
         ConvolutionType type,
         ConvolutionMethod method = ConvolutionMethod::Auto) const;
     ///@}
@@ -89,17 +89,17 @@ namespace OmniDSP {
     /** @name Fourier Transforms (One-Off) */
     ///@{
     template <typename T>
-    [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>> fft(
-        const std::vector<ComplexT<T>>& input) const;
+    [[nodiscard]] OmniExpected<std::vector<Utils::GetComplexType<T>>> fft(
+        const std::vector<Utils::GetComplexType<T>>& input) const;
     template <typename T>
-    [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>> ifft(
-        const std::vector<ComplexT<T>>& input) const;
+    [[nodiscard]] OmniExpected<std::vector<Utils::GetComplexType<T>>> ifft(
+        const std::vector<Utils::GetComplexType<T>>& input) const;
     template <typename T>
-    [[nodiscard]] OmniExpected<std::vector<ComplexT<T>>> rfft(
-        const std::vector<RealT<T>>& input) const;
+    [[nodiscard]] OmniExpected<std::vector<Utils::GetComplexType<T>>> rfft(
+        const std::vector<Utils::GetRealType<T>>& input) const;
     template <typename T>
     [[nodiscard]] OmniExpected<std::vector<T>> irfft(  // T is REAL type
-        const std::vector<ComplexT<T>>& input,
+        const std::vector<Utils::GetComplexType<T>>& input,
         size_t output_length) const;
     ///@}
 
@@ -148,9 +148,9 @@ namespace OmniDSP {
         size_t length) const;
     template <typename T>  // T is real type
     [[nodiscard]] OmniExpected<std::unique_ptr<CQTPlan<T>>> create_cqt_plan(
-        RealT<T> sample_rate,
-        RealT<T> min_freq,
-        RealT<T> max_freq,
+        Utils::GetRealType<T> sample_rate,
+        Utils::GetRealType<T> min_freq,
+        Utils::GetRealType<T> max_freq,
         int bins_per_octave,
         const WindowSpec& window_spec = WindowSpec()) const;
     template <typename T>  // T is real type
@@ -191,8 +191,8 @@ namespace OmniDSP {
     /** @} */  // End of FilterDesign group
 
    private:
-    OmniDSP(std::unique_ptr<backend::AbstractBackend> impl);
-    std::unique_ptr<backend::AbstractBackend> pimpl_;
+    OmniDSP(std::unique_ptr<abstract::AbstractBackend> impl);
+    std::unique_ptr<abstract::AbstractBackend> pimpl_;
   };
 
   //--------------------------------------------------------------------------
@@ -202,9 +202,10 @@ namespace OmniDSP {
   // --- DSP Operations ---
   // *** Default argument REMOVED from definition ***
   template <typename T>
-  [[nodiscard]] inline OmniExpected<std::vector<RealT<T>>> OmniDSP::convolve(
-      const std::vector<RealT<T>>& input,
-      const std::vector<RealT<T>>& kernel,
+  [[nodiscard]] inline OmniExpected<std::vector<Utils::GetRealType<T>>>
+  OmniDSP::convolve(
+      const std::vector<Utils::GetRealType<T>>& input,
+      const std::vector<Utils::GetRealType<T>>& kernel,
       ConvolutionType type,
       ConvolutionMethod method) const
   {
@@ -222,9 +223,10 @@ namespace OmniDSP {
 
   // *** Default argument REMOVED from definition ***
   template <typename T>
-  [[nodiscard]] inline OmniExpected<std::vector<ComplexT<T>>> OmniDSP::convolve(
-      const std::vector<ComplexT<T>>& input,
-      const std::vector<ComplexT<T>>& kernel,
+  [[nodiscard]] inline OmniExpected<std::vector<Utils::GetComplexType<T>>>
+  OmniDSP::convolve(
+      const std::vector<Utils::GetComplexType<T>>& input,
+      const std::vector<Utils::GetComplexType<T>>& kernel,
       ConvolutionType type,
       ConvolutionMethod method) const
   {
@@ -242,9 +244,10 @@ namespace OmniDSP {
 
   // *** Default argument REMOVED from definition ***
   template <typename T>
-  [[nodiscard]] inline OmniExpected<std::vector<RealT<T>>> OmniDSP::correlate(
-      const std::vector<RealT<T>>& input,
-      const std::vector<RealT<T>>& kernel,
+  [[nodiscard]] inline OmniExpected<std::vector<Utils::GetRealType<T>>>
+  OmniDSP::correlate(
+      const std::vector<Utils::GetRealType<T>>& input,
+      const std::vector<Utils::GetRealType<T>>& kernel,
       ConvolutionType type,
       ConvolutionMethod method) const
   {
@@ -262,10 +265,10 @@ namespace OmniDSP {
 
   // *** Default argument REMOVED from definition ***
   template <typename T>
-  [[nodiscard]] inline OmniExpected<std::vector<ComplexT<T>>>
+  [[nodiscard]] inline OmniExpected<std::vector<Utils::GetComplexType<T>>>
   OmniDSP::correlate(
-      const std::vector<ComplexT<T>>& input,
-      const std::vector<ComplexT<T>>& kernel,
+      const std::vector<Utils::GetComplexType<T>>& input,
+      const std::vector<Utils::GetComplexType<T>>& kernel,
       ConvolutionType type,
       ConvolutionMethod method) const
   {
@@ -283,8 +286,8 @@ namespace OmniDSP {
 
   // --- One-off FFTs ---
   template <typename T>
-  [[nodiscard]] inline OmniExpected<std::vector<ComplexT<T>>> OmniDSP::fft(
-      const std::vector<ComplexT<T>>& input) const
+  [[nodiscard]] inline OmniExpected<std::vector<Utils::GetComplexType<T>>>
+  OmniDSP::fft(const std::vector<Utils::GetComplexType<T>>& input) const
   {
     if (!pimpl_) throw std::runtime_error("Invalid OmniDSP instance");
     if constexpr (std::is_same_v<T, C32>) {
@@ -299,8 +302,8 @@ namespace OmniDSP {
   }
 
   template <typename T>
-  [[nodiscard]] inline OmniExpected<std::vector<ComplexT<T>>> OmniDSP::ifft(
-      const std::vector<ComplexT<T>>& input) const
+  [[nodiscard]] inline OmniExpected<std::vector<Utils::GetComplexType<T>>>
+  OmniDSP::ifft(const std::vector<Utils::GetComplexType<T>>& input) const
   {
     if (!pimpl_) throw std::runtime_error("Invalid OmniDSP instance");
     if constexpr (std::is_same_v<T, C32>) {
@@ -315,8 +318,8 @@ namespace OmniDSP {
   }
 
   template <typename T>
-  [[nodiscard]] inline OmniExpected<std::vector<ComplexT<T>>> OmniDSP::rfft(
-      const std::vector<RealT<T>>& input) const
+  [[nodiscard]] inline OmniExpected<std::vector<Utils::GetComplexType<T>>>
+  OmniDSP::rfft(const std::vector<Utils::GetRealType<T>>& input) const
   {
     if (!pimpl_) throw std::runtime_error("Invalid OmniDSP instance");
     if constexpr (std::is_same_v<T, F32>) {
@@ -332,7 +335,8 @@ namespace OmniDSP {
 
   template <typename T>
   [[nodiscard]] inline OmniExpected<std::vector<T>> OmniDSP::irfft(
-      const std::vector<ComplexT<T>>& input, size_t output_length) const
+      const std::vector<Utils::GetComplexType<T>>& input,
+      size_t output_length) const
   {
     if (!pimpl_) throw std::runtime_error("Invalid OmniDSP instance");
     if constexpr (std::is_same_v<T, F32>) {
@@ -557,9 +561,9 @@ namespace OmniDSP {
   template <typename T>
   [[nodiscard]] inline OmniExpected<std::unique_ptr<CQTPlan<T>>>
   OmniDSP::create_cqt_plan(
-      RealT<T> sample_rate,
-      RealT<T> min_freq,
-      RealT<T> max_freq,
+      Utils::GetRealType<T> sample_rate,
+      Utils::GetRealType<T> min_freq,
+      Utils::GetRealType<T> max_freq,
       int bins_per_octave,
       const WindowSpec& window_spec) const
   {

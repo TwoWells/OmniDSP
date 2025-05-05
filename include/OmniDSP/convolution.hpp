@@ -17,13 +17,13 @@
 #include "OmniDSP/omnidsp_export.hpp"
 #include "core_types.hpp"  // Includes Status, OmniExpected, Detail::* etc.
 
-// Forward declare backend Impl classes
-namespace OmniDSP::backend {
+// Forward declare abstract Impl classes
+namespace OmniDSP::abstract {
   template <typename T>
   class ConvolutionPlanImpl;
   template <typename T>
   class CorrelationPlanImpl;
-}  // namespace OmniDSP::backend
+}  // namespace OmniDSP::abstract
 
 namespace OmniDSP {
 
@@ -98,7 +98,7 @@ namespace OmniDSP {
      * nullptr if pimpl is null.
      */
     static std::unique_ptr<ConvolutionPlan<T>> create_from_impl(
-        std::unique_ptr<backend::ConvolutionPlanImpl<T>> pimpl)
+        std::unique_ptr<abstract::ConvolutionPlanImpl<T>> pimpl)
     {
       if (!pimpl) {
         return nullptr;
@@ -110,11 +110,11 @@ namespace OmniDSP {
    private:
     /** @brief Private constructor, called by create_from_impl. */
     explicit ConvolutionPlan(
-        std::unique_ptr<backend::ConvolutionPlanImpl<T>> pimpl);
+        std::unique_ptr<abstract::ConvolutionPlanImpl<T>> pimpl);
 
     // Removed the private static helper and MakeUniqueEnabler struct
 
-    std::unique_ptr<backend::ConvolutionPlanImpl<T>> pimpl_;
+    std::unique_ptr<abstract::ConvolutionPlanImpl<T>> pimpl_;
   };
 
   /**
@@ -148,7 +148,7 @@ namespace OmniDSP {
      * nullptr if pimpl is null.
      */
     static std::unique_ptr<CorrelationPlan<T>> create_from_impl(
-        std::unique_ptr<backend::CorrelationPlanImpl<T>> pimpl)
+        std::unique_ptr<abstract::CorrelationPlanImpl<T>> pimpl)
     {
       if (!pimpl) {
         return nullptr;
@@ -160,11 +160,11 @@ namespace OmniDSP {
    private:
     /** @brief Private constructor, called by create_from_impl. */
     explicit CorrelationPlan(
-        std::unique_ptr<backend::CorrelationPlanImpl<T>> pimpl);
+        std::unique_ptr<abstract::CorrelationPlanImpl<T>> pimpl);
 
     // Removed the private static helper and MakeUniqueEnabler struct
 
-    std::unique_ptr<backend::CorrelationPlanImpl<T>> pimpl_;
+    std::unique_ptr<abstract::CorrelationPlanImpl<T>> pimpl_;
   };
 
   // Definitions MUST be provided in the corresponding .cpp file

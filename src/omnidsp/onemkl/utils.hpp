@@ -3,11 +3,9 @@
  * @brief Utility functions for the oneMKL backend, including status code
  * conversions.
  */
-#ifndef OMNIDSP_ONEMKL_UTILS_HPP
-#define OMNIDSP_ONEMKL_UTILS_HPP
+// No include guards as requested
 
-#include <ippcore.h>  // For IppStatus and ippGetStatusString
-#include <mkl.h>      // For MKL_LONG and DftiErrorMessage
+#include <mkl.h>  // For MKL_LONG and DftiErrorMessage
 
 #include <OmniDSP/core_types.hpp>  // For OmniDSP::Status
 #include <iostream>                // For std::cerr
@@ -15,37 +13,11 @@
 #include <string>     // For std::string
 #include <type_traits>  // For std::is_floating_point_v, std::is_same_v (needed for get_dfti_precision)
 
-namespace OmniDSP::backend {
+// Removed: #include <ippcore.h>
 
-  /**
-   * @brief Converts IPP status codes to OmniDSP::Status.
-   * @param status The IppStatus code returned by an IPP function.
-   * @return The corresponding OmniDSP::Status enum value.
-   */
-  inline Status ipp_status_to_omnidsp_status(IppStatus status)
-  {
-    if (status == ippStsNoErr) {
-      return Status::Success;
-    }
-    // Log the specific IPP error message
-    std::cerr << "IPP Error: " << ippGetStatusString(status)
-              << " (Code: " << status << ")" << std::endl;
+namespace OmniDSP::onemkl::utils {  // Updated namespace for clarity
 
-    // Map specific IPP errors to OmniDSP errors
-    if (status == ippStsNullPtrErr || status == ippStsSizeErr
-        || status == ippStsStepErr || status == ippStsBadArgErr
-        || status == ippStsOutOfRangeErr) {
-      return Status::InvalidArgument;
-    }
-    if (status == ippStsMemAllocErr) {
-      return Status::AllocationError;
-    }
-    // Add more specific mappings if needed
-    // ...
-
-    // Default to a generic backend error for unmapped statuses
-    return Status::BackendError;
-  }
+  // Removed: ipp_status_to_omnidsp_status function
 
   /**
    * @brief Converts MKL DFTI status codes to OmniDSP::Status.
@@ -97,12 +69,8 @@ namespace OmniDSP::backend {
       return DFTI_DOUBLE;
     }
     // The static_assert above ensures this part is unreachable for valid types.
-    // If somehow bypassed, this would cause a compile error in non-constexpr
-    // contexts or potentially lead to unexpected behavior in constexpr ones. No
-    // return needed here due to static_assert guaranteeing T_Real is float or
-    // double.
   }
 
-}  // namespace OmniDSP::backend
+}  // namespace OmniDSP::onemkl::utils
 
-#endif  // OMNIDSP_ONEMKL_UTILS_HPP
+// No endif for include guard
