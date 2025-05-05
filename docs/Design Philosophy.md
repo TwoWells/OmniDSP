@@ -7,11 +7,11 @@ The OmniDSP library is designed around several core concepts and software design
 ### **The `OmniDSP` Class: Backend Encapsulation and Entry Point**
 
 - **Purpose:** The `OmniDSP` class serves as the primary user-facing entry point for interacting with the library's functionalities. Its most crucial role is to **encapsulate the selected backend implementation**.
-- **Backend Management:** DSP algorithms often have multiple possible implementations leveraging different hardware acceleration libraries (e.g., Apple Accelerate, Intel oneMKL), parallel execution strategies (e.g., OpenMP, TBB, CUDA), specialized hardware (e.g., FPGAs), distributed systems (e.g., Clusters), or a portable default implementation (using standard C++). The `OmniDSP` class manages which of these backends is active for all subsequent operations performed through that instance via an **Abstract Backend Interface** (`AbstractBackend`).
+- **Backend Management:** DSP algorithms often have multiple possible implementations leveraging different hardware acceleration libraries (e.g., Apple Accelerate, Intel oneMKL, Intel IPP), parallel execution strategies (e.g., OpenMP, TBB, CUDA), specialized hardware (e.g., FPGAs), distributed systems (e.g., Clusters), or a portable default implementation (using standard C++). The `OmniDSP` class manages which of these backends is active for all subsequent operations performed through that instance via an **Abstract Backend Interface** (`OmniDSP::abstract::AbstractBackend`).
 - **Instantiation (`OmniDSP::create`)**: Users **must** create an instance of `OmniDSP` using the static factory method `OmniDSP::create(Backend backend_type)`. This step is essential because it:
-  - Selects the desired backend implementation (e.g., `Backend::Accelerate`, `Backend::OneMKL`, `Backend::Default`, or potential future backends like `Backend::CUDA`, `Backend::FPGA`, `Backend::Cluster`). The library compiles support for all available backends, and `create` chooses the appropriate one at runtime based on the request and availability checks.
+  - Selects the desired backend implementation (e.g., `Backend::Accelerate`, `Backend::OneMKL`, `Backend::IntelIPP`, `Backend::Default`, or potential future backends like `Backend::CUDA`, `Backend::FPGA`, `Backend::Cluster`). The library compiles support for all available backends, and `create` chooses the appropriate one at runtime based on the request and availability checks.
   - Initializes any necessary resources or context required by that specific backend (e.g., connecting to cluster nodes, loading an FPGA bitstream).
-  - Hides the backend-specific details (including its internal parallelism model, communication protocols, or hardware interactions) from the user using the **Pimpl (Pointer to Implementation) idiom**, where the `pimpl_` member of `OmniDSP` holds a `std::unique_ptr<AbstractBackend>`.
+  - Hides the backend-specific details (including its internal parallelism model, communication protocols, or hardware interactions) from the user using the **Pimpl (Pointer to Implementation) idiom**, where the `pimpl_` member of `OmniDSP` holds a `std::unique_ptr<abstract::AbstractBackend>`.
 - **Factory Role for Plans & State:** The `OmniDSP` instance acts as a factory for creating all `Plan` objects (like `FFTPlan`, `ConvolutionPlan`, etc.) and potentially associated `State` objects (e.g., `dsp.create_filter_state(plan)`) primarily for use with the synchronous API.
 - **One-Off Operations:** The `OmniDSP` class also provides methods for performing "one-off" DSP operations (e.g., window generation like `dsp.hann_window(len)`, or convolution like `dsp.convolve(input, kernel)`). These methods directly utilize the encapsulated backend for computation by calling the corresponding virtual methods on the `AbstractBackend` interface.
 
@@ -39,7 +39,7 @@ The OmniDSP library is designed around several core concepts and software design
 - **Characteristics:**
   - **Immutable (Post-Creation):** Once created via an `OmniDSP` factory, the Plan object itself and its core resources are typically immutable.
   - **Stateless (Ideally):** Plans themselves should ideally not hold mutable state related to signal processing between `execute` calls. State required for continuous processing (like filter delays) should be managed separately (see State Objects).
-  - **Factory-Created:** Always created via factory methods on an `OmniDSP` instance (e.g., `dsp.create_fft_plan(len)`). This links the Plan to the specific backend and configuration. The creation involves the backend creating its specific `*PlanImpl` object and then using the public Plan's static `create_from_impl` method to construct the user-facing Plan object which holds the implementation via Pimpl.
+  - **Factory-Created:** Always created via factory methods on an `OmniDSP` instance (e.g., `dsp.create_fft_plan(len)`). This links the Plan to the specific backend and configuration. The creation involves the backend creating its specific `*PlanImpl` object (e.g., `OmniDSP::default::DefaultFFTPlanImpl`) and then using the public Plan's static `create_from_impl` method to construct the user-facing Plan object which holds the implementation via Pimpl.
   - **Backend-Dependent:** The internal implementation (`*PlanImpl`) depends on the backend selected when the parent `OmniDSP` object was created.
   - **Optimized for Execution:** Designed for low-overhead execution via their `execute` method after the initial setup cost during creation.
 - **Usage:**
@@ -74,12 +74,12 @@ Beyond the core components, OmniDSP employs several standard design patterns:
   - **Decoupling:** Reduces compile-time dependencies between user code and backend implementations, speeding up builds.
   - **ABI Stability:** Helps maintain a stable Application Binary Interface for the library, as changes to the implementation details don't affect the public header or require users to recompile against minor internal changes.
   - **Encapsulation:** Cleanly separates the public interface from private implementation details.
-  - **Backend Abstraction:** Enables the runtime selection and encapsulation of different backend implementations via the `AbstractBackend` interface held by `OmniDSP`.
+  - **Backend Abstraction:** Enables the runtime selection and encapsulation of different backend implementations via the `OmniDSP::abstract::AbstractBackend` interface held by `OmniDSP`.
 
   ### **Backend Interface Contract (`interface/backend.hpp`)**
 
-- **Application:** The abstract base class `AbstractBackend` and the abstract `*PlanImpl` interfaces define the contract for all backends.
-- **Benefits:** Interchangeability, Consistency, Clear Extension Point. This contract is the key enabler for supporting diverse execution targets. Concrete backends (like `DefaultBackend`, `AccelerateBackend`) inherit from `AbstractBackend` and provide implementations for the pure virtual methods.
+- **Application:** The abstract base class `OmniDSP::abstract::AbstractBackend` and the abstract `*PlanImpl` interfaces define the contract for all backends.
+- **Benefits:** Interchangeability, Consistency, Clear Extension Point. This contract is the key enabler for supporting diverse execution targets. Concrete backends (like `OmniDSP::default::DefaultBackend`, `OmniDSP::accelerate::AccelerateBackend`, `OmniDSP::intelipp::IntelIPPBackend`, `OmniDSP::onemkl::OneMKLBackend`) inherit from `AbstractBackend` and provide implementations for the pure virtual methods.
 
   ### **Factory Pattern**
 
@@ -88,13 +88,13 @@ Beyond the core components, OmniDSP employs several standard design patterns:
 
   ### **Strategy Pattern (via Backends)**
 
-- **Application:** Different backend implementations (`DefaultBackend`, `AccelerateBackend`, etc.) act as interchangeable strategies selected by `OmniDSP`. The choice of backend determines the underlying execution strategy.
+- **Application:** Different backend implementations (`OmniDSP::default::DefaultBackend`, `OmniDSP::accelerate::AccelerateBackend`, `OmniDSP::onemkl::OneMKLBackend`, `OmniDSP::intelipp::IntelIPPBackend`, etc.) act as interchangeable strategies selected by `OmniDSP`. The choice of backend determines the underlying execution strategy.
 - **Benefits:** Allows algorithms and their execution characteristics (serial CPU, SIMD CPU, parallel CPU, GPU, FPGA, Cluster) to vary independently from clients using the standard API. Facilitates adding new backends with different performance profiles or targeting different hardware.
 - **Example Flexibility:** This pattern enables diverse backends like `CudaBackend`, `OpenMPDefaultBackend`, `ClusterBackend`, `FpgaBackend`.
 
   ### **Implementation Inheritance (from `DefaultBackend`)**
 
-- **Application:** Optimized backends (e.g., `AccelerateBackend`, `YourBackend`) **should inherit from `DefaultBackend`**. `DefaultBackend` itself inherits from `AbstractBackend` and provides standard C++ baseline implementations for all virtual methods.
+- **Application:** Optimized backends (e.g., `AccelerateBackend`, `OneMKLBackend`, `IntelIPPBackend`, `YourBackend`) **should inherit from `OmniDSP::default::DefaultBackend`**. `DefaultBackend` itself inherits from `AbstractBackend` and provides standard C++ baseline implementations for all virtual methods.
 - **Benefits:**
 
   - **Code Reuse:** Optimized backends only need to override the methods they specifically accelerate, reusing the standard C++ logic from `DefaultBackend` for other operations.
@@ -121,12 +121,12 @@ Beyond the core components, OmniDSP employs several standard design patterns:
 
 Achieving high performance is a primary goal of OmniDSP. Several design choices contribute to this:
 
-- **Backend Strategy:** The core mechanism for performance is selecting the appropriate backend via `OmniDSP::create`. Users can choose hardware-accelerated backends (Accelerate, oneMKL, potential future CUDA/FPGA) when available for maximum speed on specific platforms.
+- **Backend Strategy:** The core mechanism for performance is selecting the appropriate backend via `OmniDSP::create`. Users can choose hardware-accelerated backends (Accelerate, oneMKL, IntelIPP, potential future CUDA/FPGA) when available for maximum speed on specific platforms.
 - **Default Backend:** The `Default` backend provides a portable implementation using standard C++. While functional, it is **not** currently optimized with SIMD and serves as a baseline or fallback. Maximum performance generally requires selecting a platform-specific accelerated backend.
 - **Plan Objects:** The Plan pattern avoids redundant setup costs. Expensive operations like FFT planning, filter coefficient calculation, or backend resource allocation happen once during Plan creation, making subsequent `execute` calls lightweight and efficient for processing data streams or repeated operations.
 - **Synchronous Core API:** The primary `Plan::execute` API is synchronous. While potentially limiting for hiding latency from specific backends (see Asynchronous Execution below), this model avoids the overhead associated with asynchronous task creation, scheduling, and synchronization (e.g., `std::future`, thread pools) in the common case, maximizing raw single-threaded throughput for CPU-bound operations.
 - **User-Managed Memory (`std::span`):** The API uses `std::span` for input/output buffers, requiring the user to manage memory allocation. This avoids hidden memory copies or allocations within the `execute` methods, giving the user full control and enabling optimizations like buffer reuse or operating directly on memory-mapped regions.
-- **Memory Alignment:** While the library aims to function correctly with unaligned data, performance on many backends (including SIMD-based ones like Accelerate or oneMKL) can be significantly improved if input/output buffers passed via `std::span` are aligned to appropriate boundaries (e.g., 32 or 64 bytes). Using standard containers like `std::vector` often provides suitable alignment, but users seeking maximum performance should consider using aligned allocators or memory allocation functions.
+- **Memory Alignment:** While the library aims to function correctly with unaligned data, performance on many backends (including SIMD-based ones like Accelerate, oneMKL, or IntelIPP) can be significantly improved if input/output buffers passed via `std::span` are aligned to appropriate boundaries (e.g., 32 or 64 bytes). Using standard containers like `std::vector` often provides suitable alignment, but users seeking maximum performance should consider using aligned allocators or memory allocation functions.
 
   ## **Build System Philosophy (CMake)**
 
@@ -134,24 +134,23 @@ The build system plays a critical role in managing complexity, dependencies, and
 
 ### **Dependency Management**
 
-- **Standard `find_package`:** Dependencies (like Boost, Highway, MKL, GTest, pybind11) should primarily be located using CMake's standard `find_package` mechanism, leveraging the config-files or find-modules provided by the dependencies themselves (often installed via package managers like Conda).
-- **Modularization:** Dependency finding and configuration logic should be encapsulated within dedicated CMake script files located in a `cmake/` directory (e.g., `cmake/depend/boost.cmake`, `cmake/depend/highway.cmake`). These files are responsible for:
+- **Standard `find_package`:** Dependencies (like Boost, Highway, MKL, IPP, GTest, pybind11) should primarily be located using CMake's standard `find_package` mechanism, leveraging the config-files or find-modules provided by the dependencies themselves (often installed via package managers like Conda).
+- **Modularization:** Dependency finding and configuration logic should be encapsulated within dedicated CMake script files located in a `cmake/` directory (e.g., `cmake/depend/boost.cmake`, `cmake/depend/highway.cmake`, `cmake/backend/onemkl.cmake`, `cmake/backend/intelipp.cmake`). These files are responsible for:
   - Calling `find_package`.
   - Checking if the dependency was found successfully.
-  - Setting any necessary cache or status variables (e.g., `OMNIDSP_HAS_ONEMKL`, using `PARENT_SCOPE` if needed by the root `CMakeLists.txt`).
-  - Appending required include directories, link libraries, compile definitions, etc., to common list variables defined in the root scope (e.g., `OMNIDSP_LINK_LIBS`, `OMNIDSP_COMPILE_DEFINITIONS`).
-  - Defining backend-specific source file lists (e.g., `ONEMKL_BACKEND_SOURCES`, set with `PARENT_SCOPE`). This approach keeps the root `CMakeLists.txt` cleaner (using `include(cmake/depend/my_dependency.cmake)`), makes dependency logic reusable, and simplifies adding or modifying dependencies.
+  - Setting cache variables indicating enablement status (e.g., `OMNIDSP_ENABLED_ONEMKL`, `OMNIDSP_ENABLED_INTELIPP`).
+  - Creating `INTERFACE IMPORTED` targets (e.g., `OmniDSP::onemkl`, `OmniDSP::intelipp`) that encapsulate the include directories, link libraries, compile definitions, etc., of the dependency.
 - **Conda Integration:** When dependencies are managed via Conda, the build system explicitly uses the `$ENV{CONDA_PREFIX}` environment variable (added automatically to `CMAKE_PREFIX_PATH` in the root CMakeLists) to help `find_package` locate necessary headers and libraries within the active Conda environment.
 
   ### **Handling Platform/Backend Specifics**
 
-- **Avoid Preprocessor Conditionals (`#ifdef`) in Source Code:** Platform-specific code (e.g., different API calls for Windows vs. Linux, or code specific to Accelerate vs. MKL) should be segregated into different implementation files whenever possible. Preprocessor directives (`#ifdef _WIN32`, `#ifdef USE_ACCELERATE`) within the main C++ logic should be **strongly avoided**.
+- **Avoid Preprocessor Conditionals (`#ifdef`) in Source Code:** Platform-specific code (e.g., different API calls for Windows vs. Linux, or code specific to Accelerate vs. MKL vs. IPP) should be segregated into different implementation files whenever possible. Preprocessor directives (`#ifdef _WIN32`, `#ifdef OMNIDSP_ENABLED_BACKEND_ACCELERATE`) within the main C++ logic should be **strongly avoided**.
   - **Rationale:** Extensive `#ifdef` blocks make code harder to read, maintain, and test. Crucially, they interfere with code coverage tools, which typically only analyze one branch of an `#ifdef` during a single build configuration, leading to inaccurate coverage metrics. Code clarity and testability are prioritized.
 - **CMake-Managed Conditional Compilation:** The build system (CMake) is responsible for handling platform and backend differences:
 
-  - **Conditional Source Files:** CMake logic determines which implementation files are compiled for a given target based on the detected platform and available backends. This is the preferred way to manage platform/backend-specific code.
-  - **Conditional Compile Definitions:** CMake sets preprocessor definitions (e.g., `OMNIDSP_BACKEND_ACCELERATE`, `OMNIDSP_BACKEND_ONEMKL`) via `target_compile_definitions`. These definitions should ideally only be used for _minimal_ conditional inclusion of backend-specific _headers_ or very small, unavoidable code snippets where separate files are impractical, not for large blocks of differing logic.
-  - **Conditional Linking:** CMake links the appropriate libraries (`Accelerate.framework`, MKL/IPP libraries) based on the selected or available backends, typically configured within the `cmake/depend/*.cmake` modules.
+  - **Conditional Source Files:** CMake logic determines which implementation files are compiled for a given target based on the detected platform and enabled backends (e.g., using generator expressions based on `OMNIDSP_ENABLED_*` variables). This is the preferred way to manage platform/backend-specific code.
+  - **Conditional Compile Definitions:** CMake sets preprocessor definitions (e.g., `OMNIDSP_BACKEND_ACCELERATE_ENABLED=1`, `OMNIDSP_BACKEND_ONEMKL_ENABLED=1`) via `target_compile_definitions` (often within the backend interface targets like `OmniDSP::onemkl`). These definitions are primarily consumed by the generated `omnidsp_config.h` header and should ideally only be used for _minimal_ conditional inclusion of backend-specific _headers_ or very small, unavoidable code snippets where separate files are impractical, not for large blocks of differing logic.
+  - **Conditional Linking:** CMake links the appropriate libraries (`Accelerate.framework`, MKL/IPP libraries) by linking the main `omnidsp` target to the backend-specific interface targets (`OmniDSP::accelerate`, `OmniDSP::onemkl`, `OmniDSP::intelipp`) conditionally using generator expressions based on the `OMNIDSP_ENABLED_*` variables.
 
   ## **Other Design Considerations**
 
@@ -164,7 +163,7 @@ The build system plays a critical role in managing complexity, dependencies, and
   ### **Backend Discovery and Selection**
 
 - **Availability:** A static function `OmniDSP::get_available_backends() -> std::vector<Backend>` should be provided to allow users to query at runtime which backends were successfully compiled and detected as available on the current system.
-- **Preference:** A static function `OmniDSP::get_preferred_backend() -> Backend` should indicate the default backend that `OmniDSP::create()` would select if none is explicitly requested. (The preference logic, e.g., MKL \> Accelerate \> Default, needs to be defined).
+- **Preference:** A static function `OmniDSP::get_preferred_backend() -> Backend` should indicate the default backend that `OmniDSP::create()` would select if none is explicitly requested. (The preference logic, e.g., oneMKL > IntelIPP > Accelerate > Default, needs to be defined).
 - **Runtime Choice:** Users select the desired backend via the `OmniDSP::create(Backend)` factory method.
 
   ### **Execution Model (Synchronous Core API)**
@@ -203,6 +202,21 @@ The build system plays a critical role in managing complexity, dependencies, and
   - **Testing Inherited Methods:** It is also crucial to test the _inherited_ methods for each optimized backend. This verifies that the optimized backend correctly uses the functional baseline provided by `DefaultBackend` for operations it doesn't override itself.
   - **Testing Fallback Logic:** If an optimized backend implements logic to selectively fall back to the default implementation under certain conditions, these fallback paths must also be specifically tested.
 - **Comprehensive Testing:** A robust test suite should cover all public API functions across all compiled backends, exercising both optimized and inherited code paths.
+
+  ### **Core Type Utilities (`core_types.hpp`)**
+
+- **Purpose:** Provides fundamental type definitions and utilities used across the library.
+- **Key Components:**
+
+  - **`Status` Enum:** Standardized error/status codes.
+  - **`Backend` Enum:** Identifiers for different computation backends.
+  - **Type Aliases:** `F32`, `F64`, `C32`, `C64` and corresponding `Vec` types.
+  - **`OmniExpected<T>`:** Alias for `std::expected<T, Status>` for return values.
+  - **`OmniException`:** Custom exception class, often used for constructor failures.
+  - **`Utils` Namespace:** Contains type traits:
+    - `Utils::IsComplex_v<T>`: Checks if `T` is `C32` or `C64`.
+    - `Utils::GetRealType<T>`: Gets the underlying real type (`F32` or `F64`) from `T` (which can be real or complex).
+    - `Utils::GetComplexType<T>`: Gets the corresponding complex type (`C32` or `C64`) from `T` (which can be real or complex).
 
   ## **Rationale Summary**
 
