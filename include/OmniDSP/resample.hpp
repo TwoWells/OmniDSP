@@ -20,10 +20,10 @@
 #include "window.hpp"  // Include for non-templated WindowSpec
 
 // Forward declare backend Impl class
-namespace OmniDSP::abstract {
+namespace OmniDSP::Abstract {
   template <typename T>
   class ResamplePlanImpl;
-}  // namespace OmniDSP::abstract
+}  // namespace OmniDSP::Abstract
 
 namespace OmniDSP {
 
@@ -93,7 +93,7 @@ namespace OmniDSP {
      * nullptr if pimpl is null.
      */
     static std::unique_ptr<ResamplePlan<T>> create_from_impl(
-        std::unique_ptr<abstract::ResamplePlanImpl<T>> pimpl)
+        std::unique_ptr<Abstract::ResamplePlanImpl<T>> pimpl)
     {
       if (!pimpl) {
         return nullptr;
@@ -105,9 +105,9 @@ namespace OmniDSP {
    private:
     /** @brief Private constructor, called by create_from_impl or friend
      * OmniDSPImpl. */
-    explicit ResamplePlan(std::unique_ptr<abstract::ResamplePlanImpl<T>> pimpl);
+    explicit ResamplePlan(std::unique_ptr<Abstract::ResamplePlanImpl<T>> pimpl);
 
-    std::unique_ptr<abstract::ResamplePlanImpl<T>> pimpl_;
+    std::unique_ptr<Abstract::ResamplePlanImpl<T>> pimpl_;
   };
 
   // Definitions MUST be provided in a .cpp file

@@ -41,7 +41,7 @@ namespace OmniDSP {
   class OmniDSPImpl;
 }  // namespace OmniDSP
 
-namespace OmniDSP::abstract {
+namespace OmniDSP::Abstract {
 
   class AbstractBackend;
 
@@ -410,6 +410,6 @@ namespace OmniDSP::abstract {
 
   // Add declarations for other potential backends here...
 
-}  // namespace OmniDSP::abstract
+}  // namespace OmniDSP::Abstract
 
 #endif  // OMNIDSP_BACKEND_HPP

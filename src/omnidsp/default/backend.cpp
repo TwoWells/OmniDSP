@@ -849,7 +849,7 @@ namespace OmniDSP::default
 
   // --- Internal Implementation Factories (Private) ---
   // ... (Internal factory implementations remain the same) ...
-  [[nodiscard]] OmniExpected<std::unique_ptr<abstract::FFTPlanImpl<C32>>>
+  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C32>>>
   DefaultBackend::create_fft_plan_impl_c32(size_t length) const
   {
     try {
@@ -859,10 +859,10 @@ namespace OmniDSP::default
       std::cerr << "Error creating DefaultFFTPlanImpl<C32>: " << e.what()
                 << std::endl;
       OMNI_RETURN_ERROR(
-          std::unique_ptr<abstract::FFTPlanImpl<C32>>, Status::Failure);
+          std::unique_ptr<Abstract::FFTPlanImpl<C32>>, Status::Failure);
     }
   }
-  [[nodiscard]] OmniExpected<std::unique_ptr<abstract::FFTPlanImpl<C64>>>
+  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C64>>>
   DefaultBackend::create_fft_plan_impl_c64(size_t length) const
   {
     try {
@@ -872,10 +872,10 @@ namespace OmniDSP::default
       std::cerr << "Error creating DefaultFFTPlanImpl<C64>: " << e.what()
                 << std::endl;
       OMNI_RETURN_ERROR(
-          std::unique_ptr<abstract::FFTPlanImpl<C64>>, Status::Failure);
+          std::unique_ptr<Abstract::FFTPlanImpl<C64>>, Status::Failure);
     }
   }
-  [[nodiscard]] OmniExpected<std::unique_ptr<abstract::RFFTPlanImpl<F32>>>
+  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::RFFTPlanImpl<F32>>>
   DefaultBackend::create_rfft_plan_impl_f32(size_t length) const
   {
     try {
@@ -885,10 +885,10 @@ namespace OmniDSP::default
       std::cerr << "Error creating DefaultRFFTPlanImpl<F32>: " << e.what()
                 << std::endl;
       OMNI_RETURN_ERROR(
-          std::unique_ptr<abstract::RFFTPlanImpl<F32>>, Status::Failure);
+          std::unique_ptr<Abstract::RFFTPlanImpl<F32>>, Status::Failure);
     }
   }
-  [[nodiscard]] OmniExpected<std::unique_ptr<abstract::RFFTPlanImpl<F64>>>
+  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::RFFTPlanImpl<F64>>>
   DefaultBackend::create_rfft_plan_impl_f64(size_t length) const
   {
     try {
@@ -898,11 +898,11 @@ namespace OmniDSP::default
       std::cerr << "Error creating DefaultRFFTPlanImpl<F64>: " << e.what()
                 << std::endl;
       OMNI_RETURN_ERROR(
-          std::unique_ptr<abstract::RFFTPlanImpl<F64>>, Status::Failure);
+          std::unique_ptr<Abstract::RFFTPlanImpl<F64>>, Status::Failure);
     }
   }
   [[nodiscard]] OmniExpected<
-      std::unique_ptr<abstract::ConvolutionPlanImpl<F32>>>
+      std::unique_ptr<Abstract::ConvolutionPlanImpl<F32>>>
   DefaultBackend::create_convolution_plan_impl_f32(
       const F32Vec& kernel, ConvolutionType type, ConvolutionMethod method)
       const
@@ -918,7 +918,7 @@ namespace OmniDSP::default
       if (!rfft_plan_expected)
         return std::unexpected(rfft_plan_expected.error());
       DefaultConvolutionPlanImpl<F32>::FFTPlanImplVariant fft_variant;
-      fft_variant.emplace<std::unique_ptr<abstract::RFFTPlanImpl<F32>>>(
+      fft_variant.emplace<std::unique_ptr<Abstract::RFFTPlanImpl<F32>>>(
           std::move(rfft_plan_expected.value()));
       return std::make_unique<DefaultConvolutionPlanImpl<F32>>(
           std::move(fft_variant), kernel, type, method);
@@ -927,11 +927,11 @@ namespace OmniDSP::default
       std::cerr << "Error creating DefaultConvolutionPlanImpl<F32>: "
                 << e.what() << std::endl;
       OMNI_RETURN_ERROR(
-          std::unique_ptr<abstract::ConvolutionPlanImpl<F32>>, Status::Failure);
+          std::unique_ptr<Abstract::ConvolutionPlanImpl<F32>>, Status::Failure);
     }
   }
   [[nodiscard]] OmniExpected<
-      std::unique_ptr<abstract::ConvolutionPlanImpl<F64>>>
+      std::unique_ptr<Abstract::ConvolutionPlanImpl<F64>>>
   DefaultBackend::create_convolution_plan_impl_f64(
       const F64Vec& kernel, ConvolutionType type, ConvolutionMethod method)
       const
@@ -947,7 +947,7 @@ namespace OmniDSP::default
       if (!rfft_plan_expected)
         return std::unexpected(rfft_plan_expected.error());
       DefaultConvolutionPlanImpl<F64>::FFTPlanImplVariant fft_variant;
-      fft_variant.emplace<std::unique_ptr<abstract::RFFTPlanImpl<F64>>>(
+      fft_variant.emplace<std::unique_ptr<Abstract::RFFTPlanImpl<F64>>>(
           std::move(rfft_plan_expected.value()));
       return std::make_unique<DefaultConvolutionPlanImpl<F64>>(
           std::move(fft_variant), kernel, type, method);
@@ -956,11 +956,11 @@ namespace OmniDSP::default
       std::cerr << "Error creating DefaultConvolutionPlanImpl<F64>: "
                 << e.what() << std::endl;
       OMNI_RETURN_ERROR(
-          std::unique_ptr<abstract::ConvolutionPlanImpl<F64>>, Status::Failure);
+          std::unique_ptr<Abstract::ConvolutionPlanImpl<F64>>, Status::Failure);
     }
   }
   [[nodiscard]] OmniExpected<
-      std::unique_ptr<abstract::ConvolutionPlanImpl<C32>>>
+      std::unique_ptr<Abstract::ConvolutionPlanImpl<C32>>>
   DefaultBackend::create_convolution_plan_impl_c32(
       const C32Vec& kernel, ConvolutionType type, ConvolutionMethod method)
       const
@@ -975,7 +975,7 @@ namespace OmniDSP::default
       if (!cfft_plan_expected)
         return std::unexpected(cfft_plan_expected.error());
       DefaultConvolutionPlanImpl<C32>::FFTPlanImplVariant fft_variant;
-      fft_variant.emplace<std::unique_ptr<abstract::FFTPlanImpl<C32>>>(
+      fft_variant.emplace<std::unique_ptr<Abstract::FFTPlanImpl<C32>>>(
           std::move(cfft_plan_expected.value()));
       return std::make_unique<DefaultConvolutionPlanImpl<C32>>(
           std::move(fft_variant), kernel, type, method);
@@ -984,11 +984,11 @@ namespace OmniDSP::default
       std::cerr << "Error creating DefaultConvolutionPlanImpl<C32>: "
                 << e.what() << std::endl;
       OMNI_RETURN_ERROR(
-          std::unique_ptr<abstract::ConvolutionPlanImpl<C32>>, Status::Failure);
+          std::unique_ptr<Abstract::ConvolutionPlanImpl<C32>>, Status::Failure);
     }
   }
   [[nodiscard]] OmniExpected<
-      std::unique_ptr<abstract::ConvolutionPlanImpl<C64>>>
+      std::unique_ptr<Abstract::ConvolutionPlanImpl<C64>>>
   DefaultBackend::create_convolution_plan_impl_c64(
       const C64Vec& kernel, ConvolutionType type, ConvolutionMethod method)
       const
@@ -1003,7 +1003,7 @@ namespace OmniDSP::default
       if (!cfft_plan_expected)
         return std::unexpected(cfft_plan_expected.error());
       DefaultConvolutionPlanImpl<C64>::FFTPlanImplVariant fft_variant;
-      fft_variant.emplace<std::unique_ptr<abstract::FFTPlanImpl<C64>>>(
+      fft_variant.emplace<std::unique_ptr<Abstract::FFTPlanImpl<C64>>>(
           std::move(cfft_plan_expected.value()));
       return std::make_unique<DefaultConvolutionPlanImpl<C64>>(
           std::move(fft_variant), kernel, type, method);
@@ -1012,11 +1012,11 @@ namespace OmniDSP::default
       std::cerr << "Error creating DefaultConvolutionPlanImpl<C64>: "
                 << e.what() << std::endl;
       OMNI_RETURN_ERROR(
-          std::unique_ptr<abstract::ConvolutionPlanImpl<C64>>, Status::Failure);
+          std::unique_ptr<Abstract::ConvolutionPlanImpl<C64>>, Status::Failure);
     }
   }
   [[nodiscard]] OmniExpected<
-      std::unique_ptr<abstract::CorrelationPlanImpl<F32>>>
+      std::unique_ptr<Abstract::CorrelationPlanImpl<F32>>>
   DefaultBackend::create_correlation_plan_impl_f32(
       const F32Vec& kernel, ConvolutionType type, ConvolutionMethod method)
       const
@@ -1032,7 +1032,7 @@ namespace OmniDSP::default
       if (!rfft_plan_expected)
         return std::unexpected(rfft_plan_expected.error());
       DefaultCorrelationPlanImpl<F32>::FFTPlanImplVariant fft_variant;
-      fft_variant.emplace<std::unique_ptr<abstract::RFFTPlanImpl<F32>>>(
+      fft_variant.emplace<std::unique_ptr<Abstract::RFFTPlanImpl<F32>>>(
           std::move(rfft_plan_expected.value()));
       return std::make_unique<DefaultCorrelationPlanImpl<F32>>(
           std::move(fft_variant), kernel, type, method);
@@ -1041,11 +1041,11 @@ namespace OmniDSP::default
       std::cerr << "Error creating DefaultCorrelationPlanImpl<F32>: "
                 << e.what() << std::endl;
       OMNI_RETURN_ERROR(
-          std::unique_ptr<abstract::CorrelationPlanImpl<F32>>, Status::Failure);
+          std::unique_ptr<Abstract::CorrelationPlanImpl<F32>>, Status::Failure);
     }
   }
   [[nodiscard]] OmniExpected<
-      std::unique_ptr<abstract::CorrelationPlanImpl<F64>>>
+      std::unique_ptr<Abstract::CorrelationPlanImpl<F64>>>
   DefaultBackend::create_correlation_plan_impl_f64(
       const F64Vec& kernel, ConvolutionType type, ConvolutionMethod method)
       const
@@ -1061,7 +1061,7 @@ namespace OmniDSP::default
       if (!rfft_plan_expected)
         return std::unexpected(rfft_plan_expected.error());
       DefaultCorrelationPlanImpl<F64>::FFTPlanImplVariant fft_variant;
-      fft_variant.emplace<std::unique_ptr<abstract::RFFTPlanImpl<F64>>>(
+      fft_variant.emplace<std::unique_ptr<Abstract::RFFTPlanImpl<F64>>>(
           std::move(rfft_plan_expected.value()));
       return std::make_unique<DefaultCorrelationPlanImpl<F64>>(
           std::move(fft_variant), kernel, type, method);
@@ -1070,11 +1070,11 @@ namespace OmniDSP::default
       std::cerr << "Error creating DefaultCorrelationPlanImpl<F64>: "
                 << e.what() << std::endl;
       OMNI_RETURN_ERROR(
-          std::unique_ptr<abstract::CorrelationPlanImpl<F64>>, Status::Failure);
+          std::unique_ptr<Abstract::CorrelationPlanImpl<F64>>, Status::Failure);
     }
   }
   [[nodiscard]] OmniExpected<
-      std::unique_ptr<abstract::CorrelationPlanImpl<C32>>>
+      std::unique_ptr<Abstract::CorrelationPlanImpl<C32>>>
   DefaultBackend::create_correlation_plan_impl_c32(
       const C32Vec& kernel, ConvolutionType type, ConvolutionMethod method)
       const
@@ -1089,7 +1089,7 @@ namespace OmniDSP::default
       if (!cfft_plan_expected)
         return std::unexpected(cfft_plan_expected.error());
       DefaultCorrelationPlanImpl<C32>::FFTPlanImplVariant fft_variant;
-      fft_variant.emplace<std::unique_ptr<abstract::FFTPlanImpl<C32>>>(
+      fft_variant.emplace<std::unique_ptr<Abstract::FFTPlanImpl<C32>>>(
           std::move(cfft_plan_expected.value()));
       return std::make_unique<DefaultCorrelationPlanImpl<C32>>(
           std::move(fft_variant), kernel, type, method);
@@ -1098,11 +1098,11 @@ namespace OmniDSP::default
       std::cerr << "Error creating DefaultCorrelationPlanImpl<C32>: "
                 << e.what() << std::endl;
       OMNI_RETURN_ERROR(
-          std::unique_ptr<abstract::CorrelationPlanImpl<C32>>, Status::Failure);
+          std::unique_ptr<Abstract::CorrelationPlanImpl<C32>>, Status::Failure);
     }
   }
   [[nodiscard]] OmniExpected<
-      std::unique_ptr<abstract::CorrelationPlanImpl<C64>>>
+      std::unique_ptr<Abstract::CorrelationPlanImpl<C64>>>
   DefaultBackend::create_correlation_plan_impl_c64(
       const C64Vec& kernel, ConvolutionType type, ConvolutionMethod method)
       const
@@ -1117,7 +1117,7 @@ namespace OmniDSP::default
       if (!cfft_plan_expected)
         return std::unexpected(cfft_plan_expected.error());
       DefaultCorrelationPlanImpl<C64>::FFTPlanImplVariant fft_variant;
-      fft_variant.emplace<std::unique_ptr<abstract::FFTPlanImpl<C64>>>(
+      fft_variant.emplace<std::unique_ptr<Abstract::FFTPlanImpl<C64>>>(
           std::move(cfft_plan_expected.value()));
       return std::make_unique<DefaultCorrelationPlanImpl<C64>>(
           std::move(fft_variant), kernel, type, method);
@@ -1126,10 +1126,10 @@ namespace OmniDSP::default
       std::cerr << "Error creating DefaultCorrelationPlanImpl<C64>: "
                 << e.what() << std::endl;
       OMNI_RETURN_ERROR(
-          std::unique_ptr<abstract::CorrelationPlanImpl<C64>>, Status::Failure);
+          std::unique_ptr<Abstract::CorrelationPlanImpl<C64>>, Status::Failure);
     }
   }
-  [[nodiscard]] OmniExpected<std::unique_ptr<abstract::CQTPlanImpl<F32>>>
+  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTPlanImpl<F32>>>
   DefaultBackend::create_cqt_plan_impl_f32(
       F32 sample_rate,
       F32 min_freq,
@@ -1145,10 +1145,10 @@ namespace OmniDSP::default
       std::cerr << "Error creating DefaultCQTPlanImpl<F32>: " << e.what()
                 << std::endl;
       OMNI_RETURN_ERROR(
-          std::unique_ptr<abstract::CQTPlanImpl<F32>>, Status::Failure);
+          std::unique_ptr<Abstract::CQTPlanImpl<F32>>, Status::Failure);
     }
   }
-  [[nodiscard]] OmniExpected<std::unique_ptr<abstract::CQTPlanImpl<F64>>>
+  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTPlanImpl<F64>>>
   DefaultBackend::create_cqt_plan_impl_f64(
       F64 sample_rate,
       F64 min_freq,
@@ -1164,7 +1164,7 @@ namespace OmniDSP::default
       std::cerr << "Error creating DefaultCQTPlanImpl<F64>: " << e.what()
                 << std::endl;
       OMNI_RETURN_ERROR(
-          std::unique_ptr<abstract::CQTPlanImpl<F64>>, Status::Failure);
+          std::unique_ptr<Abstract::CQTPlanImpl<F64>>, Status::Failure);
     }
   }
 
@@ -1240,12 +1240,12 @@ namespace OmniDSP::default
   }
 }  // namespace OmniDSP::default
 
-// This function needs to be defined in the global OmniDSP::abstract namespace
+// This function needs to be defined in the global OmniDSP::Abstract namespace
 // as declared in interface/backend.hpp
-namespace OmniDSP::abstract {
+namespace OmniDSP::Abstract {
   std::unique_ptr<AbstractBackend> create_default_backend()
   {
     // Use the concrete class from the default namespace
     return std::make_unique<::OmniDSP::default ::DefaultBackend>();
   }
-}  // namespace OmniDSP::abstract
+}  // namespace OmniDSP::Abstract

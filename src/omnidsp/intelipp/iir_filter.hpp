@@ -143,7 +143,7 @@ namespace OmniDSP::intelipp {
   //--------------------------------------------------------------------------
   template <typename T>  // T is F32 or F64 (IPP IIR typically real only)
   class IntelIPPIIRFilterPlanImpl final
-      : public abstract::IIRFilterPlanImpl<T> {
+      : public Abstract::IIRFilterPlanImpl<T> {
     static_assert(
         std::is_same_v<T, F32> || std::is_same_v<T, F64>,
         "IntelIPPIIRFilterPlanImpl currently supports only F32 or F64.");

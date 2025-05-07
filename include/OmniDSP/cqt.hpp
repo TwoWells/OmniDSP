@@ -18,10 +18,10 @@
 #include "window.hpp"
 
 // Forward declare backend Impl class
-namespace OmniDSP::abstract {
+namespace OmniDSP::Abstract {
   template <typename T>
   class CQTPlanImpl;
-}  // namespace OmniDSP::abstract
+}  // namespace OmniDSP::Abstract
 
 namespace OmniDSP {
 
@@ -61,7 +61,7 @@ namespace OmniDSP {
      * if pimpl is null.
      */
     static std::unique_ptr<CQTPlan<T>> create_from_impl(
-        std::unique_ptr<abstract::CQTPlanImpl<T>> pimpl)
+        std::unique_ptr<Abstract::CQTPlanImpl<T>> pimpl)
     {
       if (!pimpl) {
         return nullptr;
@@ -71,11 +71,11 @@ namespace OmniDSP {
 
    private:
     /** @brief Private constructor, called by create_from_impl. */
-    explicit CQTPlan(std::unique_ptr<abstract::CQTPlanImpl<T>> pimpl);
+    explicit CQTPlan(std::unique_ptr<Abstract::CQTPlanImpl<T>> pimpl);
 
     // Removed the private static helper and MakeUniqueEnabler struct
 
-    std::unique_ptr<abstract::CQTPlanImpl<T>> pimpl_;
+    std::unique_ptr<Abstract::CQTPlanImpl<T>> pimpl_;
   };
 
   // Definitions MUST be provided in a .cpp file

@@ -296,7 +296,7 @@ namespace OmniDSP::intelipp {
   // IntelIPP Complex FFT Plan Implementation
   //--------------------------------------------------------------------------
   template <typename T_Complex>
-  class IntelIPPFFTPlanImpl final : public abstract::FFTPlanImpl<T_Complex> {
+  class IntelIPPFFTPlanImpl final : public Abstract::FFTPlanImpl<T_Complex> {
     static_assert(
         std::is_same_v<T_Complex, C32> || std::is_same_v<T_Complex, C64>,
         "IntelIPPFFTPlanImpl supports only C32 or C64.");
@@ -337,7 +337,7 @@ namespace OmniDSP::intelipp {
   // IntelIPP Real FFT Plan Implementation
   //--------------------------------------------------------------------------
   template <typename T_Real>
-  class IntelIPPRFFTPlanImpl final : public abstract::RFFTPlanImpl<T_Real> {
+  class IntelIPPRFFTPlanImpl final : public Abstract::RFFTPlanImpl<T_Real> {
     static_assert(
         std::is_same_v<T_Real, F32> || std::is_same_v<T_Real, F64>,
         "IntelIPPRFFTPlanImpl supports only F32 or F64.");

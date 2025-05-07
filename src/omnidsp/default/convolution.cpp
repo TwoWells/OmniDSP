@@ -119,8 +119,8 @@ namespace OmniDSP::default
     // Define real type
     using T_Real = Utils::GetRealType<T>;
     // Define the specific plan pointer types we expect in the variant
-    using FFTPlanPtr = std::unique_ptr<abstract::FFTPlanImpl<T_Complex>>;
-    using RFFTPlanPtr = std::unique_ptr<abstract::RFFTPlanImpl<T_Real>>;
+    using FFTPlanPtr = std::unique_ptr<Abstract::FFTPlanImpl<T_Complex>>;
+    using RFFTPlanPtr = std::unique_ptr<Abstract::RFFTPlanImpl<T_Real>>;
 
     Status fft_status = Status::Failure;
     size_t kernel_fft_size = 0;
@@ -238,8 +238,8 @@ namespace OmniDSP::default
     // Define complex/real types and plan pointer types
     using T_Complex = Utils::GetComplexType<T>;
     using T_Real = Utils::GetRealType<T>;
-    using FFTPlanPtr = std::unique_ptr<abstract::FFTPlanImpl<T_Complex>>;
-    using RFFTPlanPtr = std::unique_ptr<abstract::RFFTPlanImpl<T_Real>>;
+    using FFTPlanPtr = std::unique_ptr<Abstract::FFTPlanImpl<T_Complex>>;
+    using RFFTPlanPtr = std::unique_ptr<Abstract::RFFTPlanImpl<T_Real>>;
 
     // Check for empty input/kernel early
     if (signal_len == 0 || kernel_length_ == 0) {
@@ -508,8 +508,8 @@ namespace OmniDSP::default
     // Define complex/real types and plan pointer types
     using T_Complex = Utils::GetComplexType<T>;
     using T_Real = Utils::GetRealType<T>;
-    using FFTPlanPtr = std::unique_ptr<abstract::FFTPlanImpl<T_Complex>>;
-    using RFFTPlanPtr = std::unique_ptr<abstract::RFFTPlanImpl<T_Real>>;
+    using FFTPlanPtr = std::unique_ptr<Abstract::FFTPlanImpl<T_Complex>>;
+    using RFFTPlanPtr = std::unique_ptr<Abstract::RFFTPlanImpl<T_Real>>;
 
     Status fft_status = Status::Failure;
     size_t kernel_fft_size = 0;
@@ -634,8 +634,8 @@ namespace OmniDSP::default
     // Define complex/real types and plan pointer types
     using T_Complex = Utils::GetComplexType<T>;
     using T_Real = Utils::GetRealType<T>;
-    using FFTPlanPtr = std::unique_ptr<abstract::FFTPlanImpl<T_Complex>>;
-    using RFFTPlanPtr = std::unique_ptr<abstract::RFFTPlanImpl<T_Real>>;
+    using FFTPlanPtr = std::unique_ptr<Abstract::FFTPlanImpl<T_Complex>>;
+    using RFFTPlanPtr = std::unique_ptr<Abstract::RFFTPlanImpl<T_Real>>;
 
     // Check for empty input/kernel early
     if (signal_len == 0 || kernel_length_ == 0) {

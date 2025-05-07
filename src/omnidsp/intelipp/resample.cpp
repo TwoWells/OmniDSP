@@ -48,7 +48,7 @@ namespace OmniDSP::intelipp {
   // Constructor Implementation
   template <typename T>
   IntelIPPResamplePlanImpl<T>::IntelIPPResamplePlanImpl(
-      const abstract::AbstractBackend* owner, const ResampleSpec& spec)
+      const Abstract::AbstractBackend* owner, const ResampleSpec& spec)
       : input_rate_(spec.input_rate),
         output_rate_(spec.output_rate),
         quality_(spec.quality)

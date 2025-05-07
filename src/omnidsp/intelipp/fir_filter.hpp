@@ -194,7 +194,7 @@ namespace OmniDSP::intelipp {
   //--------------------------------------------------------------------------
   template <typename T>
   class IntelIPPFIRFilterPlanImpl final
-      : public abstract::FIRFilterPlanImpl<T> {
+      : public Abstract::FIRFilterPlanImpl<T> {
     // *** Use type helpers from utils namespace ***
     using IPP_Spec_Type = utils::GetIPPFIRSpec<T>;
 

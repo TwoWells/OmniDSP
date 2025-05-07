@@ -201,12 +201,12 @@ namespace OmniDSP::accelerate {
 }  // namespace OmniDSP::accelerate
 
 // *** ADDED Factory Function Definition (Outside namespace) ***
-// This function needs to be defined in the global OmniDSP::abstract namespace
+// This function needs to be defined in the global OmniDSP::Abstract namespace
 // as declared in interface/backend.hpp
-namespace OmniDSP::abstract {
+namespace OmniDSP::Abstract {
   std::unique_ptr<AbstractBackend> create_accelerate_backend()
   {
     // Use the concrete class from the accelerate namespace
     return std::make_unique<::OmniDSP::accelerate::AccelerateBackend>();
   }
-}  // namespace OmniDSP::abstract
+}  // namespace OmniDSP::Abstract

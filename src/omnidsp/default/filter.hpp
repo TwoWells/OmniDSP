@@ -25,7 +25,7 @@ namespace OmniDSP::default
    * @tparam T The data type (F32, F64, C32, C64).
    */
   template <typename T>
-  class DefaultFIRFilterPlanImpl final : public abstract::FIRFilterPlanImpl<T> {
+  class DefaultFIRFilterPlanImpl final : public Abstract::FIRFilterPlanImpl<T> {
    public:
     /**
      * @brief Constructs a DefaultFIRFilterPlanImpl.
@@ -99,7 +99,7 @@ namespace OmniDSP::default
    * @tparam T The data type (typically F32 or F64).
    */
   template <typename T>  // T is typically real (F32, F64)
-  class DefaultIIRFilterPlanImpl final : public abstract::IIRFilterPlanImpl<T> {
+  class DefaultIIRFilterPlanImpl final : public Abstract::IIRFilterPlanImpl<T> {
    private:
     // Private struct to hold coefficients of the correct type T
     template <typename Type>

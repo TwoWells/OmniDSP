@@ -24,7 +24,7 @@ namespace OmniDSP::onemkl {
    * @tparam T Complex type (e.g., C32, C64).
    */
   template <typename T>  // T is complex type here (C32, C64)
-  class OneMKLFFTPlanImpl final : public abstract::FFTPlanImpl<T> {
+  class OneMKLFFTPlanImpl final : public Abstract::FFTPlanImpl<T> {
     static_assert(
         Utils::IsComplex_v<T>, "OneMKLFFTPlanImpl requires a complex type.");
     using Real = typename T::value_type;  // Get underlying real type
@@ -76,7 +76,7 @@ namespace OmniDSP::onemkl {
    * @tparam T Real type (e.g., F32, F64).
    */
   template <typename T>  // T is real type here (F32, F64)
-  class OneMKLRFFTPlanImpl final : public abstract::RFFTPlanImpl<T> {
+  class OneMKLRFFTPlanImpl final : public Abstract::RFFTPlanImpl<T> {
     static_assert(
         !Utils::IsComplex_v<T>, "OneMKLRFFTPlanImpl requires a real type.");
     using Complex = Utils::GetComplexType<T>;  // Corresponding complex type

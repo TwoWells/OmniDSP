@@ -20,12 +20,12 @@
 #include "window.hpp"  // Include for non-templated WindowSpec
 
 // Forward declare backend Impl classes
-namespace OmniDSP::abstract {
+namespace OmniDSP::Abstract {
   template <typename T>
   class FIRFilterPlanImpl;
   template <typename T>
   class IIRFilterPlanImpl;
-}  // namespace OmniDSP::abstract
+}  // namespace OmniDSP::Abstract
 
 namespace OmniDSP {
 
@@ -156,7 +156,7 @@ namespace OmniDSP {
     // public getter
 
     static std::unique_ptr<FIRFilterPlan<T>> create_from_impl(
-        std::unique_ptr<abstract::FIRFilterPlanImpl<T>> pimpl)
+        std::unique_ptr<Abstract::FIRFilterPlanImpl<T>> pimpl)
     {
       if (!pimpl) {
         return nullptr;
@@ -167,8 +167,8 @@ namespace OmniDSP {
 
    private:
     explicit FIRFilterPlan(
-        std::unique_ptr<abstract::FIRFilterPlanImpl<T>> pimpl);
-    std::unique_ptr<abstract::FIRFilterPlanImpl<T>> pimpl_;
+        std::unique_ptr<Abstract::FIRFilterPlanImpl<T>> pimpl);
+    std::unique_ptr<Abstract::FIRFilterPlanImpl<T>> pimpl_;
   };
 
   /** @brief Plan object for executing Infinite Impulse Response (IIR) filters.
@@ -195,7 +195,7 @@ namespace OmniDSP {
     size_t get_num_sections() const;
 
     static std::unique_ptr<IIRFilterPlan<T>> create_from_impl(
-        std::unique_ptr<abstract::IIRFilterPlanImpl<T>> pimpl)
+        std::unique_ptr<Abstract::IIRFilterPlanImpl<T>> pimpl)
     {
       if (!pimpl) {
         return nullptr;
@@ -206,8 +206,8 @@ namespace OmniDSP {
 
    private:
     explicit IIRFilterPlan(
-        std::unique_ptr<abstract::IIRFilterPlanImpl<T>> pimpl);
-    std::unique_ptr<abstract::IIRFilterPlanImpl<T>> pimpl_;
+        std::unique_ptr<Abstract::IIRFilterPlanImpl<T>> pimpl);
+    std::unique_ptr<Abstract::IIRFilterPlanImpl<T>> pimpl_;
   };
 
 }  // namespace OmniDSP

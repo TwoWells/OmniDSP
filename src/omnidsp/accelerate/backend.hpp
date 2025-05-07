@@ -65,8 +65,8 @@ namespace OmniDSP::accelerate {
     // (Unlikely needed if only overriding plan factories)
   };
 
-  std::unique_ptr<abstract::AbstractBackend>
-  abstract::create_accelerate_backend();
+  std::unique_ptr<Abstract::AbstractBackend>
+  Abstract::create_accelerate_backend();
 }  // namespace OmniDSP::accelerate
 
 #endif  // OMNIDSP_ACCELERATE_BACKEND_HPP

@@ -19,7 +19,7 @@
 
 // Forward declare the base class implementation if needed (usually defined in
 // interface/backend.hpp or similar)
-namespace OmniDSP::abstract {
+namespace OmniDSP::Abstract {
   template <typename T>
   class ResamplePlanImpl;
 }
@@ -36,7 +36,7 @@ namespace OmniDSP::intelipp {
    */
   template <typename T>
   class IntelIPPResamplePlanImpl final
-      : public abstract::ResamplePlanImpl<T> {  // Assuming base is in abstract
+      : public Abstract::ResamplePlanImpl<T> {  // Assuming base is in abstract
                                                 // namespace
     static_assert(
         !Utils::IsComplex_v<T>,
@@ -54,7 +54,7 @@ namespace OmniDSP::intelipp {
      * or if internal filter design fails.
      */
     explicit IntelIPPResamplePlanImpl(
-        const abstract::AbstractBackend* owner, const ResampleSpec& spec);
+        const Abstract::AbstractBackend* owner, const ResampleSpec& spec);
 
     /**
      * @brief Destructor. Frees the IPP resampler state.

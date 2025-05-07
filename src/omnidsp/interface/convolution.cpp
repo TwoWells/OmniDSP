@@ -27,7 +27,7 @@ namespace OmniDSP {
 
   template <typename T>
   ConvolutionPlan<T>::ConvolutionPlan(
-      std::unique_ptr<abstract::ConvolutionPlanImpl<T>> pimpl)
+      std::unique_ptr<Abstract::ConvolutionPlanImpl<T>> pimpl)
       : pimpl_(std::move(pimpl))
   {
     if (!pimpl_) {
@@ -120,7 +120,7 @@ namespace OmniDSP {
 
   template <typename T>
   CorrelationPlan<T>::CorrelationPlan(
-      std::unique_ptr<abstract::CorrelationPlanImpl<T>> pimpl)
+      std::unique_ptr<Abstract::CorrelationPlanImpl<T>> pimpl)
       : pimpl_(std::move(pimpl))
   {
     if (!pimpl_) {

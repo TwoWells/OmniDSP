@@ -26,7 +26,7 @@ namespace OmniDSP {
 
   // Constructor - Takes the backend implementation pointer
   template <typename T>  // T is Complex type (C32, C64)
-  FFTPlan<T>::FFTPlan(std::unique_ptr<abstract::FFTPlanImpl<T>> pimpl)
+  FFTPlan<T>::FFTPlan(std::unique_ptr<Abstract::FFTPlanImpl<T>> pimpl)
       : pimpl_(std::move(pimpl))
   {
     if (!pimpl_) {
@@ -100,7 +100,7 @@ namespace OmniDSP {
 
   // Constructor - Takes the backend implementation pointer
   template <typename T>  // T is REAL type (F32, F64)
-  RFFTPlan<T>::RFFTPlan(std::unique_ptr<abstract::RFFTPlanImpl<T>> pimpl)
+  RFFTPlan<T>::RFFTPlan(std::unique_ptr<Abstract::RFFTPlanImpl<T>> pimpl)
       : pimpl_(std::move(pimpl))
   {
     if (!pimpl_) {

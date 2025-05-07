@@ -154,7 +154,7 @@ namespace OmniDSP::intelipp {
 
   // Factory function declaration (definition in .cpp file)
   // This still returns a pointer to the ABSTRACT base, which is correct.
-  std::unique_ptr<abstract::AbstractBackend> create_intelipp_backend();
+  std::unique_ptr<Abstract::AbstractBackend> create_intelipp_backend();
 
 }  // namespace OmniDSP::intelipp
 

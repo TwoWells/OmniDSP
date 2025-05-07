@@ -34,7 +34,7 @@ namespace OmniDSP::default
 
   template <typename T>
   DefaultResamplePlanImpl<T>::DefaultResamplePlanImpl(
-      const abstract::AbstractBackend* owner,  // Use AbstractBackend*
+      const Abstract::AbstractBackend* owner,  // Use AbstractBackend*
       const ResampleSpec& spec)
       : owner_backend_(owner),     // Initialize owner
         spec_(spec),               // Initialize spec

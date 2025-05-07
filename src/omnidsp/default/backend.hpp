@@ -40,7 +40,7 @@ namespace OmniDSP::default
   template <typename T>
   class DefaultIIRFilterPlanImpl;
 
-  class DefaultBackend : public abstract::AbstractBackend {
+  class DefaultBackend : public Abstract::AbstractBackend {
    public:
     DefaultBackend();
     ~DefaultBackend() override;
@@ -244,70 +244,70 @@ namespace OmniDSP::default
 
    private:
     // --- Internal Implementation Factories (Specific to DefaultBackend) ---
-    [[nodiscard]] OmniExpected<std::unique_ptr<abstract::FFTPlanImpl<C32>>>
+    [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C32>>>
     create_fft_plan_impl_c32(size_t length) const;
-    [[nodiscard]] OmniExpected<std::unique_ptr<abstract::FFTPlanImpl<C64>>>
+    [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C64>>>
     create_fft_plan_impl_c64(size_t length) const;
-    [[nodiscard]] OmniExpected<std::unique_ptr<abstract::RFFTPlanImpl<F32>>>
+    [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::RFFTPlanImpl<F32>>>
     create_rfft_plan_impl_f32(size_t length) const;
-    [[nodiscard]] OmniExpected<std::unique_ptr<abstract::RFFTPlanImpl<F64>>>
+    [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::RFFTPlanImpl<F64>>>
     create_rfft_plan_impl_f64(size_t length) const;
     [[nodiscard]] OmniExpected<
-        std::unique_ptr<abstract::ConvolutionPlanImpl<F32>>>
+        std::unique_ptr<Abstract::ConvolutionPlanImpl<F32>>>
     create_convolution_plan_impl_f32(
         const F32Vec& kernel,
         ConvolutionType type,
         ConvolutionMethod method) const;
     [[nodiscard]] OmniExpected<
-        std::unique_ptr<abstract::ConvolutionPlanImpl<F64>>>
+        std::unique_ptr<Abstract::ConvolutionPlanImpl<F64>>>
     create_convolution_plan_impl_f64(
         const F64Vec& kernel,
         ConvolutionType type,
         ConvolutionMethod method) const;
     [[nodiscard]] OmniExpected<
-        std::unique_ptr<abstract::ConvolutionPlanImpl<C32>>>
+        std::unique_ptr<Abstract::ConvolutionPlanImpl<C32>>>
     create_convolution_plan_impl_c32(
         const C32Vec& kernel,
         ConvolutionType type,
         ConvolutionMethod method) const;
     [[nodiscard]] OmniExpected<
-        std::unique_ptr<abstract::ConvolutionPlanImpl<C64>>>
+        std::unique_ptr<Abstract::ConvolutionPlanImpl<C64>>>
     create_convolution_plan_impl_c64(
         const C64Vec& kernel,
         ConvolutionType type,
         ConvolutionMethod method) const;
     [[nodiscard]] OmniExpected<
-        std::unique_ptr<abstract::CorrelationPlanImpl<F32>>>
+        std::unique_ptr<Abstract::CorrelationPlanImpl<F32>>>
     create_correlation_plan_impl_f32(
         const F32Vec& kernel,
         ConvolutionType type,
         ConvolutionMethod method) const;
     [[nodiscard]] OmniExpected<
-        std::unique_ptr<abstract::CorrelationPlanImpl<F64>>>
+        std::unique_ptr<Abstract::CorrelationPlanImpl<F64>>>
     create_correlation_plan_impl_f64(
         const F64Vec& kernel,
         ConvolutionType type,
         ConvolutionMethod method) const;
     [[nodiscard]] OmniExpected<
-        std::unique_ptr<abstract::CorrelationPlanImpl<C32>>>
+        std::unique_ptr<Abstract::CorrelationPlanImpl<C32>>>
     create_correlation_plan_impl_c32(
         const C32Vec& kernel,
         ConvolutionType type,
         ConvolutionMethod method) const;
     [[nodiscard]] OmniExpected<
-        std::unique_ptr<abstract::CorrelationPlanImpl<C64>>>
+        std::unique_ptr<Abstract::CorrelationPlanImpl<C64>>>
     create_correlation_plan_impl_c64(
         const C64Vec& kernel,
         ConvolutionType type,
         ConvolutionMethod method) const;
-    [[nodiscard]] OmniExpected<std::unique_ptr<abstract::CQTPlanImpl<F32>>>
+    [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTPlanImpl<F32>>>
     create_cqt_plan_impl_f32(
         F32 sample_rate,
         F32 min_freq,
         F32 max_freq,
         int bins_per_octave,
         const WindowSpec& window_spec) const;
-    [[nodiscard]] OmniExpected<std::unique_ptr<abstract::CQTPlanImpl<F64>>>
+    [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTPlanImpl<F64>>>
     create_cqt_plan_impl_f64(
         F64 sample_rate,
         F64 min_freq,
@@ -316,7 +316,7 @@ namespace OmniDSP::default
         const WindowSpec& window_spec) const;
   };
 
-  std::unique_ptr<abstract::AbstractBackend> abstract::create_default_backend();
+  std::unique_ptr<Abstract::AbstractBackend> Abstract::create_default_backend();
 
 }  // namespace OmniDSP::default
 

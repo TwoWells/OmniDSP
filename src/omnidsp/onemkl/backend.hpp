@@ -72,7 +72,7 @@ namespace OmniDSP::onemkl {
   // create_onemkl_backend() here and ensure the declaration in
   // interface/backend.hpp matches. For now, keeping it as create_backend()
   // assuming it's declared correctly elsewhere.
-  std::unique_ptr<abstract::AbstractBackend> create_backend();
+  std::unique_ptr<Abstract::AbstractBackend> create_backend();
 
 }  // namespace OmniDSP::onemkl
 

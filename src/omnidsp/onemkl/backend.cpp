@@ -192,10 +192,10 @@ namespace OmniDSP::onemkl {
 
 // This function needs to be defined in the global OmniDSP::abstract namespace
 // as declared in interface/backend.hpp
-namespace OmniDSP::abstract {
+namespace OmniDSP::Abstract {
   std::unique_ptr<AbstractBackend> create_onemkl_backend()
   {
     // Use the concrete class from the onemkl namespace
     return std::make_unique<::OmniDSP::onemkl::OneMKLBackend>();
   }
-}  // namespace OmniDSP::abstract
+}  // namespace OmniDSP::Abstract

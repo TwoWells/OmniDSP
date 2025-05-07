@@ -30,7 +30,7 @@ namespace OmniDSP {
    * @throws std::runtime_error if pimpl is null.
    */
   template <typename T>  // T is REAL type
-  CQTPlan<T>::CQTPlan(std::unique_ptr<abstract::CQTPlanImpl<T>> pimpl)
+  CQTPlan<T>::CQTPlan(std::unique_ptr<Abstract::CQTPlanImpl<T>> pimpl)
       : pimpl_(std::move(pimpl))
   {
     if (!pimpl_) {

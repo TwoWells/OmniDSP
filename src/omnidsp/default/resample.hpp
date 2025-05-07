@@ -29,7 +29,7 @@ namespace OmniDSP::default
    * @tparam T The REAL data type (F32 or F64).
    */
   template <typename T>  // T is real type (F32, F64)
-  class DefaultResamplePlanImpl final : public abstract::ResamplePlanImpl<T> {
+  class DefaultResamplePlanImpl final : public Abstract::ResamplePlanImpl<T> {
    public:
     /**
      * @brief Constructs a DefaultResamplePlanImpl.
@@ -42,7 +42,7 @@ namespace OmniDSP::default
      * @throws std::runtime_error if filter design or internal setup fails.
      */
     DefaultResamplePlanImpl(
-        const abstract::AbstractBackend* owner_backend,
+        const Abstract::AbstractBackend* owner_backend,
         const ResampleSpec& spec);
 
     /**
@@ -101,7 +101,7 @@ namespace OmniDSP::default
 
    private:
     // --- Configuration ---
-    const abstract::AbstractBackend*
+    const Abstract::AbstractBackend*
         owner_backend_;  // Non-owning pointer to backend for filter design
     ResampleSpec spec_;
     size_t interpolation_factor_;  // L

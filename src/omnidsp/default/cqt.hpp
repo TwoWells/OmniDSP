@@ -26,7 +26,7 @@ namespace OmniDSP::default
    * @tparam T The REAL data type (F32 or F64).
    */
   template <typename T>  // T is real type (F32, F64)
-  class DefaultCQTPlanImpl final : public abstract::CQTPlanImpl<T> {
+  class DefaultCQTPlanImpl final : public Abstract::CQTPlanImpl<T> {
    public:
     using Real = T;                            // Alias for clarity
     using Complex = Utils::GetComplexType<T>;  // Use type trait
@@ -47,7 +47,7 @@ namespace OmniDSP::default
      * kernel generation) fails.
      */
     DefaultCQTPlanImpl(
-        const abstract::AbstractBackend* owner,  // Use AbstractBackend
+        const Abstract::AbstractBackend* owner,  // Use AbstractBackend
         Real sample_rate,
         Real min_freq,
         Real max_freq,
@@ -107,7 +107,7 @@ namespace OmniDSP::default
 
    private:
     // --- Configuration ---
-    const abstract::AbstractBackend*
+    const Abstract::AbstractBackend*
         owner_;  // Non-owning pointer to backend for helpers
     Real sample_rate_;
     Real min_freq_;

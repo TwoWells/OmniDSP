@@ -73,7 +73,7 @@ namespace OmniDSP {
   {
     // Pointer to the abstract backend implementation (using type from
     // interface/backend.hpp)
-    std::unique_ptr<abstract::AbstractBackend> pimpl = nullptr;
+    std::unique_ptr<Abstract::AbstractBackend> pimpl = nullptr;
 
     try {
       // Select the backend factory based on the requested type and availability
@@ -83,7 +83,7 @@ namespace OmniDSP {
           if constexpr (OMNIDSP_ENABLED_BACKEND_ACCELERATE) {
             std::cout << "Creating Accelerate backend..." << std::endl;
             // Call factory function from abstract namespace
-            pimpl = abstract::create_accelerate_backend();
+            pimpl = Abstract::create_accelerate_backend();
             if (!pimpl) {  // Check if factory succeeded at runtime
               std::cerr << "Error: Accelerate backend factory failed."
                         << std::endl;
@@ -102,7 +102,7 @@ namespace OmniDSP {
           if constexpr (OMNIDSP_ENABLED_BACKEND_ONEMKL) {
             std::cout << "Creating OneMKL backend..." << std::endl;
             // Call factory function from abstract namespace
-            pimpl = abstract::create_onemkl_backend();
+            pimpl = Abstract::create_onemkl_backend();
             if (!pimpl) {
               std::cerr << "Error: OneMKL backend factory failed." << std::endl;
               return std::unexpected(Status::BackendError);
@@ -119,7 +119,7 @@ namespace OmniDSP {
           if constexpr (OMNIDSP_ENABLED_BACKEND_INTELIPP) {
             std::cout << "Creating IntelIPP backend..." << std::endl;
             // Call factory function from abstract namespace
-            pimpl = abstract::create_intelipp_backend();
+            pimpl = Abstract::create_intelipp_backend();
             if (!pimpl) {
               std::cerr << "Error: IntelIPP backend factory failed."
                         << std::endl;
@@ -140,7 +140,7 @@ namespace OmniDSP {
           if constexpr (OMNIDSP_ENABLED_BACKEND_DEFAULT) {
             std::cout << "Creating Default backend..." << std::endl;
             // Call factory function from abstract namespace
-            pimpl = abstract::create_default_backend();
+            pimpl = Abstract::create_default_backend();
             if (!pimpl) {
               std::cerr << "Error: Default backend factory failed."
                         << std::endl;
@@ -206,7 +206,7 @@ namespace OmniDSP {
   // Private constructor taking the backend implementation pointer
   // Definition matches declaration:
   // OmniDSP(std::unique_ptr<abstract::AbstractBackend> impl);
-  OmniDSP::OmniDSP(std::unique_ptr<abstract::AbstractBackend> impl)
+  OmniDSP::OmniDSP(std::unique_ptr<Abstract::AbstractBackend> impl)
       : pimpl_(std::move(impl))
   {
     if (!pimpl_) {

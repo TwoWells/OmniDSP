@@ -17,13 +17,13 @@
 #include "core_types.hpp"
 
 // Forward declare backend Impl class
-namespace OmniDSP::abstract {
+namespace OmniDSP::Abstract {
   template <typename T>
   class FFTPlanImpl;
 
   template <typename T>
   class RFFTPlanImpl;
-}  // namespace OmniDSP::abstract
+}  // namespace OmniDSP::Abstract
 
 namespace OmniDSP {
 
@@ -65,7 +65,7 @@ namespace OmniDSP {
      * if pimpl is null.
      */
     static std::unique_ptr<FFTPlan<T>> create_from_impl(
-        std::unique_ptr<abstract::FFTPlanImpl<T>> pimpl)
+        std::unique_ptr<Abstract::FFTPlanImpl<T>> pimpl)
     {
       if (!pimpl) {
         return nullptr;  // Or handle error appropriately
@@ -77,11 +77,11 @@ namespace OmniDSP {
 
    private:
     /** @brief Private constructor, called by create_from_impl. */
-    explicit FFTPlan(std::unique_ptr<abstract::FFTPlanImpl<T>> pimpl);
+    explicit FFTPlan(std::unique_ptr<Abstract::FFTPlanImpl<T>> pimpl);
 
     // Removed the private static helper and MakeUniqueEnabler struct
 
-    std::unique_ptr<abstract::FFTPlanImpl<T>> pimpl_;
+    std::unique_ptr<Abstract::FFTPlanImpl<T>> pimpl_;
   };
 
   /**
@@ -122,7 +122,7 @@ namespace OmniDSP {
      * nullptr if pimpl is null.
      */
     static std::unique_ptr<RFFTPlan<T>> create_from_impl(
-        std::unique_ptr<abstract::RFFTPlanImpl<T>> pimpl)
+        std::unique_ptr<Abstract::RFFTPlanImpl<T>> pimpl)
     {
       if (!pimpl) {
         return nullptr;
@@ -132,11 +132,11 @@ namespace OmniDSP {
 
    private:
     /** @brief Private constructor, called by create_from_impl. */
-    explicit RFFTPlan(std::unique_ptr<abstract::RFFTPlanImpl<T>> pimpl);
+    explicit RFFTPlan(std::unique_ptr<Abstract::RFFTPlanImpl<T>> pimpl);
 
     // Removed the private static helper and MakeUniqueEnabler struct
 
-    std::unique_ptr<abstract::RFFTPlanImpl<T>> pimpl_;
+    std::unique_ptr<Abstract::RFFTPlanImpl<T>> pimpl_;
   };
 
   // Definitions MUST be provided in a .cpp file

@@ -29,7 +29,7 @@ namespace OmniDSP::default
    * @tparam T_Complex Complex type (e.g., C32 or C64).
    */
   template <typename T_Complex>  // T_Complex will be C32 or C64
-  class DefaultFFTPlanImpl final : public abstract::FFTPlanImpl<T_Complex> {
+  class DefaultFFTPlanImpl final : public Abstract::FFTPlanImpl<T_Complex> {
     // Infer scalar type T from T_Complex (assuming T_Complex is
     // std::complex<T>)
     using T = typename T_Complex::value_type;
@@ -91,7 +91,7 @@ namespace OmniDSP::default
    * @tparam T_Real Real type (e.g., F32 or F64).
    */
   template <typename T_Real>  // T_Real will be F32 or F64
-  class DefaultRFFTPlanImpl final : public abstract::RFFTPlanImpl<T_Real> {
+  class DefaultRFFTPlanImpl final : public Abstract::RFFTPlanImpl<T_Real> {
     // Define complex type corresponding to T_Real
     // Use the Utils::GetComplexType from core_types.hpp as seen in
     // interface/backend.hpp

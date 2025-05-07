@@ -66,7 +66,7 @@ namespace OmniDSP::default
 
   template <typename T>
   DefaultCQTPlanImpl<T>::DefaultCQTPlanImpl(
-      const abstract::AbstractBackend* owner,  // Use AbstractBackend
+      const Abstract::AbstractBackend* owner,  // Use AbstractBackend
       Real sample_rate,                        // Use Real alias
       Real min_freq,                           // Use Real alias
       Real max_freq,                           // Use Real alias

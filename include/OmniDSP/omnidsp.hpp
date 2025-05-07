@@ -191,8 +191,8 @@ namespace OmniDSP {
     /** @} */  // End of FilterDesign group
 
    private:
-    OmniDSP(std::unique_ptr<abstract::AbstractBackend> impl);
-    std::unique_ptr<abstract::AbstractBackend> pimpl_;
+    OmniDSP(std::unique_ptr<Abstract::AbstractBackend> impl);
+    std::unique_ptr<Abstract::AbstractBackend> pimpl_;
   };
 
   //--------------------------------------------------------------------------

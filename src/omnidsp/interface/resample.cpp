@@ -31,7 +31,7 @@ namespace OmniDSP {
    */
   template <typename T>  // T is REAL type
   ResamplePlan<T>::ResamplePlan(
-      std::unique_ptr<abstract::ResamplePlanImpl<T>> pimpl)
+      std::unique_ptr<Abstract::ResamplePlanImpl<T>> pimpl)
       : pimpl_(std::move(pimpl))
   {
     if (!pimpl_) {

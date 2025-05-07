@@ -477,10 +477,10 @@ namespace OmniDSP::intelipp {
 
 // This function needs to be defined in the global OmniDSP::abstract namespace
 // as declared in interface/backend.hpp
-namespace OmniDSP::abstract {
+namespace OmniDSP::Abstract {
   std::unique_ptr<AbstractBackend> create_intelipp_backend()
   {
     // Use the concrete class from the intelipp namespace
     return std::make_unique<::OmniDSP::intelipp::IntelIPPBackend>();
   }
-}  // namespace OmniDSP::abstract
+}  // namespace OmniDSP::Abstract

@@ -32,7 +32,7 @@ namespace OmniDSP::default
    */
   template <typename T>
   class DefaultConvolutionPlanImpl final
-      : public abstract::ConvolutionPlanImpl<T> {
+      : public Abstract::ConvolutionPlanImpl<T> {
     // Define complex type corresponding to T
     // *** UPDATED Namespace ***
     using T_Complex = Utils::GetComplexType<T>;
@@ -44,8 +44,8 @@ namespace OmniDSP::default
     // Define the variant type to hold a pointer to the appropriate base FFT
     // plan implementation
     using FFTPlanImplVariant = std::variant<
-        std::unique_ptr<abstract::FFTPlanImpl<T_Complex>>,  // For complex T
-        std::unique_ptr<abstract::RFFTPlanImpl<T_Real>>     // For real T
+        std::unique_ptr<Abstract::FFTPlanImpl<T_Complex>>,  // For complex T
+        std::unique_ptr<Abstract::RFFTPlanImpl<T_Real>>     // For real T
         >;
 
     // public constructor and methods remain here
@@ -114,7 +114,7 @@ namespace OmniDSP::default
    */
   template <typename T>
   class DefaultCorrelationPlanImpl final
-      : public abstract::CorrelationPlanImpl<T> {
+      : public Abstract::CorrelationPlanImpl<T> {
     // Define complex type corresponding to T
     // *** UPDATED Namespace ***
     using T_Complex = Utils::GetComplexType<T>;
@@ -126,8 +126,8 @@ namespace OmniDSP::default
     // Define the variant type to hold a pointer to the appropriate base FFT
     // plan implementation
     using FFTPlanImplVariant = std::variant<
-        std::unique_ptr<abstract::FFTPlanImpl<T_Complex>>,  // For complex T
-        std::unique_ptr<abstract::RFFTPlanImpl<T_Real>>     // For real T
+        std::unique_ptr<Abstract::FFTPlanImpl<T_Complex>>,  // For complex T
+        std::unique_ptr<Abstract::RFFTPlanImpl<T_Real>>     // For real T
         >;
 
     // public constructor and methods remain here
@@ -202,36 +202,36 @@ namespace OmniDSP::default
   // --- Backend Factory Function Declarations (Implementation in backend.cpp)
   // --- These declarations remain unchanged (match AbstractBackend)
   [[nodiscard]] OmniExpected<
-      std::unique_ptr<abstract::ConvolutionPlanImpl<F32>>>
+      std::unique_ptr<Abstract::ConvolutionPlanImpl<F32>>>
   create_default_convolution_plan_impl_f32(
       const F32Vec& kernel, ConvolutionType type, ConvolutionMethod method);
   [[nodiscard]] OmniExpected<
-      std::unique_ptr<abstract::ConvolutionPlanImpl<F64>>>
+      std::unique_ptr<Abstract::ConvolutionPlanImpl<F64>>>
   create_default_convolution_plan_impl_f64(
       const F64Vec& kernel, ConvolutionType type, ConvolutionMethod method);
   [[nodiscard]] OmniExpected<
-      std::unique_ptr<abstract::ConvolutionPlanImpl<C32>>>
+      std::unique_ptr<Abstract::ConvolutionPlanImpl<C32>>>
   create_default_convolution_plan_impl_c32(
       const C32Vec& kernel, ConvolutionType type, ConvolutionMethod method);
   [[nodiscard]] OmniExpected<
-      std::unique_ptr<abstract::ConvolutionPlanImpl<C64>>>
+      std::unique_ptr<Abstract::ConvolutionPlanImpl<C64>>>
   create_default_convolution_plan_impl_c64(
       const C64Vec& kernel, ConvolutionType type, ConvolutionMethod method);
 
   [[nodiscard]] OmniExpected<
-      std::unique_ptr<abstract::CorrelationPlanImpl<F32>>>
+      std::unique_ptr<Abstract::CorrelationPlanImpl<F32>>>
   create_default_correlation_plan_impl_f32(
       const F32Vec& kernel, ConvolutionType type, ConvolutionMethod method);
   [[nodiscard]] OmniExpected<
-      std::unique_ptr<abstract::CorrelationPlanImpl<F64>>>
+      std::unique_ptr<Abstract::CorrelationPlanImpl<F64>>>
   create_default_correlation_plan_impl_f64(
       const F64Vec& kernel, ConvolutionType type, ConvolutionMethod method);
   [[nodiscard]] OmniExpected<
-      std::unique_ptr<abstract::CorrelationPlanImpl<C32>>>
+      std::unique_ptr<Abstract::CorrelationPlanImpl<C32>>>
   create_default_correlation_plan_impl_c32(
       const C32Vec& kernel, ConvolutionType type, ConvolutionMethod method);
   [[nodiscard]] OmniExpected<
-      std::unique_ptr<abstract::CorrelationPlanImpl<C64>>>
+      std::unique_ptr<Abstract::CorrelationPlanImpl<C64>>>
   create_default_correlation_plan_impl_c64(
       const C64Vec& kernel, ConvolutionType type, ConvolutionMethod method);
 
