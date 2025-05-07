@@ -26,10 +26,11 @@
 // Note: convolution.hpp and cqt.hpp are included via default/backend.hpp
 
 // Include the headers declaring the IntelIPP Plan implementations
-#include "fft.hpp"       // Defines IntelIPPFFTPlanImpl etc.
-#include "filter.hpp"    // Defines IntelIPPFIRFilterPlanImpl etc.
-#include "resample.hpp"  // Defines IntelIPPResamplePlanImpl
-#include "window.hpp"    // Defines IntelIPP window helpers (if overridden)
+#include "fft.hpp"         // Defines IntelIPPFFTPlanImpl etc.
+#include "fir_filter.hpp"  // Defines IntelIPPFIRFilterPlanImpl etc.
+#include "iir_filter.hpp"  // Defines IntelIPPFIRFilterPlanImpl etc.
+#include "resample.hpp"    // Defines IntelIPPResamplePlanImpl
+#include "window.hpp"      // Defines IntelIPP window helpers (if overridden)
 
 namespace OmniDSP::intelipp {
 

@@ -1,16 +1,15 @@
 /**
- * @file filter.hpp (intelipp)
- * @brief Declares the Intel IPP implementation classes for FIR and IIR filter
- * plans.
+ * @file fir_filter.hpp (intelipp)
+ * @brief Declares the Intel IPP implementation class for FIR filter plans.
  */
 
-#ifndef OMNIDSP_INTELIPP_FILTER_HPP
-#define OMNIDSP_INTELIPP_FILTER_HPP
+#ifndef OMNIDSP_INTELIPP_FIR_FILTER_HPP
+#define OMNIDSP_INTELIPP_FIR_FILTER_HPP
 
 #include <ipp.h>  // Main IPP header including ipps.h
 
 #include <OmniDSP/core_types.hpp>  // For F32, C32, F64, C64, Status, OmniException, Utils::* etc.
-#include <OmniDSP/filter.hpp>  // For IIRFilterCoef definition
+// #include <OmniDSP/filter.hpp> // Not needed for FIR directly
 #include <complex>
 #include <memory>       // For std::unique_ptr
 #include <span>         // For std::span in method signatures
@@ -18,13 +17,13 @@
 #include <type_traits>  // For std::is_same_v
 #include <vector>
 
-#include "../interface/backend.hpp"  // Defines abstract::FIRFilterPlanImpl, abstract::IIRFilterPlanImpl
+#include "../interface/backend.hpp"  // Defines abstract::FIRFilterPlanImpl
 #include "utils.hpp"  // For IPP type helpers (utils::GetIPPType etc.) and macros
 
 namespace OmniDSP::intelipp {
 
   //--------------------------------------------------------------------------
-  // Helper Functions / Type Traits (Internal) - Wrappers only now
+  // Helper Functions / Type Traits (Internal) - FIR Wrappers
   //--------------------------------------------------------------------------
   namespace internal {
 
@@ -188,116 +187,6 @@ namespace OmniDSP::intelipp {
           pDlyDst,
           pBuffer);
     }
-
-    // IIR GetStateSize
-    template <typename T>
-    inline IppStatus ippsIIRGetStateSize_BiQuad(int numBq, int* pStateSize);
-    template <>
-    inline IppStatus ippsIIRGetStateSize_BiQuad<F32>(int numBq, int* pStateSize)
-    {
-      return ::ippsIIRGetStateSize_BiQuad_32f(numBq, pStateSize);
-    }
-    template <>
-    inline IppStatus ippsIIRGetStateSize_BiQuad<F64>(int numBq, int* pStateSize)
-    {
-      return ::ippsIIRGetStateSize_BiQuad_64f(numBq, pStateSize);
-    }
-    // Add complex if needed/supported by IPP for BiQuad size
-
-    // IIR Init (5 Args)
-    template <typename T>
-    inline IppStatus ippsIIRInit_BiQuad(
-        utils::GetIPPIIRState<T>** ppState,  // Use utils::
-        const utils::GetIPPType<T>* pTaps,   // Use utils:: (Corrected type)
-        int numBq,
-        const utils::GetIPPType<T>* pDlyLine,  // Use utils::
-        Ipp8u* pBuf);
-    template <>
-    inline IppStatus ippsIIRInit_BiQuad<F32>(
-        utils::GetIPPIIRState<F32>** ppState,
-        const utils::GetIPPType<F32>* pTaps,
-        int numBq,
-        const utils::GetIPPType<F32>* pDlyLine,
-        Ipp8u* pBuf)
-    {  // Use utils::
-      return ::ippsIIRInit_BiQuad_32f(ppState, pTaps, numBq, pDlyLine, pBuf);
-    }
-    template <>
-    inline IppStatus ippsIIRInit_BiQuad<F64>(
-        utils::GetIPPIIRState<F64>** ppState,
-        const utils::GetIPPType<F64>* pTaps,
-        int numBq,
-        const utils::GetIPPType<F64>* pDlyLine,
-        Ipp8u* pBuf)
-    {  // Use utils::
-      return ::ippsIIRInit_BiQuad_64f(ppState, pTaps, numBq, pDlyLine, pBuf);
-    }
-    // Add complex if needed/supported by IPP for BiQuad init
-
-    // IIR Execute
-    // *** CORRECTED WRAPPER ***
-    template <typename T>
-    inline IppStatus ippsIIR(
-        const utils::GetIPPType<T>* pSrc,
-        utils::GetIPPType<T>* pDst,
-        int len,
-        utils::GetIPPIIRState<T>* pState);  // Use utils::
-    template <>
-    inline IppStatus ippsIIR<F32>(
-        const utils::GetIPPType<F32>* pSrc,
-        utils::GetIPPType<F32>* pDst,
-        int len,
-        utils::GetIPPIIRState<F32>* pState)
-    {  // Use utils::
-      // Call the out-of-place version
-      return ::ippsIIR_32f(pSrc, pDst, len, pState);
-    }
-    template <>
-    inline IppStatus ippsIIR<F64>(
-        const utils::GetIPPType<F64>* pSrc,
-        utils::GetIPPType<F64>* pDst,
-        int len,
-        utils::GetIPPIIRState<F64>* pState)
-    {  // Use utils::
-      // Call the out-of-place version
-      return ::ippsIIR_64f(pSrc, pDst, len, pState);
-    }
-    // Add complex specializations if needed (assuming IppsIIRState_32fc/64fc
-    // exist)
-    /*
-    template<> inline IppStatus ippsIIR<C32>(const utils::GetIPPType<C32>* pSrc,
-    utils::GetIPPType<C32>* pDst, int len, utils::GetIPPIIRState<C32>* pState) {
-        // Assuming IppsIIRState_32fc exists and is mapped correctly by
-    GetIPPIIRState return ::ippsIIR_32fc(pSrc, pDst, len, pState);
-    }
-    template<> inline IppStatus ippsIIR<C64>(const utils::GetIPPType<C64>* pSrc,
-    utils::GetIPPType<C64>* pDst, int len, utils::GetIPPIIRState<C64>* pState) {
-        // Assuming IppsIIRState_64fc exists and is mapped correctly by
-    GetIPPIIRState return ::ippsIIR_64fc(pSrc, pDst, len, pState);
-    }
-    */
-
-    // IIR SetDlyLine
-    template <typename T>
-    inline IppStatus ippsIIRSetDlyLine(
-        utils::GetIPPIIRState<T>* pState,
-        const utils::GetIPPType<T>* pDlyLine);  // Use utils::
-    template <>
-    inline IppStatus ippsIIRSetDlyLine<F32>(
-        utils::GetIPPIIRState<F32>* pState,
-        const utils::GetIPPType<F32>* pDlyLine)
-    {  // Use utils::
-      return ::ippsIIRSetDlyLine_32f(pState, pDlyLine);
-    }
-    template <>
-    inline IppStatus ippsIIRSetDlyLine<F64>(
-        utils::GetIPPIIRState<F64>* pState,
-        const utils::GetIPPType<F64>* pDlyLine)
-    {  // Use utils::
-      return ::ippsIIRSetDlyLine_64f(pState, pDlyLine);
-    }
-    // Add complex if needed/supported by IPP
-
   }  // namespace internal
 
   //--------------------------------------------------------------------------
@@ -337,47 +226,6 @@ namespace OmniDSP::intelipp {
     IPP_Spec_Type* p_ipp_spec_ = nullptr;  // Typed pointer into p_spec_
   };
 
-  //--------------------------------------------------------------------------
-  // IntelIPP IIR Filter Plan Implementation (Biquad SOS)
-  //--------------------------------------------------------------------------
-  template <typename T>  // T is F32 or F64 (IPP IIR typically real only)
-  class IntelIPPIIRFilterPlanImpl final
-      : public abstract::IIRFilterPlanImpl<T> {
-    static_assert(
-        std::is_same_v<T, F32> || std::is_same_v<T, F64>,
-        "IntelIPPIIRFilterPlanImpl currently supports only F32 or F64.");
-    // *** Use type helpers from utils namespace ***
-    using IPP_State_Type = utils::GetIPPIIRState<T>;
-
-   public:
-    explicit IntelIPPIIRFilterPlanImpl(
-        const std::vector<IIRFilterCoef>& sos_coefficients);
-    ~IntelIPPIIRFilterPlanImpl() override;
-
-    IntelIPPIIRFilterPlanImpl(const IntelIPPIIRFilterPlanImpl&) = delete;
-    IntelIPPIIRFilterPlanImpl& operator=(const IntelIPPIIRFilterPlanImpl&)
-        = delete;
-    IntelIPPIIRFilterPlanImpl(IntelIPPIIRFilterPlanImpl&&) = delete;
-    IntelIPPIIRFilterPlanImpl& operator=(IntelIPPIIRFilterPlanImpl&&) = delete;
-
-    [[nodiscard]] Status execute(
-        std::span<const T> input, std::span<T> output) override;
-    [[nodiscard]] Status reset() override;
-
-    size_t get_order() const override;
-    size_t get_num_sections() const override;
-
-   private:
-    size_t num_sections_;
-    size_t order_;
-    IPP_State_Type* p_state_ = nullptr;  // Typed pointer into state_mem_
-    std::vector<Ipp8u>
-        state_mem_;             // Raw memory buffer for the IPP state structure
-    int state_size_bytes_ = 0;  // Store size for debugging/verification
-    // Store coefficients in the correct type T for passing to IPP Init
-    std::vector<T> taps_interleaved_;
-  };
-
 }  // namespace OmniDSP::intelipp
 
-#endif  // OMNIDSP_INTELIPP_FILTER_HPP
+#endif  // OMNIDSP_INTELIPP_FIR_FILTER_HPP

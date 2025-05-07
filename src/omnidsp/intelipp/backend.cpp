@@ -19,10 +19,11 @@
 #include <vector>                // For std::vector<> types like F32Vec etc.
 
 // Include necessary IPP backend implementation headers
-#include "fft.hpp"       // Defines IntelIPP FFT plan impls
-#include "filter.hpp"    // Defines IntelIPP Filter plan impls
-#include "resample.hpp"  // Defines IntelIPP Resample plan impls
-#include "window.hpp"    // Defines the generate_*_window_intelipp helpers
+#include "fft.hpp"         // Defines IntelIPP FFT plan impls
+#include "fir_filter.hpp"  // Defines IntelIPP Filter plan impls
+#include "iir_filter.hpp"  // Defines IntelIPP Filter plan impls
+#include "resample.hpp"    // Defines IntelIPP Resample plan impls
+#include "window.hpp"      // Defines the generate_*_window_intelipp helpers
 
 // Include the interface backend header for AbstractBackend (needed for factory
 // func return type)
