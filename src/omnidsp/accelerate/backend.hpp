@@ -24,7 +24,7 @@
 namespace OmniDSP::accelerate {
 
   //--------------------------------------------------------------------------
-  // Accelerate Main Backend Implementation Class
+  // Accelerate Main BackendType Implementation Class
   //--------------------------------------------------------------------------
 
   /**
@@ -40,7 +40,7 @@ namespace OmniDSP::accelerate {
 
     // --- Core ---
     // MUST override to identify this backend
-    Backend get_backend() const override;
+    BackendType get_backend() const override;
 
     // --- Override functions optimized by Accelerate (FFT Only) ---
 

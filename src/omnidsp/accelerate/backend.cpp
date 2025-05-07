@@ -31,17 +31,20 @@ namespace OmniDSP::accelerate {
 
   AccelerateBackend::AccelerateBackend()
   {
-    // std::cout << "Accelerate Backend Initialized." << std::endl; // Debug
+    // std::cout << "Accelerate BackendType Initialized." << std::endl; // Debug
     // message
   }
 
   AccelerateBackend::~AccelerateBackend()
   {
-    // std::cout << "Accelerate Backend Destroyed." << std::endl; // Debug
+    // std::cout << "Accelerate BackendType Destroyed." << std::endl; // Debug
     // message
   }
 
-  Backend AccelerateBackend::get_backend() const { return Backend::Accelerate; }
+  BackendType AccelerateBackend::get_backend() const
+  {
+    return BackendType::Accelerate;
+  }
 
   // --- Plan Factories (FFT/RFFT Overrides Only with Fallback) ---
 

@@ -25,8 +25,8 @@
 namespace OmniDSP::default
 {
 
-  // --- Filter Design Helper Functions (Internal Linkage within Backend) ---
-  // Moved OUT of anonymous namespace to allow explicit instantiation
+  // --- Filter Design Helper Functions (Internal Linkage within BackendType)
+  // --- Moved OUT of anonymous namespace to allow explicit instantiation
 
   //--------------------------------------------------------------------------
   // FIR Filter Design Implementation (Windowed Sinc)

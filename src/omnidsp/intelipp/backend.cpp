@@ -72,9 +72,9 @@ namespace OmniDSP::intelipp {
     // Cleanup IPP if needed (e.g., if ippInit was called)
   }
 
-  Backend IntelIPPBackend::get_backend() const
+  BackendType IntelIPPBackend::get_backend() const
   {
-    return Backend::IntelIPP;  // Override to identify correctly
+    return BackendType::IntelIPP;  // Override to identify correctly
   }
 
   // --- DSP Operations (One-Off Implementations) ---

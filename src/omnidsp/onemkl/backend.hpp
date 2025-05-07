@@ -42,7 +42,7 @@ namespace OmniDSP::onemkl {
 
     // --- Core ---
     // MUST override to identify this backend
-    Backend get_backend() const override;
+    BackendType get_backend() const override;
 
     // --- Override functions optimized ONLY by oneMKL DFTI ---
     // --- All other functions (windows, other plans, filter design) are

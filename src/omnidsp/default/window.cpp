@@ -42,8 +42,9 @@ namespace OmniDSP::default
     // Avoid division by zero if length was 1 (already handled, but safe)
     if (N_minus_1 <= static_cast<T>(0.0)) {
       // Should not happen due to length==1 check, but indicates logic error
-      std::cerr << "Default Backend Error: Invalid length in bartlett_window."
-                << std::endl;
+      std::cerr
+          << "Default BackendType Error: Invalid length in bartlett_window."
+          << std::endl;
       return Status::Failure;
     }
     const T factor = static_cast<T>(2.0) / N_minus_1;
@@ -125,7 +126,7 @@ namespace OmniDSP::default
     if (length == 0) return Status::Success;
 
     if (stddev <= static_cast<T>(0.0)) {
-      std::cerr << "Default Backend Error: Gaussian window standard "
+      std::cerr << "Default BackendType Error: Gaussian window standard "
                    "deviation must be positive."
                 << std::endl;
       return Status::InvalidArgument;
@@ -143,7 +144,7 @@ namespace OmniDSP::default
     // Avoid division by zero if center is 0 (length 1, handled above)
     if (sigma_term == static_cast<T>(0.0)) {
       std::cerr
-          << "Default Backend Error: Invalid sigma term in gaussian_window."
+          << "Default BackendType Error: Invalid sigma term in gaussian_window."
           << std::endl;
       return Status::Failure;  // Should not happen
     }
@@ -211,9 +212,10 @@ namespace OmniDSP::default
     if (length == 0) return Status::Success;
 
     if (beta < static_cast<T>(0.0)) {
-      std::cerr << "Default Backend Error: Kaiser window beta parameter must "
-                   "be non-negative."
-                << std::endl;
+      std::cerr
+          << "Default BackendType Error: Kaiser window beta parameter must "
+             "be non-negative."
+          << std::endl;
       return Status::InvalidArgument;
     }
 
@@ -231,7 +233,7 @@ namespace OmniDSP::default
       if (beta == static_cast<T>(0.0)) {
         return rectangular_window(output);
       }
-      std::cerr << "Default Backend Error: Kaiser window denominator "
+      std::cerr << "Default BackendType Error: Kaiser window denominator "
                    "I0(beta) is zero for non-zero beta."
                 << std::endl;
       return Status::Failure;  // Mathematical issue
@@ -281,7 +283,7 @@ namespace OmniDSP::default
     const T norm = L / static_cast<T>(2.0);
     if (norm == static_cast<T>(0.0)) {
       // Should not happen due to length checks
-      std::cerr << "Default Backend Error: Invalid normalization factor in "
+      std::cerr << "Default BackendType Error: Invalid normalization factor in "
                    "triangular_window."
                 << std::endl;
       return Status::Failure;

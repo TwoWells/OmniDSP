@@ -199,7 +199,8 @@ namespace OmniDSP::default
   extern template class DefaultCorrelationPlanImpl<C32>;
   extern template class DefaultCorrelationPlanImpl<C64>;
 
-  // --- Backend Factory Function Declarations (Implementation in backend.cpp)
+  // --- BackendType Factory Function Declarations (Implementation in
+  // backend.cpp)
   // --- These declarations remain unchanged (match AbstractBackend)
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::ConvolutionPlanImpl<F32>>>

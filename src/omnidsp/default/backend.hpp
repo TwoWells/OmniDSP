@@ -45,7 +45,7 @@ namespace OmniDSP::default
     DefaultBackend();
     ~DefaultBackend() override;
 
-    Backend get_backend() const override;
+    BackendType get_backend() const override;
 
     // --- One-off Operations ---
     [[nodiscard]] OmniExpected<F32Vec> convolve_f32(

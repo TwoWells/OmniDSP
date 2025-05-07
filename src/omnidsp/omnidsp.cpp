@@ -69,7 +69,7 @@ namespace OmniDSP {
   // Definition matches declaration: static OmniExpected<OmniDSP> create(Backend
   // backend); Default argument is only in the declaration.
   [[nodiscard]] /* static */ OmniExpected<OmniDSP> OmniDSP::create(
-      Backend backend)
+      BackendType backend)
   {
     // Pointer to the abstract backend implementation (using type from
     // interface/backend.hpp)
@@ -77,8 +77,8 @@ namespace OmniDSP {
 
     try {
       // Select the backend factory based on the requested type and availability
-      switch (backend) {           // Switching on the 'Backend' enum parameter
-        case Backend::Accelerate:  // Use 'Backend' enum value
+      switch (backend) {  // Switching on the 'Backend' enum parameter
+        case BackendType::Accelerate:  // Use 'Backend' enum value
           // Use if constexpr to check if the backend is enabled at compile time
           if constexpr (OMNIDSP_ENABLED_BACKEND_ACCELERATE) {
             std::cout << "Creating Accelerate backend..." << std::endl;
@@ -98,7 +98,7 @@ namespace OmniDSP {
           }
           break;  // End Accelerate case
 
-        case Backend::OneMKL:  // Use 'Backend' enum value
+        case BackendType::OneMKL:  // Use 'Backend' enum value
           if constexpr (OMNIDSP_ENABLED_BACKEND_ONEMKL) {
             std::cout << "Creating OneMKL backend..." << std::endl;
             // Call factory function from abstract namespace
@@ -115,7 +115,7 @@ namespace OmniDSP {
           }
           break;  // End OneMKL case
 
-        case Backend::IntelIPP:  // Use 'Backend' enum value
+        case BackendType::IntelIPP:  // Use 'Backend' enum value
           if constexpr (OMNIDSP_ENABLED_BACKEND_INTELIPP) {
             std::cout << "Creating IntelIPP backend..." << std::endl;
             // Call factory function from abstract namespace
@@ -134,8 +134,8 @@ namespace OmniDSP {
           }
           break;  // End IntelIPP case
 
-        case Backend::Default:  // Use 'Backend' enum value
-        default:                // Fallback to Default
+        case BackendType::Default:  // Use 'Backend' enum value
+        default:                    // Fallback to Default
           // Default backend should ideally always be enabled
           if constexpr (OMNIDSP_ENABLED_BACKEND_DEFAULT) {
             std::cout << "Creating Default backend..." << std::endl;
@@ -241,7 +241,7 @@ namespace OmniDSP {
    * moved-from) state.
    */
   // Definition matches declaration: Backend get_backend() const;
-  Backend OmniDSP::get_backend() const
+  BackendType OmniDSP::get_backend() const
   {
     if (!pimpl_) {
       // Throw here as using a moved-from object is a programming error

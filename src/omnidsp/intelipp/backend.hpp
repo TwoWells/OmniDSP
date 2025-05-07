@@ -52,7 +52,7 @@ namespace OmniDSP::intelipp {
 
     // --- Core ---
     // MUST override to identify this backend
-    Backend get_backend() const override;
+    BackendType get_backend() const override;
 
     // --- Override functions optimized by Intel IPP ---
     // --- If a function is NOT overridden, the DefaultBackend implementation is

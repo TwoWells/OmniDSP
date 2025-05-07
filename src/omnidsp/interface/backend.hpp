@@ -154,7 +154,7 @@ namespace OmniDSP::Abstract {
     // ... (Virtual function declarations remain the same) ...
    public:
     virtual ~AbstractBackend() = default;
-    virtual Backend get_backend() const = 0;
+    virtual BackendType get_backend() const = 0;
     [[nodiscard]] virtual OmniExpected<F32Vec> convolve_f32(
         const F32Vec& input,
         const F32Vec& kernel,

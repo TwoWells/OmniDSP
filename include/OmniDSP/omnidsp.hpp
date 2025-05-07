@@ -41,7 +41,7 @@ namespace OmniDSP {
   class OMNIDSP_EXPORT OmniDSP {
    public:
     [[nodiscard]] static OmniExpected<OmniDSP> create(
-        Backend backend = Backend::Default);
+        BackendType backend = BackendType::Default);
 
     ~OmniDSP();
     OmniDSP(OmniDSP&& other) noexcept;
@@ -50,7 +50,7 @@ namespace OmniDSP {
     OmniDSP(const OmniDSP&) = delete;
     OmniDSP& operator=(const OmniDSP&) = delete;
 
-    Backend get_backend() const;
+    BackendType get_backend() const;
 
     //-------------------------------------------------------------------------
     /** @defgroup DspOps DSP Operations (Member Methods)

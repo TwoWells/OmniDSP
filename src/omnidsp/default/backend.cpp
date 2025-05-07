@@ -80,7 +80,7 @@ namespace OmniDSP::default
   {
     if (!condition) {
       if (!error_message.empty()) {
-        std::cerr << "OmniDSP Default Backend Error: " << error_message
+        std::cerr << "OmniDSP Default BackendType Error: " << error_message
                   << std::endl;
       }
       return error_status;
@@ -103,7 +103,10 @@ namespace OmniDSP::default
   //--------------------------------------------------------------------------
   DefaultBackend::DefaultBackend() {}
   DefaultBackend::~DefaultBackend() {}
-  Backend DefaultBackend::get_backend() const { return Backend::Default; }
+  BackendType DefaultBackend::get_backend() const
+  {
+    return BackendType::Default;
+  }
 
   // --- DSP Operations (One-Off Implementations) ---
   // ... (convolve_*, correlate_*, fft_*, etc. implementations remain the

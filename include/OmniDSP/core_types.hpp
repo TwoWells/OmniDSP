@@ -73,7 +73,7 @@ namespace OmniDSP {
     }
   }
 
-  // --- Backend Selection Enum ---
+  // --- BackendType Selection Enum ---
 
   /**
    * @brief Specifies the backend implementation library to use for
@@ -81,7 +81,7 @@ namespace OmniDSP {
    * @details Allows selecting between different optimized libraries or a
    * default portable implementation at runtime via OmniDSP::create.
    */
-  enum class Backend {
+  enum class BackendType {
     Default,  ///< Portable C++ implementation with potential SIMD acceleration.
     Accelerate,  ///< Apple Accelerate framework (macOS/iOS).
     OneMKL,      ///< Intel oneMKL library.
@@ -90,24 +90,24 @@ namespace OmniDSP {
   };
 
   /**
-   * @brief Gets the string name corresponding to a Backend enum value.
+   * @brief Gets the string name corresponding to a BackendType enum value.
    * @param backend The backend enum value.
    * @return A string_view representing the backend name.
    */
-  inline std::string_view get_backend_name(Backend backend) noexcept
+  inline std::string_view get_backend_name(BackendType backend) noexcept
   {
     switch (backend) {
-      case Backend::Default:
+      case BackendType::Default:
         return "Default";
-      case Backend::Accelerate:
+      case BackendType::Accelerate:
         return "Accelerate";
-      case Backend::OneMKL:
+      case BackendType::OneMKL:
         return "oneMKL";
-      case Backend::IntelIPP:
+      case BackendType::IntelIPP:
         return "IntelIPP";
       default:
         // Handle potential future additions gracefully
-        return "Unknown Backend";
+        return "Unknown BackendType";
     }
   }
 

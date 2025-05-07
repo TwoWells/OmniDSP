@@ -160,10 +160,10 @@ PYBIND11_MODULE(_omnidsp_cpp, m)
       });
 
   // --- Enums ---
-  py::enum_<Backend>(m, "Backend")
-      .value("Default", Backend::Default)
-      .value("Accelerate", Backend::Accelerate)
-      .value("OneMKL", Backend::OneMKL)
+  py::enum_<BackendType>(m, "BackendType")
+      .value("Default", BackendType::Default)
+      .value("Accelerate", BackendType::Accelerate)
+      .value("OneMKL", BackendType::OneMKL)
       .export_values();
 
   py::enum_<Status>(m, "Status")
@@ -522,12 +522,12 @@ PYBIND11_MODULE(_omnidsp_cpp, m)
       // Do not expose constructor directly
       .def_static(
           "create",
-          [](Backend backend = Backend::Default)
+          [](BackendType backend = BackendType::Default)
           {
             // Use helper to handle expected and potential exception
             return check_expected(OmniDSP::create(backend), "OmniDSP.create");
           },
-          py::arg("backend") = Backend::Default,
+          py::arg("backend") = BackendType::Default,
           "Static factory method to create an OmniDSP instance.")
 
       .def("get_backend", &OmniDSP::get_backend)

@@ -201,7 +201,8 @@ std::map<std::string, VecD> BackendConvTest::expected_data_d;
 std::map<std::string, VecF> BackendConvTest::expected_data_f;
 bool BackendConvTest::references_loaded = false;
 
-// --- Backend Agnostic Test Cases (These should pass regardless of backend) ---
+// --- BackendType Agnostic Test Cases (These should pass regardless of backend)
+// ---
 
 TEST_F(BackendConvTest, Correlate1d_Valid_Double)
 {

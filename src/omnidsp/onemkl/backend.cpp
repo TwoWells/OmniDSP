@@ -51,7 +51,7 @@ namespace OmniDSP::onemkl {
     // std::cout << "oneMKL Backend Destroyed." << std::endl; // Debug message
   }
 
-  Backend OneMKLBackend::get_backend() const { return Backend::OneMKL; }
+  BackendType OneMKLBackend::get_backend() const { return BackendType::OneMKL; }
 
   // --- DSP Operations (One-off) ---
   // Inherited from DefaultBackend
