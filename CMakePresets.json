@@ -1,0 +1,185 @@
+{
+    "version": 8,
+    "configurePresets": [
+        {
+            "name": "common-base",
+            "hidden": true,
+            "description": "Common settings for all platforms (Ninja generator, standard build/install dirs)",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}"
+            }
+        },
+        {
+            "name": "windows-base",
+            "hidden": true,
+            "description": "Base settings for Windows builds (x64, MSVC, Conda paths)",
+            "inherits": "common-base",
+            "architecture": {
+                "strategy": "external"
+            },
+            "toolset": {
+                "strategy": "external"
+            },
+            "cacheVariables": {
+                "CMAKE_PREFIX_PATH": "$env{CONDA_PREFIX};$env{CONDA_PREFIX}/Library",
+                "CMAKE_C_COMPILER": "cl.exe",
+                "CMAKE_CXX_COMPILER": "cl.exe"
+            }
+        },
+        {
+            "name": "windows-debug",
+            "displayName": "Windows Ninja MSVC Debug",
+            "description": "Windows Debug build using Ninja and MSVC (x64)",
+            "inherits": "windows-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "windows-release",
+            "displayName": "Windows Ninja MSVC Release",
+            "description": "Windows Release build using Ninja and MSVC (x64)",
+            "inherits": "windows-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "linux-base",
+            "hidden": true,
+            "description": "Base settings for Linux builds (GNU compilers, Conda paths)",
+            "inherits": "common-base",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_CXX_COMPILER": "g++",
+                "CMAKE_PREFIX_PATH": "$env{CONDA_PREFIX}"
+            }
+        },
+        {
+            "name": "linux-debug",
+            "displayName": "Linux Ninja Debug",
+            "description": "Linux Debug build using Ninja and GCC",
+            "inherits": "linux-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "linux-release",
+            "displayName": "Linux Ninja Release",
+            "description": "Linux Release build using Ninja and GCC",
+            "inherits": "linux-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "macos-base",
+            "hidden": true,
+            "description": "Base settings for macOS builds (Clang compilers, Conda paths, arm64 architecture)",
+            "inherits": "common-base",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_OSX_ARCHITECTURES": "arm64",
+                "CMAKE_PREFIX_PATH": "$env{CONDA_PREFIX}"
+            }
+        },
+        {
+            "name": "macos-debug",
+            "displayName": "macOS Ninja Debug",
+            "description": "macOS Debug build using Ninja and Clang (arm64)",
+            "inherits": "macos-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "macos-release",
+            "displayName": "macOS Ninja Release",
+            "description": "macOS Release build using Ninja and Clang (arm64)",
+            "inherits": "macos-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "build-windows-debug",
+            "displayName": "Build Windows Debug",
+            "configurePreset": "windows-debug",
+            "configuration": "Debug"
+        },
+        {
+            "name": "build-windows-release",
+            "displayName": "Build Windows Release",
+            "configurePreset": "windows-release",
+            "configuration": "Release"
+        },
+        {
+            "name": "build-linux-debug",
+            "displayName": "Build Linux Debug",
+            "configurePreset": "linux-debug",
+            "configuration": "Debug"
+        },
+        {
+            "name": "build-linux-release",
+            "displayName": "Build Linux Release",
+            "configurePreset": "linux-release",
+            "configuration": "Release"
+        },
+        {
+            "name": "build-macos-debug",
+            "displayName": "Build macOS Debug",
+            "configurePreset": "macos-debug",
+            "configuration": "Debug"
+        },
+        {
+            "name": "build-macos-release",
+            "displayName": "Build macOS Release",
+            "configurePreset": "macos-release",
+            "configuration": "Release"
+        }
+    ],
+    "testPresets": [
+        {
+            "name": "test-windows-debug",
+            "displayName": "Test Windows Debug",
+            "configurePreset": "windows-debug",
+            "configuration": "Debug"
+        },
+        {
+            "name": "test-windows-release",
+            "displayName": "Test Windows Release",
+            "configurePreset": "windows-release",
+            "configuration": "Release"
+        },
+        {
+            "name": "test-linux-debug",
+            "displayName": "Test Linux Debug",
+            "configurePreset": "linux-debug",
+            "configuration": "Debug"
+        },
+        {
+            "name": "test-linux-release",
+            "displayName": "Test Linux Release",
+            "configurePreset": "linux-release",
+            "configuration": "Release"
+        },
+        {
+            "name": "test-macos-debug",
+            "displayName": "Test macOS Debug",
+            "configurePreset": "macos-debug",
+            "configuration": "Debug"
+        },
+        {
+            "name": "test-macos-release",
+            "displayName": "Test macOS Release",
+            "configurePreset": "macos-release",
+            "configuration": "Release"
+        }
+    ]
+}
