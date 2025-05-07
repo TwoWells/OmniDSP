@@ -6,5 +6,5 @@
 message(STATUS "  Finding Boost dependency...")
 
 # Find Boost (Using find_package is recommended over FetchContent for Boost)
-find_package(Boost REQUIRED)
+find_package(Boost 1.85.0 CONFIG REQUIRED)
 message(STATUS "    Found Boost version ${Boost_VERSION}")

@@ -205,12 +205,12 @@ elseif(DEFINED ENV{IPPROOT})
     list(APPEND _IPP_SEARCH_PATHS "$ENV{IPPROOT}")
 endif()
 # 3. Conda Environment Prefix (if set)
-if(DEFINED ENV{CONDA_PREFIX})
-    IPP_DEBUG_MSG("Found CONDA_PREFIX environment variable: $ENV{CONDA_PREFIX}")
-    list(APPEND _IPP_SEARCH_PATHS "$ENV{CONDA_PREFIX}")
-else()
-    IPP_DEBUG_MSG("CONDA_PREFIX environment variable not set. Searching standard paths.")
-endif()
+# if(DEFINED ENV{CONDA_PREFIX})
+#     IPP_DEBUG_MSG("Found CONDA_PREFIX environment variable: $ENV{CONDA_PREFIX}")
+#     list(APPEND _IPP_SEARCH_PATHS "$ENV{CONDA_PREFIX}")
+# else()
+#     IPP_DEBUG_MSG("CONDA_PREFIX environment variable not set. Searching standard paths.")
+# endif()
 # 4. Standard system paths (will be searched by find_path/find_library anyway)
 
 # Define platform-specific subdirectories within the search paths
@@ -718,9 +718,6 @@ unset(_INCS_STR)
 unset(_DEFS_STR)
 unset(_FOUND_COMPONENTS_STR)
 unset(_MISSING_COMPONENTS_STR)
-# unset(_CONDA_PREFIX_ENV) # Keep this if you want to reference it in messages
-# unset(_CMAKE_COMMAND_DIR) # Keep this if you want to reference it in messages
-# unset(_GUESS_CONDA_PREFIX) # Keep this if you want to reference it in messages
 unset(_IPP_ALL_TARGETS)
 unset(_VERSION_PATH_DIRECT) # Clean up version check paths
 unset(_VERSION_PATH_SUBDIR) # Clean up version check paths

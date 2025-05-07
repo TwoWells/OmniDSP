@@ -8,20 +8,20 @@ cmake_policy(SET CMP0167 NEW) # Policy for FindBoost module removal
 
 # --- Automatically Add Conda Prefix to CMAKE_PREFIX_PATH ---
 # Check if the CONDA_PREFIX environment variable is set
-if(DEFINED ENV{CONDA_PREFIX})
-  # Read the value of the CONDA_PREFIX environment variable
-  set(CONDA_ENV_PREFIX "$ENV{CONDA_PREFIX}")
-  message(STATUS "Detected Conda environment prefix: ${CONDA_ENV_PREFIX}")
-
-  # Append the Conda prefix to CMAKE_PREFIX_PATH
-  # Use list(APPEND ...) to handle paths correctly, especially on Windows
-  list(APPEND CMAKE_PREFIX_PATH ${CONDA_ENV_PREFIX})
-  # Optionally, make it unique in case it was already passed or present
-  list(REMOVE_DUPLICATES CMAKE_PREFIX_PATH)
-  message(STATUS "Appended Conda prefix to CMAKE_PREFIX_PATH.")
-else()
-  message(STATUS "CONDA_PREFIX environment variable not set. Assuming system paths or manually provided CMAKE_PREFIX_PATH.")
-endif()
+# if(DEFINED ENV{CONDA_PREFIX})
+#   # Read the value of the CONDA_PREFIX environment variable
+#   set(CONDA_ENV_PREFIX "$ENV{CONDA_PREFIX}")
+#   message(STATUS "Detected Conda environment prefix: ${CONDA_ENV_PREFIX}")
+#
+#   # Append the Conda prefix to CMAKE_PREFIX_PATH
+#   # Use list(APPEND ...) to handle paths correctly, especially on Windows
+#   list(APPEND CMAKE_PREFIX_PATH ${CONDA_ENV_PREFIX})
+#   # Optionally, make it unique in case it was already passed or present
+#   list(REMOVE_DUPLICATES CMAKE_PREFIX_PATH)
+#   message(STATUS "Appended Conda prefix to CMAKE_PREFIX_PATH.")
+# else()
+#   message(STATUS "CONDA_PREFIX environment variable not set. Assuming system paths or manually provided CMAKE_PREFIX_PATH.")
+# endif()
 # --- End Conda Prefix Handling ---
 
 project(

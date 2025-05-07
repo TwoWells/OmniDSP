@@ -13,10 +13,10 @@
 ## **High Priority / Blocking Tasks**
 
 - **Implement Filter Module:** _(Crucial core feature)_
-  - \[ \] Implement `IntelIPPFIRFilterPlanImpl` (src/omnidsp/intelipp/filter.cpp) - _(Structure exists, needs IPP implementation)_.
-  - \[ \] Implement `IntelIPPIIRFilterPlanImpl` (src/omnidsp/intelipp/filter.cpp) - _(Structure exists, needs IPP implementation)_.
-  - \[ \] Implement `create_fir_filter_plan_*` factory methods in `IntelIPPBackend`.
-  - \[ \] Implement `create_iir_filter_plan_*` factory methods in `IntelIPPBackend`.
+  - \[x\] Implement `IntelIPPFIRFilterPlanImpl` (src/omnidsp/intelipp/filter.cpp) - _(Structure exists, needs IPP implementation)_.
+  - \[x\] Implement `IntelIPPIIRFilterPlanImpl` (src/omnidsp/intelipp/filter.cpp) - _(Structure exists, needs IPP implementation)_.
+  - \[x\] Implement `create_fir_filter_plan_*` factory methods in `IntelIPPBackend`.
+  - \[x\] Implement `create_iir_filter_plan_*` factory methods in `IntelIPPBackend`.
   - \[ \] Implement `design_iir_filter_*` methods in `DefaultBackend` (src/omnidsp/default/filter_design.cpp or similar).
   - \[ \] Add Python bindings for Filter Plans and design methods.
   - \[ \] Add comprehensive C++ and Python tests for the Filter module across all backends _(See Testing section)_.

@@ -15,7 +15,7 @@ message(STATUS "Processing project dependencies...")
 
 # --- Include FetchContent module ---
 # Needs to be included before setting FetchContent variables or calling FetchContent functions.
-include(FetchContent)
+# include(FetchContent)
 
 # --- Configure FetchContent Cache Location ---
 # Set the base directory for FetchContent outside the build folder

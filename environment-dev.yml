@@ -22,7 +22,7 @@ dependencies:
   # --- C++ Build Toolchain & Dependencies (Managed by Conda) ---
   - cmake>=3.21
   - cxx-compiler
-  - make # Or ninja
+  - ninja
   - boost
   - gtest
   - libhwy

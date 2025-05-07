@@ -50,7 +50,8 @@ set(ONEMKL_BACKEND_SOURCES
 set(INTELIPP_BACKEND_SOURCES
     "${PROJECT_SOURCE_DIR}/src/omnidsp/intelipp/backend.cpp"
     "${PROJECT_SOURCE_DIR}/src/omnidsp/intelipp/fft.cpp"
-    "${PROJECT_SOURCE_DIR}/src/omnidsp/intelipp/filter.cpp"
+    "${PROJECT_SOURCE_DIR}/src/omnidsp/intelipp/fir_filter.cpp"
+    "${PROJECT_SOURCE_DIR}/src/omnidsp/intelipp/iir_filter.cpp"
     "${PROJECT_SOURCE_DIR}/src/omnidsp/intelipp/resample.cpp"
     "${PROJECT_SOURCE_DIR}/src/omnidsp/intelipp/window.cpp"
     "${PROJECT_SOURCE_DIR}/src/omnidsp/intelipp/utils.cpp"
