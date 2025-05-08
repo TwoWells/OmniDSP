@@ -1,4 +1,4 @@
-# OmniDSP/src/omnidsp/CMakeLists.txt
+# src/omnidsp/CMakeLists.txt
 # Defines the 'OmniDSP' library, manages backend selection options,
 # includes enabled backend configurations, and generates omnidsp_config.h and omnidsp_export.h.
 
@@ -93,9 +93,20 @@ target_include_directories(OmniDSP
 )
 
 # --- Common Dependencies ---
+# Link against Google Highway (found in cmake/depend.cmake)
 if(TARGET hwy::hwy)
     target_link_libraries(OmniDSP PRIVATE hwy::hwy)
     message(STATUS "Linking OmniDSP with hwy::hwy")
+else()
+   message(WARNING "hwy::hwy target not found after find_package. Linking might fail.")
+endif()
+
+# Link against spdlog (found in cmake/depend.cmake)
+if(TARGET spdlog::spdlog)
+   target_link_libraries(OmniDSP PRIVATE spdlog::spdlog)
+   message(STATUS "Linking OmniDSP with spdlog::spdlog")
+else()
+   message(WARNING "spdlog::spdlog target not found after find_package. Linking might fail.")
 endif()
 
 # --- Include Backend Configurations ---

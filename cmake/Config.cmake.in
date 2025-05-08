@@ -26,6 +26,10 @@ find_dependency(Boost ${OMNIDSP_REQUIRED_BOOST_VERSION} CONFIG REQUIRED)
 message(STATUS "OmniDSPConfig.cmake: Finding dependency: hwy ${OMNIDSP_REQUIRED_HIGHWAY_VERSION}")
 find_dependency(hwy ${OMNIDSP_REQUIRED_HIGHWAY_VERSION} CONFIG REQUIRED)
 
+# spdlog dependency (add ONLY if spdlog is a PUBLIC dependency)
+# message(STATUS "OmniDSPConfig.cmake: Finding dependency: spdlog")
+# find_dependency(spdlog CONFIG REQUIRED)
+
 # Add find_dependency() calls for any other PUBLIC/INTERFACE dependencies here.
 # If a dependency is optional for your library's core functionality but was enabled
 # in the build of OmniDSP that is being packaged, you might make its find_dependency

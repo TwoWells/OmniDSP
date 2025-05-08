@@ -34,6 +34,7 @@ dependencies:
   - boost
   - gtest
   - libhwy
+  - spdlog
 
   # --------------------------------------------------------------------
   # Optimized DSP Backends (Selected by CMake based on availability)
