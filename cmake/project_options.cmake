@@ -15,6 +15,9 @@
 # Option to control whether Python bindings are built
 option(OMNIDSP_BUILD_PYTHON_BINDINGS "Build the Python language bindings" OFF)
 
+option(OMNIDSP_BUILD_TESTS "Build tests for OmniDSP" OFF)
+option(OMNIDSP_BUILD_EXAMPLES "Build C++ examples for OmniDSP" OFF)
+
 # Option to control shared/static library build type Note: BUILD_SHARED_LIBS is a standard CMake
 # variable, often set externally. Defining it here provides a default if not set by the
 # user/environment.
@@ -24,10 +27,10 @@ option(BUILD_SHARED_LIBS "Build shared libraries (.dll/.so/.dylib)" ON)
 # Moved this logic from target_definitions.cmake
 if(BUILD_SHARED_LIBS)
     set(OMNIDSP_LIBRARY_TYPE SHARED)
-    message(STATUS "  Building omnidsp as SHARED library.")
+    message(STATUS "  Building OmniDSP as SHARED library.")
 else()
     set(OMNIDSP_LIBRARY_TYPE STATIC)
-    message(STATUS "  Building omnidsp as STATIC library.")
+    message(STATUS "  Building OmniDSP as STATIC library.")
 endif()
 # --- End Library Type Determination ---
 

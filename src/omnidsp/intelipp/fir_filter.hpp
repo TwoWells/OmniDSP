@@ -1,5 +1,5 @@
 /**
- * @file fir_filter.hpp (intelipp)
+ * @file fir_filter.hpp (IntelIPP)
  * @brief Declares the Intel IPP implementation class for FIR filter plans.
  */
 
@@ -20,7 +20,7 @@
 #include "../interface/backend.hpp"  // Defines abstract::FIRFilterPlanImpl
 #include "utils.hpp"  // For IPP type helpers (utils::GetIPPType etc.) and macros
 
-namespace OmniDSP::intelipp {
+namespace OmniDSP::IntelIPP {
 
   //--------------------------------------------------------------------------
   // Helper Functions / Type Traits (Internal) - FIR Wrappers
@@ -226,6 +226,6 @@ namespace OmniDSP::intelipp {
     IPP_Spec_Type* p_ipp_spec_ = nullptr;  // Typed pointer into p_spec_
   };
 
-}  // namespace OmniDSP::intelipp
+}  // namespace OmniDSP::IntelIPP
 
 #endif  // OMNIDSP_INTELIPP_FIR_FILTER_HPP

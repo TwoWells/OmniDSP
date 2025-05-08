@@ -21,8 +21,7 @@
 //   class RFFTPlanImpl;
 // }  // namespace OmniDSP::backend
 
-namespace OmniDSP::default
-{
+namespace OmniDSP::Default {
 
   /**
    * @brief Default backend implementation for Convolution Plan (Standard C++).
@@ -201,7 +200,7 @@ namespace OmniDSP::default
 
   // --- BackendType Factory Function Declarations (Implementation in
   // backend.cpp)
-  // --- These declarations remain unchanged (match AbstractBackend)
+  // --- These declarations remain unchanged (match Backend)
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::ConvolutionPlanImpl<F32>>>
   create_default_convolution_plan_impl_f32(
@@ -236,6 +235,6 @@ namespace OmniDSP::default
   create_default_correlation_plan_impl_c64(
       const C64Vec& kernel, ConvolutionType type, ConvolutionMethod method);
 
-}  // namespace OmniDSP::default
+}  // namespace OmniDSP::Default
 
 #endif  // OMNIDSP_DEFAULT_CONVOLUTION_HPP

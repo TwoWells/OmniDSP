@@ -1,5 +1,5 @@
 /**
- * @file backend.cpp (default)
+ * @file backend.cpp (Default)
  * @brief Implements the DefaultBackend class methods using standard C++.
  */
 
@@ -38,8 +38,7 @@
 #include <variant>
 #include <vector>
 
-namespace OmniDSP::default
-{
+namespace OmniDSP::Default {
 
   // Forward declare the internal design helper functions (defined in
   // filter.cpp) These declarations allow this file to call them.
@@ -652,8 +651,9 @@ namespace OmniDSP::default
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<ConvolutionPlan<F32>>>
   DefaultBackend::create_convolution_plan_f32(
-      const F32Vec& kernel, ConvolutionType type, ConvolutionMethod method)
-      const
+      const F32Vec& kernel,
+      ConvolutionType type,
+      ConvolutionMethod method) const
   {
     auto pimpl_expected
         = create_convolution_plan_impl_f32(kernel, type, method);
@@ -663,8 +663,9 @@ namespace OmniDSP::default
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<ConvolutionPlan<F64>>>
   DefaultBackend::create_convolution_plan_f64(
-      const F64Vec& kernel, ConvolutionType type, ConvolutionMethod method)
-      const
+      const F64Vec& kernel,
+      ConvolutionType type,
+      ConvolutionMethod method) const
   {
     auto pimpl_expected
         = create_convolution_plan_impl_f64(kernel, type, method);
@@ -674,8 +675,9 @@ namespace OmniDSP::default
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<ConvolutionPlan<C32>>>
   DefaultBackend::create_convolution_plan_c32(
-      const C32Vec& kernel, ConvolutionType type, ConvolutionMethod method)
-      const
+      const C32Vec& kernel,
+      ConvolutionType type,
+      ConvolutionMethod method) const
   {
     auto pimpl_expected
         = create_convolution_plan_impl_c32(kernel, type, method);
@@ -685,8 +687,9 @@ namespace OmniDSP::default
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<ConvolutionPlan<C64>>>
   DefaultBackend::create_convolution_plan_c64(
-      const C64Vec& kernel, ConvolutionType type, ConvolutionMethod method)
-      const
+      const C64Vec& kernel,
+      ConvolutionType type,
+      ConvolutionMethod method) const
   {
     auto pimpl_expected
         = create_convolution_plan_impl_c64(kernel, type, method);
@@ -696,8 +699,9 @@ namespace OmniDSP::default
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<CorrelationPlan<F32>>>
   DefaultBackend::create_correlation_plan_f32(
-      const F32Vec& kernel, ConvolutionType type, ConvolutionMethod method)
-      const
+      const F32Vec& kernel,
+      ConvolutionType type,
+      ConvolutionMethod method) const
   {
     auto pimpl_expected
         = create_correlation_plan_impl_f32(kernel, type, method);
@@ -707,8 +711,9 @@ namespace OmniDSP::default
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<CorrelationPlan<F64>>>
   DefaultBackend::create_correlation_plan_f64(
-      const F64Vec& kernel, ConvolutionType type, ConvolutionMethod method)
-      const
+      const F64Vec& kernel,
+      ConvolutionType type,
+      ConvolutionMethod method) const
   {
     auto pimpl_expected
         = create_correlation_plan_impl_f64(kernel, type, method);
@@ -718,8 +723,9 @@ namespace OmniDSP::default
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<CorrelationPlan<C32>>>
   DefaultBackend::create_correlation_plan_c32(
-      const C32Vec& kernel, ConvolutionType type, ConvolutionMethod method)
-      const
+      const C32Vec& kernel,
+      ConvolutionType type,
+      ConvolutionMethod method) const
   {
     auto pimpl_expected
         = create_correlation_plan_impl_c32(kernel, type, method);
@@ -729,8 +735,9 @@ namespace OmniDSP::default
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<CorrelationPlan<C64>>>
   DefaultBackend::create_correlation_plan_c64(
-      const C64Vec& kernel, ConvolutionType type, ConvolutionMethod method)
-      const
+      const C64Vec& kernel,
+      ConvolutionType type,
+      ConvolutionMethod method) const
   {
     auto pimpl_expected
         = create_correlation_plan_impl_c64(kernel, type, method);
@@ -907,8 +914,9 @@ namespace OmniDSP::default
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::ConvolutionPlanImpl<F32>>>
   DefaultBackend::create_convolution_plan_impl_f32(
-      const F32Vec& kernel, ConvolutionType type, ConvolutionMethod method)
-      const
+      const F32Vec& kernel,
+      ConvolutionType type,
+      ConvolutionMethod method) const
   {
     try {
       size_t kernel_length = kernel.size();
@@ -936,8 +944,9 @@ namespace OmniDSP::default
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::ConvolutionPlanImpl<F64>>>
   DefaultBackend::create_convolution_plan_impl_f64(
-      const F64Vec& kernel, ConvolutionType type, ConvolutionMethod method)
-      const
+      const F64Vec& kernel,
+      ConvolutionType type,
+      ConvolutionMethod method) const
   {
     try {
       size_t kernel_length = kernel.size();
@@ -965,8 +974,9 @@ namespace OmniDSP::default
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::ConvolutionPlanImpl<C32>>>
   DefaultBackend::create_convolution_plan_impl_c32(
-      const C32Vec& kernel, ConvolutionType type, ConvolutionMethod method)
-      const
+      const C32Vec& kernel,
+      ConvolutionType type,
+      ConvolutionMethod method) const
   {
     try {
       size_t kernel_length = kernel.size();
@@ -993,8 +1003,9 @@ namespace OmniDSP::default
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::ConvolutionPlanImpl<C64>>>
   DefaultBackend::create_convolution_plan_impl_c64(
-      const C64Vec& kernel, ConvolutionType type, ConvolutionMethod method)
-      const
+      const C64Vec& kernel,
+      ConvolutionType type,
+      ConvolutionMethod method) const
   {
     try {
       size_t kernel_length = kernel.size();
@@ -1021,8 +1032,9 @@ namespace OmniDSP::default
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::CorrelationPlanImpl<F32>>>
   DefaultBackend::create_correlation_plan_impl_f32(
-      const F32Vec& kernel, ConvolutionType type, ConvolutionMethod method)
-      const
+      const F32Vec& kernel,
+      ConvolutionType type,
+      ConvolutionMethod method) const
   {
     try {
       size_t kernel_length = kernel.size();
@@ -1050,8 +1062,9 @@ namespace OmniDSP::default
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::CorrelationPlanImpl<F64>>>
   DefaultBackend::create_correlation_plan_impl_f64(
-      const F64Vec& kernel, ConvolutionType type, ConvolutionMethod method)
-      const
+      const F64Vec& kernel,
+      ConvolutionType type,
+      ConvolutionMethod method) const
   {
     try {
       size_t kernel_length = kernel.size();
@@ -1079,8 +1092,9 @@ namespace OmniDSP::default
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::CorrelationPlanImpl<C32>>>
   DefaultBackend::create_correlation_plan_impl_c32(
-      const C32Vec& kernel, ConvolutionType type, ConvolutionMethod method)
-      const
+      const C32Vec& kernel,
+      ConvolutionType type,
+      ConvolutionMethod method) const
   {
     try {
       size_t kernel_length = kernel.size();
@@ -1107,8 +1121,9 @@ namespace OmniDSP::default
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::CorrelationPlanImpl<C64>>>
   DefaultBackend::create_correlation_plan_impl_c64(
-      const C64Vec& kernel, ConvolutionType type, ConvolutionMethod method)
-      const
+      const C64Vec& kernel,
+      ConvolutionType type,
+      ConvolutionMethod method) const
   {
     try {
       size_t kernel_length = kernel.size();
@@ -1216,39 +1231,39 @@ namespace OmniDSP::default
     }
     switch (spec.get_type()) {
       case WindowType::Bartlett:
-        return default ::bartlett_window(output);
+        return Default ::bartlett_window(output);
       case WindowType::Blackman:
-        return default ::blackman_window(output);
+        return Default ::blackman_window(output);
       case WindowType::Flattop:
-        return default ::flattop_window(output);
+        return Default ::flattop_window(output);
       case WindowType::Hamming:
-        return default ::hamming_window(output);
+        return Default ::hamming_window(output);
       case WindowType::Hann:
-        return default ::hann_window(output);
+        return Default ::hann_window(output);
       case WindowType::Rectangular:
-        return default ::rectangular_window(output);
+        return Default ::rectangular_window(output);
       case WindowType::Triangular:
-        return default ::triangular_window(output);
+        return Default ::triangular_window(output);
       case WindowType::Gaussian:
         if (!spec.get_param().has_value()) return Status::InvalidArgument;
-        return default ::gaussian_window(
+        return Default ::gaussian_window(
             spec.get_param().value(), output);  // Pass double directly
       case WindowType::Kaiser:
         if (!spec.get_param().has_value()) return Status::InvalidArgument;
-        return default ::kaiser_window(
+        return Default ::kaiser_window(
             spec.get_param().value(), output);  // Pass double directly
       default:
         return Status::InvalidArgument;
     }
   }
-}  // namespace OmniDSP::default
+}  // namespace OmniDSP::Default
 
 // This function needs to be defined in the global OmniDSP::Abstract namespace
 // as declared in interface/backend.hpp
 namespace OmniDSP::Abstract {
-  std::unique_ptr<AbstractBackend> create_default_backend()
+  std::unique_ptr<Backend> create_default_backend()
   {
-    // Use the concrete class from the default namespace
-    return std::make_unique<::OmniDSP::default ::DefaultBackend>();
+    // Use the concrete class from the Default namespace
+    return std::make_unique<::OmniDSP::Default ::DefaultBackend>();
   }
 }  // namespace OmniDSP::Abstract

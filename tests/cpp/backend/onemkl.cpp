@@ -3,9 +3,9 @@
  * @brief Unit tests specifically for the MKL backend convolution/correlation
  * (if any).
  */
-#include <OmniDSP/convolution.h>
 #include <gtest/gtest.h>
 
+#include <OmniDSP/convolution.hpp>
 #include <vector>
 
 // Only compile these tests if the MKL backend is active

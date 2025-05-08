@@ -1,6 +1,6 @@
 /**
- * @file backend.cpp (intelipp)
- * @brief Implements the IntelIPPBackend class methods using Intel IPP.
+ * @file backend.cpp (IntelIPP)
+ * @brief Implements the Backend class methods using Intel IPP.
  */
 
 #include "backend.hpp"  // Includes default/backend.hpp now
@@ -29,7 +29,7 @@
 // func return type)
 #include "../interface/backend.hpp"
 
-namespace OmniDSP::intelipp {
+namespace OmniDSP::IntelIPP {
 
   // Error Handling Macros remain useful
 #define OMNI_RETURN_IPP_ERROR(T, status_code, message)                         \
@@ -47,10 +47,10 @@ namespace OmniDSP::intelipp {
   }
 
   //--------------------------------------------------------------------------
-  // IntelIPPBackend Method Definitions
+  // Backend Method Definitions
   //--------------------------------------------------------------------------
 
-  IntelIPPBackend::IntelIPPBackend()
+  Backend::Backend()
   {
     // Initialize IPP library (optional but recommended)
     // ippInit(); // Might be needed depending on IPP version/linking
@@ -67,12 +67,12 @@ namespace OmniDSP::intelipp {
     }
   }
 
-  IntelIPPBackend::~IntelIPPBackend()
+  Backend::~Backend()
   {
     // Cleanup IPP if needed (e.g., if ippInit was called)
   }
 
-  BackendType IntelIPPBackend::get_backend() const
+  BackendType Backend::get_backend() const
   {
     return BackendType::IntelIPP;  // Override to identify correctly
   }
@@ -87,113 +87,113 @@ namespace OmniDSP::intelipp {
   // --- Overridden Window Generation ---
   // Provide definitions ONLY for functions marked 'override' in the header.
 
-  [[nodiscard]] Status IntelIPPBackend::bartlett_window_f32(
+  [[nodiscard]] Status Backend::bartlett_window_f32(
       size_t length, std::span<F32> output) const
   {
     // Basic size check (optional, could rely on helper)
     if (output.size() < length) return Status::SizeMismatch;
     // Call the specific IPP helper function
-    return intelipp::generate_bartlett_window_intelipp(output.first(length));
+    return IntelIPP::generate_bartlett_window_intelipp(output.first(length));
   }
-  [[nodiscard]] Status IntelIPPBackend::bartlett_window_f64(
+  [[nodiscard]] Status Backend::bartlett_window_f64(
       size_t length, std::span<F64> output) const
   {
     if (output.size() < length) return Status::SizeMismatch;
-    return intelipp::generate_bartlett_window_intelipp(output.first(length));
+    return IntelIPP::generate_bartlett_window_intelipp(output.first(length));
   }
 
-  [[nodiscard]] Status IntelIPPBackend::blackman_window_f32(
+  [[nodiscard]] Status Backend::blackman_window_f32(
       size_t length, std::span<F32> output) const
   {
     if (output.size() < length) return Status::SizeMismatch;
-    return intelipp::generate_blackman_window_intelipp(output.first(length));
+    return IntelIPP::generate_blackman_window_intelipp(output.first(length));
   }
-  [[nodiscard]] Status IntelIPPBackend::blackman_window_f64(
+  [[nodiscard]] Status Backend::blackman_window_f64(
       size_t length, std::span<F64> output) const
   {
     if (output.size() < length) return Status::SizeMismatch;
-    return intelipp::generate_blackman_window_intelipp(output.first(length));
+    return IntelIPP::generate_blackman_window_intelipp(output.first(length));
   }
 
   // Flattop and Gaussian are NOT overridden - definitions inherited.
 
-  [[nodiscard]] Status IntelIPPBackend::hamming_window_f32(
+  [[nodiscard]] Status Backend::hamming_window_f32(
       size_t length, std::span<F32> output) const
   {
     if (output.size() < length) return Status::SizeMismatch;
-    return intelipp::generate_hamming_window_intelipp(output.first(length));
+    return IntelIPP::generate_hamming_window_intelipp(output.first(length));
   }
-  [[nodiscard]] Status IntelIPPBackend::hamming_window_f64(
+  [[nodiscard]] Status Backend::hamming_window_f64(
       size_t length, std::span<F64> output) const
   {
     if (output.size() < length) return Status::SizeMismatch;
-    return intelipp::generate_hamming_window_intelipp(output.first(length));
+    return IntelIPP::generate_hamming_window_intelipp(output.first(length));
   }
 
-  [[nodiscard]] Status IntelIPPBackend::hann_window_f32(
+  [[nodiscard]] Status Backend::hann_window_f32(
       size_t length, std::span<F32> output) const
   {
     if (output.size() < length) return Status::SizeMismatch;
-    return intelipp::generate_hann_window_intelipp(output.first(length));
+    return IntelIPP::generate_hann_window_intelipp(output.first(length));
   }
-  [[nodiscard]] Status IntelIPPBackend::hann_window_f64(
+  [[nodiscard]] Status Backend::hann_window_f64(
       size_t length, std::span<F64> output) const
   {
     if (output.size() < length) return Status::SizeMismatch;
-    return intelipp::generate_hann_window_intelipp(output.first(length));
+    return IntelIPP::generate_hann_window_intelipp(output.first(length));
   }
 
-  [[nodiscard]] Status IntelIPPBackend::kaiser_window_f32(
+  [[nodiscard]] Status Backend::kaiser_window_f32(
       size_t length, double beta, std::span<F32> output) const
   {
     if (output.size() < length) return Status::SizeMismatch;
     // Add validation for beta if needed, although the helper might do it
     if (beta < 0.0) return Status::InvalidArgument;
-    return intelipp::generate_kaiser_window_intelipp(
+    return IntelIPP::generate_kaiser_window_intelipp(
         beta, output.first(length));
   }
-  [[nodiscard]] Status IntelIPPBackend::kaiser_window_f64(
+  [[nodiscard]] Status Backend::kaiser_window_f64(
       size_t length, double beta, std::span<F64> output) const
   {
     if (output.size() < length) return Status::SizeMismatch;
     if (beta < 0.0) return Status::InvalidArgument;
-    return intelipp::generate_kaiser_window_intelipp(
+    return IntelIPP::generate_kaiser_window_intelipp(
         beta, output.first(length));
   }
 
-  [[nodiscard]] Status IntelIPPBackend::rectangular_window_f32(
+  [[nodiscard]] Status Backend::rectangular_window_f32(
       size_t length, std::span<F32> output) const
   {
     if (output.size() < length) return Status::SizeMismatch;
-    return intelipp::generate_rectangular_window_intelipp(output.first(length));
+    return IntelIPP::generate_rectangular_window_intelipp(output.first(length));
   }
-  [[nodiscard]] Status IntelIPPBackend::rectangular_window_f64(
+  [[nodiscard]] Status Backend::rectangular_window_f64(
       size_t length, std::span<F64> output) const
   {
     if (output.size() < length) return Status::SizeMismatch;
-    return intelipp::generate_rectangular_window_intelipp(output.first(length));
+    return IntelIPP::generate_rectangular_window_intelipp(output.first(length));
   }
 
-  [[nodiscard]] Status IntelIPPBackend::triangular_window_f32(
+  [[nodiscard]] Status Backend::triangular_window_f32(
       size_t length, std::span<F32> output) const
   {
     if (output.size() < length) return Status::SizeMismatch;
     // IPP Triangular uses the Bartlett implementation helper
-    return intelipp::generate_triangular_window_intelipp(output.first(length));
+    return IntelIPP::generate_triangular_window_intelipp(output.first(length));
   }
-  [[nodiscard]] Status IntelIPPBackend::triangular_window_f64(
+  [[nodiscard]] Status Backend::triangular_window_f64(
       size_t length, std::span<F64> output) const
   {
     if (output.size() < length) return Status::SizeMismatch;
     // IPP Triangular uses the Bartlett implementation helper
-    return intelipp::generate_triangular_window_intelipp(output.first(length));
+    return IntelIPP::generate_triangular_window_intelipp(output.first(length));
   }
 
   // --- Overridden Plan Factories (Public API) ---
   // These create the public Plan<> handles using the IPP implementations.
 
   [[nodiscard]] OmniExpected<std::unique_ptr<FFTPlan<C32>>>
-  IntelIPPBackend::create_fft_plan_c32(size_t length) const
+  Backend::create_fft_plan_c32(size_t length) const
   {
     try {
       // Create the IPP-specific implementation
@@ -216,7 +216,7 @@ namespace OmniDSP::intelipp {
   }
 
   [[nodiscard]] OmniExpected<std::unique_ptr<FFTPlan<C64>>>
-  IntelIPPBackend::create_fft_plan_c64(size_t length) const
+  Backend::create_fft_plan_c64(size_t length) const
   {
     try {
       auto pimpl = std::make_unique<IntelIPPFFTPlanImpl<C64>>(length);
@@ -237,7 +237,7 @@ namespace OmniDSP::intelipp {
   }
 
   [[nodiscard]] OmniExpected<std::unique_ptr<RFFTPlan<F32>>>
-  IntelIPPBackend::create_rfft_plan_f32(size_t length) const
+  Backend::create_rfft_plan_f32(size_t length) const
   {
     try {
       auto pimpl = std::make_unique<IntelIPPRFFTPlanImpl<F32>>(length);
@@ -258,7 +258,7 @@ namespace OmniDSP::intelipp {
   }
 
   [[nodiscard]] OmniExpected<std::unique_ptr<RFFTPlan<F64>>>
-  IntelIPPBackend::create_rfft_plan_f64(size_t length) const
+  Backend::create_rfft_plan_f64(size_t length) const
   {
     try {
       auto pimpl = std::make_unique<IntelIPPRFFTPlanImpl<F64>>(length);
@@ -279,7 +279,7 @@ namespace OmniDSP::intelipp {
   }
 
   [[nodiscard]] OmniExpected<std::unique_ptr<ResamplePlan<F32>>>
-  IntelIPPBackend::create_resample_plan_f32(const ResampleSpec& spec) const
+  Backend::create_resample_plan_f32(const ResampleSpec& spec) const
   {
     try {
       auto pimpl = std::make_unique<IntelIPPResamplePlanImpl<F32>>(this, spec);
@@ -302,7 +302,7 @@ namespace OmniDSP::intelipp {
   }
 
   [[nodiscard]] OmniExpected<std::unique_ptr<ResamplePlan<F64>>>
-  IntelIPPBackend::create_resample_plan_f64(const ResampleSpec& spec) const
+  Backend::create_resample_plan_f64(const ResampleSpec& spec) const
   {
     try {
       auto pimpl = std::make_unique<IntelIPPResamplePlanImpl<F64>>(this, spec);
@@ -325,7 +325,7 @@ namespace OmniDSP::intelipp {
   }
 
   [[nodiscard]] OmniExpected<std::unique_ptr<FIRFilterPlan<F32>>>
-  IntelIPPBackend::create_fir_filter_plan_f32(const F32Vec& coefficients) const
+  Backend::create_fir_filter_plan_f32(const F32Vec& coefficients) const
   {
     try {
       auto pimpl
@@ -349,7 +349,7 @@ namespace OmniDSP::intelipp {
   }
 
   [[nodiscard]] OmniExpected<std::unique_ptr<FIRFilterPlan<F64>>>
-  IntelIPPBackend::create_fir_filter_plan_f64(const F64Vec& coefficients) const
+  Backend::create_fir_filter_plan_f64(const F64Vec& coefficients) const
   {
     try {
       auto pimpl
@@ -373,7 +373,7 @@ namespace OmniDSP::intelipp {
   }
 
   [[nodiscard]] OmniExpected<std::unique_ptr<FIRFilterPlan<C32>>>
-  IntelIPPBackend::create_fir_filter_plan_c32(const C32Vec& coefficients) const
+  Backend::create_fir_filter_plan_c32(const C32Vec& coefficients) const
   {
     try {
       auto pimpl
@@ -397,7 +397,7 @@ namespace OmniDSP::intelipp {
   }
 
   [[nodiscard]] OmniExpected<std::unique_ptr<FIRFilterPlan<C64>>>
-  IntelIPPBackend::create_fir_filter_plan_c64(const C64Vec& coefficients) const
+  Backend::create_fir_filter_plan_c64(const C64Vec& coefficients) const
   {
     try {
       auto pimpl
@@ -421,7 +421,7 @@ namespace OmniDSP::intelipp {
   }
 
   [[nodiscard]] OmniExpected<std::unique_ptr<IIRFilterPlan<F32>>>
-  IntelIPPBackend::create_iir_filter_plan_f32(
+  Backend::create_iir_filter_plan_f32(
       const std::vector<IIRFilterCoef>& sos_coefficients) const
   {
     try {
@@ -446,7 +446,7 @@ namespace OmniDSP::intelipp {
   }
 
   [[nodiscard]] OmniExpected<std::unique_ptr<IIRFilterPlan<F64>>>
-  IntelIPPBackend::create_iir_filter_plan_f64(
+  Backend::create_iir_filter_plan_f64(
       const std::vector<IIRFilterCoef>& sos_coefficients) const
   {
     try {
@@ -473,14 +473,14 @@ namespace OmniDSP::intelipp {
   // Definitions for Convolution/Correlation/CQT plan factories are inherited.
   // Definitions for Filter design methods are inherited.
 
-}  // namespace OmniDSP::intelipp
+}  // namespace OmniDSP::IntelIPP
 
 // This function needs to be defined in the global OmniDSP::abstract namespace
 // as declared in interface/backend.hpp
 namespace OmniDSP::Abstract {
-  std::unique_ptr<AbstractBackend> create_intelipp_backend()
+  std::unique_ptr<Backend> create_intelipp_backend()
   {
-    // Use the concrete class from the intelipp namespace
-    return std::make_unique<::OmniDSP::intelipp::IntelIPPBackend>();
+    // Use the concrete class from the IntelIPP namespace
+    return std::make_unique<::OmniDSP::IntelIPP::Backend>();
   }
 }  // namespace OmniDSP::Abstract

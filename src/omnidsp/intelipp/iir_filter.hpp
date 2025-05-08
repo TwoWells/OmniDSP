@@ -1,5 +1,5 @@
 /**
- * @file iir_filter.hpp (intelipp)
+ * @file iir_filter.hpp (IntelIPP)
  * @brief Declares the Intel IPP implementation class for IIR filter plans.
  */
 
@@ -20,7 +20,7 @@
 #include "../interface/backend.hpp"  // Defines abstract::IIRFilterPlanImpl
 #include "utils.hpp"  // For IPP type helpers (utils::GetIPPType etc.) and macros
 
-namespace OmniDSP::intelipp {
+namespace OmniDSP::IntelIPP {
 
   //--------------------------------------------------------------------------
   // Helper Functions / Type Traits (Internal) - IIR Wrappers
@@ -179,6 +179,6 @@ namespace OmniDSP::intelipp {
     std::vector<T> taps_interleaved_;
   };
 
-}  // namespace OmniDSP::intelipp
+}  // namespace OmniDSP::IntelIPP
 
 #endif  // OMNIDSP_INTELIPP_IIR_FILTER_HPP

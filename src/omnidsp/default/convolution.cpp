@@ -22,8 +22,7 @@
 
 #include "../interface/backend.hpp"  // For AbstractBackend and FFTPlanImpl base classes (FFTPlanImpl, RFFTPlanImpl)
 
-namespace OmniDSP::default
-{
+namespace OmniDSP::Default {
 
   //--------------------------------------------------------------------------
   // Helper Functions (Standard C++) - Keep from original file
@@ -98,7 +97,7 @@ namespace OmniDSP::default
 
   template <typename T>  // T can be F32, F64, C32, C64
   DefaultConvolutionPlanImpl<T>::DefaultConvolutionPlanImpl(
-      FFTPlanImplVariant && fft_plan_variant,  // Accept the FFT plan variant
+      FFTPlanImplVariant&& fft_plan_variant,  // Accept the FFT plan variant
       const std::vector<T>& kernel,
       ConvolutionType type,
       ConvolutionMethod method)
@@ -445,8 +444,8 @@ namespace OmniDSP::default
     return method_;
   }
   template <typename T>
-  size_t DefaultConvolutionPlanImpl<T>::get_output_length(size_t input_length)
-      const
+  size_t DefaultConvolutionPlanImpl<T>::get_output_length(
+      size_t input_length) const
   {
     if (kernel_length_ == 0)
       return (
@@ -487,7 +486,7 @@ namespace OmniDSP::default
 
   template <typename T>  // T can be F32, F64, C32, C64
   DefaultCorrelationPlanImpl<T>::DefaultCorrelationPlanImpl(
-      FFTPlanImplVariant && fft_plan_variant,  // Accept the FFT plan variant
+      FFTPlanImplVariant&& fft_plan_variant,  // Accept the FFT plan variant
       const std::vector<T>& kernel,  // This is the 'template' for correlation
       ConvolutionType
           type,  // Using ConvolutionType enum for mode (Full, Same, Valid)
@@ -840,8 +839,8 @@ namespace OmniDSP::default
     return method_;
   }
   template <typename T>
-  size_t DefaultCorrelationPlanImpl<T>::get_output_length(size_t input_length)
-      const
+  size_t DefaultCorrelationPlanImpl<T>::get_output_length(
+      size_t input_length) const
   {
     // Same logic as convolution for output length calculation
     if (kernel_length_ == 0)
@@ -886,4 +885,4 @@ namespace OmniDSP::default
   template class DefaultCorrelationPlanImpl<C32>;
   template class DefaultCorrelationPlanImpl<C64>;
 
-}  // namespace OmniDSP::default
+}  // namespace OmniDSP::Default

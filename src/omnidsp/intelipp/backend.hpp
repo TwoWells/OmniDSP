@@ -1,5 +1,5 @@
 /**
- * @file backend.hpp (intelipp)
+ * @file backend.hpp (IntelIPP)
  * @brief Declares the concrete Intel IPP backend implementation class.
  * @details This class inherits from DefaultBackend and overrides functions
  * where Intel IPP provides optimized implementations (FFT, windowing,
@@ -32,7 +32,7 @@
 #include "resample.hpp"    // Defines IntelIPPResamplePlanImpl
 #include "window.hpp"      // Defines IntelIPP window helpers (if overridden)
 
-namespace OmniDSP::intelipp {
+namespace OmniDSP::IntelIPP {
 
   //--------------------------------------------------------------------------
   // IntelIPP Main Backend Implementation Class
@@ -42,13 +42,13 @@ namespace OmniDSP::intelipp {
    * @brief Concrete Intel IPP backend implementation. Inherits from
    * DefaultBackend.
    */
-  class IntelIPPBackend final : public default ::DefaultBackend {
+  class Backend final : public Default::DefaultBackend {
    public:
     // --- Constructor / Destructor ---
-    IntelIPPBackend();
+    Backend();
     // Destructor override is inherited from DefaultBackend (which overrides
     // AbstractBackend)
-    ~IntelIPPBackend() override;
+    ~Backend() override;
 
     // --- Core ---
     // MUST override to identify this backend
@@ -154,8 +154,8 @@ namespace OmniDSP::intelipp {
 
   // Factory function declaration (definition in .cpp file)
   // This still returns a pointer to the ABSTRACT base, which is correct.
-  std::unique_ptr<Abstract::AbstractBackend> create_intelipp_backend();
+  std::unique_ptr<Abstract::Backend> create_intelipp_backend();
 
-}  // namespace OmniDSP::intelipp
+}  // namespace OmniDSP::IntelIPP
 
 #endif  // OMNIDSP_INTELIPP_BACKEND_HPP

@@ -14,9 +14,7 @@
 // Removed Highway includes for standard C++ version
 // #include <hwy/aligned_allocator.h>
 
-// Corrected namespace to OmniDSP::default
-namespace OmniDSP::default
-{
+namespace OmniDSP::Default {
 
   // --- Default BackendType FFT Plan Implementations (Standard C++) ---
   // Inherit from internal Impl classes defined in ../interface/backend.hpp
@@ -158,6 +156,6 @@ namespace OmniDSP::default
         packed_buffer_;  // Buffer for N/2 complex data (used in RFFT/IRFFT)
   };
 
-}  // namespace OmniDSP::default
+}  // namespace OmniDSP::Default
 
 #endif  // OMNIDSP_DEFAULT_FFT_HPP

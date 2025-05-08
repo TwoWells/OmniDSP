@@ -15,7 +15,7 @@
 
 // Forward declare AbstractBackend
 namespace OmniDSP::Abstract {
-  class AbstractBackend;
+  class Backend;
 }
 
 namespace OmniDSP::Utils {
@@ -39,7 +39,7 @@ namespace OmniDSP::Utils {
    */
   template <typename T>
   [[nodiscard]] OmniExpected<FIRCoefs<T>> design_resampling_prototype_filter(
-      const Abstract::AbstractBackend* owner_backend,
+      const Abstract::Backend* owner_backend,
       size_t L,
       size_t M,
       int quality,
@@ -48,14 +48,14 @@ namespace OmniDSP::Utils {
   // Explicit template instantiation declarations (implementation in .cpp)
   extern template OmniExpected<FIRCoefs<F32>>
   design_resampling_prototype_filter<F32>(
-      const Abstract::AbstractBackend* owner_backend,
+      const Abstract::Backend* owner_backend,
       size_t L,
       size_t M,
       int quality,
       const WindowSpec& window_spec);
   extern template OmniExpected<FIRCoefs<F64>>
   design_resampling_prototype_filter<F64>(
-      const Abstract::AbstractBackend* owner_backend,
+      const Abstract::Backend* owner_backend,
       size_t L,
       size_t M,
       int quality,

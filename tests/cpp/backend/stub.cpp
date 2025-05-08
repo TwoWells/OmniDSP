@@ -3,9 +3,9 @@
  * @brief Unit tests specifically for the Default backend
  * convolution/correlation behavior.
  */
-#include <OmniDSP/convolution.h>  // Include the public API
 #include <gtest/gtest.h>
 
+#include <OmniDSP/convolution.hpp>  // Include the public API
 #include <stdexcept>
 #include <vector>
 

@@ -10,11 +10,11 @@
 #include <span>                    // For std::span
 
 // Changed namespace to intelipp
-namespace OmniDSP::intelipp {
+namespace OmniDSP::IntelIPP {
 
   // --- Intel IPP Window Generation Helper Function Declarations ---
   // These functions perform the actual computation using IPP.
-  // They are called by the corresponding virtual methods in IntelIPPBackend.
+  // They are called by the corresponding virtual methods in Backend.
 
   // Renamed functions from _onemkl to _intelipp
   [[nodiscard]] Status generate_bartlett_window_intelipp(std::span<F32> output);
@@ -44,6 +44,6 @@ namespace OmniDSP::intelipp {
   [[nodiscard]] Status generate_triangular_window_intelipp(
       std::span<F64> output);
 
-}  // namespace OmniDSP::intelipp
+}  // namespace OmniDSP::IntelIPP
 
 #endif  // OMNIDSP_INTELIPP_WINDOW_HPP

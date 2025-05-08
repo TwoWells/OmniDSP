@@ -4,10 +4,10 @@
  * Uses TestDataLoader for loading reference data and tests the public API.
  */
 
-#include <OmniDSP/core_types.h>  // Include for Precision enum
-#include <OmniDSP/cqt.h>         // Include the OmniDSP CQT header
-#include <OmniDSP/fft.h>         // Include for FFTNorm enum
-#include <OmniDSP/resample.h>    // Include for filter_and_downsample
+#include <OmniDSP/core_types.hpp>  // Include for Precision enum
+#include <OmniDSP/cqt.hpp>         // Include the OmniDSP CQT header
+#include <OmniDSP/fft.hpp>         // Include for FFTNorm enum
+#include <OmniDSP/resample.hpp>    // Include for filter_and_downsample
 // #include <OmniDSP/window.h>
 #include <gtest/gtest.h>
 
@@ -21,7 +21,7 @@
 #include <string>
 #include <vector>
 
-#include "../TestDataLoader.h"  // Include the new data loader utility
+#include "../TestDataLoader.hpp"  // Include the new data loader utility
 
 // Define aliases for vector/matrix types
 using VecD = std::vector<double>;

@@ -43,7 +43,7 @@ namespace OmniDSP {
 
 namespace OmniDSP::Abstract {
 
-  class AbstractBackend;
+  class Backend;
 
   //--------------------------------------------------------------------------
   // Plan Implementation Interfaces (Abstract Base Classes)
@@ -150,10 +150,10 @@ namespace OmniDSP::Abstract {
   //--------------------------------------------------------------------------
   // Main Backend Implementation Interface (Abstract Base Class)
   //--------------------------------------------------------------------------
-  class AbstractBackend {
+  class Backend {
     // ... (Virtual function declarations remain the same) ...
    public:
-    virtual ~AbstractBackend() = default;
+    virtual ~Backend() = default;
     virtual BackendType get_backend() const = 0;
     [[nodiscard]] virtual OmniExpected<F32Vec> convolve_f32(
         const F32Vec& input,
@@ -391,7 +391,7 @@ namespace OmniDSP::Abstract {
         = 0;
 
    protected:
-    AbstractBackend() = default;
+    Backend() = default;
   };
 
   // --- Backend Factory Function Declarations ---
@@ -399,14 +399,14 @@ namespace OmniDSP::Abstract {
   // and are called by OmniDSP::create.
 
   // Always available
-  std::unique_ptr<AbstractBackend> create_default_backend();
+  std::unique_ptr<Backend> create_default_backend();
 
   // Conditionally available based on CMake definitions
   // (These declarations are fine even if the backend isn't compiled,
   // as long as they aren't *called* without the definition being linked)
-  std::unique_ptr<AbstractBackend> create_accelerate_backend();
-  std::unique_ptr<AbstractBackend> create_onemkl_backend();
-  std::unique_ptr<AbstractBackend> create_intelipp_backend();
+  std::unique_ptr<Backend> create_accelerate_backend();
+  std::unique_ptr<Backend> create_onemkl_backend();
+  std::unique_ptr<Backend> create_intelipp_backend();
 
   // Add declarations for other potential backends here...
 

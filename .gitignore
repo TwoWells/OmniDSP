@@ -3,6 +3,7 @@
 # === Build Output ===
 # Ignore the build directory regardless of its name case
 [Bb]uild/
+[Oo]ut/
 # Ignore scikit-build-core temporary build directory
 _skbuild/
 # Ignore common VS build output directories (often redundant if using a separate build/ folder)

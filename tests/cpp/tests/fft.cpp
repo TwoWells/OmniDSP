@@ -4,17 +4,17 @@
  * functions. Uses TestDataLoader for loading reference data and tests the
  * public API.
  */
-#include "OmniDSP/fft.h"  // Include the OmniDSP FFT header
 
+#include <OmniDSP/core_types.hpp>
+#include <OmniDSP/fft.hpp>
 #include <cmath>    // For std::abs
 #include <complex>  // For std::complex
 #include <limits>   // For std::numeric_limits
 #include <string>   // For std::string
 #include <vector>   // For std::vector
 
-#include "../TestDataLoader.h"  // Include the new data loader utility
-#include "OmniDSP/core_types.h"  // Include for Precision, Direction, Domain enums
-#include "gtest/gtest.h"         // Google Test framework
+#include "../TestDataLoader.hpp"  // Include the new data loader utility
+#include "gtest/gtest.h"          // Google Test framework
 
 // Helper function to compare complex vectors with tolerance
 template <typename T>

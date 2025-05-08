@@ -1,5 +1,5 @@
 /**
- * @file cqt.hpp (default)
+ * @file cqt.hpp (Default)
  * @brief Declares the concrete CQTPlanImpl class for the Default backend.
  */
 
@@ -18,8 +18,7 @@
 
 #include "../interface/backend.hpp"  // Base CQTPlanImpl interface and AbstractBackend
 
-namespace OmniDSP::default
-{
+namespace OmniDSP::Default {
   /**
    * @brief Default backend implementation for a Constant-Q Transform (CQT)
    * Plan.
@@ -47,7 +46,7 @@ namespace OmniDSP::default
      * kernel generation) fails.
      */
     DefaultCQTPlanImpl(
-        const Abstract::AbstractBackend* owner,  // Use AbstractBackend
+        const Abstract::Backend* owner,  // Use AbstractBackend
         Real sample_rate,
         Real min_freq,
         Real max_freq,
@@ -107,7 +106,7 @@ namespace OmniDSP::default
 
    private:
     // --- Configuration ---
-    const Abstract::AbstractBackend*
+    const Abstract::Backend*
         owner_;  // Non-owning pointer to backend for helpers
     Real sample_rate_;
     Real min_freq_;
@@ -139,6 +138,6 @@ namespace OmniDSP::default
   extern template class DefaultCQTPlanImpl<F32>;
   extern template class DefaultCQTPlanImpl<F64>;
 
-}  // namespace OmniDSP::default
+}  // namespace OmniDSP::Default
 
 #endif  // OMNIDSP_DEFAULT_CQT_HPP

@@ -1,5 +1,5 @@
 /**
- * @file iir_filter.cpp (intelipp)
+ * @file iir_filter.cpp (IntelIPP)
  * @brief Implements Intel IPP backend IIRFilterPlanImpl class using IPP.
  */
 
@@ -24,7 +24,7 @@
 #include <OmniDSP/core_types.hpp>  // Defines OmniException, Status etc.
 #include <OmniDSP/filter.hpp>      // Defines IIRFilterCoef
 
-namespace OmniDSP::intelipp {
+namespace OmniDSP::IntelIPP {
 
   //--------------------------------------------------------------------------
   // IntelIPPIIRFilterPlanImpl Method Definitions
@@ -223,4 +223,4 @@ namespace OmniDSP::intelipp {
   template class IntelIPPIIRFilterPlanImpl<F32>;
   template class IntelIPPIIRFilterPlanImpl<F64>;
 
-}  // namespace OmniDSP::intelipp
+}  // namespace OmniDSP::IntelIPP

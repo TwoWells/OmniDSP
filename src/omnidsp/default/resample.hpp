@@ -1,5 +1,5 @@
 /**
- * @file resample.hpp (default)
+ * @file resample.hpp (Default)
  * @brief Declares the concrete ResamplePlanImpl class for the Default backend.
  */
 
@@ -15,8 +15,7 @@
 
 #include "../interface/backend.hpp"  // Base ResamplePlanImpl interface
 
-namespace OmniDSP::default
-{
+namespace OmniDSP::Default {
 
   // Forward declare FIR plan if used internally
   template <typename T>
@@ -42,8 +41,7 @@ namespace OmniDSP::default
      * @throws std::runtime_error if filter design or internal setup fails.
      */
     DefaultResamplePlanImpl(
-        const Abstract::AbstractBackend* owner_backend,
-        const ResampleSpec& spec);
+        const Abstract::Backend* owner_backend, const ResampleSpec& spec);
 
     /**
      * @brief Destructor.
@@ -101,7 +99,7 @@ namespace OmniDSP::default
 
    private:
     // --- Configuration ---
-    const Abstract::AbstractBackend*
+    const Abstract::Backend*
         owner_backend_;  // Non-owning pointer to backend for filter design
     ResampleSpec spec_;
     size_t interpolation_factor_;  // L
@@ -131,6 +129,6 @@ namespace OmniDSP::default
   extern template class DefaultResamplePlanImpl<F32>;
   extern template class DefaultResamplePlanImpl<F64>;
 
-}  // namespace OmniDSP::default
+}  // namespace OmniDSP::Default
 
 #endif  // OMNIDSP_DEFAULT_RESAMPLE_HPP

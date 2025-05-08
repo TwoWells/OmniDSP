@@ -1,5 +1,5 @@
 /**
- * @file resample.cpp (intelipp)
+ * @file resample.cpp (IntelIPP)
  * @brief Implements the Intel IPP backend ResamplePlanImpl class using Intel
  * IPP FIRMR.
  * @details Designs the FIR filter coefficients using a common utility function
@@ -36,7 +36,7 @@
 #include "../utils/resample.hpp"       // For calculate_resampling_factors
 
 // Changed namespace
-namespace OmniDSP::intelipp {
+namespace OmniDSP::IntelIPP {
 
   // using directive for OmniException
   using ::OmniDSP::OmniException;
@@ -48,7 +48,7 @@ namespace OmniDSP::intelipp {
   // Constructor Implementation
   template <typename T>
   IntelIPPResamplePlanImpl<T>::IntelIPPResamplePlanImpl(
-      const Abstract::AbstractBackend* owner, const ResampleSpec& spec)
+      const Abstract::Backend* owner, const ResampleSpec& spec)
       : input_rate_(spec.input_rate),
         output_rate_(spec.output_rate),
         quality_(spec.quality)
@@ -117,7 +117,7 @@ namespace OmniDSP::intelipp {
     // 2. Get sizes for spec and buffer using the *actual* tapsLen
     status = ippsFIRMRGetSize(
         tapsLen, upFactor, downFactor, ippDataType, &spec_size_, &buffer_size_);
-    // Use the macro from intelipp/utils.hpp
+    // Use the macro from IntelIPP/utils.hpp
     OMNI_CHECK_IPP_STATUS_THROW(
         status, "IPP Resample: ippsFIRMRGetSize failed");
 
@@ -170,7 +170,7 @@ namespace OmniDSP::intelipp {
       p_spec_ = nullptr;
       p_buffer_ = nullptr;
       p_ipp_spec_typed_ = nullptr;
-      // Use the macro from intelipp/utils.hpp
+      // Use the macro from IntelIPP/utils.hpp
       OMNI_CHECK_IPP_STATUS_THROW(status, "IPP Resample: ippsFIRMRInit failed");
     }
   }
@@ -248,7 +248,7 @@ namespace OmniDSP::intelipp {
       );
     }
 
-    // Use the function from intelipp/utils.hpp
+    // Use the function from IntelIPP/utils.hpp
     return utils::ipp_status_to_omnidsp_status(status);
   }
 
@@ -308,4 +308,4 @@ namespace OmniDSP::intelipp {
   template class IntelIPPResamplePlanImpl<float>;
   template class IntelIPPResamplePlanImpl<double>;
 
-}  // namespace OmniDSP::intelipp
+}  // namespace OmniDSP::IntelIPP

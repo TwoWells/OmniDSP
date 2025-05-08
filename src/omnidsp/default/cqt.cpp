@@ -1,10 +1,10 @@
 /**
- * @file cqt.cpp (default)
+ * @file cqt.cpp (Default)
  * @brief Implements the Default backend CQTPlanImpl class using a recursive
  * downsampling strategy.
  * @details Provides a portable CQT implementation using standard C++ and
  * leveraging sub-plans (FFTPlan, ResamplePlan) created via the owner
- * AbstractBackend instance, ensuring backend consistency. Processes the highest
+ * Backend instance, ensuring backend consistency. Processes the highest
  * octave via FFT convolution and recursively downsamples the signal to process
  * lower octaves.
  */
@@ -31,8 +31,7 @@
 #include "OmniDSP/resample.hpp"  // Needed for internal ResamplePlan interface and ResampleSpec
 #include "OmniDSP/window.hpp"  // Needed for non-templated WindowSpec and window generation
 
-namespace OmniDSP::default
-{
+namespace OmniDSP::Default {
 
   // Helper function to calculate the next power of two
   inline size_t next_power_of_two(size_t n)
@@ -66,10 +65,10 @@ namespace OmniDSP::default
 
   template <typename T>
   DefaultCQTPlanImpl<T>::DefaultCQTPlanImpl(
-      const Abstract::AbstractBackend* owner,  // Use AbstractBackend
-      Real sample_rate,                        // Use Real alias
-      Real min_freq,                           // Use Real alias
-      Real max_freq,                           // Use Real alias
+      const Abstract::Backend* owner,  // Use Backend
+      Real sample_rate,                // Use Real alias
+      Real min_freq,                   // Use Real alias
+      Real max_freq,                   // Use Real alias
       int bins_per_octave,
       const WindowSpec& window_spec)
       : owner_(owner),
@@ -81,7 +80,7 @@ namespace OmniDSP::default
   {
     if (!owner_) {
       throw std::invalid_argument(
-          "DefaultCQTPlanImpl requires a valid owner AbstractBackend pointer.");
+          "DefaultCQTPlanImpl requires a valid owner Backend pointer.");
     }
     // Basic parameter validation
     if (sample_rate <= 0 || min_freq <= 0 || max_freq <= 0
@@ -524,4 +523,4 @@ namespace OmniDSP::default
   template class DefaultCQTPlanImpl<float>;
   template class DefaultCQTPlanImpl<double>;
 
-}  // namespace OmniDSP::default
+}  // namespace OmniDSP::Default

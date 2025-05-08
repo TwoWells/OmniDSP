@@ -15,8 +15,7 @@
 // Include core_types to ensure Utils::GetComplexType is available
 #include <OmniDSP/core_types.hpp>
 
-namespace OmniDSP::default
-{
+namespace OmniDSP::Default {
 
   //-----------------------------------------------------------------------------
   // Internal Helper Functions (Standard C++)
@@ -365,4 +364,4 @@ namespace OmniDSP::default
   template class DefaultRFFTPlanImpl<F32>;  // float
   template class DefaultRFFTPlanImpl<F64>;  // double
 
-}  // namespace OmniDSP::default
+}  // namespace OmniDSP::Default

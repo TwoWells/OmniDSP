@@ -4,10 +4,9 @@
  */
 
 // Ensure all potentially relevant headers are included
-#include <OmniDSP/core_types.h>  // Defines Precision
-#include <OmniDSP/cqt.h>         // Primary header for CQTPlan
-#include <OmniDSP/fft.h>         // Defines FFTNorm
-
+#include <OmniDSP/core_types.hpp>  // Defines Precision
+#include <OmniDSP/cqt.hpp>         // Primary header for CQTPlan
+#include <OmniDSP/fft.hpp>         // Defines FFTNorm
 #include <cmath>
 #include <complex>
 #include <iostream>

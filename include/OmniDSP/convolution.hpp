@@ -74,7 +74,7 @@ namespace OmniDSP {
   template <typename T>
   class OMNIDSP_EXPORT ConvolutionPlan {
     friend class OmniDSP;  // Keep friend for OmniDSP if needed
-    // Removed friend declarations for AbstractBackend and DefaultBackend
+    // Removed friend declarations for Backend and DefaultBackend
 
    public:
     ~ConvolutionPlan();
@@ -124,7 +124,7 @@ namespace OmniDSP {
   template <typename T>
   class OMNIDSP_EXPORT CorrelationPlan {
     friend class OmniDSP;  // Keep friend for OmniDSP if needed
-    // Removed friend declarations for AbstractBackend and DefaultBackend
+    // Removed friend declarations for Backend and DefaultBackend
 
    public:
     ~CorrelationPlan();

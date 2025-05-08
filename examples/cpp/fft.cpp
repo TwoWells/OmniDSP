@@ -6,9 +6,8 @@
  * and convenience functions (OOP and IP). Uses Backward normalization.
  */
 
-#include <OmniDSP/omnidsp.h>  // Includes necessary headers like fft.h, core_types.h
-
-#include <algorithm>  // For std::min, std::max
+#include <OmniDSP/omnidsp.hpp>  // Includes necessary headers like fft.h, core_types.h
+#include <algorithm>            // For std::min, std::max
 #include <cmath>
 #include <complex>
 #include <iostream>

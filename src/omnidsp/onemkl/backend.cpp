@@ -1,5 +1,5 @@
 /**
- * @file backend.cpp (onemkl)
+ * @file backend.cpp (OneMKL)
  * @brief Implements the OneMKLBackend class methods using oneMKL functions.
  */
 
@@ -35,7 +35,7 @@
 // Include oneMKL utilities
 #include "utils.hpp"
 
-namespace OmniDSP::onemkl {
+namespace OmniDSP::OneMKL {
 
   //--------------------------------------------------------------------------
   // OneMKLBackend Method Definitions
@@ -188,14 +188,14 @@ namespace OmniDSP::onemkl {
   // --- Filter Design ---
   // Inherited from DefaultBackend
 
-}  // namespace OmniDSP::onemkl
+}  // namespace OmniDSP::OneMKL
 
 // This function needs to be defined in the global OmniDSP::abstract namespace
 // as declared in interface/backend.hpp
 namespace OmniDSP::Abstract {
-  std::unique_ptr<AbstractBackend> create_onemkl_backend()
+  std::unique_ptr<Backend> create_onemkl_backend()
   {
-    // Use the concrete class from the onemkl namespace
-    return std::make_unique<::OmniDSP::onemkl::OneMKLBackend>();
+    // Use the concrete class from the OneMKL namespace
+    return std::make_unique<::OmniDSP::OneMKL::OneMKLBackend>();
   }
 }  // namespace OmniDSP::Abstract

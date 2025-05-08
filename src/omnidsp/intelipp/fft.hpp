@@ -1,5 +1,5 @@
 /**
- * @file fft.hpp (intelipp)
+ * @file fft.hpp (IntelIPP)
  * @brief Declares the Intel IPP implementation classes for FFT plans.
  */
 
@@ -20,7 +20,7 @@
 #include "../interface/backend.hpp"  // Defines abstract::FFTPlanImpl, abstract::RFFTPlanImpl
 #include "utils.hpp"  // For IPP type helpers (utils::GetIPPType etc.) and macros
 
-namespace OmniDSP::intelipp {
+namespace OmniDSP::IntelIPP {
 
   //--------------------------------------------------------------------------
   // Helper Functions / Type Traits (Internal) - Wrappers only now
@@ -379,6 +379,6 @@ namespace OmniDSP::intelipp {
     mutable std::vector<IPP_R_Type> temp_packed_buf_;
   };
 
-}  // namespace OmniDSP::intelipp
+}  // namespace OmniDSP::IntelIPP
 
 #endif  // OMNIDSP_INTELIPP_FFT_HPP

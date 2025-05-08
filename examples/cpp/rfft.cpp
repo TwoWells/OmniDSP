@@ -7,9 +7,8 @@
  * Corrected irfft convenience function call.
  */
 
-#include <OmniDSP/omnidsp.h>  // Includes fft.h, core_types.h etc.
-
-#include <algorithm>  // For std::min, std::max
+#include <OmniDSP/omnidsp.hpp>  // Includes fft.h, core_types.h etc.
+#include <algorithm>            // For std::min, std::max
 #include <cmath>
 #include <complex>
 #include <iostream>

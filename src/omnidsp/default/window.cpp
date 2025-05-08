@@ -1,5 +1,5 @@
 /**
- * @file window.cpp (default)
+ * @file window.cpp (Default)
  * @brief Implements Default backend window generation helper functions using
  * standard C++.
  * @details These functions write directly to the provided output span.
@@ -20,8 +20,7 @@
 // Include Boost Bessel function for Kaiser window
 #include <boost/math/special_functions/bessel.hpp>
 
-namespace OmniDSP::default
-{
+namespace OmniDSP::Default {
 
   //--------------------------------------------------------------------------
   // Default Window Generation Helper Function Implementations (Span-based)
@@ -317,4 +316,4 @@ namespace OmniDSP::default
   template Status kaiser_window<F32>(F32 beta, std::span<F32> output);
   template Status kaiser_window<F64>(F64 beta, std::span<F64> output);
 
-}  // namespace OmniDSP::default
+}  // namespace OmniDSP::Default

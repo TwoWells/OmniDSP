@@ -1,5 +1,5 @@
 /**
- * @file filter.hpp (default)
+ * @file filter.hpp (Default)
  * @brief Declares the concrete FIRFilterPlanImpl and IIRFilterPlanImpl classes
  * for the Default backend.
  */
@@ -16,8 +16,7 @@
 
 #include "../interface/backend.hpp"  // Base PlanImpl interfaces
 
-namespace OmniDSP::default
-{
+namespace OmniDSP::Default {
 
   /**
    * @brief Default backend implementation for an FIR Filter Plan.
@@ -195,6 +194,6 @@ namespace OmniDSP::default
   extern template class DefaultIIRFilterPlanImpl<F32>;
   extern template class DefaultIIRFilterPlanImpl<F64>;
 
-}  // namespace OmniDSP::default
+}  // namespace OmniDSP::Default
 
 #endif  // OMNIDSP_DEFAULT_FILTER_HPP

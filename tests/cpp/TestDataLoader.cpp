@@ -6,7 +6,7 @@
  * Uses std::filesystem for robust path handling and throws std::runtime_error
  * with concise messages on failure, suitable for catching in test cases.
  */
-#include "TestDataLoader.h"  // Include the header file declaration
+#include "TestDataLoader.hpp"  // Include the header file declaration
 
 #include <complex>
 #include <filesystem>  // For std::filesystem::path

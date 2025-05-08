@@ -24,10 +24,10 @@ namespace OmniDSP::Abstract {
   class ResamplePlanImpl;
 }
 
-namespace OmniDSP::intelipp {
+namespace OmniDSP::IntelIPP {
 
   // Forward declare the backend class used in the constructor
-  class IntelIPPBackend;
+  class Backend;
 
   /**
    * @brief Intel IPP implementation for resampling plans using IPP FIR-based
@@ -45,7 +45,7 @@ namespace OmniDSP::intelipp {
    public:
     /**
      * @brief Constructor. Initializes IPP resampler state.
-     * @param owner Pointer to the IntelIPPBackend instance creating this plan.
+     * @param owner Pointer to the Backend instance creating this plan.
      * Used to access filter design capabilities inherited from DefaultBackend.
      * Must not be null.
      * @param spec The resampling specification.
@@ -54,7 +54,7 @@ namespace OmniDSP::intelipp {
      * or if internal filter design fails.
      */
     explicit IntelIPPResamplePlanImpl(
-        const Abstract::AbstractBackend* owner, const ResampleSpec& spec);
+        const Abstract::Backend* owner, const ResampleSpec& spec);
 
     /**
      * @brief Destructor. Frees the IPP resampler state.
@@ -93,6 +93,6 @@ namespace OmniDSP::intelipp {
     void* p_ipp_spec_typed_ = nullptr;
   };
 
-}  // namespace OmniDSP::intelipp
+}  // namespace OmniDSP::IntelIPP
 
 #endif  // OMNIDSP_INTELIPP_RESAMPLE_HPP

@@ -1,5 +1,5 @@
 /**
- * @file window.hpp (default)
+ * @file window.hpp (Default)
  * @brief Declares internal helper functions for window generation for the
  * Default backend.
  * @details These functions now write directly to the provided output span.
@@ -12,8 +12,7 @@
 #include <cstddef>                 // For size_t
 #include <span>                    // For std::span
 
-namespace OmniDSP::default
-{
+namespace OmniDSP::Default {
 
   // --- Default Window Generation Helper Functions (Span-based Output) ---
   // These implement the actual window calculations used by
@@ -101,6 +100,6 @@ namespace OmniDSP::default
   extern template Status kaiser_window<F32>(F32 beta, std::span<F32> output);
   extern template Status kaiser_window<F64>(F64 beta, std::span<F64> output);
 
-}  // namespace OmniDSP::default
+}  // namespace OmniDSP::Default
 
 #endif  // OMNIDSP_DEFAULT_WINDOW_HPP

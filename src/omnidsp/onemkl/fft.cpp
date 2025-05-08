@@ -1,5 +1,5 @@
 /**
- * @file fft.cpp (onemkl)
+ * @file fft.cpp (OneMKL)
  * @brief Implements oneMKL backend FFTPlanImpl and RFFTPlanImpl classes using
  * DFTI.
  */
@@ -25,7 +25,7 @@
 // *** ADDED: Include the new utility header ***
 #include "utils.hpp"
 
-namespace OmniDSP::onemkl {
+namespace OmniDSP::OneMKL {
 
   // *** REMOVED mkl_status_to_omnidsp_status helper (now in utils.hpp) ***
 
@@ -297,4 +297,4 @@ namespace OmniDSP::onemkl {
   template class OneMKLRFFTPlanImpl<F32>;
   template class OneMKLRFFTPlanImpl<F64>;
 
-}  // namespace OmniDSP::onemkl
+}  // namespace OmniDSP::OneMKL

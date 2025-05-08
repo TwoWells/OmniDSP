@@ -1,5 +1,5 @@
 /**
- * @file backend.hpp (onemkl)
+ * @file backend.hpp (OneMKL)
  * @brief Declares the concrete oneMKL backend implementation class.
  * @details This class inherits from DefaultBackend and overrides functions
  * where oneMKL (DFTI) provides optimized implementations (FFT plans).
@@ -26,7 +26,7 @@
 // Include the headers declaring the oneMKL Plan implementations
 #include "fft.hpp"
 
-namespace OmniDSP::onemkl {
+namespace OmniDSP::OneMKL {
 
   //--------------------------------------------------------------------------
   // oneMKL Main Backend Implementation Class
@@ -34,7 +34,7 @@ namespace OmniDSP::onemkl {
 
   /** @brief Concrete oneMKL backend implementation. Inherits from
    * DefaultBackend. */
-  class OneMKLBackend final : public default ::DefaultBackend {
+  class OneMKLBackend final : public Default ::DefaultBackend {
    public:
     // --- Constructor / Destructor ---
     OneMKLBackend();
@@ -72,8 +72,8 @@ namespace OmniDSP::onemkl {
   // create_onemkl_backend() here and ensure the declaration in
   // interface/backend.hpp matches. For now, keeping it as create_backend()
   // assuming it's declared correctly elsewhere.
-  std::unique_ptr<Abstract::AbstractBackend> create_backend();
+  std::unique_ptr<Abstract::Backend> create_backend();
 
-}  // namespace OmniDSP::onemkl
+}  // namespace OmniDSP::OneMKL
 
 #endif  // OMNIDSP_ONEMKL_BACKEND_HPP

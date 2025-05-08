@@ -1,5 +1,5 @@
 /**
- * @file filter.cpp (default)
+ * @file filter.cpp (Default)
  * @brief Implements Default backend FIRFilterPlanImpl, IIRFilterPlanImpl,
  * and filter design helper functions.
  */
@@ -20,10 +20,9 @@
 #include <vector>
 
 #include "OmniDSP/core_types.hpp"  // Core types
-#include "window.hpp"  // For default backend window generation helpers
+#include "window.hpp"  // For Default backend window generation helpers
 
-namespace OmniDSP::default
-{
+namespace OmniDSP::Default {
 
   // --- Filter Design Helper Functions (Internal Linkage within BackendType)
   // --- Moved OUT of anonymous namespace to allow explicit instantiation
@@ -403,4 +402,4 @@ namespace OmniDSP::default
       const FIRFilterSpec& spec);
   // No instantiation needed for non-template generate_iir_filter_coeffs
 
-}  // namespace OmniDSP::default
+}  // namespace OmniDSP::Default

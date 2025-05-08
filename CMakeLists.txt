@@ -1,112 +1,76 @@
-# CMakeLists.txt for OmniDSP project
-# Uses Conda for managing CMake, pybind11, GTest, Boost, Highway, and MKL/IPP dependencies
-# Supports compiling multiple backends (Default + available Accelerate/oneMKL) for runtime selection.
+# OmniDSP/CMakeLists.txt (Root - Refactored)
+# Main project file. Sets up basic project structure and includes sub-modules.
 
 cmake_minimum_required(VERSION 3.21)
 cmake_policy(SET CMP0148 NEW) # Policy for modern FindPython behavior
-cmake_policy(SET CMP0167 NEW) # Policy for FindBoost module removal
-
-# --- Automatically Add Conda Prefix to CMAKE_PREFIX_PATH ---
-# Check if the CONDA_PREFIX environment variable is set
-# if(DEFINED ENV{CONDA_PREFIX})
-#   # Read the value of the CONDA_PREFIX environment variable
-#   set(CONDA_ENV_PREFIX "$ENV{CONDA_PREFIX}")
-#   message(STATUS "Detected Conda environment prefix: ${CONDA_ENV_PREFIX}")
-#
-#   # Append the Conda prefix to CMAKE_PREFIX_PATH
-#   # Use list(APPEND ...) to handle paths correctly, especially on Windows
-#   list(APPEND CMAKE_PREFIX_PATH ${CONDA_ENV_PREFIX})
-#   # Optionally, make it unique in case it was already passed or present
-#   list(REMOVE_DUPLICATES CMAKE_PREFIX_PATH)
-#   message(STATUS "Appended Conda prefix to CMAKE_PREFIX_PATH.")
-# else()
-#   message(STATUS "CONDA_PREFIX environment variable not set. Assuming system paths or manually provided CMAKE_PREFIX_PATH.")
-# endif()
-# --- End Conda Prefix Handling ---
 
 project(
   OmniDSP
   VERSION 1.0.0
   LANGUAGES CXX)
 
-# Note: enable_testing() moved to cmake/testing.cmake
+# --- Include Project Utility Modules from ./cmake ---
 
-# --- Include Project Modules ---
-# Create the cmake directory if it doesn't exist
-file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/cmake)
-
-list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
-
-# Include utility functions first
-include(cmake/utils.cmake)
-
-# --- Include Project Modules (Continued) ---
-# Include project options
-include(cmake/project_options.cmake)
-# Include compiler settings
+include(cmake/project_options.cmake) # Sets OMNIDSP_LIBRARY_TYPE, BUILD_SHARED_LIBS, OMNIDSP_BUILD_PYTHON_BINDINGS, OMNIDSP_BUILD_TESTS, OMNIDSP_BUILD_EXAMPLES etc.
 include(cmake/compiler_settings.cmake)
-# Include core dependency finding/fetching orchestrator
-include(cmake/depend.cmake)
-# Include backend detection and configuration
-# Requires cmake/backend/ directory
-file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/cmake/backend)
-include(cmake/backend.cmake)
+include(cmake/depend.cmake) # Handles finding/fetching common dependencies. Should NOT find Python/pybind11.
 
-# --- Generate Configuration Header ---
-# Ensure OMNIDSP_HAS_* variables are treated as boolean for #cmakedefine
-# (CMake automatically handles ON/TRUE/1 as defined, OFF/FALSE/0/NOTFOUND as undefined)
-# No explicit conversion needed here if variables are set correctly (e.g., TRUE/FALSE)
+# --- Add Core Library Subdirectory ---
+add_subdirectory(src/omnidsp) # Defines the 'OmniDSP' C++ library target
 
-# Configure the header file based on the template
-configure_file(
-    cmake/omnidsp_config.h.in                   # Input template file
-    ${PROJECT_BINARY_DIR}/include/OmniDSP/omnidsp_config.h # Output file location
-)
-
-# Ensure the binary include directory is available for finding the generated header
-# This should already be part of target_include_directories for the omnidsp target
-# Example (if not already done in target_definitions.cmake):
-# target_include_directories(omnidsp PUBLIC $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>)
-
-message(STATUS "Generated omnidsp_config.h in ${PROJECT_BINARY_DIR}/include/OmniDSP")
-
-# --- Include Standard CMake Modules ---
-# GNUInstallDirs is needed *before* installation.cmake
+# --- Include Standard CMake Modules (if needed at root level) ---
 include(GNUInstallDirs)
-# CMakePackageConfigHelpers is needed *before* installation.cmake
 include(CMakePackageConfigHelpers)
-# GenerateExportHeader is needed *before* target_definitions.cmake
-include(GenerateExportHeader)
-# FetchContent is included within depend.cmake
-
-# --- Define and Configure Core Library Target ---
-# This module uses variables set by previous includes (especially backend.cmake)
-# to define the 'omnidsp' target and set its properties (sources, includes, links, etc.)
-include(cmake/target_definitions.cmake)
-
-# =============================================================================
-# Conditionally Add Subdirectories (Python Bindings Source)
-# =============================================================================
-# Include the module that adds the Python bindings source subdirectory if enabled.
-include(cmake/omnidsp_py.cmake)
-
-# =============================================================================
-# Examples Configuration
-# =============================================================================
-# Include the module that adds example subdirectories (currently only C++ examples).
-# include(cmake/examples.cmake)
 
 # =============================================================================
 # Testing Configuration
 # =============================================================================
-# Include the module that enables testing and adds test subdirectories.
-# include(cmake/testing.cmake)
+# The OMNIDSP_BUILD_TESTS option should be defined (e.g., in cmake/project_options.cmake)
+if(OMNIDSP_BUILD_TESTS)
+    message(STATUS "Testing enabled by option (OMNIDSP_BUILD_TESTS=ON).")
+    # Enable CTest support globally if tests are to be built.
+    # This needs to be done before any add_test() calls, which might occur in subdirectories.
+    enable_testing()
+    message(STATUS "  CTest support enabled.")
+
+    # Add the main tests subdirectory.
+    # Its CMakeLists.txt will handle adding specific test type subdirectories (cpp, python).
+    message(STATUS "  Attempting to add main tests subdirectory (tests)...")
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt")
+        add_subdirectory(tests ${PROJECT_BINARY_DIR}/tests)
+    else()
+        message(WARNING "  Directory tests or its CMakeLists.txt not found. Skipping all test configurations.")
+    endif()
+else()
+    message(STATUS "Testing disabled (OMNIDSP_BUILD_TESTS=OFF).")
+endif()
+
+# =============================================================================
+# Conditionally Add Python Bindings Subdirectory
+# =============================================================================
+if(OMNIDSP_BUILD_PYTHON_BINDINGS)
+    message(STATUS "Python bindings enabled by option (OMNIDSP_BUILD_PYTHON_BINDINGS=ON). Adding src/omnidsp_py subdirectory.")
+    add_subdirectory(src/omnidsp_py ${PROJECT_BINARY_DIR}/src/omnidsp_py)
+else()
+    message(STATUS "Python bindings disabled (OMNIDSP_BUILD_PYTHON_BINDINGS=OFF). Skipping src/omnidsp_py.")
+endif()
+
+# =============================================================================
+# Examples Configuration
+# =============================================================================
+# The examples/cpp/CMakeLists.txt is responsible for checking OMNIDSP_BUILD_EXAMPLES
+# and OMNIDSP_BUILD_PYTHON_BINDINGS to determine if it should actually configure anything.
+message(STATUS "Attempting to add examples/cpp subdirectory (configuration depends on options in its CMakeLists.txt)...")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/cpp/CMakeLists.txt")
+    add_subdirectory(examples/cpp ${PROJECT_BINARY_DIR}/examples/cpp)
+else()
+    message(STATUS "  Directory examples/cpp or its CMakeLists.txt not found. Skipping examples configuration.")
+endif()
+
 
 # =============================================================================
 # Installation Rules
 # =============================================================================
-# Include the module that defines all installation rules for the project.
-# This should generally come after all targets that need to be installed are defined.
 include(cmake/installation.cmake)
 
 message(STATUS "Finished processing root CMakeLists.txt")

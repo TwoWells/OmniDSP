@@ -3,16 +3,15 @@
  * @brief Unit tests for the OmniDSP::Window class static methods.
  * Uses TestDataLoader for loading reference data and tests the public API.
  */
-#include "OmniDSP/window.h"  // Include the OmniDSP window header
+#include <OmniDSP/window.hpp>  // Include the OmniDSP window header
+#include <cmath>               // For std::abs
+#include <limits>              // For std::numeric_limits
+#include <stdexcept>           // For std::invalid_argument
+#include <string>              // For std::string
+#include <vector>              // For std::vector
 
-#include <cmath>      // For std::abs
-#include <limits>     // For std::numeric_limits
-#include <stdexcept>  // For std::invalid_argument
-#include <string>     // For std::string
-#include <vector>     // For std::vector
-
-#include "../TestDataLoader.h"  // Include the new data loader utility
-#include "gtest/gtest.h"        // Google Test framework
+#include "../TestDataLoader.hpp"  // Include the new data loader utility
+#include "gtest/gtest.h"          // Google Test framework
 
 // Helper function to compare real vectors with tolerance
 template <typename T>

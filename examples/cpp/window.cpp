@@ -6,9 +6,8 @@
  * Updated includes after header refactoring.
  */
 
-#include <OmniDSP/omnidsp.h>  // Includes enums
-#include <OmniDSP/window.h>   // <-- Corrected include
-
+#include <OmniDSP/omnidsp.hpp>
+#include <OmniDSP/window.hpp>
 #include <cmath>    // For sin
 #include <iomanip>  // For std::setprecision
 #include <iostream>

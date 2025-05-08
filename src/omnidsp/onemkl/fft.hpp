@@ -1,5 +1,5 @@
 /**
- * @file fft.hpp (onemkl)
+ * @file fft.hpp (OneMKL)
  * @brief Declares the oneMKL backend FFTPlanImpl and RFFTPlanImpl classes.
  */
 
@@ -17,7 +17,7 @@
 
 #include "../interface/backend.hpp"  // Base PlanImpl interfaces
 
-namespace OmniDSP::onemkl {
+namespace OmniDSP::OneMKL {
 
   /**
    * @brief oneMKL implementation for complex-to-complex FFT plans using DFTI.
@@ -121,6 +121,6 @@ namespace OmniDSP::onemkl {
     // mutable MKL_LONG last_mkl_status_ = DFTI_NO_ERROR;
   };
 
-}  // namespace OmniDSP::onemkl
+}  // namespace OmniDSP::OneMKL
 
 #endif  // OMNIDSP_ONEMKL_FFT_HPP

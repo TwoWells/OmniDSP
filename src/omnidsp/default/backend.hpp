@@ -1,5 +1,5 @@
 /**
- * @file backend.hpp (default)
+ * @file backend.hpp (Default)
  * @brief Declares the concrete Default backend implementation class.
  */
 
@@ -10,7 +10,7 @@
 #include <OmniDSP/core_types.hpp>
 #include <OmniDSP/cqt.hpp>
 #include <OmniDSP/fft.hpp>
-#include <OmniDSP/filter.hpp>  // Includes FIRCoefs alias
+#include <OmniDSP/filter.hpp>
 #include <OmniDSP/resample.hpp>
 #include <OmniDSP/window.hpp>
 #include <memory>
@@ -19,9 +19,7 @@
 
 #include "../interface/backend.hpp"
 
-namespace OmniDSP::default
-{
-
+namespace OmniDSP::Default {
   // Forward declare Plan implementations
   template <typename T>
   class DefaultFFTPlanImpl;
@@ -40,12 +38,12 @@ namespace OmniDSP::default
   template <typename T>
   class DefaultIIRFilterPlanImpl;
 
-  class DefaultBackend : public Abstract::AbstractBackend {
+  class DefaultBackend : public ::OmniDSP::Abstract::Backend {
    public:
     DefaultBackend();
     ~DefaultBackend() override;
 
-    BackendType get_backend() const override;
+    ::OmniDSP::BackendType get_backend() const override;
 
     // --- One-off Operations ---
     [[nodiscard]] OmniExpected<F32Vec> convolve_f32(
@@ -316,8 +314,8 @@ namespace OmniDSP::default
         const WindowSpec& window_spec) const;
   };
 
-  std::unique_ptr<Abstract::AbstractBackend> Abstract::create_default_backend();
+  std::unique_ptr<Abstract::Backend> Abstract::create_default_backend();
 
-}  // namespace OmniDSP::default
+}  // namespace OmniDSP::Default
 
 #endif  // OMNIDSP_DEFAULT_BACKEND_HPP

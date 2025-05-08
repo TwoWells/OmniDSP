@@ -1,5 +1,5 @@
 /**
- * @file fir_filter.cpp (intelipp)
+ * @file fir_filter.cpp (IntelIPP)
  * @brief Implements Intel IPP backend FIRFilterPlanImpl class using IPP.
  */
 
@@ -24,7 +24,7 @@
 #include <OmniDSP/core_types.hpp>  // Defines OmniException, Status etc.
 // <OmniDSP/filter.hpp> is not directly needed for FIR implementation
 
-namespace OmniDSP::intelipp {
+namespace OmniDSP::IntelIPP {
 
   //--------------------------------------------------------------------------
   // IntelIPPFIRFilterPlanImpl Method Definitions
@@ -205,4 +205,4 @@ namespace OmniDSP::intelipp {
   template class IntelIPPFIRFilterPlanImpl<C32>;
   template class IntelIPPFIRFilterPlanImpl<C64>;
 
-}  // namespace OmniDSP::intelipp
+}  // namespace OmniDSP::IntelIPP

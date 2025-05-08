@@ -26,7 +26,7 @@
 #include "utils.hpp"
 
 // Changed namespace to intelipp
-namespace OmniDSP::intelipp {
+namespace OmniDSP::IntelIPP {
 
   //--------------------------------------------------------------------------
   // Intel IPP Window Generation Helper Function Implementations
@@ -256,6 +256,6 @@ namespace OmniDSP::intelipp {
     return generate_bartlett_window_intelipp(output);
   }
 
-}  // namespace OmniDSP::intelipp
+}  // namespace OmniDSP::IntelIPP
 
 // No endif for include guard
