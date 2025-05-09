@@ -205,11 +205,10 @@ namespace OmniDSP::Default {
     return std::unexpected(Status::NotImplemented);
   }
 
-  // --- DefaultFIRFilterPlanImpl ---
+  // --- FIRFilterPlanImpl ---
   // ... (Implementation remains the same) ...
   template <typename T>
-  DefaultFIRFilterPlanImpl<T>::DefaultFIRFilterPlanImpl(
-      const std::vector<T>& coefficients)
+  FIRFilterPlanImpl<T>::FIRFilterPlanImpl(const std::vector<T>& coefficients)
       : coefficients_(coefficients),
         state_(coefficients.empty() ? 0 : coefficients.size() - 1, T{0})
   {
@@ -218,9 +217,9 @@ namespace OmniDSP::Default {
     }
   }
   template <typename T>
-  DefaultFIRFilterPlanImpl<T>::~DefaultFIRFilterPlanImpl() = default;
+  FIRFilterPlanImpl<T>::~FIRFilterPlanImpl() = default;
   template <typename T>
-  Status DefaultFIRFilterPlanImpl<T>::execute(
+  Status FIRFilterPlanImpl<T>::execute(
       std::span<const T> input, std::span<T> output)
   {
     if (coefficients_.empty()) {
@@ -271,31 +270,31 @@ namespace OmniDSP::Default {
     return Status::Success;
   }
   template <typename T>
-  Status DefaultFIRFilterPlanImpl<T>::reset()
+  Status FIRFilterPlanImpl<T>::reset()
   {
     std::fill(state_.begin(), state_.end(), T{0});
     return Status::Success;
   }
   template <typename T>
-  size_t DefaultFIRFilterPlanImpl<T>::get_order() const
+  size_t FIRFilterPlanImpl<T>::get_order() const
   {
     return coefficients_.empty() ? 0 : coefficients_.size() - 1;
   }
   template <typename T>
-  size_t DefaultFIRFilterPlanImpl<T>::get_num_taps() const
+  size_t FIRFilterPlanImpl<T>::get_num_taps() const
   {
     return coefficients_.size();
   }
   template <typename T>
-  std::span<const T> DefaultFIRFilterPlanImpl<T>::get_coefficients() const
+  std::span<const T> FIRFilterPlanImpl<T>::get_coefficients() const
   {
     return std::span<const T>(coefficients_);
   }
 
-  // --- DefaultIIRFilterPlanImpl ---
+  // --- IIRFilterPlanImpl ---
   // ... (Implementation remains the same) ...
   template <typename T>
-  DefaultIIRFilterPlanImpl<T>::DefaultIIRFilterPlanImpl(
+  IIRFilterPlanImpl<T>::IIRFilterPlanImpl(
       const std::vector<IIRFilterCoef>& sos_coefficients)
   {
     if (sos_coefficients.empty()) {
@@ -318,9 +317,9 @@ namespace OmniDSP::Default {
     state_.assign(internal_coeffs_.size() * 2, T{0});
   }
   template <typename T>
-  DefaultIIRFilterPlanImpl<T>::~DefaultIIRFilterPlanImpl() = default;
+  IIRFilterPlanImpl<T>::~IIRFilterPlanImpl() = default;
   template <typename T>
-  Status DefaultIIRFilterPlanImpl<T>::execute(
+  Status IIRFilterPlanImpl<T>::execute(
       std::span<const T> input, std::span<T> output)
   {
     if (internal_coeffs_.empty()) {
@@ -361,38 +360,38 @@ namespace OmniDSP::Default {
     return Status::Success;
   }
   template <typename T>
-  Status DefaultIIRFilterPlanImpl<T>::reset()
+  Status IIRFilterPlanImpl<T>::reset()
   {
     std::fill(state_.begin(), state_.end(), T{0});
     return Status::Success;
   }
   template <typename T>
-  size_t DefaultIIRFilterPlanImpl<T>::get_order() const
+  size_t IIRFilterPlanImpl<T>::get_order() const
   {
     return internal_coeffs_.empty() ? 0 : internal_coeffs_.size() * 2;
   }
   template <typename T>
-  size_t DefaultIIRFilterPlanImpl<T>::get_num_sections() const
+  size_t IIRFilterPlanImpl<T>::get_num_sections() const
   {
     return internal_coeffs_.size();
   }
 
   // --- Explicit Template Instantiations ---
-  template class DefaultFIRFilterPlanImpl<F32>;
-  template class DefaultFIRFilterPlanImpl<F64>;
-  template class DefaultFIRFilterPlanImpl<C32>;
-  template class DefaultFIRFilterPlanImpl<C64>;
-  template std::span<const F32>
-  DefaultFIRFilterPlanImpl<F32>::get_coefficients() const;
-  template std::span<const F64>
-  DefaultFIRFilterPlanImpl<F64>::get_coefficients() const;
-  template std::span<const C32>
-  DefaultFIRFilterPlanImpl<C32>::get_coefficients() const;
-  template std::span<const C64>
-  DefaultFIRFilterPlanImpl<C64>::get_coefficients() const;
+  template class FIRFilterPlanImpl<F32>;
+  template class FIRFilterPlanImpl<F64>;
+  template class FIRFilterPlanImpl<C32>;
+  template class FIRFilterPlanImpl<C64>;
+  template std::span<const F32> FIRFilterPlanImpl<F32>::get_coefficients()
+      const;
+  template std::span<const F64> FIRFilterPlanImpl<F64>::get_coefficients()
+      const;
+  template std::span<const C32> FIRFilterPlanImpl<C32>::get_coefficients()
+      const;
+  template std::span<const C64> FIRFilterPlanImpl<C64>::get_coefficients()
+      const;
 
-  template class DefaultIIRFilterPlanImpl<F32>;
-  template class DefaultIIRFilterPlanImpl<F64>;
+  template class IIRFilterPlanImpl<F32>;
+  template class IIRFilterPlanImpl<F64>;
 
   // Explicit instantiations for the design helper functions defined in this
   // file

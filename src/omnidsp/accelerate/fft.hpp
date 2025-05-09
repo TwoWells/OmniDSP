@@ -1,11 +1,14 @@
 /**
- * @file fft.hpp (accelerate)
+ * @file fft.hpp (Accelerate)
  * @brief Declares the Accelerate backend FFTPlanImpl and RFFTPlanImpl classes
  * using vDSP DFT.
  */
 
 #ifndef OMNIDSP_ACCELERATE_FFT_HPP
 #define OMNIDSP_ACCELERATE_FFT_HPP
+
+#include <OmniDSP/omnidsp_config.hpp>
+#ifdef OMNIDSP_INTERNAL_USE_ACCELERATE
 
 #include <Accelerate/Accelerate.h>  // Specifically vDSP.h is needed
 
@@ -17,7 +20,7 @@
 
 #include "../interface/backend.hpp"  // Base PlanImpl interfaces
 
-namespace OmniDSP::accelerate {
+namespace OmniDSP::Accelerate {
 
   // --- Constants ---
   // Maximum length supported by vDSP_DFT_Interleaved_CreateSetup (for the
@@ -30,10 +33,9 @@ namespace OmniDSP::accelerate {
    * @tparam T Complex type (C32 or C64).
    */
   template <typename T>  // T is complex type here (C32, C64)
-  class AccelerateFFTPlanImpl final : public FFTPlanImpl<T> {
+  class FFTPlanImpl final : public Abstract::FFTPlanImpl<T> {
     static_assert(
-        Utils::IsComplex_v<T>,
-        "AccelerateFFTPlanImpl requires a complex type.");
+        Utils::IsComplex_v<T>, "FFTPlanImpl requires a complex type.");
     using Real = typename T::value_type;
 
     using vDSP_DFT_Setup_Type = typename std::conditional<
@@ -47,13 +49,13 @@ namespace OmniDSP::accelerate {
         DSPDoubleComplex>::type;
 
    public:
-    explicit AccelerateFFTPlanImpl(size_t length);
-    ~AccelerateFFTPlanImpl() override;
+    explicit FFTPlanImpl(size_t length);
+    ~FFTPlanImpl() override;
 
-    AccelerateFFTPlanImpl(const AccelerateFFTPlanImpl&) = delete;
-    AccelerateFFTPlanImpl& operator=(const AccelerateFFTPlanImpl&) = delete;
-    AccelerateFFTPlanImpl(AccelerateFFTPlanImpl&&) = delete;
-    AccelerateFFTPlanImpl& operator=(AccelerateFFTPlanImpl&&) = delete;
+    FFTPlanImpl(const FFTPlanImpl&) = delete;
+    FFTPlanImpl& operator=(const FFTPlanImpl&) = delete;
+    FFTPlanImpl(FFTPlanImpl&&) = delete;
+    FFTPlanImpl& operator=(FFTPlanImpl&&) = delete;
 
     [[nodiscard]] Status fft(
         std::span<const T> input, std::span<T> output) const override;
@@ -75,9 +77,8 @@ namespace OmniDSP::accelerate {
    * @tparam T Real type (F32 or F64).
    */
   template <typename T>  // T is real type here (F32, F64)
-  class AccelerateRFFTPlanImpl final : public RFFTPlanImpl<T> {
-    static_assert(
-        !Utils::IsComplex_v<T>, "AccelerateRFFTPlanImpl requires a real type.");
+  class RFFTPlanImpl final : public Abstract::RFFTPlanImpl<T> {
+    static_assert(!Utils::IsComplex_v<T>, "RFFTPlanImpl requires a real type.");
     using Complex = Utils::GetComplexType<T>;
 
     using vDSP_DFT_Setup_Type = typename std::conditional<
@@ -91,13 +92,13 @@ namespace OmniDSP::accelerate {
         DSPDoubleComplex>::type;
 
    public:
-    explicit AccelerateRFFTPlanImpl(size_t length);
-    ~AccelerateRFFTPlanImpl() override;
+    explicit RFFTPlanImpl(size_t length);
+    ~RFFTPlanImpl() override;
 
-    AccelerateRFFTPlanImpl(const AccelerateRFFTPlanImpl&) = delete;
-    AccelerateRFFTPlanImpl& operator=(const AccelerateRFFTPlanImpl&) = delete;
-    AccelerateRFFTPlanImpl(AccelerateRFFTPlanImpl&&) = delete;
-    AccelerateRFFTPlanImpl& operator=(AccelerateRFFTPlanImpl&&) = delete;
+    RFFTPlanImpl(const RFFTPlanImpl&) = delete;
+    RFFTPlanImpl& operator=(const RFFTPlanImpl&) = delete;
+    RFFTPlanImpl(RFFTPlanImpl&&) = delete;
+    RFFTPlanImpl& operator=(RFFTPlanImpl&&) = delete;
 
     [[nodiscard]] Status rfft(
         std::span<const T> input, std::span<Complex> output) const override;
@@ -112,8 +113,11 @@ namespace OmniDSP::accelerate {
     size_t length_;  // Number of real elements (N)
     vDSP_DFT_Setup_Type fft_setup_forward_ = nullptr;
     vDSP_DFT_Setup_Type fft_setup_inverse_ = nullptr;
+    mutable std::vector<T> temp_packed_buffer_;
   };
 
-}  // namespace OmniDSP::accelerate
+}  // namespace OmniDSP::Accelerate
+
+#endif  // OMNIDSP_INTERNAL_USE_ACCELERATE
 
 #endif  // OMNIDSP_ACCELERATE_FFT_HPP

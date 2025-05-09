@@ -24,27 +24,26 @@ namespace OmniDSP::Default {
    * @tparam T The data type (F32, F64, C32, C64).
    */
   template <typename T>
-  class DefaultFIRFilterPlanImpl final : public Abstract::FIRFilterPlanImpl<T> {
+  class FIRFilterPlanImpl final : public Abstract::FIRFilterPlanImpl<T> {
    public:
     /**
-     * @brief Constructs a DefaultFIRFilterPlanImpl.
+     * @brief Constructs a FIRFilterPlanImpl.
      * @param coefficients The FIR filter coefficients (taps). Copied
      * internally.
      * @throws std::invalid_argument if coefficients vector is empty.
      */
-    explicit DefaultFIRFilterPlanImpl(const std::vector<T>& coefficients);
+    explicit FIRFilterPlanImpl(const std::vector<T>& coefficients);
 
     /**
      * @brief Destructor.
      */
-    ~DefaultFIRFilterPlanImpl() override;
+    ~FIRFilterPlanImpl() override;
 
     // --- Disable Copy/Move ---
-    DefaultFIRFilterPlanImpl(const DefaultFIRFilterPlanImpl&) = delete;
-    DefaultFIRFilterPlanImpl& operator=(const DefaultFIRFilterPlanImpl&)
-        = delete;
-    DefaultFIRFilterPlanImpl(DefaultFIRFilterPlanImpl&&) = delete;
-    DefaultFIRFilterPlanImpl& operator=(DefaultFIRFilterPlanImpl&&) = delete;
+    FIRFilterPlanImpl(const FIRFilterPlanImpl&) = delete;
+    FIRFilterPlanImpl& operator=(const FIRFilterPlanImpl&) = delete;
+    FIRFilterPlanImpl(FIRFilterPlanImpl&&) = delete;
+    FIRFilterPlanImpl& operator=(FIRFilterPlanImpl&&) = delete;
 
     // --- Interface Methods Implementation ---
 
@@ -98,7 +97,7 @@ namespace OmniDSP::Default {
    * @tparam T The data type (typically F32 or F64).
    */
   template <typename T>  // T is typically real (F32, F64)
-  class DefaultIIRFilterPlanImpl final : public Abstract::IIRFilterPlanImpl<T> {
+  class IIRFilterPlanImpl final : public Abstract::IIRFilterPlanImpl<T> {
    private:
     // Private struct to hold coefficients of the correct type T
     template <typename Type>
@@ -112,27 +111,26 @@ namespace OmniDSP::Default {
 
    public:
     /**
-     * @brief Constructs a DefaultIIRFilterPlanImpl from second-order sections.
+     * @brief Constructs a IIRFilterPlanImpl from second-order sections.
      * @param sos_coefficients A vector of IIRFilterCoef representing the filter
      * sections.
      * @throws std::invalid_argument if sos_coefficients vector is empty.
      * @throws std::runtime_error if sos_coefficients contain non-normalized a0.
      */
     // *** UPDATED: Constructor takes non-templated IIRFilterCoef ***
-    explicit DefaultIIRFilterPlanImpl(
+    explicit IIRFilterPlanImpl(
         const std::vector<IIRFilterCoef>& sos_coefficients);
 
     /**
      * @brief Destructor.
      */
-    ~DefaultIIRFilterPlanImpl() override;
+    ~IIRFilterPlanImpl() override;
 
     // --- Disable Copy/Move ---
-    DefaultIIRFilterPlanImpl(const DefaultIIRFilterPlanImpl&) = delete;
-    DefaultIIRFilterPlanImpl& operator=(const DefaultIIRFilterPlanImpl&)
-        = delete;
-    DefaultIIRFilterPlanImpl(DefaultIIRFilterPlanImpl&&) = delete;
-    DefaultIIRFilterPlanImpl& operator=(DefaultIIRFilterPlanImpl&&) = delete;
+    IIRFilterPlanImpl(const IIRFilterPlanImpl&) = delete;
+    IIRFilterPlanImpl& operator=(const IIRFilterPlanImpl&) = delete;
+    IIRFilterPlanImpl(IIRFilterPlanImpl&&) = delete;
+    IIRFilterPlanImpl& operator=(IIRFilterPlanImpl&&) = delete;
 
     // --- Interface Methods Implementation ---
 
@@ -186,13 +184,13 @@ namespace OmniDSP::Default {
   };
 
   // --- Explicit Template Instantiations (Declaration) ---
-  extern template class DefaultFIRFilterPlanImpl<F32>;
-  extern template class DefaultFIRFilterPlanImpl<F64>;
-  extern template class DefaultFIRFilterPlanImpl<C32>;
-  extern template class DefaultFIRFilterPlanImpl<C64>;
+  extern template class FIRFilterPlanImpl<F32>;
+  extern template class FIRFilterPlanImpl<F64>;
+  extern template class FIRFilterPlanImpl<C32>;
+  extern template class FIRFilterPlanImpl<C64>;
 
-  extern template class DefaultIIRFilterPlanImpl<F32>;
-  extern template class DefaultIIRFilterPlanImpl<F64>;
+  extern template class IIRFilterPlanImpl<F32>;
+  extern template class IIRFilterPlanImpl<F64>;
 
 }  // namespace OmniDSP::Default
 

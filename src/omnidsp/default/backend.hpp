@@ -22,21 +22,21 @@
 namespace OmniDSP::Default {
   // Forward declare Plan implementations
   template <typename T>
-  class DefaultFFTPlanImpl;
+  class FFTPlanImpl;
   template <typename T>
-  class DefaultRFFTPlanImpl;
+  class RFFTPlanImpl;
   template <typename T>
-  class DefaultCQTPlanImpl;
+  class CQTPlanImpl;
   template <typename T>
-  class DefaultResamplePlanImpl;
+  class ResamplePlanImpl;
   template <typename T>
-  class DefaultConvolutionPlanImpl;
+  class ConvolutionPlanImpl;
   template <typename T>
-  class DefaultCorrelationPlanImpl;
+  class CorrelationPlanImpl;
   template <typename T>
-  class DefaultFIRFilterPlanImpl;
+  class FIRFilterPlanImpl;
   template <typename T>
-  class DefaultIIRFilterPlanImpl;
+  class IIRFilterPlanImpl;
 
   class DefaultBackend : public ::OmniDSP::Abstract::Backend {
    public:

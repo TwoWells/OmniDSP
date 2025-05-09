@@ -1,5 +1,5 @@
 /**
- * @file utils.cpp (OneMKL)
+ * @file details.cpp (OneMKL)
  * @brief Implements utility functions for the oneMKL backend.
  */
 
@@ -9,9 +9,9 @@
 
 #include <iostream>  // For std::cerr
 // No other specific headers needed for this function's definition beyond what
-// utils.hpp includes for declarations.
+// Details.hpp includes for declarations.
 
-namespace OmniDSP::OneMKL::utils {
+namespace OmniDSP::OneMKL::Details {
 
   Status mkl_status_to_omnidsp_status(MKL_LONG mkl_status)
   {
@@ -52,4 +52,4 @@ namespace OmniDSP::OneMKL::utils {
     return Status::BackendError;
   }
 
-}  // namespace OmniDSP::OneMKL::utils
+}  // namespace OmniDSP::OneMKL::Details

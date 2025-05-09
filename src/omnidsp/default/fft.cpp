@@ -123,9 +123,9 @@ namespace OmniDSP::Default {
   // Plan Class Implementations (Standard C++)
   //-----------------------------------------------------------------------------
 
-  // --- DefaultFFTPlanImpl Implementation ---
+  // --- FFTPlanImpl Implementation ---
   template <typename T_Complex>
-  DefaultFFTPlanImpl<T_Complex>::DefaultFFTPlanImpl(size_t n) : n_(n)
+  FFTPlanImpl<T_Complex>::FFTPlanImpl(size_t n) : n_(n)
   {
     using T = typename T_Complex::value_type;  // Scalar type
     if (n == 0 || (n & (n - 1)) != 0) {
@@ -153,7 +153,7 @@ namespace OmniDSP::Default {
   }
 
   template <typename T_Complex>
-  Status DefaultFFTPlanImpl<T_Complex>::fft(
+  Status FFTPlanImpl<T_Complex>::fft(
       std::span<const T_Complex> input, std::span<T_Complex> output) const
   {
     if (input.size() < n_ || output.size() < n_) {
@@ -172,7 +172,7 @@ namespace OmniDSP::Default {
   }
 
   template <typename T_Complex>
-  Status DefaultFFTPlanImpl<T_Complex>::ifft(
+  Status FFTPlanImpl<T_Complex>::ifft(
       std::span<const T_Complex> input, std::span<T_Complex> output) const
   {
     if (input.size() < n_ || output.size() < n_) {
@@ -191,14 +191,14 @@ namespace OmniDSP::Default {
   }
 
   template <typename T_Complex>
-  size_t DefaultFFTPlanImpl<T_Complex>::get_length() const
+  size_t FFTPlanImpl<T_Complex>::get_length() const
   {
     return n_;
   }
 
-  // --- DefaultRFFTPlanImpl Implementation ---
+  // --- RFFTPlanImpl Implementation ---
   template <typename T_Real>
-  DefaultRFFTPlanImpl<T_Real>::DefaultRFFTPlanImpl(size_t n)
+  RFFTPlanImpl<T_Real>::RFFTPlanImpl(size_t n)
       : n_(n), cfft_plan_(n / 2)  // Initialize CFFT plan for size N/2
   {
     // Use the alias defined in the header (matches base class)
@@ -226,7 +226,7 @@ namespace OmniDSP::Default {
 
   // FIX: Use T_Complex alias for the output span type
   template <typename T_Real>
-  Status DefaultRFFTPlanImpl<T_Real>::rfft(
+  Status RFFTPlanImpl<T_Real>::rfft(
       std::span<const T_Real> input, std::span<T_Complex> output) const
   {
     // using T_Complex = std::complex<T_Real>; // Original incorrect definition
@@ -284,7 +284,7 @@ namespace OmniDSP::Default {
 
   // FIX: Use T_Complex alias for the input span type
   template <typename T_Real>
-  Status DefaultRFFTPlanImpl<T_Real>::irfft(
+  Status RFFTPlanImpl<T_Real>::irfft(
       std::span<const T_Complex> input, std::span<T_Real> output) const
   {
     // using T_Complex = std::complex<T_Real>; // Original incorrect definition
@@ -351,17 +351,17 @@ namespace OmniDSP::Default {
   }
 
   template <typename T_Real>
-  size_t DefaultRFFTPlanImpl<T_Real>::get_length() const
+  size_t RFFTPlanImpl<T_Real>::get_length() const
   {
     return n_;  // Return the original real length N
   }
 
   // Explicit template instantiations for float and double based types
   // Need to instantiate with the complex types for FFTPlanImpl
-  template class DefaultFFTPlanImpl<C32>;  // std::complex<float>
-  template class DefaultFFTPlanImpl<C64>;  // std::complex<double>
+  template class FFTPlanImpl<C32>;  // std::complex<float>
+  template class FFTPlanImpl<C64>;  // std::complex<double>
   // Need to instantiate with the real types for RFFTPlanImpl
-  template class DefaultRFFTPlanImpl<F32>;  // float
-  template class DefaultRFFTPlanImpl<F64>;  // double
+  template class RFFTPlanImpl<F32>;  // float
+  template class RFFTPlanImpl<F64>;  // double
 
 }  // namespace OmniDSP::Default

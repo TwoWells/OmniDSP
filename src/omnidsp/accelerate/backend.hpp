@@ -1,5 +1,5 @@
 /**
- * @file backend.hpp (accelerate)
+ * @file backend.hpp (Accelerate)
  * @brief Declares the concrete Accelerate backend implementation class.
  * @details This class inherits from DefaultBackend and overrides functions
  * where the Accelerate framework provides optimized FFT implementations.
@@ -13,15 +13,22 @@
 #include <span>    // For std::span
 #include <vector>  // For vector types
 
-#include "../default/backend.hpp"  // Inherit from DefaultBackend
+// *** Inherit from DefaultBackend instead of AbstractBackend ***
+#include "../default/backend.hpp"
+
 // Include necessary types referenced in method signatures
 #include <OmniDSP/core_types.hpp>
-#include <OmniDSP/fft.hpp>  // Include public plan headers for factory return types
+// #include <OmniDSP/convolution.hpp>
+// #include <OmniDSP/cqt.hpp>
+#include <OmniDSP/fft.hpp>
+// #include <OmniDSP/filter.hpp>
+// #include <OmniDSP/resample.hpp>
+// #include <OmniDSP/window.hpp>
 
 // Include the header declaring the Accelerate FFT plan implementations
 #include "fft.hpp"  // Assumes this file exists and declares Accelerate*FFTPlanImpl
 
-namespace OmniDSP::accelerate {
+namespace OmniDSP::Accelerate {
 
   //--------------------------------------------------------------------------
   // Accelerate Main BackendType Implementation Class
@@ -31,12 +38,12 @@ namespace OmniDSP::accelerate {
    * @brief Concrete Accelerate backend implementation. Inherits from
    * DefaultBackend. Specializes only FFT operations.
    */
-  class AccelerateBackend final
-      : public DefaultBackend {  // Inherits from DefaultBackend
+  class Backend final
+      : public Default::DefaultBackend {  // Inherits from DefaultBackend
    public:
     // --- Constructor / Destructor ---
-    AccelerateBackend();
-    ~AccelerateBackend() override;
+    Backend();
+    ~Backend() override;
 
     // --- Core ---
     // MUST override to identify this backend
@@ -65,7 +72,7 @@ namespace OmniDSP::accelerate {
     // (Unlikely needed if only overriding plan factories)
   };
 
-  std::unique_ptr<Abstract::Backend> Abstract::create_accelerate_backend();
-}  // namespace OmniDSP::accelerate
+  std::unique_ptr<Abstract::Backend> create_accelerate_backend();
+}  // namespace OmniDSP::Accelerate
 
 #endif  // OMNIDSP_ACCELERATE_BACKEND_HPP

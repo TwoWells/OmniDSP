@@ -5,7 +5,7 @@
 #include <iostream>
 #include <string>
 
-namespace OmniDSP::IntelIPP::utils {
+namespace OmniDSP::IntelIPP::Details {
 
   // Definition (no inline keyword here)
   Status ipp_status_to_omnidsp_status(IppStatus status)
@@ -34,4 +34,4 @@ namespace OmniDSP::IntelIPP::utils {
 
   // ... (definitions of other helpers if moved from header) ...
 
-}  // namespace OmniDSP::IntelIPP::utils
+}  // namespace OmniDSP::IntelIPP::Details

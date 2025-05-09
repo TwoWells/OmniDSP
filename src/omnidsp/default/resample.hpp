@@ -28,10 +28,10 @@ namespace OmniDSP::Default {
    * @tparam T The REAL data type (F32 or F64).
    */
   template <typename T>  // T is real type (F32, F64)
-  class DefaultResamplePlanImpl final : public Abstract::ResamplePlanImpl<T> {
+  class ResamplePlanImpl final : public Abstract::ResamplePlanImpl<T> {
    public:
     /**
-     * @brief Constructs a DefaultResamplePlanImpl.
+     * @brief Constructs a ResamplePlanImpl.
      * @param owner_backend Pointer to the backend instance creating this plan
      * (needed for filter design).
      * @param spec The resampling specification (input rate, output rate,
@@ -40,19 +40,19 @@ namespace OmniDSP::Default {
      * rates <= 0).
      * @throws std::runtime_error if filter design or internal setup fails.
      */
-    DefaultResamplePlanImpl(
+    ResamplePlanImpl(
         const Abstract::Backend* owner_backend, const ResampleSpec& spec);
 
     /**
      * @brief Destructor.
      */
-    ~DefaultResamplePlanImpl() override;
+    ~ResamplePlanImpl() override;
 
     // --- Disable Copy/Move ---
-    DefaultResamplePlanImpl(const DefaultResamplePlanImpl&) = delete;
-    DefaultResamplePlanImpl& operator=(const DefaultResamplePlanImpl&) = delete;
-    DefaultResamplePlanImpl(DefaultResamplePlanImpl&&) = delete;
-    DefaultResamplePlanImpl& operator=(DefaultResamplePlanImpl&&) = delete;
+    ResamplePlanImpl(const ResamplePlanImpl&) = delete;
+    ResamplePlanImpl& operator=(const ResamplePlanImpl&) = delete;
+    ResamplePlanImpl(ResamplePlanImpl&&) = delete;
+    ResamplePlanImpl& operator=(ResamplePlanImpl&&) = delete;
 
     // --- Interface Methods Implementation ---
 
@@ -126,8 +126,8 @@ namespace OmniDSP::Default {
   };
 
   // --- Explicit Template Instantiations (Declaration) ---
-  extern template class DefaultResamplePlanImpl<F32>;
-  extern template class DefaultResamplePlanImpl<F64>;
+  extern template class ResamplePlanImpl<F32>;
+  extern template class ResamplePlanImpl<F64>;
 
 }  // namespace OmniDSP::Default
 

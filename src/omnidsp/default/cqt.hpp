@@ -25,13 +25,13 @@ namespace OmniDSP::Default {
    * @tparam T The REAL data type (F32 or F64).
    */
   template <typename T>  // T is real type (F32, F64)
-  class DefaultCQTPlanImpl final : public Abstract::CQTPlanImpl<T> {
+  class CQTPlanImpl final : public Abstract::CQTPlanImpl<T> {
    public:
     using Real = T;                            // Alias for clarity
     using Complex = Utils::GetComplexType<T>;  // Use type trait
 
     /**
-     * @brief Constructs a DefaultCQTPlanImpl.
+     * @brief Constructs a CQTPlanImpl.
      * @param owner Pointer to the backend instance creating this plan (needed
      * for internal helpers like window generation and sub-plan creation).
      * @param sample_rate The sample rate of the input signal.
@@ -45,7 +45,7 @@ namespace OmniDSP::Default {
      * @throws std::runtime_error if internal setup (e.g., FFT plan creation,
      * kernel generation) fails.
      */
-    DefaultCQTPlanImpl(
+    CQTPlanImpl(
         const Abstract::Backend* owner,  // Use AbstractBackend
         Real sample_rate,
         Real min_freq,
@@ -56,13 +56,13 @@ namespace OmniDSP::Default {
     /**
      * @brief Destructor.
      */
-    ~DefaultCQTPlanImpl() override;
+    ~CQTPlanImpl() override;
 
     // --- Disable Copy/Move ---
-    DefaultCQTPlanImpl(const DefaultCQTPlanImpl&) = delete;
-    DefaultCQTPlanImpl& operator=(const DefaultCQTPlanImpl&) = delete;
-    DefaultCQTPlanImpl(DefaultCQTPlanImpl&&) = delete;
-    DefaultCQTPlanImpl& operator=(DefaultCQTPlanImpl&&) = delete;
+    CQTPlanImpl(const CQTPlanImpl&) = delete;
+    CQTPlanImpl& operator=(const CQTPlanImpl&) = delete;
+    CQTPlanImpl(CQTPlanImpl&&) = delete;
+    CQTPlanImpl& operator=(CQTPlanImpl&&) = delete;
 
     // --- Interface Methods Implementation ---
 
@@ -135,8 +135,8 @@ namespace OmniDSP::Default {
   };
 
   // --- Explicit Template Instantiations (Declaration) ---
-  extern template class DefaultCQTPlanImpl<F32>;
-  extern template class DefaultCQTPlanImpl<F64>;
+  extern template class CQTPlanImpl<F32>;
+  extern template class CQTPlanImpl<F64>;
 
 }  // namespace OmniDSP::Default
 

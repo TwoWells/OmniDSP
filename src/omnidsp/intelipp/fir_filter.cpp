@@ -27,12 +27,11 @@
 namespace OmniDSP::IntelIPP {
 
   //--------------------------------------------------------------------------
-  // IntelIPPFIRFilterPlanImpl Method Definitions
+  // FIRFilterPlanImpl Method Definitions
   //--------------------------------------------------------------------------
 
   template <typename T>
-  IntelIPPFIRFilterPlanImpl<T>::IntelIPPFIRFilterPlanImpl(
-      const std::vector<T>& coefficients)
+  FIRFilterPlanImpl<T>::FIRFilterPlanImpl(const std::vector<T>& coefficients)
       : coefficients_(coefficients),  // Store original coefficients
         num_taps_(coefficients.size()),
         order_(coefficients.empty() ? 0 : coefficients.size() - 1),
@@ -92,7 +91,7 @@ namespace OmniDSP::IntelIPP {
     }
 
     // Cast the raw spec memory to the correct IPP spec type pointer
-    p_ipp_spec_ = reinterpret_cast<utils::GetIPPFIRSpec<T>*>(p_spec_);
+    p_ipp_spec_ = reinterpret_cast<Details::GetIPPFIRSpec<T>*>(p_spec_);
 
     // Initialize the FIR state structure
     // Get a pointer to the coefficients data. IPP Init functions often take
@@ -100,8 +99,8 @@ namespace OmniDSP::IntelIPP {
     const T* p_taps = coefficients_.data();
 
     // Cast the pointer to the type expected by the wrapper
-    const utils::GetIPPType<T>* p_taps_ipp
-        = reinterpret_cast<const utils::GetIPPType<T>*>(p_taps);
+    const Details::GetIPPType<T>* p_taps_ipp
+        = reinterpret_cast<const Details::GetIPPType<T>*>(p_taps);
 
     // Use the internal templated wrapper for Init
     status = internal::ippsFIRSRInit<T>(
@@ -123,14 +122,14 @@ namespace OmniDSP::IntelIPP {
   }
 
   template <typename T>
-  IntelIPPFIRFilterPlanImpl<T>::~IntelIPPFIRFilterPlanImpl()
+  FIRFilterPlanImpl<T>::~FIRFilterPlanImpl()
   {
     ippsFree(p_spec_);    // Free the raw memory
     ippsFree(p_buffer_);  // Free the raw memory
   }
 
   template <typename T>
-  Status IntelIPPFIRFilterPlanImpl<T>::execute(
+  Status FIRFilterPlanImpl<T>::execute(
       std::span<const T> input, std::span<T> output)
   {
     if (!p_ipp_spec_) return Status::NotInitialized;
@@ -141,10 +140,10 @@ namespace OmniDSP::IntelIPP {
     int len = static_cast<int>(input.size());
     // IPP expects non-const pointers for src/dst even if src isn't modified
     // Use reinterpret_cast for type conversion if necessary
-    const utils::GetIPPType<T>* p_src_ipp
-        = reinterpret_cast<const utils::GetIPPType<T>*>(input.data());
-    utils::GetIPPType<T>* p_dst_ipp
-        = reinterpret_cast<utils::GetIPPType<T>*>(output.data());
+    const Details::GetIPPType<T>* p_src_ipp
+        = reinterpret_cast<const Details::GetIPPType<T>*>(input.data());
+    Details::GetIPPType<T>* p_dst_ipp
+        = reinterpret_cast<Details::GetIPPType<T>*>(output.data());
 
     // Execute FIR filter operation using internal wrapper
     status = internal::ippsFIRSR<T>(
@@ -161,7 +160,7 @@ namespace OmniDSP::IntelIPP {
   }
 
   template <typename T>
-  Status IntelIPPFIRFilterPlanImpl<T>::reset()
+  Status FIRFilterPlanImpl<T>::reset()
   {
     if (!p_ipp_spec_) return Status::NotInitialized;
 
@@ -172,8 +171,8 @@ namespace OmniDSP::IntelIPP {
     // Re-initialize the state using the same coefficients
     const T* p_taps = coefficients_.data();
     // Cast the pointer to the type expected by the wrapper
-    const utils::GetIPPType<T>* p_taps_ipp
-        = reinterpret_cast<const utils::GetIPPType<T>*>(p_taps);
+    const Details::GetIPPType<T>* p_taps_ipp
+        = reinterpret_cast<const Details::GetIPPType<T>*>(p_taps);
 
     // Use internal wrapper for Init
     status = internal::ippsFIRSRInit<T>(
@@ -188,21 +187,21 @@ namespace OmniDSP::IntelIPP {
   }
 
   template <typename T>
-  size_t IntelIPPFIRFilterPlanImpl<T>::get_order() const /* noexcept */
+  size_t FIRFilterPlanImpl<T>::get_order() const /* noexcept */
   {
     return order_;
   }
 
   template <typename T>
-  size_t IntelIPPFIRFilterPlanImpl<T>::get_num_taps() const /* noexcept */
+  size_t FIRFilterPlanImpl<T>::get_num_taps() const /* noexcept */
   {
     return num_taps_;
   }
 
   // --- Explicit Template Instantiations for FIR ---
-  template class IntelIPPFIRFilterPlanImpl<F32>;
-  template class IntelIPPFIRFilterPlanImpl<F64>;
-  template class IntelIPPFIRFilterPlanImpl<C32>;
-  template class IntelIPPFIRFilterPlanImpl<C64>;
+  template class FIRFilterPlanImpl<F32>;
+  template class FIRFilterPlanImpl<F64>;
+  template class FIRFilterPlanImpl<C32>;
+  template class FIRFilterPlanImpl<C64>;
 
 }  // namespace OmniDSP::IntelIPP

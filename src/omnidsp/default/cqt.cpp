@@ -60,11 +60,11 @@ namespace OmniDSP::Default {
   }
 
   //--------------------------------------------------------------------------
-  // DefaultCQTPlanImpl Method Implementations
+  // CQTPlanImpl Method Implementations
   //--------------------------------------------------------------------------
 
   template <typename T>
-  DefaultCQTPlanImpl<T>::DefaultCQTPlanImpl(
+  CQTPlanImpl<T>::CQTPlanImpl(
       const Abstract::Backend* owner,  // Use Backend
       Real sample_rate,                // Use Real alias
       Real min_freq,                   // Use Real alias
@@ -80,7 +80,7 @@ namespace OmniDSP::Default {
   {
     if (!owner_) {
       throw std::invalid_argument(
-          "DefaultCQTPlanImpl requires a valid owner Backend pointer.");
+          "CQTPlanImpl requires a valid owner Backend pointer.");
     }
     // Basic parameter validation
     if (sample_rate <= 0 || min_freq <= 0 || max_freq <= 0
@@ -294,7 +294,7 @@ namespace OmniDSP::Default {
   }
 
   template <typename T>
-  DefaultCQTPlanImpl<T>::~DefaultCQTPlanImpl()
+  CQTPlanImpl<T>::~CQTPlanImpl()
   {
     //   std::cout << "Default CQTPlanImpl destroyed." << std::endl; // Debug
   }
@@ -302,7 +302,7 @@ namespace OmniDSP::Default {
   // --- Definition using the aliases 'Real' and 'Complex' from the class scope
   // ---
   template <typename T>
-  Status DefaultCQTPlanImpl<T>::execute(
+  Status CQTPlanImpl<T>::execute(
       std::span<const Real> input, std::span<Complex> output) const
   {
     // *** Use this-> consistently for member access ***
@@ -496,13 +496,13 @@ namespace OmniDSP::Default {
   }
 
   template <typename T>
-  size_t DefaultCQTPlanImpl<T>::get_num_bins() const
+  size_t CQTPlanImpl<T>::get_num_bins() const
   {
     return num_bins_;
   }
 
   template <typename T>
-  size_t DefaultCQTPlanImpl<T>::get_num_output_frames(size_t input_length) const
+  size_t CQTPlanImpl<T>::get_num_output_frames(size_t input_length) const
   {
     if (hop_length_ == 0 || input_length == 0) {
       return 0;
@@ -512,7 +512,7 @@ namespace OmniDSP::Default {
   }
 
   template <typename T>
-  size_t DefaultCQTPlanImpl<T>::get_hop_length() const
+  size_t CQTPlanImpl<T>::get_hop_length() const
   {
     return hop_length_;
   }
@@ -520,7 +520,7 @@ namespace OmniDSP::Default {
   //--------------------------------------------------------------------------
   // Explicit Template Instantiations
   //--------------------------------------------------------------------------
-  template class DefaultCQTPlanImpl<float>;
-  template class DefaultCQTPlanImpl<double>;
+  template class CQTPlanImpl<float>;
+  template class CQTPlanImpl<double>;
 
 }  // namespace OmniDSP::Default

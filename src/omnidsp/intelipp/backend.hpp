@@ -19,11 +19,12 @@
 
 // Include necessary types referenced in method signatures
 #include <OmniDSP/core_types.hpp>
-#include <OmniDSP/fft.hpp>  // Needed for overridden FFT plans
+// #include <OmniDSP/convolution.hpp>
+// #include <OmniDSP/cqt.hpp>
+#include <OmniDSP/fft.hpp>
 #include <OmniDSP/filter.hpp>
 #include <OmniDSP/resample.hpp>
 #include <OmniDSP/window.hpp>
-// Note: convolution.hpp and cqt.hpp are included via default/backend.hpp
 
 // Include the headers declaring the IntelIPP Plan implementations
 #include "fft.hpp"         // Defines IntelIPPFFTPlanImpl etc.

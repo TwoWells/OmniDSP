@@ -42,12 +42,12 @@ namespace OmniDSP::IntelIPP {
   using ::OmniDSP::OmniException;
 
   //--------------------------------------------------------------------------
-  // IntelIPPResamplePlanImpl Method Definitions
+  // ResamplePlanImpl Method Definitions
   //--------------------------------------------------------------------------
 
   // Constructor Implementation
   template <typename T>
-  IntelIPPResamplePlanImpl<T>::IntelIPPResamplePlanImpl(
+  ResamplePlanImpl<T>::ResamplePlanImpl(
       const Abstract::Backend* owner, const ResampleSpec& spec)
       : input_rate_(spec.input_rate),
         output_rate_(spec.output_rate),
@@ -56,7 +56,7 @@ namespace OmniDSP::IntelIPP {
     // Check owner pointer
     if (!owner) {
       throw OmniException(
-          "IntelIPPResamplePlanImpl requires a non-null owner backend pointer.",
+          "ResamplePlanImpl requires a non-null owner backend pointer.",
           Status::InvalidArgument);
     }
     if (!spec.validate()) {
@@ -117,7 +117,7 @@ namespace OmniDSP::IntelIPP {
     // 2. Get sizes for spec and buffer using the *actual* tapsLen
     status = ippsFIRMRGetSize(
         tapsLen, upFactor, downFactor, ippDataType, &spec_size_, &buffer_size_);
-    // Use the macro from IntelIPP/utils.hpp
+    // Use the macro from IntelIPP/Utils.hpp
     OMNI_CHECK_IPP_STATUS_THROW(
         status, "IPP Resample: ippsFIRMRGetSize failed");
 
@@ -136,8 +136,8 @@ namespace OmniDSP::IntelIPP {
 
     // 4. Initialize the spec structure using the designed taps
     // Cast taps pointer to the IPP type
-    const utils::GetIPPType<T>* pTaps_ipp
-        = reinterpret_cast<const utils::GetIPPType<T>*>(pTaps.data());
+    const Details::GetIPPType<T>* pTaps_ipp
+        = reinterpret_cast<const Details::GetIPPType<T>*>(pTaps.data());
 
     if constexpr (std::is_same_v<T, float>) {
       IppsFIRSpec_32f* typed_spec = reinterpret_cast<IppsFIRSpec_32f*>(p_spec_);
@@ -170,14 +170,14 @@ namespace OmniDSP::IntelIPP {
       p_spec_ = nullptr;
       p_buffer_ = nullptr;
       p_ipp_spec_typed_ = nullptr;
-      // Use the macro from IntelIPP/utils.hpp
+      // Use the macro from IntelIPP/Utils.hpp
       OMNI_CHECK_IPP_STATUS_THROW(status, "IPP Resample: ippsFIRMRInit failed");
     }
   }
 
   // Destructor Implementation
   template <typename T>
-  IntelIPPResamplePlanImpl<T>::~IntelIPPResamplePlanImpl()
+  ResamplePlanImpl<T>::~ResamplePlanImpl()
   {
     ippsFree(p_spec_);    // Safe to call on nullptr
     ippsFree(p_buffer_);  // Safe to call on nullptr
@@ -185,7 +185,7 @@ namespace OmniDSP::IntelIPP {
 
   // Execute Method Implementation
   template <typename T>
-  Status IntelIPPResamplePlanImpl<T>::execute(
+  Status ResamplePlanImpl<T>::execute(
       std::span<const T> input, std::span<T> output)
   {
     if (!p_ipp_spec_typed_) {           // Check typed pointer
@@ -217,10 +217,10 @@ namespace OmniDSP::IntelIPP {
     }
 
     // Cast pointers to IPP types
-    const utils::GetIPPType<T>* p_in_ipp
-        = reinterpret_cast<const utils::GetIPPType<T>*>(input.data());
-    utils::GetIPPType<T>* p_out_ipp
-        = reinterpret_cast<utils::GetIPPType<T>*>(output.data());
+    const Details::GetIPPType<T>* p_in_ipp
+        = reinterpret_cast<const Details::GetIPPType<T>*>(input.data());
+    Details::GetIPPType<T>* p_out_ipp
+        = reinterpret_cast<Details::GetIPPType<T>*>(output.data());
 
     // Call the correct IPP function based on type T
     if constexpr (std::is_same_v<T, float>) {
@@ -248,13 +248,13 @@ namespace OmniDSP::IntelIPP {
       );
     }
 
-    // Use the function from IntelIPP/utils.hpp
-    return utils::ipp_status_to_omnidsp_status(status);
+    // Use the function from IntelIPP/Utils.hpp
+    return Details::ipp_status_to_omnidsp_status(status);
   }
 
   // Reset Method Implementation
   template <typename T>
-  Status IntelIPPResamplePlanImpl<T>::reset()
+  Status ResamplePlanImpl<T>::reset()
   {
     if (!p_ipp_spec_typed_) {  // Check typed pointer
       return Status::InvalidOperation;
@@ -266,27 +266,26 @@ namespace OmniDSP::IntelIPP {
     // For now, just zero the work buffer as a minimal attempt.
     if (p_buffer_ && buffer_size_ > 0) {
       IppStatus status = ippsZero_8u(p_buffer_, buffer_size_);
-      return utils::ipp_status_to_omnidsp_status(status);
+      return Details::ipp_status_to_omnidsp_status(status);
     }
     return Status::Success;  // No buffer to zero
   }
 
   // Getters Implementation
   template <typename T>
-  double IntelIPPResamplePlanImpl<T>::get_input_rate() const
+  double ResamplePlanImpl<T>::get_input_rate() const
   {
     return input_rate_;
   }
 
   template <typename T>
-  double IntelIPPResamplePlanImpl<T>::get_output_rate() const
+  double ResamplePlanImpl<T>::get_output_rate() const
   {
     return output_rate_;
   }
 
   template <typename T>
-  size_t IntelIPPResamplePlanImpl<T>::get_output_length(
-      size_t input_length) const
+  size_t ResamplePlanImpl<T>::get_output_length(size_t input_length) const
   {
     if (input_rate_ <= 0.0 || output_rate_ <= 0.0 || input_length == 0)
       return 0;
@@ -305,7 +304,7 @@ namespace OmniDSP::IntelIPP {
   //--------------------------------------------------------------------------
   // Explicit Template Instantiations
   //--------------------------------------------------------------------------
-  template class IntelIPPResamplePlanImpl<float>;
-  template class IntelIPPResamplePlanImpl<double>;
+  template class ResamplePlanImpl<float>;
+  template class ResamplePlanImpl<double>;
 
 }  // namespace OmniDSP::IntelIPP

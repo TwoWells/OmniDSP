@@ -64,11 +64,6 @@ set(OMNIDSP_CORE_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/interface/filter.cpp"
 )
 
-# --- DIAGNOSTICS: Check library type variables ---
-message(STATUS "DEBUG: Before add_library(OmniDSP):")
-message(STATUS "DEBUG:   OMNIDSP_LIBRARY_TYPE = '${OMNIDSP_LIBRARY_TYPE}' (Set by cmake/project_options.cmake)")
-message(STATUS "DEBUG:   BUILD_SHARED_LIBS    = '${BUILD_SHARED_LIBS}' (Standard CMake variable)")
-
 # --- Create the Main 'OmniDSP' Library Target ---
 add_library(OmniDSP ${OMNIDSP_LIBRARY_TYPE} "")
 target_sources(OmniDSP PRIVATE ${OMNIDSP_CORE_SOURCES})
@@ -110,17 +105,8 @@ else()
 endif()
 
 # --- Include Backend Configurations ---
-# Default Backend
-message(STATUS "Attempting to configure Default backend...")
 add_subdirectory(default)
-
-# Accelerate Backend
-if(OPTION_OMNIDSP_ENABLE_ACCELERATE)
-    message(STATUS "Attempting to configure Accelerate backend (OPTION_OMNIDSP_ENABLE_ACCELERATE=ON)...")
-    add_subdirectory(accelerate)
-else()
-    message(STATUS "Accelerate backend disabled by option.")
-endif()
+add_subdirectory(accelerate)
 
 # oneMKL Backend
 if(OPTION_OMNIDSP_ENABLE_ONEMKL)

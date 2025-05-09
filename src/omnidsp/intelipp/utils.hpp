@@ -1,5 +1,5 @@
 /**
- * @file utils.hpp (intelipp)
+ * @file Utils.hpp (intelipp)
  * @brief Utility functions for the Intel IPP backend, including status code
  * conversions, error checking macros, and type mapping helpers.
  */
@@ -15,7 +15,7 @@
 #include <string>                  // For std::string, std::to_string
 #include <type_traits>             // For std::is_same_v
 
-namespace OmniDSP::IntelIPP::utils {
+namespace OmniDSP::IntelIPP::Details {
 
   /**
    * @brief Converts IPP status codes to OmniDSP::Status.
@@ -125,7 +125,7 @@ namespace OmniDSP::IntelIPP::utils {
           std::string(msg) + ": " + ippGetStatusString(_status)                \
               + " (IPP Code: " + std::to_string(_status)                       \
               + ")", /* Arg 1: msg */                                          \
-          ::OmniDSP::IntelIPP::utils::ipp_status_to_omnidsp_status(            \
+          ::OmniDSP::IntelIPP::Details::ipp_status_to_omnidsp_status(          \
               _status) /* Arg 2: status */                                     \
       );                                                                       \
     }                                                                          \
@@ -146,12 +146,12 @@ namespace OmniDSP::IntelIPP::utils {
       /* Optional: Log the error message here if desired */                    \
       /* std::cerr << msg << ": " << ippGetStatusString(_status) << std::endl; \
        */                                                                      \
-      return ::OmniDSP::IntelIPP::utils::ipp_status_to_omnidsp_status(         \
+      return ::OmniDSP::IntelIPP::Details::ipp_status_to_omnidsp_status(       \
           _status);                                                            \
     }                                                                          \
   }                                                                            \
   while (0)
 
-}  // namespace OmniDSP::IntelIPP::utils
+}  // namespace OmniDSP::IntelIPP::Details
 
 #endif  // OMNIDSP_INTELIPP_UTILS_HPP

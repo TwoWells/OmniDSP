@@ -27,11 +27,11 @@
 namespace OmniDSP::IntelIPP {
 
   //--------------------------------------------------------------------------
-  // IntelIPPIIRFilterPlanImpl Method Definitions
+  // IIRFilterPlanImpl Method Definitions
   //--------------------------------------------------------------------------
 
   template <typename T>
-  IntelIPPIIRFilterPlanImpl<T>::IntelIPPIIRFilterPlanImpl(
+  IIRFilterPlanImpl<T>::IIRFilterPlanImpl(
       const std::vector<IIRFilterCoef>& sos_coefficients)
       : num_sections_(sos_coefficients.size()),
         order_(sos_coefficients.empty() ? 0 : sos_coefficients.size() * 2),
@@ -97,17 +97,17 @@ namespace OmniDSP::IntelIPP {
       state_mem_.clear();  // Ensure vector is empty if size is 0
     }
     // Only assign p_state_ if memory was actually allocated
-    p_state_
-        = state_mem_.empty()
-              ? nullptr
-              : reinterpret_cast<utils::GetIPPIIRState<T>*>(state_mem_.data());
+    p_state_ = state_mem_.empty()
+                   ? nullptr
+                   : reinterpret_cast<Details::GetIPPIIRState<T>*>(
+                         state_mem_.data());
 
     // 4. Initialize state using the dispatch helper
     // Pass correctly typed taps pointer
     const T* p_taps = taps_interleaved_.data();
     // Cast to the IPP type pointer
-    const utils::GetIPPType<T>* p_taps_ipp
-        = reinterpret_cast<const utils::GetIPPType<T>*>(p_taps);
+    const Details::GetIPPType<T>* p_taps_ipp
+        = reinterpret_cast<const Details::GetIPPType<T>*>(p_taps);
 
     // Pass 5 arguments to the corrected wrapper
     status = internal::ippsIIRInit_BiQuad<T>(
@@ -146,14 +146,14 @@ namespace OmniDSP::IntelIPP {
   }
 
   template <typename T>
-  IntelIPPIIRFilterPlanImpl<T>::~IntelIPPIIRFilterPlanImpl()
+  IIRFilterPlanImpl<T>::~IIRFilterPlanImpl()
   {
     // No explicit free needed, state_mem_ vector handles memory
     p_state_ = nullptr;
   }
 
   template <typename T>
-  Status IntelIPPIIRFilterPlanImpl<T>::execute(
+  Status IIRFilterPlanImpl<T>::execute(
       std::span<const T> input, std::span<T> output)
   {
     if (!p_state_ && state_size_bytes_ > 0)
@@ -164,10 +164,10 @@ namespace OmniDSP::IntelIPP {
     IppStatus status = ippStsErr;
     int len = static_cast<int>(input.size());
     // Cast pointers to IPP types
-    const utils::GetIPPType<T>* p_src_ipp
-        = reinterpret_cast<const utils::GetIPPType<T>*>(input.data());
-    utils::GetIPPType<T>* p_dst_ipp
-        = reinterpret_cast<utils::GetIPPType<T>*>(output.data());
+    const Details::GetIPPType<T>* p_src_ipp
+        = reinterpret_cast<const Details::GetIPPType<T>*>(input.data());
+    Details::GetIPPType<T>* p_dst_ipp
+        = reinterpret_cast<Details::GetIPPType<T>*>(output.data());
 
     // Execute the IIR filter operation using internal wrapper
     status = internal::ippsIIR<T>(
@@ -182,7 +182,7 @@ namespace OmniDSP::IntelIPP {
   }
 
   template <typename T>
-  Status IntelIPPIIRFilterPlanImpl<T>::reset()
+  Status IIRFilterPlanImpl<T>::reset()
   {
     if (!p_state_ && state_size_bytes_ > 0) return Status::NotInitialized;
     if (!p_state_)
@@ -193,8 +193,9 @@ namespace OmniDSP::IntelIPP {
     // Create a zero delay line buffer of the correct size (2 * num_biquads)
     std::vector<T> zero_delay_line(num_biquads * 2, T{0});
     // Cast pointer to IPP type
-    const utils::GetIPPType<T>* p_dly_ipp
-        = reinterpret_cast<const utils::GetIPPType<T>*>(zero_delay_line.data());
+    const Details::GetIPPType<T>* p_dly_ipp
+        = reinterpret_cast<const Details::GetIPPType<T>*>(
+            zero_delay_line.data());
 
     // Set the delay line to zeros using internal wrapper
     status = internal::ippsIIRSetDlyLine<T>(
@@ -208,19 +209,19 @@ namespace OmniDSP::IntelIPP {
   }
 
   template <typename T>
-  size_t IntelIPPIIRFilterPlanImpl<T>::get_order() const /* noexcept */
+  size_t IIRFilterPlanImpl<T>::get_order() const /* noexcept */
   {
     return order_;
   }
 
   template <typename T>
-  size_t IntelIPPIIRFilterPlanImpl<T>::get_num_sections() const /* noexcept */
+  size_t IIRFilterPlanImpl<T>::get_num_sections() const /* noexcept */
   {
     return num_sections_;
   }
 
   // --- Explicit Template Instantiations for IIR ---
-  template class IntelIPPIIRFilterPlanImpl<F32>;
-  template class IntelIPPIIRFilterPlanImpl<F64>;
+  template class IIRFilterPlanImpl<F32>;
+  template class IIRFilterPlanImpl<F64>;
 
 }  // namespace OmniDSP::IntelIPP

@@ -17,10 +17,11 @@
 namespace OmniDSP::IntelIPP {
 
   //--------------------------------------------------------------------------
-  // IntelIPPFFTPlanImpl Method Definitions (Complex FFT)
+  // FFTPlanImpl Method Definitions (Complex FFT)
   //--------------------------------------------------------------------------
+
   template <typename T_Complex>
-  IntelIPPFFTPlanImpl<T_Complex>::IntelIPPFFTPlanImpl(size_t length)
+  FFTPlanImpl<T_Complex>::FFTPlanImpl(size_t length)
       // Initialize declared members correctly
       : length_(length),
         p_spec_(nullptr),  // Initialize pointer members to nullptr
@@ -59,7 +60,7 @@ namespace OmniDSP::IntelIPP {
     if (ipp_status != ippStsNoErr) {
       throw OmniException(
           "IPP Error: ippsFFTGetSize_C Failed",
-          IntelIPP::utils::ipp_status_to_omnidsp_status(ipp_status));
+          IntelIPP::Details::ipp_status_to_omnidsp_status(ipp_status));
     }
 
     // Allocate memory using std::vector<Ipp8u>
@@ -114,7 +115,7 @@ namespace OmniDSP::IntelIPP {
       p_spec_ = nullptr;
       throw OmniException(
           "IPP Error: ippsFFTInit_C Failed",
-          IntelIPP::utils::ipp_status_to_omnidsp_status(ipp_status));
+          IntelIPP::Details::ipp_status_to_omnidsp_status(ipp_status));
     }
     // Verify that the pointer returned by Init matches our buffer start
     // (optional sanity check)
@@ -138,7 +139,7 @@ namespace OmniDSP::IntelIPP {
   // Destructor implementation remains default or empty if vectors handle memory
 
   template <typename T_Complex>
-  Status IntelIPPFFTPlanImpl<T_Complex>::fft(
+  Status FFTPlanImpl<T_Complex>::fft(
       std::span<const T_Complex> input, std::span<T_Complex> output) const
   {
     if (p_spec_ == nullptr) return Status::NotInitialized;
@@ -152,11 +153,11 @@ namespace OmniDSP::IntelIPP {
         p_spec_,
         // Pass mutable buffer pointer, handle case where size is 0
         work_buf_.empty() ? nullptr : const_cast<Ipp8u*>(work_buf_.data()));
-    return IntelIPP::utils::ipp_status_to_omnidsp_status(ipp_status);
+    return IntelIPP::Details::ipp_status_to_omnidsp_status(ipp_status);
   }
 
   template <typename T_Complex>
-  Status IntelIPPFFTPlanImpl<T_Complex>::ifft(
+  Status FFTPlanImpl<T_Complex>::ifft(
       std::span<const T_Complex> input, std::span<T_Complex> output) const
   {
     if (p_spec_ == nullptr) return Status::NotInitialized;
@@ -170,7 +171,7 @@ namespace OmniDSP::IntelIPP {
         p_spec_,
         // Pass mutable buffer pointer, handle case where size is 0
         work_buf_.empty() ? nullptr : const_cast<Ipp8u*>(work_buf_.data()));
-    return IntelIPP::utils::ipp_status_to_omnidsp_status(ipp_status);
+    return IntelIPP::Details::ipp_status_to_omnidsp_status(ipp_status);
   }
 
   // get_length() is already defined in the header
@@ -214,7 +215,7 @@ namespace OmniDSP::IntelIPP {
     if (ipp_status != ippStsNoErr) {
       throw OmniException(
           "IPP Error: ippsFFTGetSize_R Failed",
-          IntelIPP::utils::ipp_status_to_omnidsp_status(ipp_status));
+          IntelIPP::Details::ipp_status_to_omnidsp_status(ipp_status));
     }
 
     // Allocate memory
@@ -265,7 +266,7 @@ namespace OmniDSP::IntelIPP {
       p_spec_ = nullptr;
       throw OmniException(
           "IPP Error: ippsFFTInit_R Failed",
-          IntelIPP::utils::ipp_status_to_omnidsp_status(ipp_status));
+          IntelIPP::Details::ipp_status_to_omnidsp_status(ipp_status));
     }
     if (p_spec_temp != p_spec_) {
       spec_mem_.clear();
@@ -315,7 +316,7 @@ namespace OmniDSP::IntelIPP {
     );
 
     if (ipp_status != ippStsNoErr) {
-      return IntelIPP::utils::ipp_status_to_omnidsp_status(ipp_status);
+      return IntelIPP::Details::ipp_status_to_omnidsp_status(ipp_status);
     }
 
     // --- Convert IPP Packed format to standard Complex format ---
@@ -380,7 +381,7 @@ namespace OmniDSP::IntelIPP {
             : const_cast<Ipp8u*>(work_buf_.data())  // Mutable work buffer
     );
 
-    return IntelIPP::utils::ipp_status_to_omnidsp_status(ipp_status);
+    return IntelIPP::Details::ipp_status_to_omnidsp_status(ipp_status);
   }
 
   // get_length() is already defined in the header
@@ -389,8 +390,8 @@ namespace OmniDSP::IntelIPP {
   // Explicit Template Instantiations
   //--------------------------------------------------------------------------
   // These ensure the compiler generates code for these specific types.
-  template class IntelIPPFFTPlanImpl<C32>;
-  template class IntelIPPFFTPlanImpl<C64>;
+  template class FFTPlanImpl<C32>;
+  template class FFTPlanImpl<C64>;
   template class IntelIPPRFFTPlanImpl<F32>;
   template class IntelIPPRFFTPlanImpl<F64>;
 

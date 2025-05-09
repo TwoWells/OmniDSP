@@ -27,17 +27,17 @@
 
 namespace OmniDSP::OneMKL {
 
-  // *** REMOVED mkl_status_to_omnidsp_status helper (now in utils.hpp) ***
+  // *** REMOVED mkl_status_to_omnidsp_status helper (now in Details.hpp) ***
 
-  // *** REMOVED get_dfti_precision helper (now in utils.hpp) ***
+  // *** REMOVED get_dfti_precision helper (now in Details.hpp) ***
 
   //--------------------------------------------------------------------------
-  // OneMKLFFTPlanImpl Method Definitions (Complex FFT)
+  // FFTPlanImpl Method Definitions (Complex FFT)
   //--------------------------------------------------------------------------
 
   // Constructor Implementation
   template <typename T>  // T is Complex (C32, C64)
-  OneMKLFFTPlanImpl<T>::OneMKLFFTPlanImpl(size_t length)
+  FFTPlanImpl<T>::FFTPlanImpl(size_t length)
       : length_(length), mkl_status_(DFTI_NO_ERROR)
   {
     if (length == 0) {
@@ -45,10 +45,10 @@ namespace OmniDSP::OneMKL {
     }
 
     using RealType = typename T::value_type;
-    // *** Call helper from utils.hpp ***
+    // *** Call helper from Details.hpp ***
     DFTI_CONFIG_VALUE precision;
     try {
-      precision = utils::get_dfti_precision<RealType>();
+      precision = Details::get_dfti_precision<RealType>();
     }
     catch (const std::logic_error&
                e) {  // Catch potential error if static_assert fails somehow
@@ -90,7 +90,7 @@ namespace OmniDSP::OneMKL {
 
   // Destructor Implementation
   template <typename T>
-  OneMKLFFTPlanImpl<T>::~OneMKLFFTPlanImpl()
+  FFTPlanImpl<T>::~FFTPlanImpl()
   {
     if (descriptor_handle_) {
       MKL_LONG free_status = DftiFreeDescriptor(&descriptor_handle_);
@@ -104,7 +104,7 @@ namespace OmniDSP::OneMKL {
 
   // fft Method Implementation
   template <typename T>
-  Status OneMKLFFTPlanImpl<T>::fft(
+  Status FFTPlanImpl<T>::fft(
       std::span<const T> input, std::span<T> output) const
   {
     if (!descriptor_handle_) return Status::InvalidOperation;
@@ -116,13 +116,13 @@ namespace OmniDSP::OneMKL {
         descriptor_handle_,
         const_cast<void*>(static_cast<const void*>(input.data())),
         const_cast<void*>(static_cast<void*>(output.data())));
-    // *** Use helper from utils.hpp ***
-    return utils::mkl_status_to_omnidsp_status(status);
+    // *** Use helper from Details.hpp ***
+    return Details::mkl_status_to_omnidsp_status(status);
   }
 
   // ifft Method Implementation
   template <typename T>
-  Status OneMKLFFTPlanImpl<T>::ifft(
+  Status FFTPlanImpl<T>::ifft(
       std::span<const T> input, std::span<T> output) const
   {
     if (!descriptor_handle_) return Status::InvalidOperation;
@@ -134,13 +134,13 @@ namespace OmniDSP::OneMKL {
         descriptor_handle_,
         const_cast<void*>(static_cast<const void*>(input.data())),
         const_cast<void*>(static_cast<void*>(output.data())));
-    // *** Use helper from utils.hpp ***
-    return utils::mkl_status_to_omnidsp_status(status);
+    // *** Use helper from Details.hpp ***
+    return Details::mkl_status_to_omnidsp_status(status);
   }
 
   // get_length Method Implementation
   template <typename T>
-  size_t OneMKLFFTPlanImpl<T>::get_length() const
+  size_t FFTPlanImpl<T>::get_length() const
   {
     return length_;
   }
@@ -163,8 +163,8 @@ namespace OmniDSP::OneMKL {
 
     DFTI_CONFIG_VALUE precision;
     try {
-      // *** Call helper from utils.hpp ***
-      precision = utils::get_dfti_precision<T>();  // T is already Real here
+      // *** Call helper from Details.hpp ***
+      precision = Details::get_dfti_precision<T>();  // T is already Real here
     }
     catch (const std::logic_error& e) {
       throw std::invalid_argument(
@@ -258,8 +258,8 @@ namespace OmniDSP::OneMKL {
         descriptor_handle_,
         const_cast<void*>(static_cast<const void*>(input.data())),
         const_cast<void*>(static_cast<void*>(output.data())));
-    // *** Use helper from utils.hpp ***
-    return utils::mkl_status_to_omnidsp_status(status);
+    // *** Use helper from Details.hpp ***
+    return Details::mkl_status_to_omnidsp_status(status);
   }
 
   // irfft Method Implementation
@@ -278,8 +278,8 @@ namespace OmniDSP::OneMKL {
         descriptor_handle_,
         const_cast<void*>(static_cast<const void*>(input.data())),
         const_cast<void*>(static_cast<void*>(output.data())));
-    // *** Use helper from utils.hpp ***
-    return utils::mkl_status_to_omnidsp_status(status);
+    // *** Use helper from Details.hpp ***
+    return Details::mkl_status_to_omnidsp_status(status);
   }
 
   // get_length Method Implementation
@@ -292,8 +292,8 @@ namespace OmniDSP::OneMKL {
   //--------------------------------------------------------------------------
   // Explicit Template Instantiations
   //--------------------------------------------------------------------------
-  template class OneMKLFFTPlanImpl<C32>;
-  template class OneMKLFFTPlanImpl<C64>;
+  template class FFTPlanImpl<C32>;
+  template class FFTPlanImpl<C64>;
   template class OneMKLRFFTPlanImpl<F32>;
   template class OneMKLRFFTPlanImpl<F64>;
 

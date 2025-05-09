@@ -1,6 +1,6 @@
 /**
  * @file backend.cpp (OneMKL)
- * @brief Implements the OneMKLBackend class methods using oneMKL functions.
+ * @brief Implements the OneMKL::Backend class methods using oneMKL functions.
  */
 
 #include "backend.hpp"  // Corresponding header for oneMKL backend declarations
@@ -12,10 +12,7 @@
 #include <OmniDSP/filter.hpp>
 #include <OmniDSP/resample.hpp>
 
-// Include headers for the *oneMKL* Plan implementations
-// #include "convolution.hpp"  // Defines OneMKLConvolutionPlanImpl,
-// OneMKLCorrelationPlanImpl
-#include "fft.hpp"  // Defines OneMKLFFTPlanImpl, OneMKLRFFTPlanImpl
+#include "fft.hpp"
 
 // Include MKL header (needed for status codes, potentially global settings)
 #include <mkl.h>
@@ -41,32 +38,32 @@ namespace OmniDSP::OneMKL {
   // OneMKLBackend Method Definitions
   //--------------------------------------------------------------------------
 
-  OneMKLBackend::OneMKLBackend()
+  Backend::Backend()
   {
     // std::cout << "oneMKL Backend Initialized." << std::endl; // Debug message
   }
 
-  OneMKLBackend::~OneMKLBackend()
+  Backend::~Backend()
   {
     // std::cout << "oneMKL Backend Destroyed." << std::endl; // Debug message
   }
 
-  BackendType OneMKLBackend::get_backend() const { return BackendType::OneMKL; }
+  BackendType Backend::get_backend() const { return BackendType::OneMKL; }
 
   // --- DSP Operations (One-off) ---
-  // Inherited from DefaultBackend
+  // Inherited from Default::Backend
 
   // --- Window Generation ---
-  // Inherited from DefaultBackend
+  // Inherited from Default::Backend
 
   // --- Plan Factories ---
-  // Implementations now include fallback to DefaultBackend on error
+  // Implementations now include fallback to Default::Backend on error
 
   [[nodiscard]] OmniExpected<std::unique_ptr<FFTPlan<C32>>>
-  OneMKLBackend::create_fft_plan_c32(size_t length) const
+  Backend::create_fft_plan_c32(size_t length) const
   {
     try {
-      auto pimpl_backend = std::make_unique<OneMKLFFTPlanImpl<C32>>(length);
+      auto pimpl_backend = std::make_unique<FFTPlanImpl<C32>>(length);
       // Constructor throws on MKL error, so if we reach here, it's likely okay
       auto plan = FFTPlan<C32>::create_from_impl(std::move(pimpl_backend));
       if (!plan) {  // Should ideally not happen if make_unique succeeded
@@ -92,10 +89,10 @@ namespace OmniDSP::OneMKL {
   }
 
   [[nodiscard]] OmniExpected<std::unique_ptr<FFTPlan<C64>>>
-  OneMKLBackend::create_fft_plan_c64(size_t length) const
+  Backend::create_fft_plan_c64(size_t length) const
   {
     try {
-      auto pimpl_backend = std::make_unique<OneMKLFFTPlanImpl<C64>>(length);
+      auto pimpl_backend = std::make_unique<FFTPlanImpl<C64>>(length);
       auto plan = FFTPlan<C64>::create_from_impl(std::move(pimpl_backend));
       if (!plan) {
         std::cerr
@@ -120,7 +117,7 @@ namespace OmniDSP::OneMKL {
   }
 
   [[nodiscard]] OmniExpected<std::unique_ptr<RFFTPlan<F32>>>
-  OneMKLBackend::create_rfft_plan_f32(size_t length) const
+  Backend::create_rfft_plan_f32(size_t length) const
   {
     try {
       auto pimpl_backend = std::make_unique<OneMKLRFFTPlanImpl<F32>>(length);
@@ -148,7 +145,7 @@ namespace OmniDSP::OneMKL {
   }
 
   [[nodiscard]] OmniExpected<std::unique_ptr<RFFTPlan<F64>>>
-  OneMKLBackend::create_rfft_plan_f64(size_t length) const
+  Backend::create_rfft_plan_f64(size_t length) const
   {
     try {
       auto pimpl_backend = std::make_unique<OneMKLRFFTPlanImpl<F64>>(length);
@@ -196,6 +193,6 @@ namespace OmniDSP::Abstract {
   std::unique_ptr<Backend> create_onemkl_backend()
   {
     // Use the concrete class from the OneMKL namespace
-    return std::make_unique<::OmniDSP::OneMKL::OneMKLBackend>();
+    return std::make_unique<::OmniDSP::OneMKL::Backend>();
   }
 }  // namespace OmniDSP::Abstract

@@ -197,7 +197,7 @@ namespace OmniDSP::IntelIPP {
   {
     try {
       // Create the IPP-specific implementation
-      auto pimpl = std::make_unique<IntelIPPFFTPlanImpl<C32>>(length);
+      auto pimpl = std::make_unique<FFTPlanImpl<C32>>(length);
       // Wrap it in the public handle using the static helper
       return FFTPlan<C32>::create_from_impl(std::move(pimpl));
     }
@@ -219,7 +219,7 @@ namespace OmniDSP::IntelIPP {
   Backend::create_fft_plan_c64(size_t length) const
   {
     try {
-      auto pimpl = std::make_unique<IntelIPPFFTPlanImpl<C64>>(length);
+      auto pimpl = std::make_unique<FFTPlanImpl<C64>>(length);
       return FFTPlan<C64>::create_from_impl(std::move(pimpl));
     }
     catch (const OmniException& e) {
@@ -240,7 +240,8 @@ namespace OmniDSP::IntelIPP {
   Backend::create_rfft_plan_f32(size_t length) const
   {
     try {
-      auto pimpl = std::make_unique<IntelIPPRFFTPlanImpl<F32>>(length);
+      auto pimpl
+          = std::make_unique<IntelIPP::IntelIPPRFFTPlanImpl<F32>>(length);
       return RFFTPlan<F32>::create_from_impl(std::move(pimpl));
     }
     catch (const OmniException& e) {
@@ -261,7 +262,8 @@ namespace OmniDSP::IntelIPP {
   Backend::create_rfft_plan_f64(size_t length) const
   {
     try {
-      auto pimpl = std::make_unique<IntelIPPRFFTPlanImpl<F64>>(length);
+      auto pimpl
+          = std::make_unique<IntelIPP::IntelIPPRFFTPlanImpl<F64>>(length);
       return RFFTPlan<F64>::create_from_impl(std::move(pimpl));
     }
     catch (const OmniException& e) {
@@ -282,7 +284,8 @@ namespace OmniDSP::IntelIPP {
   Backend::create_resample_plan_f32(const ResampleSpec& spec) const
   {
     try {
-      auto pimpl = std::make_unique<IntelIPPResamplePlanImpl<F32>>(this, spec);
+      auto pimpl
+          = std::make_unique<IntelIPP::ResamplePlanImpl<F32>>(this, spec);
       return ResamplePlan<F32>::create_from_impl(std::move(pimpl));
     }
     catch (const OmniException& e) {
@@ -305,7 +308,8 @@ namespace OmniDSP::IntelIPP {
   Backend::create_resample_plan_f64(const ResampleSpec& spec) const
   {
     try {
-      auto pimpl = std::make_unique<IntelIPPResamplePlanImpl<F64>>(this, spec);
+      auto pimpl
+          = std::make_unique<IntelIPP::ResamplePlanImpl<F64>>(this, spec);
       return ResamplePlan<F64>::create_from_impl(std::move(pimpl));
     }
     catch (const OmniException& e) {
@@ -329,7 +333,7 @@ namespace OmniDSP::IntelIPP {
   {
     try {
       auto pimpl
-          = std::make_unique<IntelIPPFIRFilterPlanImpl<F32>>(coefficients);
+          = std::make_unique<IntelIPP::FIRFilterPlanImpl<F32>>(coefficients);
       return FIRFilterPlan<F32>::create_from_impl(std::move(pimpl));
     }
     catch (const OmniException& e) {
@@ -353,7 +357,7 @@ namespace OmniDSP::IntelIPP {
   {
     try {
       auto pimpl
-          = std::make_unique<IntelIPPFIRFilterPlanImpl<F64>>(coefficients);
+          = std::make_unique<IntelIPP::FIRFilterPlanImpl<F64>>(coefficients);
       return FIRFilterPlan<F64>::create_from_impl(std::move(pimpl));
     }
     catch (const OmniException& e) {
@@ -377,7 +381,7 @@ namespace OmniDSP::IntelIPP {
   {
     try {
       auto pimpl
-          = std::make_unique<IntelIPPFIRFilterPlanImpl<C32>>(coefficients);
+          = std::make_unique<IntelIPP::FIRFilterPlanImpl<C32>>(coefficients);
       return FIRFilterPlan<C32>::create_from_impl(std::move(pimpl));
     }
     catch (const OmniException& e) {
@@ -401,7 +405,7 @@ namespace OmniDSP::IntelIPP {
   {
     try {
       auto pimpl
-          = std::make_unique<IntelIPPFIRFilterPlanImpl<C64>>(coefficients);
+          = std::make_unique<IntelIPP::FIRFilterPlanImpl<C64>>(coefficients);
       return FIRFilterPlan<C64>::create_from_impl(std::move(pimpl));
     }
     catch (const OmniException& e) {
@@ -425,8 +429,8 @@ namespace OmniDSP::IntelIPP {
       const std::vector<IIRFilterCoef>& sos_coefficients) const
   {
     try {
-      auto pimpl
-          = std::make_unique<IntelIPPIIRFilterPlanImpl<F32>>(sos_coefficients);
+      auto pimpl = std::make_unique<IntelIPP::IIRFilterPlanImpl<F32>>(
+          sos_coefficients);
       return IIRFilterPlan<F32>::create_from_impl(std::move(pimpl));
     }
     catch (const OmniException& e) {
@@ -450,8 +454,8 @@ namespace OmniDSP::IntelIPP {
       const std::vector<IIRFilterCoef>& sos_coefficients) const
   {
     try {
-      auto pimpl
-          = std::make_unique<IntelIPPIIRFilterPlanImpl<F64>>(sos_coefficients);
+      auto pimpl = std::make_unique<IntelIPP::IIRFilterPlanImpl<F64>>(
+          sos_coefficients);
       return IIRFilterPlan<F64>::create_from_impl(std::move(pimpl));
     }
     catch (const OmniException& e) {

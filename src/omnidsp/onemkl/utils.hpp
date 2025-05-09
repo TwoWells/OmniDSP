@@ -1,5 +1,5 @@
 /**
- * @file utils.hpp (OneMKL)
+ * @file details.hpp (OneMKL)
  * @brief Utility function declarations and template definitions for the oneMKL
  * backend.
  */
@@ -14,7 +14,7 @@
 #include <string>       // For std::string (DftiErrorMessage might involve it)
 #include <type_traits>  // For std::is_floating_point_v, std::is_same_v
 
-namespace OmniDSP::OneMKL::utils {
+namespace OmniDSP::OneMKL::Details {
 
   /**
    * @brief Converts MKL DFTI status codes to OmniDSP::Status.
@@ -48,6 +48,6 @@ namespace OmniDSP::OneMKL::utils {
     // However, for constexpr, this structure is fine.
   }
 
-}  // namespace OmniDSP::OneMKL::utils
+}  // namespace OmniDSP::OneMKL::Details
 
 #endif  // OMNIDSP_ONEMKL_UTILS_HPP

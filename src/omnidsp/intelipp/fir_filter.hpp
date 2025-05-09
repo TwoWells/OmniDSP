@@ -60,67 +60,67 @@ namespace OmniDSP::IntelIPP {
     // FIR Init
     template <typename T>
     inline IppStatus ippsFIRSRInit(
-        const utils::GetIPPType<T>* pTaps,
+        const Details::GetIPPType<T>* pTaps,
         int tapsLen,
         IppAlgType algType,
-        utils::GetIPPFIRSpec<T>* pSpec);  // Use utils::
+        Details::GetIPPFIRSpec<T>* pSpec);  // Use Utils::
     template <>
     inline IppStatus ippsFIRSRInit<F32>(
-        const utils::GetIPPType<F32>* pTaps,
+        const Details::GetIPPType<F32>* pTaps,
         int tapsLen,
         IppAlgType algType,
-        utils::GetIPPFIRSpec<F32>* pSpec)
-    {  // Use utils::
+        Details::GetIPPFIRSpec<F32>* pSpec)
+    {  // Use Utils::
       return ::ippsFIRSRInit_32f(pTaps, tapsLen, algType, pSpec);
     }
     template <>
     inline IppStatus ippsFIRSRInit<F64>(
-        const utils::GetIPPType<F64>* pTaps,
+        const Details::GetIPPType<F64>* pTaps,
         int tapsLen,
         IppAlgType algType,
-        utils::GetIPPFIRSpec<F64>* pSpec)
-    {  // Use utils::
+        Details::GetIPPFIRSpec<F64>* pSpec)
+    {  // Use Utils::
       return ::ippsFIRSRInit_64f(pTaps, tapsLen, algType, pSpec);
     }
     template <>
     inline IppStatus ippsFIRSRInit<C32>(
-        const utils::GetIPPType<C32>* pTaps,
+        const Details::GetIPPType<C32>* pTaps,
         int tapsLen,
         IppAlgType algType,
-        utils::GetIPPFIRSpec<C32>* pSpec)
-    {  // Use utils::
+        Details::GetIPPFIRSpec<C32>* pSpec)
+    {  // Use Utils::
       return ::ippsFIRSRInit_32fc(pTaps, tapsLen, algType, pSpec);
     }
     template <>
     inline IppStatus ippsFIRSRInit<C64>(
-        const utils::GetIPPType<C64>* pTaps,
+        const Details::GetIPPType<C64>* pTaps,
         int tapsLen,
         IppAlgType algType,
-        utils::GetIPPFIRSpec<C64>* pSpec)
-    {  // Use utils::
+        Details::GetIPPFIRSpec<C64>* pSpec)
+    {  // Use Utils::
       return ::ippsFIRSRInit_64fc(pTaps, tapsLen, algType, pSpec);
     }
 
     // FIR Execute
     template <typename T>
     inline IppStatus ippsFIRSR(
-        const utils::GetIPPType<T>* pSrc,
-        utils::GetIPPType<T>* pDst,
+        const Details::GetIPPType<T>* pSrc,
+        Details::GetIPPType<T>* pDst,
         int numIters,
-        utils::GetIPPFIRSpec<T>* pSpec,
-        const utils::GetIPPType<T>* pDlySrc,
-        utils::GetIPPType<T>* pDlyDst,
-        Ipp8u* pBuffer);  // Use utils::
+        Details::GetIPPFIRSpec<T>* pSpec,
+        const Details::GetIPPType<T>* pDlySrc,
+        Details::GetIPPType<T>* pDlyDst,
+        Ipp8u* pBuffer);  // Use Utils::
     template <>
     inline IppStatus ippsFIRSR<F32>(
-        const utils::GetIPPType<F32>* pSrc,
-        utils::GetIPPType<F32>* pDst,
+        const Details::GetIPPType<F32>* pSrc,
+        Details::GetIPPType<F32>* pDst,
         int numIters,
-        utils::GetIPPFIRSpec<F32>* pSpec,
-        const utils::GetIPPType<F32>* pDlySrc,
-        utils::GetIPPType<F32>* pDlyDst,
+        Details::GetIPPFIRSpec<F32>* pSpec,
+        const Details::GetIPPType<F32>* pDlySrc,
+        Details::GetIPPType<F32>* pDlyDst,
         Ipp8u* pBuffer)
-    {  // Use utils::
+    {  // Use Utils::
       return ::ippsFIRSR_32f(
           pSrc,
           pDst,
@@ -132,14 +132,14 @@ namespace OmniDSP::IntelIPP {
     }
     template <>
     inline IppStatus ippsFIRSR<F64>(
-        const utils::GetIPPType<F64>* pSrc,
-        utils::GetIPPType<F64>* pDst,
+        const Details::GetIPPType<F64>* pSrc,
+        Details::GetIPPType<F64>* pDst,
         int numIters,
-        utils::GetIPPFIRSpec<F64>* pSpec,
-        const utils::GetIPPType<F64>* pDlySrc,
-        utils::GetIPPType<F64>* pDlyDst,
+        Details::GetIPPFIRSpec<F64>* pSpec,
+        const Details::GetIPPType<F64>* pDlySrc,
+        Details::GetIPPType<F64>* pDlyDst,
         Ipp8u* pBuffer)
-    {  // Use utils::
+    {  // Use Utils::
       return ::ippsFIRSR_64f(
           pSrc,
           pDst,
@@ -151,14 +151,14 @@ namespace OmniDSP::IntelIPP {
     }
     template <>
     inline IppStatus ippsFIRSR<C32>(
-        const utils::GetIPPType<C32>* pSrc,
-        utils::GetIPPType<C32>* pDst,
+        const Details::GetIPPType<C32>* pSrc,
+        Details::GetIPPType<C32>* pDst,
         int numIters,
-        utils::GetIPPFIRSpec<C32>* pSpec,
-        const utils::GetIPPType<C32>* pDlySrc,
-        utils::GetIPPType<C32>* pDlyDst,
+        Details::GetIPPFIRSpec<C32>* pSpec,
+        const Details::GetIPPType<C32>* pDlySrc,
+        Details::GetIPPType<C32>* pDlyDst,
         Ipp8u* pBuffer)
-    {  // Use utils::
+    {  // Use Utils::
       return ::ippsFIRSR_32fc(
           pSrc,
           pDst,
@@ -170,14 +170,14 @@ namespace OmniDSP::IntelIPP {
     }
     template <>
     inline IppStatus ippsFIRSR<C64>(
-        const utils::GetIPPType<C64>* pSrc,
-        utils::GetIPPType<C64>* pDst,
+        const Details::GetIPPType<C64>* pSrc,
+        Details::GetIPPType<C64>* pDst,
         int numIters,
-        utils::GetIPPFIRSpec<C64>* pSpec,
-        const utils::GetIPPType<C64>* pDlySrc,
-        utils::GetIPPType<C64>* pDlyDst,
+        Details::GetIPPFIRSpec<C64>* pSpec,
+        const Details::GetIPPType<C64>* pDlySrc,
+        Details::GetIPPType<C64>* pDlyDst,
         Ipp8u* pBuffer)
-    {  // Use utils::
+    {  // Use Utils::
       return ::ippsFIRSR_64fc(
           pSrc,
           pDst,
@@ -193,20 +193,18 @@ namespace OmniDSP::IntelIPP {
   // IntelIPP FIR Filter Plan Implementation
   //--------------------------------------------------------------------------
   template <typename T>
-  class IntelIPPFIRFilterPlanImpl final
-      : public Abstract::FIRFilterPlanImpl<T> {
-    // *** Use type helpers from utils namespace ***
-    using IPP_Spec_Type = utils::GetIPPFIRSpec<T>;
+  class FIRFilterPlanImpl final : public Abstract::FIRFilterPlanImpl<T> {
+    // *** Use type helpers from Utils namespace ***
+    using IPP_Spec_Type = Details::GetIPPFIRSpec<T>;
 
    public:
-    explicit IntelIPPFIRFilterPlanImpl(const std::vector<T>& coefficients);
-    ~IntelIPPFIRFilterPlanImpl() override;
+    explicit FIRFilterPlanImpl(const std::vector<T>& coefficients);
+    ~FIRFilterPlanImpl() override;
 
-    IntelIPPFIRFilterPlanImpl(const IntelIPPFIRFilterPlanImpl&) = delete;
-    IntelIPPFIRFilterPlanImpl& operator=(const IntelIPPFIRFilterPlanImpl&)
-        = delete;
-    IntelIPPFIRFilterPlanImpl(IntelIPPFIRFilterPlanImpl&&) = delete;
-    IntelIPPFIRFilterPlanImpl& operator=(IntelIPPFIRFilterPlanImpl&&) = delete;
+    FIRFilterPlanImpl(const FIRFilterPlanImpl&) = delete;
+    FIRFilterPlanImpl& operator=(const FIRFilterPlanImpl&) = delete;
+    FIRFilterPlanImpl(FIRFilterPlanImpl&&) = delete;
+    FIRFilterPlanImpl& operator=(FIRFilterPlanImpl&&) = delete;
 
     [[nodiscard]] Status execute(
         std::span<const T> input, std::span<T> output) override;

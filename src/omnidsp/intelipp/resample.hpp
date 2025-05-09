@@ -35,12 +35,12 @@ namespace OmniDSP::IntelIPP {
    * @tparam T Real data type (F32 or F64).
    */
   template <typename T>
-  class IntelIPPResamplePlanImpl final
+  class ResamplePlanImpl final
       : public Abstract::ResamplePlanImpl<T> {  // Assuming base is in abstract
                                                 // namespace
     static_assert(
-        !Utils::IsComplex_v<T>,
-        "IntelIPPResamplePlanImpl requires a real type.");
+        !::OmniDSP::Utils::IsComplex_v<T>,
+        "ResamplePlanImpl requires a real type.");
 
    public:
     /**
@@ -53,20 +53,19 @@ namespace OmniDSP::IntelIPP {
      * @throws OmniDSPException If IPP state allocation or initialization fails,
      * or if internal filter design fails.
      */
-    explicit IntelIPPResamplePlanImpl(
+    explicit ResamplePlanImpl(
         const Abstract::Backend* owner, const ResampleSpec& spec);
 
     /**
      * @brief Destructor. Frees the IPP resampler state.
      */
-    ~IntelIPPResamplePlanImpl() override;
+    ~ResamplePlanImpl() override;
 
     // --- Deleted Copy/Move ---
-    IntelIPPResamplePlanImpl(const IntelIPPResamplePlanImpl&) = delete;
-    IntelIPPResamplePlanImpl& operator=(const IntelIPPResamplePlanImpl&)
-        = delete;
-    IntelIPPResamplePlanImpl(IntelIPPResamplePlanImpl&&) = delete;
-    IntelIPPResamplePlanImpl& operator=(IntelIPPResamplePlanImpl&&) = delete;
+    ResamplePlanImpl(const ResamplePlanImpl&) = delete;
+    ResamplePlanImpl& operator=(const ResamplePlanImpl&) = delete;
+    ResamplePlanImpl(ResamplePlanImpl&&) = delete;
+    ResamplePlanImpl& operator=(ResamplePlanImpl&&) = delete;
 
     // --- Interface Methods ---
     [[nodiscard]] Status execute(

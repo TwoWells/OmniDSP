@@ -45,7 +45,7 @@ namespace OmniDSP::IntelIPP {
       return static_cast<int>(std::log2(static_cast<double>(n)));
     }
 
-    // *** REMOVED Type mapping helpers - Moved to utils.hpp ***
+    // *** REMOVED Type mapping helpers - Moved to Utils.hpp ***
 
     // --- Templated wrappers for IPP FFT functions ---
     // GetSize Cplx (Requires 6 arguments: order, flag, hint, pSpecSize,
@@ -121,33 +121,33 @@ namespace OmniDSP::IntelIPP {
     // pSpecBuffer)
     template <typename T_Complex>
     inline IppStatus ippsFFTInit_C(
-        utils::GetIPPFFTSpec<T_Complex>** ppFFTSpec,
+        Details::GetIPPFFTSpec<T_Complex>** ppFFTSpec,
         int order,
         int flag,
         IppHintAlgorithm hint,
         Ipp8u* pSpec,
-        Ipp8u* pSpecBuffer);  // Use utils::
+        Ipp8u* pSpecBuffer);  // Use Utils::
     template <>
     inline IppStatus ippsFFTInit_C<C32>(
-        utils::GetIPPFFTSpec<C32>** ppFFTSpec,
+        Details::GetIPPFFTSpec<C32>** ppFFTSpec,
         int order,
         int flag,
         IppHintAlgorithm hint,
         Ipp8u* pSpec,
         Ipp8u* pSpecBuffer)
-    {  // Use utils::
+    {  // Use Utils::
       return ::ippsFFTInit_C_32fc(
           ppFFTSpec, order, flag, hint, pSpec, pSpecBuffer);
     }
     template <>
     inline IppStatus ippsFFTInit_C<C64>(
-        utils::GetIPPFFTSpec<C64>** ppFFTSpec,
+        Details::GetIPPFFTSpec<C64>** ppFFTSpec,
         int order,
         int flag,
         IppHintAlgorithm hint,
         Ipp8u* pSpec,
         Ipp8u* pSpecBuffer)
-    {  // Use utils::
+    {  // Use Utils::
       return ::ippsFFTInit_C_64fc(
           ppFFTSpec, order, flag, hint, pSpec, pSpecBuffer);
     }
@@ -155,33 +155,33 @@ namespace OmniDSP::IntelIPP {
     // Init Real (Requires 6 arguments)
     template <typename T_Real>
     inline IppStatus ippsFFTInit_R(
-        utils::GetIPPFFTSpec<T_Real>** ppFFTSpec,
+        Details::GetIPPFFTSpec<T_Real>** ppFFTSpec,
         int order,
         int flag,
         IppHintAlgorithm hint,
         Ipp8u* pSpec,
-        Ipp8u* pSpecBuffer);  // Use utils::
+        Ipp8u* pSpecBuffer);  // Use Utils::
     template <>
     inline IppStatus ippsFFTInit_R<F32>(
-        utils::GetIPPFFTSpec<F32>** ppFFTSpec,
+        Details::GetIPPFFTSpec<F32>** ppFFTSpec,
         int order,
         int flag,
         IppHintAlgorithm hint,
         Ipp8u* pSpec,
         Ipp8u* pSpecBuffer)
-    {  // Use utils::
+    {  // Use Utils::
       return ::ippsFFTInit_R_32f(
           ppFFTSpec, order, flag, hint, pSpec, pSpecBuffer);
     }
     template <>
     inline IppStatus ippsFFTInit_R<F64>(
-        utils::GetIPPFFTSpec<F64>** ppFFTSpec,
+        Details::GetIPPFFTSpec<F64>** ppFFTSpec,
         int order,
         int flag,
         IppHintAlgorithm hint,
         Ipp8u* pSpec,
         Ipp8u* pSpecBuffer)
-    {  // Use utils::
+    {  // Use Utils::
       return ::ippsFFTInit_R_64f(
           ppFFTSpec, order, flag, hint, pSpec, pSpecBuffer);
     }
@@ -189,104 +189,104 @@ namespace OmniDSP::IntelIPP {
     // Forward Cplx (Requires 4 arguments: pSrc, pDst, pFFTSpec, pBuffer)
     template <typename T_Complex>
     inline IppStatus ippsFFTFwd_CToC(
-        const utils::GetIPPType<T_Complex>* pSrc,
-        utils::GetIPPType<T_Complex>* pDst,
-        const utils::GetIPPFFTSpec<T_Complex>* pFFTSpec,
-        Ipp8u* pBuffer);  // Use utils::
+        const Details::GetIPPType<T_Complex>* pSrc,
+        Details::GetIPPType<T_Complex>* pDst,
+        const Details::GetIPPFFTSpec<T_Complex>* pFFTSpec,
+        Ipp8u* pBuffer);  // Use Utils::
     template <>
     inline IppStatus ippsFFTFwd_CToC<C32>(
-        const utils::GetIPPType<C32>* pSrc,
-        utils::GetIPPType<C32>* pDst,
-        const utils::GetIPPFFTSpec<C32>* pFFTSpec,
+        const Details::GetIPPType<C32>* pSrc,
+        Details::GetIPPType<C32>* pDst,
+        const Details::GetIPPFFTSpec<C32>* pFFTSpec,
         Ipp8u* pBuffer)
-    {  // Use utils::
+    {  // Use Utils::
       return ::ippsFFTFwd_CToC_32fc(pSrc, pDst, pFFTSpec, pBuffer);
     }
     template <>
     inline IppStatus ippsFFTFwd_CToC<C64>(
-        const utils::GetIPPType<C64>* pSrc,
-        utils::GetIPPType<C64>* pDst,
-        const utils::GetIPPFFTSpec<C64>* pFFTSpec,
+        const Details::GetIPPType<C64>* pSrc,
+        Details::GetIPPType<C64>* pDst,
+        const Details::GetIPPFFTSpec<C64>* pFFTSpec,
         Ipp8u* pBuffer)
-    {  // Use utils::
+    {  // Use Utils::
       return ::ippsFFTFwd_CToC_64fc(pSrc, pDst, pFFTSpec, pBuffer);
     }
 
     // Inverse Cplx (Requires 4 arguments)
     template <typename T_Complex>
     inline IppStatus ippsFFTInv_CToC(
-        const utils::GetIPPType<T_Complex>* pSrc,
-        utils::GetIPPType<T_Complex>* pDst,
-        const utils::GetIPPFFTSpec<T_Complex>* pFFTSpec,
-        Ipp8u* pBuffer);  // Use utils::
+        const Details::GetIPPType<T_Complex>* pSrc,
+        Details::GetIPPType<T_Complex>* pDst,
+        const Details::GetIPPFFTSpec<T_Complex>* pFFTSpec,
+        Ipp8u* pBuffer);  // Use Utils::
     template <>
     inline IppStatus ippsFFTInv_CToC<C32>(
-        const utils::GetIPPType<C32>* pSrc,
-        utils::GetIPPType<C32>* pDst,
-        const utils::GetIPPFFTSpec<C32>* pFFTSpec,
+        const Details::GetIPPType<C32>* pSrc,
+        Details::GetIPPType<C32>* pDst,
+        const Details::GetIPPFFTSpec<C32>* pFFTSpec,
         Ipp8u* pBuffer)
-    {  // Use utils::
+    {  // Use Utils::
       return ::ippsFFTInv_CToC_32fc(pSrc, pDst, pFFTSpec, pBuffer);
     }
     template <>
     inline IppStatus ippsFFTInv_CToC<C64>(
-        const utils::GetIPPType<C64>* pSrc,
-        utils::GetIPPType<C64>* pDst,
-        const utils::GetIPPFFTSpec<C64>* pFFTSpec,
+        const Details::GetIPPType<C64>* pSrc,
+        Details::GetIPPType<C64>* pDst,
+        const Details::GetIPPFFTSpec<C64>* pFFTSpec,
         Ipp8u* pBuffer)
-    {  // Use utils::
+    {  // Use Utils::
       return ::ippsFFTInv_CToC_64fc(pSrc, pDst, pFFTSpec, pBuffer);
     }
 
     // Forward Real (Using Pack format - Requires 4 arguments)
     template <typename T_Real>
     inline IppStatus ippsFFTFwd_RToPack(
-        const utils::GetIPPType<T_Real>* pSrc,
-        utils::GetIPPType<T_Real>* pDst,
-        const utils::GetIPPFFTSpec<T_Real>* pFFTSpec,
-        Ipp8u* pBuffer);  // Use utils::
+        const Details::GetIPPType<T_Real>* pSrc,
+        Details::GetIPPType<T_Real>* pDst,
+        const Details::GetIPPFFTSpec<T_Real>* pFFTSpec,
+        Ipp8u* pBuffer);  // Use Utils::
     template <>
     inline IppStatus ippsFFTFwd_RToPack<F32>(
-        const utils::GetIPPType<F32>* pSrc,
-        utils::GetIPPType<F32>* pDst,
-        const utils::GetIPPFFTSpec<F32>* pFFTSpec,
+        const Details::GetIPPType<F32>* pSrc,
+        Details::GetIPPType<F32>* pDst,
+        const Details::GetIPPFFTSpec<F32>* pFFTSpec,
         Ipp8u* pBuffer)
-    {  // Use utils::
+    {  // Use Utils::
       return ::ippsFFTFwd_RToPack_32f(pSrc, pDst, pFFTSpec, pBuffer);
     }
     template <>
     inline IppStatus ippsFFTFwd_RToPack<F64>(
-        const utils::GetIPPType<F64>* pSrc,
-        utils::GetIPPType<F64>* pDst,
-        const utils::GetIPPFFTSpec<F64>* pFFTSpec,
+        const Details::GetIPPType<F64>* pSrc,
+        Details::GetIPPType<F64>* pDst,
+        const Details::GetIPPFFTSpec<F64>* pFFTSpec,
         Ipp8u* pBuffer)
-    {  // Use utils::
+    {  // Use Utils::
       return ::ippsFFTFwd_RToPack_64f(pSrc, pDst, pFFTSpec, pBuffer);
     }
 
     // Inverse Real (Using Pack format - Requires 4 arguments)
     template <typename T_Real>
     inline IppStatus ippsFFTInv_PackToR(
-        const utils::GetIPPType<T_Real>* pSrc,
-        utils::GetIPPType<T_Real>* pDst,
-        const utils::GetIPPFFTSpec<T_Real>* pFFTSpec,
-        Ipp8u* pBuffer);  // Use utils::
+        const Details::GetIPPType<T_Real>* pSrc,
+        Details::GetIPPType<T_Real>* pDst,
+        const Details::GetIPPFFTSpec<T_Real>* pFFTSpec,
+        Ipp8u* pBuffer);  // Use Utils::
     template <>
     inline IppStatus ippsFFTInv_PackToR<F32>(
-        const utils::GetIPPType<F32>* pSrc,
-        utils::GetIPPType<F32>* pDst,
-        const utils::GetIPPFFTSpec<F32>* pFFTSpec,
+        const Details::GetIPPType<F32>* pSrc,
+        Details::GetIPPType<F32>* pDst,
+        const Details::GetIPPFFTSpec<F32>* pFFTSpec,
         Ipp8u* pBuffer)
-    {  // Use utils::
+    {  // Use Utils::
       return ::ippsFFTInv_PackToR_32f(pSrc, pDst, pFFTSpec, pBuffer);
     }
     template <>
     inline IppStatus ippsFFTInv_PackToR<F64>(
-        const utils::GetIPPType<F64>* pSrc,
-        utils::GetIPPType<F64>* pDst,
-        const utils::GetIPPFFTSpec<F64>* pFFTSpec,
+        const Details::GetIPPType<F64>* pSrc,
+        Details::GetIPPType<F64>* pDst,
+        const Details::GetIPPFFTSpec<F64>* pFFTSpec,
         Ipp8u* pBuffer)
-    {  // Use utils::
+    {  // Use Utils::
       return ::ippsFFTInv_PackToR_64f(pSrc, pDst, pFFTSpec, pBuffer);
     }
 
@@ -296,22 +296,22 @@ namespace OmniDSP::IntelIPP {
   // IntelIPP Complex FFT Plan Implementation
   //--------------------------------------------------------------------------
   template <typename T_Complex>
-  class IntelIPPFFTPlanImpl final : public Abstract::FFTPlanImpl<T_Complex> {
+  class FFTPlanImpl final : public Abstract::FFTPlanImpl<T_Complex> {
     static_assert(
         std::is_same_v<T_Complex, C32> || std::is_same_v<T_Complex, C64>,
-        "IntelIPPFFTPlanImpl supports only C32 or C64.");
-    // *** Use type helpers from utils namespace ***
-    using IPP_C_Type = utils::GetIPPType<T_Complex>;
-    using IPP_Spec_Type = utils::GetIPPFFTSpec<T_Complex>;
+        "FFTPlanImpl supports only C32 or C64.");
+    // *** Use type helpers from Utils namespace ***
+    using IPP_C_Type = Details::GetIPPType<T_Complex>;
+    using IPP_Spec_Type = Details::GetIPPFFTSpec<T_Complex>;
 
    public:
-    explicit IntelIPPFFTPlanImpl(size_t length);
-    ~IntelIPPFFTPlanImpl() override = default;
+    explicit FFTPlanImpl(size_t length);
+    ~FFTPlanImpl() override = default;
 
-    IntelIPPFFTPlanImpl(const IntelIPPFFTPlanImpl&) = delete;
-    IntelIPPFFTPlanImpl& operator=(const IntelIPPFFTPlanImpl&) = delete;
-    IntelIPPFFTPlanImpl(IntelIPPFFTPlanImpl&&) = delete;
-    IntelIPPFFTPlanImpl& operator=(IntelIPPFFTPlanImpl&&) = delete;
+    FFTPlanImpl(const FFTPlanImpl&) = delete;
+    FFTPlanImpl& operator=(const FFTPlanImpl&) = delete;
+    FFTPlanImpl(FFTPlanImpl&&) = delete;
+    FFTPlanImpl& operator=(FFTPlanImpl&&) = delete;
 
     [[nodiscard]] Status fft(  // Use 'fft' to match abstract base
         std::span<const T_Complex> input,
@@ -341,13 +341,13 @@ namespace OmniDSP::IntelIPP {
     static_assert(
         std::is_same_v<T_Real, F32> || std::is_same_v<T_Real, F64>,
         "IntelIPPRFFTPlanImpl supports only F32 or F64.");
-    // *** Use type helpers from utils namespace ***
+    // *** Use type helpers from Utils namespace ***
     using T_Complex = ::OmniDSP::Utils::GetComplexType<
         T_Real>;  // Get corresponding complex type from core_types
-    using IPP_R_Type = utils::GetIPPType<T_Real>;
+    using IPP_R_Type = Details::GetIPPType<T_Real>;
     using IPP_C_Type
-        = utils::GetIPPType<T_Complex>;  // Needed for output span type
-    using IPP_Spec_Type = utils::GetIPPFFTSpec<T_Real>;
+        = Details::GetIPPType<T_Complex>;  // Needed for output span type
+    using IPP_Spec_Type = Details::GetIPPFFTSpec<T_Real>;
 
    public:
     explicit IntelIPPRFFTPlanImpl(size_t length);

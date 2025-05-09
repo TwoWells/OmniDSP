@@ -7,7 +7,7 @@
 
 // Include Intel IPP signal processing header
 #include <ipps.h>
-// Include IPP core header for ippGetStatusString (needed by utils)
+// Include IPP core header for ippGetStatusString (needed by Utils)
 #include <ippcore.h>
 
 #include <cmath>      // Not strictly needed now VML Gaussian is gone
@@ -46,8 +46,8 @@ namespace OmniDSP::IntelIPP {
     std::vector<F32> temp_input(length, 1.0f);
     IppStatus status = ippsWinBartlett_32f(
         temp_input.data(), output.data(), static_cast<int>(length));
-    // Use helper from intelipp/utils.hpp
-    return utils::ipp_status_to_omnidsp_status(status);
+    // Use helper from intelipp/Utils.hpp
+    return Details::ipp_status_to_omnidsp_status(status);
   }
   // Renamed function
   [[nodiscard]] Status generate_bartlett_window_intelipp(std::span<F64> output)
@@ -62,8 +62,8 @@ namespace OmniDSP::IntelIPP {
     std::vector<F64> temp_input(length, 1.0);
     IppStatus status = ippsWinBartlett_64f(
         temp_input.data(), output.data(), static_cast<int>(length));
-    // Use helper from intelipp/utils.hpp
-    return utils::ipp_status_to_omnidsp_status(status);
+    // Use helper from intelipp/Utils.hpp
+    return Details::ipp_status_to_omnidsp_status(status);
   }
 
   // --- Blackman ---
@@ -81,8 +81,8 @@ namespace OmniDSP::IntelIPP {
     // Using standard Blackman, Opt might also be available
     IppStatus status = ippsWinBlackmanStd_32f(
         temp_input.data(), output.data(), static_cast<int>(length));
-    // Use helper from intelipp/utils.hpp
-    return utils::ipp_status_to_omnidsp_status(status);
+    // Use helper from intelipp/Utils.hpp
+    return Details::ipp_status_to_omnidsp_status(status);
   }
   // Renamed function
   [[nodiscard]] Status generate_blackman_window_intelipp(std::span<F64> output)
@@ -98,8 +98,8 @@ namespace OmniDSP::IntelIPP {
     // Using standard Blackman, Opt might also be available
     IppStatus status = ippsWinBlackmanStd_64f(
         temp_input.data(), output.data(), static_cast<int>(length));
-    // Use helper from intelipp/utils.hpp
-    return utils::ipp_status_to_omnidsp_status(status);
+    // Use helper from intelipp/Utils.hpp
+    return Details::ipp_status_to_omnidsp_status(status);
   }
 
   // --- Hamming ---
@@ -116,8 +116,8 @@ namespace OmniDSP::IntelIPP {
     std::vector<F32> temp_input(length, 1.0f);
     IppStatus status = ippsWinHamming_32f(
         temp_input.data(), output.data(), static_cast<int>(length));
-    // Use helper from intelipp/utils.hpp
-    return utils::ipp_status_to_omnidsp_status(status);
+    // Use helper from intelipp/Utils.hpp
+    return Details::ipp_status_to_omnidsp_status(status);
   }
   // Renamed function
   [[nodiscard]] Status generate_hamming_window_intelipp(std::span<F64> output)
@@ -132,8 +132,8 @@ namespace OmniDSP::IntelIPP {
     std::vector<F64> temp_input(length, 1.0);
     IppStatus status = ippsWinHamming_64f(
         temp_input.data(), output.data(), static_cast<int>(length));
-    // Use helper from intelipp/utils.hpp
-    return utils::ipp_status_to_omnidsp_status(status);
+    // Use helper from intelipp/Utils.hpp
+    return Details::ipp_status_to_omnidsp_status(status);
   }
 
   // --- Hann ---
@@ -150,8 +150,8 @@ namespace OmniDSP::IntelIPP {
     std::vector<F32> temp_input(length, 1.0f);
     IppStatus status = ippsWinHann_32f(
         temp_input.data(), output.data(), static_cast<int>(length));
-    // Use helper from intelipp/utils.hpp
-    return utils::ipp_status_to_omnidsp_status(status);
+    // Use helper from intelipp/Utils.hpp
+    return Details::ipp_status_to_omnidsp_status(status);
   }
   // Renamed function
   [[nodiscard]] Status generate_hann_window_intelipp(std::span<F64> output)
@@ -166,8 +166,8 @@ namespace OmniDSP::IntelIPP {
     std::vector<F64> temp_input(length, 1.0);
     IppStatus status = ippsWinHann_64f(
         temp_input.data(), output.data(), static_cast<int>(length));
-    // Use helper from intelipp/utils.hpp
-    return utils::ipp_status_to_omnidsp_status(status);
+    // Use helper from intelipp/Utils.hpp
+    return Details::ipp_status_to_omnidsp_status(status);
   }
 
   // --- Kaiser ---
@@ -189,8 +189,8 @@ namespace OmniDSP::IntelIPP {
     std::vector<F32> temp_input(length, 1.0f);
     IppStatus status = ippsWinKaiser_32f(
         temp_input.data(), output.data(), static_cast<int>(length), alpha);
-    // Use helper from intelipp/utils.hpp
-    return utils::ipp_status_to_omnidsp_status(status);
+    // Use helper from intelipp/Utils.hpp
+    return Details::ipp_status_to_omnidsp_status(status);
   }
   // Renamed function
   [[nodiscard]] Status generate_kaiser_window_intelipp(
@@ -210,8 +210,8 @@ namespace OmniDSP::IntelIPP {
     std::vector<F64> temp_input(length, 1.0);
     IppStatus status = ippsWinKaiser_64f(
         temp_input.data(), output.data(), static_cast<int>(length), alpha);
-    // Use helper from intelipp/utils.hpp
-    return utils::ipp_status_to_omnidsp_status(status);
+    // Use helper from intelipp/Utils.hpp
+    return Details::ipp_status_to_omnidsp_status(status);
   }
 
   // --- Rectangular ---
@@ -224,8 +224,8 @@ namespace OmniDSP::IntelIPP {
     // Use ippsSet to fill with 1.0
     IppStatus status
         = ippsSet_32f(1.0f, output.data(), static_cast<int>(length));
-    // Use helper from intelipp/utils.hpp
-    return utils::ipp_status_to_omnidsp_status(status);
+    // Use helper from intelipp/Utils.hpp
+    return Details::ipp_status_to_omnidsp_status(status);
   }
   // Renamed function
   [[nodiscard]] Status generate_rectangular_window_intelipp(
@@ -236,8 +236,8 @@ namespace OmniDSP::IntelIPP {
     // Use ippsSet to fill with 1.0
     IppStatus status
         = ippsSet_64f(1.0, output.data(), static_cast<int>(length));
-    // Use helper from intelipp/utils.hpp
-    return utils::ipp_status_to_omnidsp_status(status);
+    // Use helper from intelipp/Utils.hpp
+    return Details::ipp_status_to_omnidsp_status(status);
   }
 
   // --- Triangular ---

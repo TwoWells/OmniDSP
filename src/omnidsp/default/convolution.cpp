@@ -92,11 +92,11 @@ namespace OmniDSP::Default {
   }  // namespace convolution_detail
 
   //--------------------------------------------------------------------------
-  // DefaultConvolutionPlanImpl Method Definitions (FFT-based, Standard C++)
+  // ConvolutionPlanImpl Method Definitions (FFT-based, Standard C++)
   //--------------------------------------------------------------------------
 
   template <typename T>  // T can be F32, F64, C32, C64
-  DefaultConvolutionPlanImpl<T>::DefaultConvolutionPlanImpl(
+  ConvolutionPlanImpl<T>::ConvolutionPlanImpl(
       FFTPlanImplVariant&& fft_plan_variant,  // Accept the FFT plan variant
       const std::vector<T>& kernel,
       ConvolutionType type,
@@ -223,7 +223,7 @@ namespace OmniDSP::Default {
 
   // Execute method
   template <typename T>
-  Status DefaultConvolutionPlanImpl<T>::execute(
+  Status ConvolutionPlanImpl<T>::execute(
       std::span<const T> input, std::span<T> output) const
   {
     const size_t signal_len = input.size();
@@ -429,23 +429,22 @@ namespace OmniDSP::Default {
 
   // --- Getters (remain the same) ---
   template <typename T>
-  size_t DefaultConvolutionPlanImpl<T>::get_kernel_length() const
+  size_t ConvolutionPlanImpl<T>::get_kernel_length() const
   {
     return kernel_length_;
   }
   template <typename T>
-  ConvolutionType DefaultConvolutionPlanImpl<T>::get_type() const
+  ConvolutionType ConvolutionPlanImpl<T>::get_type() const
   {
     return type_;
   }
   template <typename T>
-  ConvolutionMethod DefaultConvolutionPlanImpl<T>::get_method() const
+  ConvolutionMethod ConvolutionPlanImpl<T>::get_method() const
   {
     return method_;
   }
   template <typename T>
-  size_t DefaultConvolutionPlanImpl<T>::get_output_length(
-      size_t input_length) const
+  size_t ConvolutionPlanImpl<T>::get_output_length(size_t input_length) const
   {
     if (kernel_length_ == 0)
       return (
@@ -474,18 +473,18 @@ namespace OmniDSP::Default {
     }
   }
   template <typename T>
-  std::span<const T> DefaultConvolutionPlanImpl<T>::get_kernel() const
+  std::span<const T> ConvolutionPlanImpl<T>::get_kernel() const
   {
     // Return span of the original, non-padded, non-reversed kernel
     return std::span<const T>(original_kernel_);
   }
 
   //--------------------------------------------------------------------------
-  // DefaultCorrelationPlanImpl Method Definitions (FFT-based, Standard C++)
+  // CorrelationPlanImpl Method Definitions (FFT-based, Standard C++)
   //--------------------------------------------------------------------------
 
   template <typename T>  // T can be F32, F64, C32, C64
-  DefaultCorrelationPlanImpl<T>::DefaultCorrelationPlanImpl(
+  CorrelationPlanImpl<T>::CorrelationPlanImpl(
       FFTPlanImplVariant&& fft_plan_variant,  // Accept the FFT plan variant
       const std::vector<T>& kernel,  // This is the 'template' for correlation
       ConvolutionType
@@ -619,7 +618,7 @@ namespace OmniDSP::Default {
 
   // Execute method
   template <typename T>
-  Status DefaultCorrelationPlanImpl<T>::execute(
+  Status CorrelationPlanImpl<T>::execute(
       std::span<const T> input, std::span<T> output) const
   {
     const size_t signal_len = input.size();
@@ -824,23 +823,22 @@ namespace OmniDSP::Default {
 
   // --- Getters (remain the same) ---
   template <typename T>
-  size_t DefaultCorrelationPlanImpl<T>::get_template_length() const
+  size_t CorrelationPlanImpl<T>::get_template_length() const
   {
     return kernel_length_;
   }
   template <typename T>
-  ConvolutionType DefaultCorrelationPlanImpl<T>::get_type() const
+  ConvolutionType CorrelationPlanImpl<T>::get_type() const
   {
     return type_;
   }
   template <typename T>
-  ConvolutionMethod DefaultCorrelationPlanImpl<T>::get_method() const
+  ConvolutionMethod CorrelationPlanImpl<T>::get_method() const
   {
     return method_;
   }
   template <typename T>
-  size_t DefaultCorrelationPlanImpl<T>::get_output_length(
-      size_t input_length) const
+  size_t CorrelationPlanImpl<T>::get_output_length(size_t input_length) const
   {
     // Same logic as convolution for output length calculation
     if (kernel_length_ == 0)
@@ -865,7 +863,7 @@ namespace OmniDSP::Default {
     }
   }
   template <typename T>
-  std::span<const T> DefaultCorrelationPlanImpl<T>::get_template() const
+  std::span<const T> CorrelationPlanImpl<T>::get_template() const
   {
     // Return span of the original, non-padded template
     return std::span<const T>(original_kernel_);
@@ -875,14 +873,14 @@ namespace OmniDSP::Default {
   // Explicit Template Instantiations
   //--------------------------------------------------------------------------
   // Instantiate the plan implementation classes for supported types
-  template class DefaultConvolutionPlanImpl<F32>;
-  template class DefaultConvolutionPlanImpl<F64>;
-  template class DefaultConvolutionPlanImpl<C32>;
-  template class DefaultConvolutionPlanImpl<C64>;
+  template class ConvolutionPlanImpl<F32>;
+  template class ConvolutionPlanImpl<F64>;
+  template class ConvolutionPlanImpl<C32>;
+  template class ConvolutionPlanImpl<C64>;
 
-  template class DefaultCorrelationPlanImpl<F32>;
-  template class DefaultCorrelationPlanImpl<F64>;
-  template class DefaultCorrelationPlanImpl<C32>;
-  template class DefaultCorrelationPlanImpl<C64>;
+  template class CorrelationPlanImpl<F32>;
+  template class CorrelationPlanImpl<F64>;
+  template class CorrelationPlanImpl<C32>;
+  template class CorrelationPlanImpl<C64>;
 
 }  // namespace OmniDSP::Default

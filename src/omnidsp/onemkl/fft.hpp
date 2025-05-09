@@ -24,9 +24,9 @@ namespace OmniDSP::OneMKL {
    * @tparam T Complex type (e.g., C32, C64).
    */
   template <typename T>  // T is complex type here (C32, C64)
-  class OneMKLFFTPlanImpl final : public Abstract::FFTPlanImpl<T> {
+  class FFTPlanImpl final : public Abstract::FFTPlanImpl<T> {
     static_assert(
-        Utils::IsComplex_v<T>, "OneMKLFFTPlanImpl requires a complex type.");
+        Utils::IsComplex_v<T>, "FFTPlanImpl requires a complex type.");
     using Real = typename T::value_type;  // Get underlying real type
 
    public:
@@ -37,18 +37,18 @@ namespace OmniDSP::OneMKL {
      * @throws std::runtime_error If DFTI descriptor creation or configuration
      * fails.
      */
-    explicit OneMKLFFTPlanImpl(size_t length);
+    explicit FFTPlanImpl(size_t length);
 
     /**
      * @brief Destructor. Frees the DFTI descriptor.
      */
-    ~OneMKLFFTPlanImpl() override;
+    ~FFTPlanImpl() override;
 
     // --- Deleted Copy/Move ---
-    OneMKLFFTPlanImpl(const OneMKLFFTPlanImpl&) = delete;
-    OneMKLFFTPlanImpl& operator=(const OneMKLFFTPlanImpl&) = delete;
-    OneMKLFFTPlanImpl(OneMKLFFTPlanImpl&&) = delete;
-    OneMKLFFTPlanImpl& operator=(OneMKLFFTPlanImpl&&) = delete;
+    FFTPlanImpl(const FFTPlanImpl&) = delete;
+    FFTPlanImpl& operator=(const FFTPlanImpl&) = delete;
+    FFTPlanImpl(FFTPlanImpl&&) = delete;
+    FFTPlanImpl& operator=(FFTPlanImpl&&) = delete;
 
     // --- Interface Methods ---
     [[nodiscard]] Status fft(

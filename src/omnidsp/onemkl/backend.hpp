@@ -34,11 +34,11 @@ namespace OmniDSP::OneMKL {
 
   /** @brief Concrete oneMKL backend implementation. Inherits from
    * DefaultBackend. */
-  class OneMKLBackend final : public Default ::DefaultBackend {
+  class Backend final : public Default ::DefaultBackend {
    public:
     // --- Constructor / Destructor ---
-    OneMKLBackend();
-    ~OneMKLBackend() override;
+    Backend();
+    ~Backend() override;
 
     // --- Core ---
     // MUST override to identify this backend

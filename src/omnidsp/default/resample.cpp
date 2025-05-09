@@ -28,11 +28,11 @@
 namespace OmniDSP::Default {
 
   //--------------------------------------------------------------------------
-  // DefaultResamplePlanImpl Method Implementations
+  // ResamplePlanImpl Method Implementations
   //--------------------------------------------------------------------------
 
   template <typename T>
-  DefaultResamplePlanImpl<T>::DefaultResamplePlanImpl(
+  ResamplePlanImpl<T>::ResamplePlanImpl(
       const Abstract::Backend* owner,  // Use AbstractBackend*
       const ResampleSpec& spec)
       : owner_backend_(owner),     // Initialize owner
@@ -44,7 +44,7 @@ namespace OmniDSP::Default {
   {
     if (!owner_backend_) {  // Use member variable
       throw std::invalid_argument(
-          "DefaultResamplePlanImpl requires a valid owner "
+          "ResamplePlanImpl requires a valid owner "
           "AbstractBackend "
           "pointer.");
     }
@@ -97,11 +97,10 @@ namespace OmniDSP::Default {
   }
 
   template <typename T>
-  DefaultResamplePlanImpl<T>::~DefaultResamplePlanImpl()
-      = default;  // Use default
+  ResamplePlanImpl<T>::~ResamplePlanImpl() = default;  // Use default
 
   template <typename T>
-  Status DefaultResamplePlanImpl<T>::execute(
+  Status ResamplePlanImpl<T>::execute(
       std::span<const T> input, std::span<T> output)
   {
     if (interpolation_factor_ == 0 || decimation_factor_ == 0
@@ -221,7 +220,7 @@ namespace OmniDSP::Default {
   }
 
   template <typename T>
-  Status DefaultResamplePlanImpl<T>::reset()
+  Status ResamplePlanImpl<T>::reset()
   {
     std::fill(state_.begin(), state_.end(), T{0});
     current_phase_ = 0;
@@ -229,20 +228,19 @@ namespace OmniDSP::Default {
   }
 
   template <typename T>
-  double DefaultResamplePlanImpl<T>::get_input_rate() const
+  double ResamplePlanImpl<T>::get_input_rate() const
   {
     return spec_.input_rate;  // Use member variable
   }
 
   template <typename T>
-  double DefaultResamplePlanImpl<T>::get_output_rate() const
+  double ResamplePlanImpl<T>::get_output_rate() const
   {
     return spec_.output_rate;  // Use member variable
   }
 
   template <typename T>
-  size_t DefaultResamplePlanImpl<T>::get_output_length(
-      size_t input_length) const
+  size_t ResamplePlanImpl<T>::get_output_length(size_t input_length) const
   {
     return calculate_max_output(input_length);  // Call internal helper
   }
@@ -250,8 +248,8 @@ namespace OmniDSP::Default {
   // --- Helper Implementations ---
 
   template <typename T>
-  void DefaultResamplePlanImpl<T>::design_filter()  // Removed parameters, uses
-                                                    // members
+  void ResamplePlanImpl<T>::design_filter()  // Removed parameters, uses
+                                             // members
   {
     if (!owner_backend_) {
       throw std::runtime_error("Cannot design filter without owner backend.");
@@ -339,7 +337,7 @@ namespace OmniDSP::Default {
   }
 
   template <typename T>
-  void DefaultResamplePlanImpl<T>::build_polyphase_filters()
+  void ResamplePlanImpl<T>::build_polyphase_filters()
   {
     // This function now needs the prototype filter coefficients.
     // Since design_filter doesn't store them in a member variable,
@@ -429,8 +427,7 @@ namespace OmniDSP::Default {
   }
 
   template <typename T>
-  size_t DefaultResamplePlanImpl<T>::calculate_max_output(
-      size_t input_len) const
+  size_t ResamplePlanImpl<T>::calculate_max_output(size_t input_len) const
   {
     if (spec_.input_rate <= 0.0 || interpolation_factor_ == 0
         || decimation_factor_ == 0)
@@ -466,7 +463,7 @@ namespace OmniDSP::Default {
   // Instantiate templates for common types (float, double) to ensure code
   // generation.
 
-  template class DefaultResamplePlanImpl<float>;
-  template class DefaultResamplePlanImpl<double>;
+  template class ResamplePlanImpl<float>;
+  template class ResamplePlanImpl<double>;
 
 }  // namespace OmniDSP::Default

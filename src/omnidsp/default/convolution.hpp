@@ -30,8 +30,7 @@ namespace OmniDSP::Default {
    * @tparam T Data type (F32, F64, C32, C64).
    */
   template <typename T>
-  class DefaultConvolutionPlanImpl final
-      : public Abstract::ConvolutionPlanImpl<T> {
+  class ConvolutionPlanImpl final : public Abstract::ConvolutionPlanImpl<T> {
     // Define complex type corresponding to T
     // *** UPDATED Namespace ***
     using T_Complex = Utils::GetComplexType<T>;
@@ -62,12 +61,12 @@ namespace OmniDSP::Default {
      * @throws std::length_error if calculated FFT length overflows.
      * @throws std::runtime_error on internal errors (e.g., allocation).
      */
-    DefaultConvolutionPlanImpl(
+    ConvolutionPlanImpl(
         FFTPlanImplVariant&& fft_plan_variant,
         const std::vector<T>& kernel,
         ConvolutionType type,
         ConvolutionMethod method);
-    ~DefaultConvolutionPlanImpl() override = default;  // Defined here
+    ~ConvolutionPlanImpl() override = default;  // Defined here
 
     Status execute(
         std::span<const T> input, std::span<T> output) const override;
@@ -78,12 +77,10 @@ namespace OmniDSP::Default {
     std::span<const T> get_kernel() const override;
 
     // Disable copy/move operations
-    DefaultConvolutionPlanImpl(const DefaultConvolutionPlanImpl&) = delete;
-    DefaultConvolutionPlanImpl& operator=(const DefaultConvolutionPlanImpl&)
-        = delete;
-    DefaultConvolutionPlanImpl(DefaultConvolutionPlanImpl&&) = delete;
-    DefaultConvolutionPlanImpl& operator=(DefaultConvolutionPlanImpl&&)
-        = delete;
+    ConvolutionPlanImpl(const ConvolutionPlanImpl&) = delete;
+    ConvolutionPlanImpl& operator=(const ConvolutionPlanImpl&) = delete;
+    ConvolutionPlanImpl(ConvolutionPlanImpl&&) = delete;
+    ConvolutionPlanImpl& operator=(ConvolutionPlanImpl&&) = delete;
 
    private:
     ConvolutionType type_;
@@ -112,8 +109,7 @@ namespace OmniDSP::Default {
    * @tparam T Data type (F32, F64, C32, C64).
    */
   template <typename T>
-  class DefaultCorrelationPlanImpl final
-      : public Abstract::CorrelationPlanImpl<T> {
+  class CorrelationPlanImpl final : public Abstract::CorrelationPlanImpl<T> {
     // Define complex type corresponding to T
     // *** UPDATED Namespace ***
     using T_Complex = Utils::GetComplexType<T>;
@@ -144,12 +140,12 @@ namespace OmniDSP::Default {
      * @throws std::length_error if calculated FFT length overflows.
      * @throws std::runtime_error on internal errors (e.g., allocation).
      */
-    DefaultCorrelationPlanImpl(
+    CorrelationPlanImpl(
         FFTPlanImplVariant&& fft_plan_variant,
         const std::vector<T>& kernel,
         ConvolutionType type,
         ConvolutionMethod method);
-    ~DefaultCorrelationPlanImpl() override = default;  // Defined here
+    ~CorrelationPlanImpl() override = default;  // Defined here
 
     Status execute(
         std::span<const T> input, std::span<T> output) const override;
@@ -160,12 +156,10 @@ namespace OmniDSP::Default {
     std::span<const T> get_template() const override;
 
     // Disable copy/move operations
-    DefaultCorrelationPlanImpl(const DefaultCorrelationPlanImpl&) = delete;
-    DefaultCorrelationPlanImpl& operator=(const DefaultCorrelationPlanImpl&)
-        = delete;
-    DefaultCorrelationPlanImpl(DefaultCorrelationPlanImpl&&) = delete;
-    DefaultCorrelationPlanImpl& operator=(DefaultCorrelationPlanImpl&&)
-        = delete;
+    CorrelationPlanImpl(const CorrelationPlanImpl&) = delete;
+    CorrelationPlanImpl& operator=(const CorrelationPlanImpl&) = delete;
+    CorrelationPlanImpl(CorrelationPlanImpl&&) = delete;
+    CorrelationPlanImpl& operator=(CorrelationPlanImpl&&) = delete;
 
    private:
     ConvolutionType type_;
@@ -188,15 +182,15 @@ namespace OmniDSP::Default {
   };
 
   // --- Explicit Template Instantiations (Declaration) ---
-  extern template class DefaultConvolutionPlanImpl<F32>;
-  extern template class DefaultConvolutionPlanImpl<F64>;
-  extern template class DefaultConvolutionPlanImpl<C32>;
-  extern template class DefaultConvolutionPlanImpl<C64>;
+  extern template class ConvolutionPlanImpl<F32>;
+  extern template class ConvolutionPlanImpl<F64>;
+  extern template class ConvolutionPlanImpl<C32>;
+  extern template class ConvolutionPlanImpl<C64>;
 
-  extern template class DefaultCorrelationPlanImpl<F32>;
-  extern template class DefaultCorrelationPlanImpl<F64>;
-  extern template class DefaultCorrelationPlanImpl<C32>;
-  extern template class DefaultCorrelationPlanImpl<C64>;
+  extern template class CorrelationPlanImpl<F32>;
+  extern template class CorrelationPlanImpl<F64>;
+  extern template class CorrelationPlanImpl<C32>;
+  extern template class CorrelationPlanImpl<C64>;
 
   // --- BackendType Factory Function Declarations (Implementation in
   // backend.cpp)

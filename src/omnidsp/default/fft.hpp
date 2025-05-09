@@ -27,7 +27,7 @@ namespace OmniDSP::Default {
    * @tparam T_Complex Complex type (e.g., C32 or C64).
    */
   template <typename T_Complex>  // T_Complex will be C32 or C64
-  class DefaultFFTPlanImpl final : public Abstract::FFTPlanImpl<T_Complex> {
+  class FFTPlanImpl final : public Abstract::FFTPlanImpl<T_Complex> {
     // Infer scalar type T from T_Complex (assuming T_Complex is
     // std::complex<T>)
     using T = typename T_Complex::value_type;
@@ -39,8 +39,8 @@ namespace OmniDSP::Default {
      * @throws std::invalid_argument if n is not a positive power of 2.
      * @throws std::bad_alloc if memory allocation fails.
      */
-    explicit DefaultFFTPlanImpl(size_t n);
-    ~DefaultFFTPlanImpl() override = default;  // Use default destructor
+    explicit FFTPlanImpl(size_t n);
+    ~FFTPlanImpl() override = default;  // Use default destructor
 
     /**
      * @brief Executes the forward FFT.
@@ -70,10 +70,10 @@ namespace OmniDSP::Default {
     size_t get_length() const override;
 
     // Disable copy/move operations
-    DefaultFFTPlanImpl(const DefaultFFTPlanImpl&) = delete;
-    DefaultFFTPlanImpl& operator=(const DefaultFFTPlanImpl&) = delete;
-    DefaultFFTPlanImpl(DefaultFFTPlanImpl&&) = delete;
-    DefaultFFTPlanImpl& operator=(DefaultFFTPlanImpl&&) = delete;
+    FFTPlanImpl(const FFTPlanImpl&) = delete;
+    FFTPlanImpl& operator=(const FFTPlanImpl&) = delete;
+    FFTPlanImpl(FFTPlanImpl&&) = delete;
+    FFTPlanImpl& operator=(FFTPlanImpl&&) = delete;
 
    private:
     size_t n_;  // FFT Length
@@ -89,7 +89,7 @@ namespace OmniDSP::Default {
    * @tparam T_Real Real type (e.g., F32 or F64).
    */
   template <typename T_Real>  // T_Real will be F32 or F64
-  class DefaultRFFTPlanImpl final : public Abstract::RFFTPlanImpl<T_Real> {
+  class RFFTPlanImpl final : public Abstract::RFFTPlanImpl<T_Real> {
     // Define complex type corresponding to T_Real
     // Use the Utils::GetComplexType from core_types.hpp as seen in
     // interface/backend.hpp
@@ -103,8 +103,8 @@ namespace OmniDSP::Default {
      * @throws std::invalid_argument if n is not power of 2 or < 2.
      * @throws std::bad_alloc if memory allocation fails.
      */
-    explicit DefaultRFFTPlanImpl(size_t n);  // n is the real data length
-    ~DefaultRFFTPlanImpl() override = default;
+    explicit RFFTPlanImpl(size_t n);  // n is the real data length
+    ~RFFTPlanImpl() override = default;
 
     /**
      * @brief Executes the forward Real FFT (Real input -> Complex output).
@@ -135,10 +135,10 @@ namespace OmniDSP::Default {
         const override;  // Returns the original real data length N
 
     // Disable copy/move operations
-    DefaultRFFTPlanImpl(const DefaultRFFTPlanImpl&) = delete;
-    DefaultRFFTPlanImpl& operator=(const DefaultRFFTPlanImpl&) = delete;
-    DefaultRFFTPlanImpl(DefaultRFFTPlanImpl&&) = delete;
-    DefaultRFFTPlanImpl& operator=(DefaultRFFTPlanImpl&&) = delete;
+    RFFTPlanImpl(const RFFTPlanImpl&) = delete;
+    RFFTPlanImpl& operator=(const RFFTPlanImpl&) = delete;
+    RFFTPlanImpl(RFFTPlanImpl&&) = delete;
+    RFFTPlanImpl& operator=(RFFTPlanImpl&&) = delete;
 
    private:
     size_t n_;       // Real data length
@@ -146,7 +146,7 @@ namespace OmniDSP::Default {
     // Use a single CFFT plan for the underlying N/2 transform (for standard C++
     // version) This needs to be const-correct if its methods are called from
     // const methods here
-    DefaultFFTPlanImpl<T_Complex> cfft_plan_;  // Plan for N/2 complex FFT
+    FFTPlanImpl<T_Complex> cfft_plan_;  // Plan for N/2 complex FFT
     // Buffers needed for packing/unpacking stages (for standard C++ version)
     // These buffers are modified during execution, so they can remain non-const
     // members if allocated/managed correctly, OR they need to be passed as
