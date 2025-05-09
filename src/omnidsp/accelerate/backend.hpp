@@ -1,9 +1,9 @@
 /**
  * @file backend.hpp (Accelerate)
  * @brief Declares the concrete Accelerate backend implementation class.
- * @details This class inherits from DefaultBackend and overrides functions
+ * @details This class inherits from Backend and overrides functions
  * where the Accelerate framework provides optimized FFT implementations.
- * All other functionality is inherited from DefaultBackend.
+ * All other functionality is inherited from Backend.
  */
 
 #ifndef OMNIDSP_ACCELERATE_BACKEND_HPP  // Changed guard suffix to HPP
@@ -13,7 +13,7 @@
 #include <span>    // For std::span
 #include <vector>  // For vector types
 
-// *** Inherit from DefaultBackend instead of AbstractBackend ***
+// *** Inherit from Backend instead of AbstractBackend ***
 #include "../default/backend.hpp"
 
 // Include necessary types referenced in method signatures
@@ -36,10 +36,9 @@ namespace OmniDSP::Accelerate {
 
   /**
    * @brief Concrete Accelerate backend implementation. Inherits from
-   * DefaultBackend. Specializes only FFT operations.
+   * Backend. Specializes only FFT operations.
    */
-  class Backend final
-      : public Default::DefaultBackend {  // Inherits from DefaultBackend
+  class Backend final : public Default::Backend {  // Inherits from Backend
    public:
     // --- Constructor / Destructor ---
     Backend();
@@ -64,7 +63,7 @@ namespace OmniDSP::Accelerate {
     // --- Inherited Methods ---
     // All other methods (one-off operations, window generation, filter design,
     // convolution plans, correlation plans, filter plans, resample plans, CQT
-    // plans) are inherited directly from DefaultBackend and do not need
+    // plans) are inherited directly from Backend and do not need
     // overrides here.
 
    private:

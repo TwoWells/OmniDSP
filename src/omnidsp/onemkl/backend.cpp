@@ -71,7 +71,7 @@ namespace OmniDSP::OneMKL {
             << "Warning: oneMKL FFTPlan<C32> (length " << length
             << ") Impl created but wrapper failed. Falling back to Default."
             << std::endl;
-        return DefaultBackend::create_fft_plan_c32(length);  // Fallback
+        return Backend::create_fft_plan_c32(length);  // Fallback
       }
       return plan;
     }
@@ -79,12 +79,12 @@ namespace OmniDSP::OneMKL {
       std::cerr << "Error creating oneMKL FFTPlan<C32> (length " << length
                 << "): " << e.what() << ". Falling back to Default."
                 << std::endl;
-      return DefaultBackend::create_fft_plan_c32(length);  // Fallback
+      return Backend::create_fft_plan_c32(length);  // Fallback
     }
     catch (...) {
       std::cerr << "Unknown error creating oneMKL FFTPlan<C32> (length "
                 << length << "). Falling back to Default." << std::endl;
-      return DefaultBackend::create_fft_plan_c32(length);  // Fallback
+      return Backend::create_fft_plan_c32(length);  // Fallback
     }
   }
 
@@ -99,7 +99,7 @@ namespace OmniDSP::OneMKL {
             << "Warning: oneMKL FFTPlan<C64> (length " << length
             << ") Impl created but wrapper failed. Falling back to Default."
             << std::endl;
-        return DefaultBackend::create_fft_plan_c64(length);
+        return Backend::create_fft_plan_c64(length);
       }
       return plan;
     }
@@ -107,12 +107,12 @@ namespace OmniDSP::OneMKL {
       std::cerr << "Error creating oneMKL FFTPlan<C64> (length " << length
                 << "): " << e.what() << ". Falling back to Default."
                 << std::endl;
-      return DefaultBackend::create_fft_plan_c64(length);
+      return Backend::create_fft_plan_c64(length);
     }
     catch (...) {
       std::cerr << "Unknown error creating oneMKL FFTPlan<C64> (length "
                 << length << "). Falling back to Default." << std::endl;
-      return DefaultBackend::create_fft_plan_c64(length);
+      return Backend::create_fft_plan_c64(length);
     }
   }
 
@@ -127,7 +127,7 @@ namespace OmniDSP::OneMKL {
             << "Warning: oneMKL RFFTPlan<F32> (length " << length
             << ") Impl created but wrapper failed. Falling back to Default."
             << std::endl;
-        return DefaultBackend::create_rfft_plan_f32(length);
+        return Backend::create_rfft_plan_f32(length);
       }
       return plan;
     }
@@ -135,12 +135,12 @@ namespace OmniDSP::OneMKL {
       std::cerr << "Error creating oneMKL RFFTPlan<F32> (length " << length
                 << "): " << e.what() << ". Falling back to Default."
                 << std::endl;
-      return DefaultBackend::create_rfft_plan_f32(length);
+      return Backend::create_rfft_plan_f32(length);
     }
     catch (...) {
       std::cerr << "Unknown error creating oneMKL RFFTPlan<F32> (length "
                 << length << "). Falling back to Default." << std::endl;
-      return DefaultBackend::create_rfft_plan_f32(length);
+      return Backend::create_rfft_plan_f32(length);
     }
   }
 
@@ -155,7 +155,7 @@ namespace OmniDSP::OneMKL {
             << "Warning: oneMKL RFFTPlan<F64> (length " << length
             << ") Impl created but wrapper failed. Falling back to Default."
             << std::endl;
-        return DefaultBackend::create_rfft_plan_f64(length);
+        return Backend::create_rfft_plan_f64(length);
       }
       return plan;
     }
@@ -163,12 +163,12 @@ namespace OmniDSP::OneMKL {
       std::cerr << "Error creating oneMKL RFFTPlan<F64> (length " << length
                 << "): " << e.what() << ". Falling back to Default."
                 << std::endl;
-      return DefaultBackend::create_rfft_plan_f64(length);
+      return Backend::create_rfft_plan_f64(length);
     }
     catch (...) {
       std::cerr << "Unknown error creating oneMKL RFFTPlan<F64> (length "
                 << length << "). Falling back to Default." << std::endl;
-      return DefaultBackend::create_rfft_plan_f64(length);
+      return Backend::create_rfft_plan_f64(length);
     }
   }
 

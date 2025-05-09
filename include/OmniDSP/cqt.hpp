@@ -39,7 +39,7 @@ namespace OmniDSP {
     // *** UPDATED Namespace ***
     using Complex = Utils::GetComplexType<T>;
     friend class OmniDSP;  // Keep friend for OmniDSP if needed
-    // Removed friend declarations for Backend and DefaultBackend
+    // Removed friend declarations for Backend and Backend
 
    public:
     ~CQTPlan();

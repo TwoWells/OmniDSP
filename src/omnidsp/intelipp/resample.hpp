@@ -46,7 +46,7 @@ namespace OmniDSP::IntelIPP {
     /**
      * @brief Constructor. Initializes IPP resampler state.
      * @param owner Pointer to the Backend instance creating this plan.
-     * Used to access filter design capabilities inherited from DefaultBackend.
+     * Used to access filter design capabilities inherited from Backend.
      * Must not be null.
      * @param spec The resampling specification.
      * @throws std::invalid_argument If spec is invalid or owner is null.

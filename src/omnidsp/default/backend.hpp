@@ -38,10 +38,10 @@ namespace OmniDSP::Default {
   template <typename T>
   class IIRFilterPlanImpl;
 
-  class DefaultBackend : public ::OmniDSP::Abstract::Backend {
+  class Backend : public ::OmniDSP::Abstract::Backend {
    public:
-    DefaultBackend();
-    ~DefaultBackend() override;
+    Backend();
+    ~Backend() override;
 
     ::OmniDSP::BackendType get_backend() const override;
 
@@ -241,7 +241,7 @@ namespace OmniDSP::Default {
         const WindowSpec& spec, std::span<F64> output) const override;
 
    private:
-    // --- Internal Implementation Factories (Specific to DefaultBackend) ---
+    // --- Internal Implementation Factories (Specific to Backend) ---
     [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C32>>>
     create_fft_plan_impl_c32(size_t length) const;
     [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C64>>>

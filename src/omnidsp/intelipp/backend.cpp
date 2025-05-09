@@ -80,7 +80,7 @@ namespace OmniDSP::IntelIPP {
   // --- DSP Operations (One-Off Implementations) ---
   // *** REMOVED *** Definitions for fft_c32, ifft_c32, rfft_f32, irfft_c32,
   // *** REMOVED *** convolve_*, correlate_* are now INHERITED from
-  // DefaultBackend.
+  // Backend.
   // *** REMOVED *** They will automatically use the overridden IPP plan
   // factories below.
 

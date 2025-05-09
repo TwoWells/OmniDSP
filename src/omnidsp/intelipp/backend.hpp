@@ -1,7 +1,7 @@
 /**
  * @file backend.hpp (IntelIPP)
  * @brief Declares the concrete Intel IPP backend implementation class.
- * @details This class inherits from DefaultBackend and overrides functions
+ * @details This class inherits from Backend and overrides functions
  * where Intel IPP provides optimized implementations (FFT, windowing,
  * resampling, filtering). Convolution/Correlation and CQT functions are
  * inherited.
@@ -14,7 +14,7 @@
 #include <span>    // For std::span
 #include <vector>  // For vector types
 
-// *** Inherit from DefaultBackend instead of AbstractBackend ***
+// *** Inherit from Backend instead of AbstractBackend ***
 #include "../default/backend.hpp"
 
 // Include necessary types referenced in method signatures
@@ -41,13 +41,13 @@ namespace OmniDSP::IntelIPP {
 
   /**
    * @brief Concrete Intel IPP backend implementation. Inherits from
-   * DefaultBackend.
+   * Backend.
    */
-  class Backend final : public Default::DefaultBackend {
+  class Backend final : public Default::Backend {
    public:
     // --- Constructor / Destructor ---
     Backend();
-    // Destructor override is inherited from DefaultBackend (which overrides
+    // Destructor override is inherited from Backend (which overrides
     // AbstractBackend)
     ~Backend() override;
 
@@ -56,7 +56,7 @@ namespace OmniDSP::IntelIPP {
     BackendType get_backend() const override;
 
     // --- Override functions optimized by Intel IPP ---
-    // --- If a function is NOT overridden, the DefaultBackend implementation is
+    // --- If a function is NOT overridden, the Backend implementation is
     // used ---
 
     // Window Generation (Override functions implemented efficiently in IPP)
@@ -73,13 +73,13 @@ namespace OmniDSP::IntelIPP {
         size_t length,
         std::span<F64> output) const override;  // IPP specialized
     // [[nodiscard]] Status flattop_window_f32(...) const override; // NOT
-    // specialized - Inherited from DefaultBackend
+    // specialized - Inherited from Backend
     // [[nodiscard]] Status flattop_window_f64(...) const override; // NOT
-    // specialized - Inherited from DefaultBackend
+    // specialized - Inherited from Backend
     // [[nodiscard]] Status gaussian_window_f32(...) const override; // NOT
-    // specialized - Inherited from DefaultBackend
+    // specialized - Inherited from Backend
     // [[nodiscard]] Status gaussian_window_f64(...) const override; // NOT
-    // specialized - Inherited from DefaultBackend
+    // specialized - Inherited from Backend
     [[nodiscard]] Status hamming_window_f32(
         size_t length,
         std::span<F32> output) const override;  // IPP specialized
@@ -140,14 +140,14 @@ namespace OmniDSP::IntelIPP {
         const std::vector<IIRFilterCoef>& sos_coefficients) const override;
 
     // NOTE: Convolution/Correlation/CQT plan factories are NOT overridden.
-    // They will inherit the DefaultBackend implementation, which will
+    // They will inherit the Backend implementation, which will
     // use the overridden IntelIPP FFT/Resample plans created by *this* backend.
 
     // NOTE: One-off operations (convolve_*, fft_*, correlate_*) are NOT
-    // declared here. They are inherited directly from DefaultBackend.
+    // declared here. They are inherited directly from Backend.
 
     // NOTE: Filter design methods are NOT declared here.
-    // They are inherited directly from DefaultBackend.
+    // They are inherited directly from Backend.
 
    private:
     // Any private members specific to the IntelIPP backend's state (if any)

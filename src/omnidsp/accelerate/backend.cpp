@@ -2,8 +2,8 @@
  * @file backend.cpp (Accelerate)
  * @brief Implements the Backend class methods.
  * @details This simplified version only overrides the FFT/RFFT plan factories,
- * inheriting all other functionality from DefaultBackend. Includes fallback
- * to DefaultBackend for unsupported FFT lengths.
+ * inheriting all other functionality from Backend. Includes fallback
+ * to Backend for unsupported FFT lengths.
  */
 
 #include <OmniDSP/omnidsp_config.hpp>  // For OMNIDSP_BACKEND_ACCELERATE_ENABLED (used by CMake to set OMNIDSP_INTERNAL_USE_ACCELERATE)
@@ -64,19 +64,19 @@ namespace OmniDSP::Accelerate {
                   << "): " << e.what() << ". Falling back to Default."
                   << std::endl;
         // Fallback to default implementation if Accelerate fails
-        return DefaultBackend::create_fft_plan_c32(length);
+        return Backend::create_fft_plan_c32(length);
       }
       catch (...) {
         std::cerr << "Unknown error creating Accelerate FFTPlan<C32> (length "
                   << length << "). Falling back to Default." << std::endl;
-        return DefaultBackend::create_fft_plan_c32(length);
+        return Backend::create_fft_plan_c32(length);
       }
     }
     else {
       // Length not supported by Accelerate, use Default directly
       // std::cout << "Accelerate backend: FFT length " << length << " not
       // supported by vDSP DFT, using Default backend." << std::endl; // Debug
-      return DefaultBackend::create_fft_plan_c32(length);
+      return Backend::create_fft_plan_c32(length);
     }
   }
 
@@ -97,19 +97,19 @@ namespace OmniDSP::Accelerate {
         std::cerr << "Error creating Accelerate FFTPlan<C64> (length " << length
                   << "): " << e.what() << ". Falling back to Default."
                   << std::endl;
-        return DefaultBackend::create_fft_plan_c64(length);
+        return Backend::create_fft_plan_c64(length);
       }
       catch (...) {
         std::cerr << "Unknown error creating Accelerate FFTPlan<C64> (length "
                   << length << "). Falling back to Default." << std::endl;
-        return DefaultBackend::create_fft_plan_c64(length);
+        return Backend::create_fft_plan_c64(length);
       }
     }
     else {
       // Length not supported by Accelerate, use Default directly
       // std::cout << "Accelerate backend: FFT length " << length << " not
       // supported by vDSP DFT, using Default backend." << std::endl; // Debug
-      return DefaultBackend::create_fft_plan_c64(length);
+      return Backend::create_fft_plan_c64(length);
     }
   }
 
@@ -130,19 +130,19 @@ namespace OmniDSP::Accelerate {
         std::cerr << "Error creating Accelerate RFFTPlan<F32> (length "
                   << length << "): " << e.what() << ". Falling back to Default."
                   << std::endl;
-        return DefaultBackend::create_rfft_plan_f32(length);
+        return Backend::create_rfft_plan_f32(length);
       }
       catch (...) {
         std::cerr << "Unknown error creating Accelerate RFFTPlan<F32> (length "
                   << length << "). Falling back to Default." << std::endl;
-        return DefaultBackend::create_rfft_plan_f32(length);
+        return Backend::create_rfft_plan_f32(length);
       }
     }
     else {
       // Length not supported by Accelerate, use Default directly
       // std::cout << "Accelerate backend: RFFT length " << length << " not
       // supported by vDSP DFT, using Default backend." << std::endl; // Debug
-      return DefaultBackend::create_rfft_plan_f32(length);
+      return Backend::create_rfft_plan_f32(length);
     }
   }
 
@@ -163,25 +163,25 @@ namespace OmniDSP::Accelerate {
         std::cerr << "Error creating Accelerate RFFTPlan<F64> (length "
                   << length << "): " << e.what() << ". Falling back to Default."
                   << std::endl;
-        return DefaultBackend::create_rfft_plan_f64(length);
+        return Backend::create_rfft_plan_f64(length);
       }
       catch (...) {
         std::cerr << "Unknown error creating Accelerate RFFTPlan<F64> (length "
                   << length << "). Falling back to Default." << std::endl;
-        return DefaultBackend::create_rfft_plan_f64(length);
+        return Backend::create_rfft_plan_f64(length);
       }
     }
     else {
       // Length not supported by Accelerate, use Default directly
       // std::cout << "Accelerate backend: RFFT length " << length << " not
       // supported by vDSP DFT, using Default backend." << std::endl; // Debug
-      return DefaultBackend::create_rfft_plan_f64(length);
+      return Backend::create_rfft_plan_f64(length);
     }
   }
 
   // --- Other Methods REMOVED ---
   // (No implementations needed for one-off ops, windowing, filter design,
-  // other plan factories, as they are inherited from DefaultBackend)
+  // other plan factories, as they are inherited from Backend)
 
 }  // namespace OmniDSP::Accelerate
 

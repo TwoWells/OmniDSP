@@ -18,7 +18,7 @@ namespace OmniDSP::Default {
 
   // --- Default BackendType FFT Plan Implementations (Standard C++) ---
   // Inherit from internal Impl classes defined in ../interface/backend.hpp
-  // Match names used in DefaultBackend factory methods (e.g.,
+  // Match names used in Backend factory methods (e.g.,
   // create_fft_plan_impl_c32)
 
   /**

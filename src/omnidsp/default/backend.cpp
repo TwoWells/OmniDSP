@@ -1,6 +1,6 @@
 /**
  * @file backend.cpp (Default)
- * @brief Implements the DefaultBackend class methods using standard C++.
+ * @brief Implements the Backend class methods using standard C++.
  */
 
 #include "backend.hpp"  // Corresponding header for Default backend declarations
@@ -98,19 +98,16 @@ namespace OmniDSP::Default {
   return OmniExpected<T>(std::unexpect, status_code);
 
   //--------------------------------------------------------------------------
-  // DefaultBackend Method Definitions
+  // Backend Method Definitions
   //--------------------------------------------------------------------------
-  DefaultBackend::DefaultBackend() {}
-  DefaultBackend::~DefaultBackend() {}
-  BackendType DefaultBackend::get_backend() const
-  {
-    return BackendType::Default;
-  }
+  Backend::Backend() {}
+  Backend::~Backend() {}
+  BackendType Backend::get_backend() const { return BackendType::Default; }
 
   // --- DSP Operations (One-Off Implementations) ---
   // ... (convolve_*, correlate_*, fft_*, etc. implementations remain the
   // same) ...
-  [[nodiscard]] OmniExpected<F32Vec> DefaultBackend::convolve_f32(
+  [[nodiscard]] OmniExpected<F32Vec> Backend::convolve_f32(
       const F32Vec& input,
       const F32Vec& kernel,
       ConvolutionType type,
@@ -130,7 +127,7 @@ namespace OmniDSP::Default {
     }
     return output;
   }
-  [[nodiscard]] OmniExpected<F64Vec> DefaultBackend::convolve_f64(
+  [[nodiscard]] OmniExpected<F64Vec> Backend::convolve_f64(
       const F64Vec& input,
       const F64Vec& kernel,
       ConvolutionType type,
@@ -150,7 +147,7 @@ namespace OmniDSP::Default {
     }
     return output;
   }
-  [[nodiscard]] OmniExpected<C32Vec> DefaultBackend::convolve_c32(
+  [[nodiscard]] OmniExpected<C32Vec> Backend::convolve_c32(
       const C32Vec& input,
       const C32Vec& kernel,
       ConvolutionType type,
@@ -170,7 +167,7 @@ namespace OmniDSP::Default {
     }
     return output;
   }
-  [[nodiscard]] OmniExpected<C64Vec> DefaultBackend::convolve_c64(
+  [[nodiscard]] OmniExpected<C64Vec> Backend::convolve_c64(
       const C64Vec& input,
       const C64Vec& kernel,
       ConvolutionType type,
@@ -190,7 +187,7 @@ namespace OmniDSP::Default {
     }
     return output;
   }
-  [[nodiscard]] OmniExpected<F32Vec> DefaultBackend::correlate_f32(
+  [[nodiscard]] OmniExpected<F32Vec> Backend::correlate_f32(
       const F32Vec& input,
       const F32Vec& kernel,
       ConvolutionType type,
@@ -210,7 +207,7 @@ namespace OmniDSP::Default {
     }
     return output;
   }
-  [[nodiscard]] OmniExpected<F64Vec> DefaultBackend::correlate_f64(
+  [[nodiscard]] OmniExpected<F64Vec> Backend::correlate_f64(
       const F64Vec& input,
       const F64Vec& kernel,
       ConvolutionType type,
@@ -230,7 +227,7 @@ namespace OmniDSP::Default {
     }
     return output;
   }
-  [[nodiscard]] OmniExpected<C32Vec> DefaultBackend::correlate_c32(
+  [[nodiscard]] OmniExpected<C32Vec> Backend::correlate_c32(
       const C32Vec& input,
       const C32Vec& kernel,
       ConvolutionType type,
@@ -250,7 +247,7 @@ namespace OmniDSP::Default {
     }
     return output;
   }
-  [[nodiscard]] OmniExpected<C64Vec> DefaultBackend::correlate_c64(
+  [[nodiscard]] OmniExpected<C64Vec> Backend::correlate_c64(
       const C64Vec& input,
       const C64Vec& kernel,
       ConvolutionType type,
@@ -270,8 +267,7 @@ namespace OmniDSP::Default {
     }
     return output;
   }
-  [[nodiscard]] OmniExpected<C32Vec> DefaultBackend::fft_c32(
-      const C32Vec& input) const
+  [[nodiscard]] OmniExpected<C32Vec> Backend::fft_c32(const C32Vec& input) const
   {
     // auto plan_expected = create_fft_plan_impl_c32(input.size());
     auto plan_expected = this->create_fft_plan_c32(input.size());
@@ -284,8 +280,7 @@ namespace OmniDSP::Default {
     }
     return output;
   }
-  [[nodiscard]] OmniExpected<C64Vec> DefaultBackend::fft_c64(
-      const C64Vec& input) const
+  [[nodiscard]] OmniExpected<C64Vec> Backend::fft_c64(const C64Vec& input) const
   {
     // auto plan_expected = create_fft_plan_impl_c64(input.size());
     auto plan_expected = this->create_fft_plan_c64(input.size());
@@ -298,7 +293,7 @@ namespace OmniDSP::Default {
     }
     return output;
   }
-  [[nodiscard]] OmniExpected<C32Vec> DefaultBackend::ifft_c32(
+  [[nodiscard]] OmniExpected<C32Vec> Backend::ifft_c32(
       const C32Vec& input) const
   {
     // auto plan_expected = create_fft_plan_impl_c32(input.size());
@@ -312,7 +307,7 @@ namespace OmniDSP::Default {
     }
     return output;
   }
-  [[nodiscard]] OmniExpected<C64Vec> DefaultBackend::ifft_c64(
+  [[nodiscard]] OmniExpected<C64Vec> Backend::ifft_c64(
       const C64Vec& input) const
   {
     // auto plan_expected = create_fft_plan_impl_c64(input.size());
@@ -326,7 +321,7 @@ namespace OmniDSP::Default {
     }
     return output;
   }
-  [[nodiscard]] OmniExpected<C32Vec> DefaultBackend::rfft_f32(
+  [[nodiscard]] OmniExpected<C32Vec> Backend::rfft_f32(
       const F32Vec& input) const
   {
     // auto plan_expected = create_rfft_plan_impl_f32(input.size());
@@ -341,7 +336,7 @@ namespace OmniDSP::Default {
     }
     return output;
   }
-  [[nodiscard]] OmniExpected<C64Vec> DefaultBackend::rfft_f64(
+  [[nodiscard]] OmniExpected<C64Vec> Backend::rfft_f64(
       const F64Vec& input) const
   {
     // auto plan_expected = create_rfft_plan_impl_f64(input.size());
@@ -356,7 +351,7 @@ namespace OmniDSP::Default {
     }
     return output;
   }
-  [[nodiscard]] OmniExpected<F32Vec> DefaultBackend::irfft_c32(
+  [[nodiscard]] OmniExpected<F32Vec> Backend::irfft_c32(
       const C32Vec& input, size_t output_length) const
   {
     if (output_length == 0) {
@@ -382,7 +377,7 @@ namespace OmniDSP::Default {
     }
     return output;
   }
-  [[nodiscard]] OmniExpected<F64Vec> DefaultBackend::irfft_c64(
+  [[nodiscard]] OmniExpected<F64Vec> Backend::irfft_c64(
       const C64Vec& input, size_t output_length) const
   {
     if (output_length == 0) {
@@ -412,49 +407,49 @@ namespace OmniDSP::Default {
   // --- Window Generation (Public API Implementations) ---
   // ... (Window implementations remain the same, calling generate_window<T>)
   // ...
-  [[nodiscard]] Status DefaultBackend::bartlett_window_f32(
+  [[nodiscard]] Status Backend::bartlett_window_f32(
       size_t length, std::span<F32> output) const
   {
     if (output.size() < length) return Status::SizeMismatch;
     auto target_span = output.first(length);
     return generate_window_f32(WindowSpec(WindowType::Bartlett), target_span);
   }
-  [[nodiscard]] Status DefaultBackend::bartlett_window_f64(
+  [[nodiscard]] Status Backend::bartlett_window_f64(
       size_t length, std::span<F64> output) const
   {
     if (output.size() < length) return Status::SizeMismatch;
     auto target_span = output.first(length);
     return generate_window_f64(WindowSpec(WindowType::Bartlett), target_span);
   }
-  [[nodiscard]] Status DefaultBackend::blackman_window_f32(
+  [[nodiscard]] Status Backend::blackman_window_f32(
       size_t length, std::span<F32> output) const
   {
     if (output.size() < length) return Status::SizeMismatch;
     auto target_span = output.first(length);
     return generate_window_f32(WindowSpec(WindowType::Blackman), target_span);
   }
-  [[nodiscard]] Status DefaultBackend::blackman_window_f64(
+  [[nodiscard]] Status Backend::blackman_window_f64(
       size_t length, std::span<F64> output) const
   {
     if (output.size() < length) return Status::SizeMismatch;
     auto target_span = output.first(length);
     return generate_window_f64(WindowSpec(WindowType::Blackman), target_span);
   }
-  [[nodiscard]] Status DefaultBackend::flattop_window_f32(
+  [[nodiscard]] Status Backend::flattop_window_f32(
       size_t length, std::span<F32> output) const
   {
     if (output.size() < length) return Status::SizeMismatch;
     auto target_span = output.first(length);
     return generate_window_f32(WindowSpec(WindowType::Flattop), target_span);
   }
-  [[nodiscard]] Status DefaultBackend::flattop_window_f64(
+  [[nodiscard]] Status Backend::flattop_window_f64(
       size_t length, std::span<F64> output) const
   {
     if (output.size() < length) return Status::SizeMismatch;
     auto target_span = output.first(length);
     return generate_window_f64(WindowSpec(WindowType::Flattop), target_span);
   }
-  [[nodiscard]] Status DefaultBackend::gaussian_window_f32(
+  [[nodiscard]] Status Backend::gaussian_window_f32(
       size_t length, double stddev, std::span<F32> output) const
   {
     if (output.size() < length) return Status::SizeMismatch;
@@ -466,7 +461,7 @@ namespace OmniDSP::Default {
       return Status::InvalidArgument;
     }
   }
-  [[nodiscard]] Status DefaultBackend::gaussian_window_f64(
+  [[nodiscard]] Status Backend::gaussian_window_f64(
       size_t length, double stddev, std::span<F64> output) const
   {
     if (output.size() < length) return Status::SizeMismatch;
@@ -478,35 +473,35 @@ namespace OmniDSP::Default {
       return Status::InvalidArgument;
     }
   }
-  [[nodiscard]] Status DefaultBackend::hamming_window_f32(
+  [[nodiscard]] Status Backend::hamming_window_f32(
       size_t length, std::span<F32> output) const
   {
     if (output.size() < length) return Status::SizeMismatch;
     auto target_span = output.first(length);
     return generate_window_f32(WindowSpec(WindowType::Hamming), target_span);
   }
-  [[nodiscard]] Status DefaultBackend::hamming_window_f64(
+  [[nodiscard]] Status Backend::hamming_window_f64(
       size_t length, std::span<F64> output) const
   {
     if (output.size() < length) return Status::SizeMismatch;
     auto target_span = output.first(length);
     return generate_window_f64(WindowSpec(WindowType::Hamming), target_span);
   }
-  [[nodiscard]] Status DefaultBackend::hann_window_f32(
+  [[nodiscard]] Status Backend::hann_window_f32(
       size_t length, std::span<F32> output) const
   {
     if (output.size() < length) return Status::SizeMismatch;
     auto target_span = output.first(length);
     return generate_window_f32(WindowSpec(WindowType::Hann), target_span);
   }
-  [[nodiscard]] Status DefaultBackend::hann_window_f64(
+  [[nodiscard]] Status Backend::hann_window_f64(
       size_t length, std::span<F64> output) const
   {
     if (output.size() < length) return Status::SizeMismatch;
     auto target_span = output.first(length);
     return generate_window_f64(WindowSpec(WindowType::Hann), target_span);
   }
-  [[nodiscard]] Status DefaultBackend::kaiser_window_f32(
+  [[nodiscard]] Status Backend::kaiser_window_f32(
       size_t length, double beta, std::span<F32> output) const
   {
     if (output.size() < length) return Status::SizeMismatch;
@@ -518,7 +513,7 @@ namespace OmniDSP::Default {
       return Status::InvalidArgument;
     }
   }
-  [[nodiscard]] Status DefaultBackend::kaiser_window_f64(
+  [[nodiscard]] Status Backend::kaiser_window_f64(
       size_t length, double beta, std::span<F64> output) const
   {
     if (output.size() < length) return Status::SizeMismatch;
@@ -530,7 +525,7 @@ namespace OmniDSP::Default {
       return Status::InvalidArgument;
     }
   }
-  [[nodiscard]] Status DefaultBackend::rectangular_window_f32(
+  [[nodiscard]] Status Backend::rectangular_window_f32(
       size_t length, std::span<F32> output) const
   {
     if (output.size() < length) return Status::SizeMismatch;
@@ -538,7 +533,7 @@ namespace OmniDSP::Default {
     return generate_window_f32(
         WindowSpec(WindowType::Rectangular), target_span);
   }
-  [[nodiscard]] Status DefaultBackend::rectangular_window_f64(
+  [[nodiscard]] Status Backend::rectangular_window_f64(
       size_t length, std::span<F64> output) const
   {
     if (output.size() < length) return Status::SizeMismatch;
@@ -546,14 +541,14 @@ namespace OmniDSP::Default {
     return generate_window_f64(
         WindowSpec(WindowType::Rectangular), target_span);
   }
-  [[nodiscard]] Status DefaultBackend::triangular_window_f32(
+  [[nodiscard]] Status Backend::triangular_window_f32(
       size_t length, std::span<F32> output) const
   {
     if (output.size() < length) return Status::SizeMismatch;
     auto target_span = output.first(length);
     return generate_window_f32(WindowSpec(WindowType::Triangular), target_span);
   }
-  [[nodiscard]] Status DefaultBackend::triangular_window_f64(
+  [[nodiscard]] Status Backend::triangular_window_f64(
       size_t length, std::span<F64> output) const
   {
     if (output.size() < length) return Status::SizeMismatch;
@@ -564,7 +559,7 @@ namespace OmniDSP::Default {
   // --- Plan Factories (Implementations) ---
   // ... (Plan factory implementations remain the same) ...
   [[nodiscard]] OmniExpected<std::unique_ptr<FFTPlan<C32>>>
-  DefaultBackend::create_fft_plan_c32(size_t length) const
+  Backend::create_fft_plan_c32(size_t length) const
   {
     // auto pimpl_expected = create_fft_plan_impl_c32(length);
     auto pimpl_expected = this->create_fft_plan_impl_c32(length);
@@ -572,7 +567,7 @@ namespace OmniDSP::Default {
     return FFTPlan<C32>::create_from_impl(std::move(pimpl_expected.value()));
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<FFTPlan<C64>>>
-  DefaultBackend::create_fft_plan_c64(size_t length) const
+  Backend::create_fft_plan_c64(size_t length) const
   {
     // auto pimpl_expected = create_fft_plan_impl_c64(length);
     auto pimpl_expected = this->create_fft_plan_impl_c64(length);
@@ -580,7 +575,7 @@ namespace OmniDSP::Default {
     return FFTPlan<C64>::create_from_impl(std::move(pimpl_expected.value()));
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<RFFTPlan<F32>>>
-  DefaultBackend::create_rfft_plan_f32(size_t length) const
+  Backend::create_rfft_plan_f32(size_t length) const
   {
     // auto pimpl_expected = create_rfft_plan_impl_f32(length);
     auto pimpl_expected = this->create_rfft_plan_impl_f32(length);
@@ -588,7 +583,7 @@ namespace OmniDSP::Default {
     return RFFTPlan<F32>::create_from_impl(std::move(pimpl_expected.value()));
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<RFFTPlan<F64>>>
-  DefaultBackend::create_rfft_plan_f64(size_t length) const
+  Backend::create_rfft_plan_f64(size_t length) const
   {
     // auto pimpl_expected = create_rfft_plan_impl_f64(length);
     auto pimpl_expected = this->create_rfft_plan_impl_f64(length);
@@ -596,7 +591,7 @@ namespace OmniDSP::Default {
     return RFFTPlan<F64>::create_from_impl(std::move(pimpl_expected.value()));
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<CQTPlan<F32>>>
-  DefaultBackend::create_cqt_plan_f32(
+  Backend::create_cqt_plan_f32(
       F32 sample_rate,
       F32 min_freq,
       F32 max_freq,
@@ -610,7 +605,7 @@ namespace OmniDSP::Default {
     return CQTPlan<F32>::create_from_impl(std::move(pimpl_expected.value()));
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<CQTPlan<F64>>>
-  DefaultBackend::create_cqt_plan_f64(
+  Backend::create_cqt_plan_f64(
       F64 sample_rate,
       F64 min_freq,
       F64 max_freq,
@@ -624,7 +619,7 @@ namespace OmniDSP::Default {
     return CQTPlan<F64>::create_from_impl(std::move(pimpl_expected.value()));
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<ResamplePlan<F32>>>
-  DefaultBackend::create_resample_plan_f32(const ResampleSpec& spec) const
+  Backend::create_resample_plan_f32(const ResampleSpec& spec) const
   {
     try {
       auto pimpl = std::make_unique<ResamplePlanImpl<F32>>(this, spec);
@@ -637,7 +632,7 @@ namespace OmniDSP::Default {
     }
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<ResamplePlan<F64>>>
-  DefaultBackend::create_resample_plan_f64(const ResampleSpec& spec) const
+  Backend::create_resample_plan_f64(const ResampleSpec& spec) const
   {
     try {
       auto pimpl = std::make_unique<ResamplePlanImpl<F64>>(this, spec);
@@ -650,7 +645,7 @@ namespace OmniDSP::Default {
     }
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<ConvolutionPlan<F32>>>
-  DefaultBackend::create_convolution_plan_f32(
+  Backend::create_convolution_plan_f32(
       const F32Vec& kernel,
       ConvolutionType type,
       ConvolutionMethod method) const
@@ -662,7 +657,7 @@ namespace OmniDSP::Default {
         std::move(pimpl_expected.value()));
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<ConvolutionPlan<F64>>>
-  DefaultBackend::create_convolution_plan_f64(
+  Backend::create_convolution_plan_f64(
       const F64Vec& kernel,
       ConvolutionType type,
       ConvolutionMethod method) const
@@ -674,7 +669,7 @@ namespace OmniDSP::Default {
         std::move(pimpl_expected.value()));
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<ConvolutionPlan<C32>>>
-  DefaultBackend::create_convolution_plan_c32(
+  Backend::create_convolution_plan_c32(
       const C32Vec& kernel,
       ConvolutionType type,
       ConvolutionMethod method) const
@@ -686,7 +681,7 @@ namespace OmniDSP::Default {
         std::move(pimpl_expected.value()));
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<ConvolutionPlan<C64>>>
-  DefaultBackend::create_convolution_plan_c64(
+  Backend::create_convolution_plan_c64(
       const C64Vec& kernel,
       ConvolutionType type,
       ConvolutionMethod method) const
@@ -698,7 +693,7 @@ namespace OmniDSP::Default {
         std::move(pimpl_expected.value()));
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<CorrelationPlan<F32>>>
-  DefaultBackend::create_correlation_plan_f32(
+  Backend::create_correlation_plan_f32(
       const F32Vec& kernel,
       ConvolutionType type,
       ConvolutionMethod method) const
@@ -710,7 +705,7 @@ namespace OmniDSP::Default {
         std::move(pimpl_expected.value()));
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<CorrelationPlan<F64>>>
-  DefaultBackend::create_correlation_plan_f64(
+  Backend::create_correlation_plan_f64(
       const F64Vec& kernel,
       ConvolutionType type,
       ConvolutionMethod method) const
@@ -722,7 +717,7 @@ namespace OmniDSP::Default {
         std::move(pimpl_expected.value()));
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<CorrelationPlan<C32>>>
-  DefaultBackend::create_correlation_plan_c32(
+  Backend::create_correlation_plan_c32(
       const C32Vec& kernel,
       ConvolutionType type,
       ConvolutionMethod method) const
@@ -734,7 +729,7 @@ namespace OmniDSP::Default {
         std::move(pimpl_expected.value()));
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<CorrelationPlan<C64>>>
-  DefaultBackend::create_correlation_plan_c64(
+  Backend::create_correlation_plan_c64(
       const C64Vec& kernel,
       ConvolutionType type,
       ConvolutionMethod method) const
@@ -746,7 +741,7 @@ namespace OmniDSP::Default {
         std::move(pimpl_expected.value()));
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<FIRFilterPlan<F32>>>
-  DefaultBackend::create_fir_filter_plan_f32(const F32Vec& coefficients) const
+  Backend::create_fir_filter_plan_f32(const F32Vec& coefficients) const
   {
     try {
       auto pimpl = std::make_unique<FIRFilterPlanImpl<F32>>(coefficients);
@@ -759,7 +754,7 @@ namespace OmniDSP::Default {
     }
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<FIRFilterPlan<F64>>>
-  DefaultBackend::create_fir_filter_plan_f64(const F64Vec& coefficients) const
+  Backend::create_fir_filter_plan_f64(const F64Vec& coefficients) const
   {
     try {
       auto pimpl = std::make_unique<FIRFilterPlanImpl<F64>>(coefficients);
@@ -772,7 +767,7 @@ namespace OmniDSP::Default {
     }
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<FIRFilterPlan<C32>>>
-  DefaultBackend::create_fir_filter_plan_c32(const C32Vec& coefficients) const
+  Backend::create_fir_filter_plan_c32(const C32Vec& coefficients) const
   {
     try {
       auto pimpl = std::make_unique<FIRFilterPlanImpl<C32>>(coefficients);
@@ -785,7 +780,7 @@ namespace OmniDSP::Default {
     }
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<FIRFilterPlan<C64>>>
-  DefaultBackend::create_fir_filter_plan_c64(const C64Vec& coefficients) const
+  Backend::create_fir_filter_plan_c64(const C64Vec& coefficients) const
   {
     try {
       auto pimpl = std::make_unique<FIRFilterPlanImpl<C64>>(coefficients);
@@ -798,7 +793,7 @@ namespace OmniDSP::Default {
     }
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<IIRFilterPlan<F32>>>
-  DefaultBackend::create_iir_filter_plan_f32(
+  Backend::create_iir_filter_plan_f32(
       const std::vector<IIRFilterCoef>& sos_coefficients) const
   {
     try {
@@ -812,7 +807,7 @@ namespace OmniDSP::Default {
     }
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<IIRFilterPlan<F64>>>
-  DefaultBackend::create_iir_filter_plan_f64(
+  Backend::create_iir_filter_plan_f64(
       const std::vector<IIRFilterCoef>& sos_coefficients) const
   {
     try {
@@ -828,24 +823,24 @@ namespace OmniDSP::Default {
 
   // --- Filter Design ---
   // *** Calls the renamed helper functions defined in filter.cpp ***
-  [[nodiscard]] OmniExpected<FIRCoefs<F32>>
-  DefaultBackend::design_fir_filter_f32(const FIRFilterSpec& spec) const
+  [[nodiscard]] OmniExpected<FIRCoefs<F32>> Backend::design_fir_filter_f32(
+      const FIRFilterSpec& spec) const
   {
     return generate_fir_filter_coeffs<F32>(spec);  // Call helper
   }
-  [[nodiscard]] OmniExpected<FIRCoefs<F64>>
-  DefaultBackend::design_fir_filter_f64(const FIRFilterSpec& spec) const
+  [[nodiscard]] OmniExpected<FIRCoefs<F64>> Backend::design_fir_filter_f64(
+      const FIRFilterSpec& spec) const
   {
     return generate_fir_filter_coeffs<F64>(spec);  // Call helper
   }
   [[nodiscard]] OmniExpected<std::vector<IIRFilterCoef>>
-  DefaultBackend::design_iir_filter_f32(const IIRFilterSpec& spec) const
+  Backend::design_iir_filter_f32(const IIRFilterSpec& spec) const
   {
     // IIR design returns non-templated coefs, pass F32 spec context if needed
     return generate_iir_filter_coeffs(spec);  // Call helper
   }
   [[nodiscard]] OmniExpected<std::vector<IIRFilterCoef>>
-  DefaultBackend::design_iir_filter_f64(const IIRFilterSpec& spec) const
+  Backend::design_iir_filter_f64(const IIRFilterSpec& spec) const
   {
     // IIR design returns non-templated coefs, pass F64 spec context if needed
     return generate_iir_filter_coeffs(spec);  // Call helper
@@ -854,7 +849,7 @@ namespace OmniDSP::Default {
   // --- Internal Implementation Factories (Private) ---
   // ... (Internal factory implementations remain the same) ...
   [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C32>>>
-  DefaultBackend::create_fft_plan_impl_c32(size_t length) const
+  Backend::create_fft_plan_impl_c32(size_t length) const
   {
     try {
       return std::make_unique<FFTPlanImpl<C32>>(length);
@@ -866,7 +861,7 @@ namespace OmniDSP::Default {
     }
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C64>>>
-  DefaultBackend::create_fft_plan_impl_c64(size_t length) const
+  Backend::create_fft_plan_impl_c64(size_t length) const
   {
     try {
       return std::make_unique<FFTPlanImpl<C64>>(length);
@@ -878,7 +873,7 @@ namespace OmniDSP::Default {
     }
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::RFFTPlanImpl<F32>>>
-  DefaultBackend::create_rfft_plan_impl_f32(size_t length) const
+  Backend::create_rfft_plan_impl_f32(size_t length) const
   {
     try {
       return std::make_unique<RFFTPlanImpl<F32>>(length);
@@ -891,7 +886,7 @@ namespace OmniDSP::Default {
     }
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::RFFTPlanImpl<F64>>>
-  DefaultBackend::create_rfft_plan_impl_f64(size_t length) const
+  Backend::create_rfft_plan_impl_f64(size_t length) const
   {
     try {
       return std::make_unique<RFFTPlanImpl<F64>>(length);
@@ -905,7 +900,7 @@ namespace OmniDSP::Default {
   }
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::ConvolutionPlanImpl<F32>>>
-  DefaultBackend::create_convolution_plan_impl_f32(
+  Backend::create_convolution_plan_impl_f32(
       const F32Vec& kernel,
       ConvolutionType type,
       ConvolutionMethod method) const
@@ -935,7 +930,7 @@ namespace OmniDSP::Default {
   }
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::ConvolutionPlanImpl<F64>>>
-  DefaultBackend::create_convolution_plan_impl_f64(
+  Backend::create_convolution_plan_impl_f64(
       const F64Vec& kernel,
       ConvolutionType type,
       ConvolutionMethod method) const
@@ -965,7 +960,7 @@ namespace OmniDSP::Default {
   }
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::ConvolutionPlanImpl<C32>>>
-  DefaultBackend::create_convolution_plan_impl_c32(
+  Backend::create_convolution_plan_impl_c32(
       const C32Vec& kernel,
       ConvolutionType type,
       ConvolutionMethod method) const
@@ -994,7 +989,7 @@ namespace OmniDSP::Default {
   }
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::ConvolutionPlanImpl<C64>>>
-  DefaultBackend::create_convolution_plan_impl_c64(
+  Backend::create_convolution_plan_impl_c64(
       const C64Vec& kernel,
       ConvolutionType type,
       ConvolutionMethod method) const
@@ -1023,7 +1018,7 @@ namespace OmniDSP::Default {
   }
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::CorrelationPlanImpl<F32>>>
-  DefaultBackend::create_correlation_plan_impl_f32(
+  Backend::create_correlation_plan_impl_f32(
       const F32Vec& kernel,
       ConvolutionType type,
       ConvolutionMethod method) const
@@ -1053,7 +1048,7 @@ namespace OmniDSP::Default {
   }
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::CorrelationPlanImpl<F64>>>
-  DefaultBackend::create_correlation_plan_impl_f64(
+  Backend::create_correlation_plan_impl_f64(
       const F64Vec& kernel,
       ConvolutionType type,
       ConvolutionMethod method) const
@@ -1083,7 +1078,7 @@ namespace OmniDSP::Default {
   }
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::CorrelationPlanImpl<C32>>>
-  DefaultBackend::create_correlation_plan_impl_c32(
+  Backend::create_correlation_plan_impl_c32(
       const C32Vec& kernel,
       ConvolutionType type,
       ConvolutionMethod method) const
@@ -1112,7 +1107,7 @@ namespace OmniDSP::Default {
   }
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::CorrelationPlanImpl<C64>>>
-  DefaultBackend::create_correlation_plan_impl_c64(
+  Backend::create_correlation_plan_impl_c64(
       const C64Vec& kernel,
       ConvolutionType type,
       ConvolutionMethod method) const
@@ -1140,7 +1135,7 @@ namespace OmniDSP::Default {
     }
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTPlanImpl<F32>>>
-  DefaultBackend::create_cqt_plan_impl_f32(
+  Backend::create_cqt_plan_impl_f32(
       F32 sample_rate,
       F32 min_freq,
       F32 max_freq,
@@ -1158,7 +1153,7 @@ namespace OmniDSP::Default {
     }
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTPlanImpl<F64>>>
-  DefaultBackend::create_cqt_plan_impl_f64(
+  Backend::create_cqt_plan_impl_f64(
       F64 sample_rate,
       F64 min_freq,
       F64 max_freq,
@@ -1178,7 +1173,7 @@ namespace OmniDSP::Default {
 
   // --- Internal window generation helper implementation ---
   // Calls the span-based helpers from window.cpp
-  [[nodiscard]] Status DefaultBackend::generate_window_f32(
+  [[nodiscard]] Status Backend::generate_window_f32(
       const WindowSpec& spec, std::span<F32> output) const
   {
     if (output.empty()) {
@@ -1213,7 +1208,7 @@ namespace OmniDSP::Default {
     }
   }
 
-  [[nodiscard]] Status DefaultBackend::generate_window_f64(
+  [[nodiscard]] Status Backend::generate_window_f64(
       const WindowSpec& spec, std::span<F64> output) const
   {
     if (output.empty()) {
@@ -1254,6 +1249,6 @@ namespace OmniDSP::Abstract {
   std::unique_ptr<Backend> create_default_backend()
   {
     // Use the concrete class from the Default namespace
-    return std::make_unique<::OmniDSP::Default ::DefaultBackend>();
+    return std::make_unique<::OmniDSP::Default ::Backend>();
   }
 }  // namespace OmniDSP::Abstract

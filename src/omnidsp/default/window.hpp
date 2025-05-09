@@ -16,7 +16,7 @@ namespace OmniDSP::Default {
 
   // --- Default Window Generation Helper Functions (Span-based Output) ---
   // These implement the actual window calculations used by
-  // DefaultBackend::generate_window_*
+  // Backend::generate_window_*
 
   /**
    * @brief Generates a Bartlett (triangular, zero-endpoints) window.

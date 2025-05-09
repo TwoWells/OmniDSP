@@ -41,7 +41,7 @@ namespace OmniDSP {
     // Only OmniDSP needs friend access if it calls the private constructor
     // directly
     friend class OmniDSP;
-    // Removed friend declarations for Backend and DefaultBackend
+    // Removed friend declarations for Backend and Backend
 
    public:
     ~FFTPlan();
@@ -98,7 +98,7 @@ namespace OmniDSP {
     // Only OmniDSP needs friend access if it calls the private constructor
     // directly
     friend class OmniDSP;
-    // Removed friend declarations for Backend and DefaultBackend
+    // Removed friend declarations for Backend and Backend
 
    public:
     ~RFFTPlan();
