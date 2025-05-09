@@ -11,14 +11,14 @@
 #include <algorithm>    // For std::min (if needed)
 #include <cmath>        // For std::abs
 #include <cstring>      // For std::memcpy, std::memset (if needed)
-#include <iostream>     // For error messages (used by utils)
+#include <iostream>     // For error messages
 #include <numeric>      // For std::fill (if needed)
 #include <stdexcept>    // For std::runtime_error, std::invalid_argument
 #include <string>       // For std::to_string
 #include <type_traits>  // For std::is_same_v
 #include <vector>
 
-#include "utils.hpp"  // Include the intelipp utility header (defines macros and type helpers)
+#include "details.hpp"
 
 // Include OmniDSP headers
 #include <OmniDSP/core_types.hpp>  // Defines OmniException, Status etc.

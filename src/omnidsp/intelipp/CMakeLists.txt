@@ -52,7 +52,7 @@ set(INTELIPP_BACKEND_SOURCES_INTERNAL
     "${CMAKE_CURRENT_SOURCE_DIR}/iir_filter.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/resample.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/window.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/details.cpp"
 )
 
 # --- Add Sources to the 'OmniDSP' library target ---

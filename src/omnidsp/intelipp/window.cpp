@@ -10,20 +10,19 @@
 // Include IPP core header for ippGetStatusString (needed by Utils)
 #include <ippcore.h>
 
-#include <cmath>      // Not strictly needed now VML Gaussian is gone
-#include <iostream>   // For debug/error messages (used by utils)
+#include <iostream>   // For debug/error messages
 #include <numbers>    // For std::numbers::pi_v
 #include <numeric>    // Not strictly needed now ippsSet is used for Rectangular
 #include <span>       // For std::span
 #include <stdexcept>  // For potential error conditions
-#include <string>     // For error messages (used by utils)
+#include <string>     // For error messages
 #include <vector>     // Needed for IPP window temp input
 
 // Include core types for Status and type aliases F32, F64
 #include <OmniDSP/core_types.hpp>
 
 // Include the intelipp utility header
-#include "utils.hpp"
+#include "details.hpp"
 
 // Changed namespace to intelipp
 namespace OmniDSP::IntelIPP {

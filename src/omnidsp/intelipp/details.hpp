@@ -1,5 +1,5 @@
 /**
- * @file Utils.hpp (intelipp)
+ * @file details.hpp (intelipp)
  * @brief Utility functions for the Intel IPP backend, including status code
  * conversions, error checking macros, and type mapping helpers.
  */

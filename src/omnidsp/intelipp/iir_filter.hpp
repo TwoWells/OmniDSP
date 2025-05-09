@@ -18,7 +18,7 @@
 #include <vector>
 
 #include "../interface/backend.hpp"  // Defines abstract::IIRFilterPlanImpl
-#include "utils.hpp"  // For IPP type helpers (utils::GetIPPType etc.) and macros
+#include "details.hpp"  // For IPP type helpers (utils::GetIPPType etc.) and macros
 
 namespace OmniDSP::IntelIPP {
 
