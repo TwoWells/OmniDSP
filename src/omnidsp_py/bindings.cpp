@@ -207,25 +207,25 @@ PYBIND11_MODULE(_omnidsp_cpp, m)
       .value("Valid", ConvolutionMode::Valid)
       .export_values();
 
-  // --- WindowSpec ---
+  // --- WindowSetup ---
   // Need to bind template specializations
-  py::class_<WindowSpec<float>>(m, "WindowSpecFloat")
+  py::class_<WindowSetup<float>>(m, "WindowSpecFloat")
       .def(py::init<>())  // Default (Hann)
       .def(py::init<Window>(), py::arg("type"))
       .def(py::init<Window, float>(), py::arg("type"), py::arg("param"))
-      .def("get_type", &WindowSpec<float>::get_type)
-      .def("get_beta", &WindowSpec<float>::get_beta)
-      .def("get_stddev", &WindowSpec<float>::get_stddev)
+      .def("get_type", &WindowSetup<float>::get_type)
+      .def("get_beta", &WindowSetup<float>::get_beta)
+      .def("get_stddev", &WindowSetup<float>::get_stddev)
       // Add __repr__ for better printing?
       ;
 
-  py::class_<WindowSpec<double>>(m, "WindowSpecDouble")
+  py::class_<WindowSetup<double>>(m, "WindowSpecDouble")
       .def(py::init<>())  // Default (Hann)
       .def(py::init<Window>(), py::arg("type"))
       .def(py::init<Window, double>(), py::arg("type"), py::arg("param"))
-      .def("get_type", &WindowSpec<double>::get_type)
-      .def("get_beta", &WindowSpec<double>::get_beta)
-      .def("get_stddev", &WindowSpec<double>::get_stddev);
+      .def("get_type", &WindowSetup<double>::get_type)
+      .def("get_beta", &WindowSetup<double>::get_beta)
+      .def("get_stddev", &WindowSetup<double>::get_stddev);
 
   // --- Plan Classes (Bind Interfaces) ---
   // FFTPlan (Complex)

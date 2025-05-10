@@ -146,12 +146,12 @@ namespace OmniDSP::OneMKL {
   }
 
   //--------------------------------------------------------------------------
-  // OneMKLRFFTPlanImpl Method Definitions (Real FFT)
+  // RFFTPlanImpl Method Definitions (Real FFT)
   //--------------------------------------------------------------------------
 
   // Constructor Implementation
   template <typename T>  // T is REAL type
-  OneMKLRFFTPlanImpl<T>::OneMKLRFFTPlanImpl(size_t length)
+  RFFTPlanImpl<T>::RFFTPlanImpl(size_t length)
       : length_(length), mkl_status_(DFTI_NO_ERROR)
   {
     if (length == 0) {
@@ -231,7 +231,7 @@ namespace OmniDSP::OneMKL {
 
   // Destructor Implementation
   template <typename T>
-  OneMKLRFFTPlanImpl<T>::~OneMKLRFFTPlanImpl()
+  RFFTPlanImpl<T>::~RFFTPlanImpl()
   {
     if (descriptor_handle_) {
       MKL_LONG free_status = DftiFreeDescriptor(&descriptor_handle_);
@@ -244,7 +244,7 @@ namespace OmniDSP::OneMKL {
 
   // rfft Method Implementation
   template <typename T>
-  Status OneMKLRFFTPlanImpl<T>::rfft(
+  Status RFFTPlanImpl<T>::rfft(
       std::span<const T> input, std::span<Complex> output) const
   {
     if (!descriptor_handle_) return Status::InvalidOperation;
@@ -264,7 +264,7 @@ namespace OmniDSP::OneMKL {
 
   // irfft Method Implementation
   template <typename T>
-  Status OneMKLRFFTPlanImpl<T>::irfft(
+  Status RFFTPlanImpl<T>::irfft(
       std::span<const Complex> input, std::span<T> output) const
   {
     if (!descriptor_handle_) return Status::InvalidOperation;
@@ -284,7 +284,7 @@ namespace OmniDSP::OneMKL {
 
   // get_length Method Implementation
   template <typename T>
-  size_t OneMKLRFFTPlanImpl<T>::get_length() const
+  size_t RFFTPlanImpl<T>::get_length() const
   {
     return length_;
   }
@@ -294,7 +294,7 @@ namespace OmniDSP::OneMKL {
   //--------------------------------------------------------------------------
   template class FFTPlanImpl<C32>;
   template class FFTPlanImpl<C64>;
-  template class OneMKLRFFTPlanImpl<F32>;
-  template class OneMKLRFFTPlanImpl<F64>;
+  template class RFFTPlanImpl<F32>;
+  template class RFFTPlanImpl<F64>;
 
 }  // namespace OmniDSP::OneMKL

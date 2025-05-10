@@ -1,21 +1,25 @@
 /**
- * @file convolution.h
+ * @file convolution.hpp
  * @brief Defines the public API for Convolution and Correlation Plan objects.
  */
 
-#ifndef OMNIDSP_CONVOLUTION_H
-#define OMNIDSP_CONVOLUTION_H
+#ifndef OMNIDSP_CONVOLUTION_HPP
+#define OMNIDSP_CONVOLUTION_HPP
 
 #include <complex>
 #include <cstddef>
 #include <memory>
 #include <span>
-#include <string_view>
+#include <string_view>  // For get_convolution_type_name etc. if they were here (now in core_types)
 #include <utility>  // For std::move
 #include <vector>
 
 #include "OmniDSP/omnidsp_export.hpp"
-#include "core_types.hpp"  // Includes Status, OmniExpected, Detail::* etc.
+#include "core_types.hpp"  // Includes Status, OmniExpected, F32, C32,
+                           // AND NOW ConvolutionType, ConvolutionMethod
+
+// Include Abstract::Backend for the static create method
+#include "../src/omnidsp/interface/backend.hpp"  // Defines Abstract::Backend
 
 // Forward declare Abstract Impl classes
 namespace OmniDSP::Abstract {
@@ -27,55 +31,15 @@ namespace OmniDSP::Abstract {
 
 namespace OmniDSP {
 
-  class OmniDSP;
-
-  /** @brief Specifies the type (output size/boundary handling). */
-  enum class ConvolutionType { Full, Same, Valid };
-
-  /** @brief Specifies the underlying algorithm to use. */
-  enum class ConvolutionMethod { Direct, FFT, Auto };
-
-  /** @brief Gets the string name corresponding to a ConvolutionType. */
-  inline std::string_view get_convolution_type_name(
-      ConvolutionType type) noexcept
-  { /* ... */
-    switch (type) {
-      case ConvolutionType::Full:
-        return "Full";
-      case ConvolutionType::Same:
-        return "Same";
-      case ConvolutionType::Valid:
-        return "Valid";
-      default:
-        return "Unknown ConvolutionType";
-    }
-  }
-
-  /** @brief Gets the string name corresponding to a ConvolutionMethod. */
-  inline std::string_view get_convolution_method_name(
-      ConvolutionMethod method) noexcept
-  { /* ... */
-    switch (method) {
-      case ConvolutionMethod::Direct:
-        return "Direct";
-      case ConvolutionMethod::FFT:
-        return "FFT";
-      case ConvolutionMethod::Auto:
-        return "Auto";
-      default:
-        return "Unknown ConvolutionMethod";
-    }
-  }
+  // ConvolutionType and ConvolutionMethod enums, and their get_*_name functions
+  // have been MOVED to core_types.hpp
 
   /**
    * @brief Plan object for executing Convolution operations.
-   * @tparam T The data type (e.g., float, double, std::complex<float>).
+   * @tparam T The data type (e.g., F32, F64, C32, C64).
    */
   template <typename T>
   class OMNIDSP_EXPORT ConvolutionPlan {
-    friend class OmniDSP;  // Keep friend for OmniDSP if needed
-    // Removed friend declarations for Backend and Backend
-
    public:
     ~ConvolutionPlan();
     ConvolutionPlan(ConvolutionPlan&& other) noexcept;
@@ -86,17 +50,54 @@ namespace OmniDSP {
     [[nodiscard]] Status execute(
         std::span<const T> input, std::span<T> output) const;
     size_t get_kernel_length() const;
-    ConvolutionType get_type() const;
-    ConvolutionMethod get_method_hint() const;
+    ConvolutionType get_type() const;           // Enum now from core_types.hpp
+    ConvolutionMethod get_method_hint() const;  // Enum now from core_types.hpp
     size_t get_output_length(size_t input_length) const;
     std::span<const T> get_kernel() const;
 
-    /**
-     * @brief Public static helper for factory methods to create instances.
-     * @param pimpl A unique_ptr to the backend-specific implementation object.
-     * @return A unique_ptr to the newly created public ConvolutionPlan. Returns
-     * nullptr if pimpl is null.
-     */
+    [[nodiscard]] static OmniExpected<std::unique_ptr<ConvolutionPlan<T>>>
+    create(
+        const Abstract::Backend& backend,
+        const std::vector<T>& kernel,
+        ConvolutionType type,  // Enum now from core_types.hpp
+        ConvolutionMethod method
+        = ConvolutionMethod::Auto  // Enum now from core_types.hpp
+    )
+    {
+      OmniExpected<std::unique_ptr<Abstract::ConvolutionPlanImpl<T>>>
+          pimpl_expected;
+      if constexpr (std::is_same_v<T, F32>) {
+        pimpl_expected
+            = backend.create_convolution_plan_impl_f32(kernel, type, method);
+      }
+      else if constexpr (std::is_same_v<T, F64>) {
+        pimpl_expected
+            = backend.create_convolution_plan_impl_f64(kernel, type, method);
+      }
+      else if constexpr (std::is_same_v<T, C32>) {
+        pimpl_expected
+            = backend.create_convolution_plan_impl_c32(kernel, type, method);
+      }
+      else if constexpr (std::is_same_v<T, C64>) {
+        pimpl_expected
+            = backend.create_convolution_plan_impl_c64(kernel, type, method);
+      }
+      else {
+        return std::unexpected(Status::UnsupportedFeature);
+      }
+
+      if (!pimpl_expected) {
+        return std::unexpected(pimpl_expected.error());
+      }
+
+      auto plan = ConvolutionPlan<T>::create_from_impl(
+          std::move(pimpl_expected.value()));
+      if (!plan) {
+        return std::unexpected(Status::Failure);
+      }
+      return plan;
+    }
+
     static std::unique_ptr<ConvolutionPlan<T>> create_from_impl(
         std::unique_ptr<Abstract::ConvolutionPlanImpl<T>> pimpl)
     {
@@ -108,24 +109,17 @@ namespace OmniDSP {
     }
 
    private:
-    /** @brief Private constructor, called by create_from_impl. */
     explicit ConvolutionPlan(
         std::unique_ptr<Abstract::ConvolutionPlanImpl<T>> pimpl);
-
-    // Removed the private static helper and MakeUniqueEnabler struct
-
     std::unique_ptr<Abstract::ConvolutionPlanImpl<T>> pimpl_;
   };
 
   /**
    * @brief Plan object for executing Correlation operations.
-   * @tparam T The data type (e.g., float, double, std::complex<float>).
+   * @tparam T The data type (e.g., F32, F64, C32, C64).
    */
   template <typename T>
   class OMNIDSP_EXPORT CorrelationPlan {
-    friend class OmniDSP;  // Keep friend for OmniDSP if needed
-    // Removed friend declarations for Backend and Backend
-
    public:
     ~CorrelationPlan();
     CorrelationPlan(CorrelationPlan&& other) noexcept;
@@ -136,17 +130,54 @@ namespace OmniDSP {
     [[nodiscard]] Status execute(
         std::span<const T> input, std::span<T> output) const;
     size_t get_template_length() const;
-    ConvolutionType get_type() const;
-    ConvolutionMethod get_method_hint() const;
+    ConvolutionType get_type() const;           // Enum now from core_types.hpp
+    ConvolutionMethod get_method_hint() const;  // Enum now from core_types.hpp
     size_t get_output_length(size_t input_length) const;
     std::span<const T> get_template() const;
 
-    /**
-     * @brief Public static helper for factory methods to create instances.
-     * @param pimpl A unique_ptr to the backend-specific implementation object.
-     * @return A unique_ptr to the newly created public CorrelationPlan. Returns
-     * nullptr if pimpl is null.
-     */
+    [[nodiscard]] static OmniExpected<std::unique_ptr<CorrelationPlan<T>>>
+    create(
+        const Abstract::Backend& backend,
+        const std::vector<T>& kernel,
+        ConvolutionType type,  // Enum now from core_types.hpp
+        ConvolutionMethod method
+        = ConvolutionMethod::Auto  // Enum now from core_types.hpp
+    )
+    {
+      OmniExpected<std::unique_ptr<Abstract::CorrelationPlanImpl<T>>>
+          pimpl_expected;
+      if constexpr (std::is_same_v<T, F32>) {
+        pimpl_expected
+            = backend.create_correlation_plan_impl_f32(kernel, type, method);
+      }
+      else if constexpr (std::is_same_v<T, F64>) {
+        pimpl_expected
+            = backend.create_correlation_plan_impl_f64(kernel, type, method);
+      }
+      else if constexpr (std::is_same_v<T, C32>) {
+        pimpl_expected
+            = backend.create_correlation_plan_impl_c32(kernel, type, method);
+      }
+      else if constexpr (std::is_same_v<T, C64>) {
+        pimpl_expected
+            = backend.create_correlation_plan_impl_c64(kernel, type, method);
+      }
+      else {
+        return std::unexpected(Status::UnsupportedFeature);
+      }
+
+      if (!pimpl_expected) {
+        return std::unexpected(pimpl_expected.error());
+      }
+
+      auto plan = CorrelationPlan<T>::create_from_impl(
+          std::move(pimpl_expected.value()));
+      if (!plan) {
+        return std::unexpected(Status::Failure);
+      }
+      return plan;
+    }
+
     static std::unique_ptr<CorrelationPlan<T>> create_from_impl(
         std::unique_ptr<Abstract::CorrelationPlanImpl<T>> pimpl)
     {
@@ -158,17 +189,11 @@ namespace OmniDSP {
     }
 
    private:
-    /** @brief Private constructor, called by create_from_impl. */
     explicit CorrelationPlan(
         std::unique_ptr<Abstract::CorrelationPlanImpl<T>> pimpl);
-
-    // Removed the private static helper and MakeUniqueEnabler struct
-
     std::unique_ptr<Abstract::CorrelationPlanImpl<T>> pimpl_;
   };
 
-  // Definitions MUST be provided in the corresponding .cpp file
-
 }  // namespace OmniDSP
 
-#endif  // OMNIDSP_CONVOLUTION_H
+#endif  // OMNIDSP_CONVOLUTION_HPP

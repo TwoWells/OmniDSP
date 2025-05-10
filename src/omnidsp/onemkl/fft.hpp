@@ -76,9 +76,8 @@ namespace OmniDSP::OneMKL {
    * @tparam T Real type (e.g., F32, F64).
    */
   template <typename T>  // T is real type here (F32, F64)
-  class OneMKLRFFTPlanImpl final : public Abstract::RFFTPlanImpl<T> {
-    static_assert(
-        !Utils::IsComplex_v<T>, "OneMKLRFFTPlanImpl requires a real type.");
+  class RFFTPlanImpl final : public Abstract::RFFTPlanImpl<T> {
+    static_assert(!Utils::IsComplex_v<T>, "RFFTPlanImpl requires a real type.");
     using Complex = Utils::GetComplexType<T>;  // Corresponding complex type
 
    public:
@@ -90,18 +89,18 @@ namespace OmniDSP::OneMKL {
      * @throws std::runtime_error If DFTI descriptor creation or configuration
      * fails.
      */
-    explicit OneMKLRFFTPlanImpl(size_t length);
+    explicit RFFTPlanImpl(size_t length);
 
     /**
      * @brief Destructor. Frees the DFTI descriptor.
      */
-    ~OneMKLRFFTPlanImpl() override;
+    ~RFFTPlanImpl() override;
 
     // --- Deleted Copy/Move ---
-    OneMKLRFFTPlanImpl(const OneMKLRFFTPlanImpl&) = delete;
-    OneMKLRFFTPlanImpl& operator=(const OneMKLRFFTPlanImpl&) = delete;
-    OneMKLRFFTPlanImpl(OneMKLRFFTPlanImpl&&) = delete;
-    OneMKLRFFTPlanImpl& operator=(OneMKLRFFTPlanImpl&&) = delete;
+    RFFTPlanImpl(const RFFTPlanImpl&) = delete;
+    RFFTPlanImpl& operator=(const RFFTPlanImpl&) = delete;
+    RFFTPlanImpl(RFFTPlanImpl&&) = delete;
+    RFFTPlanImpl& operator=(RFFTPlanImpl&&) = delete;
 
     // --- Interface Methods ---
     [[nodiscard]] Status rfft(

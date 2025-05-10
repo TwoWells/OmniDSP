@@ -1,5 +1,5 @@
 /**
- * @file resample.hpp (intelipp)
+ * @file resample.hpp (IntelIPP)
  * @brief Declares the Intel IPP backend ResamplePlanImpl class using IPP FIRMR.
  */
 
@@ -8,26 +8,21 @@
 
 #include <ipps.h>  // IPP Signal Processing header
 
-#include <OmniDSP/core_types.hpp>
-#include <OmniDSP/resample.hpp>  // For ResampleSpec definition & Base PlanImpl interface
-#include <cstddef>               // For size_t
-#include <memory>                // For std::unique_ptr
+#include <OmniDSP/core_types.hpp>  // For Status, F32, F64, Utils::IsComplex_v
+#include <OmniDSP/resample.hpp>  // For ResampleSpec definition (which now uses WindowSetup)
+                                 // and Abstract::ResamplePlanImpl
+#include <OmniDSP/window.hpp>  // For WindowSetup (though ResampleSpec includes it)
+#include <cstddef>             // For size_t
+#include <memory>              // For std::unique_ptr
 #include <span>
 #include <vector>
 
-#include "backend.hpp"  // <-- ADDED: Include the header that defines IntelIPPBackend
-
-// Forward declare the base class implementation if needed (usually defined in
-// interface/backend.hpp or similar)
+// Forward declaration for Abstract::Backend if used as pointer/reference
 namespace OmniDSP::Abstract {
-  template <typename T>
-  class ResamplePlanImpl;
+  class Backend;
 }
 
 namespace OmniDSP::IntelIPP {
-
-  // Forward declare the backend class used in the constructor
-  class Backend;
 
   /**
    * @brief Intel IPP implementation for resampling plans using IPP FIR-based
@@ -35,30 +30,15 @@ namespace OmniDSP::IntelIPP {
    * @tparam T Real data type (F32 or F64).
    */
   template <typename T>
-  class ResamplePlanImpl final
-      : public Abstract::ResamplePlanImpl<T> {  // Assuming base is in abstract
-                                                // namespace
+  class ResamplePlanImpl final : public Abstract::ResamplePlanImpl<T> {
     static_assert(
         !::OmniDSP::Utils::IsComplex_v<T>,
-        "ResamplePlanImpl requires a real type.");
+        "IntelIPP::ResamplePlanImpl requires a real type.");
 
    public:
-    /**
-     * @brief Constructor. Initializes IPP resampler state.
-     * @param owner Pointer to the Backend instance creating this plan.
-     * Used to access filter design capabilities inherited from Backend.
-     * Must not be null.
-     * @param spec The resampling specification.
-     * @throws std::invalid_argument If spec is invalid or owner is null.
-     * @throws OmniDSPException If IPP state allocation or initialization fails,
-     * or if internal filter design fails.
-     */
     explicit ResamplePlanImpl(
         const Abstract::Backend* owner, const ResampleSpec& spec);
 
-    /**
-     * @brief Destructor. Frees the IPP resampler state.
-     */
     ~ResamplePlanImpl() override;
 
     // --- Deleted Copy/Move ---
@@ -79,17 +59,17 @@ namespace OmniDSP::IntelIPP {
     // --- Configuration ---
     double input_rate_;
     double output_rate_;
-    int quality_;  // Store quality factor used
+    int quality_;
 
     // --- IPP State ---
-    Ipp8u* p_spec_
-        = nullptr;  // Pointer to the IPP FIR MR Spec structure buffer
-    Ipp8u* p_buffer_ = nullptr;  // Pointer to the IPP working buffer
-    int spec_size_ = 0;          // Store size for freeing memory
-    int buffer_size_ = 0;        // Store size for freeing memory
-    // Store the typed spec pointer for use in execute/reset
-    // (Type depends on T, handled internally)
-    void* p_ipp_spec_typed_ = nullptr;
+    Ipp8u* p_spec_mem_ = nullptr;  // Raw memory for the IPP FIR Spec structure
+    Ipp8u* p_buffer_ = nullptr;    // Pointer to the IPP working buffer
+    int spec_mem_size_ = 0;        // Size of the p_spec_mem_ buffer
+    int buffer_size_ = 0;          // Size of the p_buffer_
+
+    // Typed pointer to the initialized IPP FIR Spec structure
+    // This will be IppsFIRSpec_32f* or IppsFIRSpec_64f*
+    void* p_ipp_fir_spec_ = nullptr;
   };
 
 }  // namespace OmniDSP::IntelIPP

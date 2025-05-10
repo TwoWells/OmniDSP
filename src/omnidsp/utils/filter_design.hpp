@@ -1,16 +1,15 @@
 /**
- * @file filter_design.hpp // Renamed
+ * @file filter_design.hpp
  * @brief Utility functions for common filter design tasks, like designing
  * the prototype filter for resampling.
  */
-#ifndef OMNIDSP_UTILS_FILTER_DESIGN_HPP  // Renamed include guard
-#define OMNIDSP_UTILS_FILTER_DESIGN_HPP  // Renamed include guard
+#ifndef OMNIDSP_UTILS_FILTER_DESIGN_HPP
+#define OMNIDSP_UTILS_FILTER_DESIGN_HPP
 
 #include <OmniDSP/core_types.hpp>  // For Status, OmniExpected, F32, F64
-#include <OmniDSP/filter.hpp>      // For FIRFilterSpec, FIRCoefs
-#include <OmniDSP/resample.hpp>    // For ResampleSpec (to get quality/window)
-#include <OmniDSP/window.hpp>      // For WindowSpec
-#include <cstddef>                 // For size_t
+#include <OmniDSP/filter.hpp>  // For FIRFilterSpec, FIRCoefs (FIRFilterSpec now uses WindowSetup)
+#include <OmniDSP/window.hpp>  // For WindowSetup
+#include <cstddef>             // For size_t
 #include <vector>
 
 // Forward declare AbstractBackend
@@ -25,15 +24,23 @@ namespace OmniDSP::Utils {
    *
    * Calculates filter parameters based on resampling factors and quality,
    * then calls the appropriate design function from the provided backend
-   * instance.
+   * instance. The window shape and its specific parameters (e.g., beta for
+   * Kaiser) are taken from the input_window_setup. The length of the window
+   * used for FIR design is determined internally based on the estimated filter
+   * order.
    *
    * @tparam T The data type for filter coefficients (F32 or F64).
    * @param owner_backend Pointer to the backend instance to use for filter
    * design. Must not be null.
    * @param L The interpolation factor.
    * @param M The decimation factor.
-   * @param quality A quality hint (e.g., 0-20) to determine filter parameters.
-   * @param window_spec The window specification to use for the FIR design.
+   * @param quality A quality hint (e.g., 0-15) to determine filter
+   * order/parameters.
+   * @param input_window_setup The window setup (type and parameters like beta)
+   * to use for the FIR design. The 'length' field in this input_window_setup is
+   * ignored by this function when setting up the FIRFilterSpec's
+   * window_setup.length; filter order (and thus window length for design) is
+   * determined internally by this utility.
    * @return An OmniExpected containing the designed FIR coefficients
    * (FIRCoefs<T>) on success, or a Status code on failure.
    */
@@ -43,7 +50,7 @@ namespace OmniDSP::Utils {
       size_t L,
       size_t M,
       int quality,
-      const WindowSpec& window_spec);
+      const WindowSetup& input_window_setup);
 
   // Explicit template instantiation declarations (implementation in .cpp)
   extern template OmniExpected<FIRCoefs<F32>>
@@ -52,15 +59,15 @@ namespace OmniDSP::Utils {
       size_t L,
       size_t M,
       int quality,
-      const WindowSpec& window_spec);
+      const WindowSetup& input_window_setup);
   extern template OmniExpected<FIRCoefs<F64>>
   design_resampling_prototype_filter<F64>(
       const Abstract::Backend* owner_backend,
       size_t L,
       size_t M,
       int quality,
-      const WindowSpec& window_spec);
+      const WindowSetup& input_window_setup);
 
 }  // namespace OmniDSP::Utils
 
-#endif  // OMNIDSP_UTILS_FILTER_DESIGN_HPP // Renamed include guard
+#endif  // OMNIDSP_UTILS_FILTER_DESIGN_HPP

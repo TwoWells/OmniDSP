@@ -13,34 +13,21 @@
 namespace OmniDSP {
 
   // --- Core Status Enum ---
-
-  /**
-   * @brief Status codes for OmniDSP operations.
-   */
   enum class Status {
-    Success = 0,          ///< Operation completed successfully.
-    Failure = 1,          ///< General failure.
-    InvalidArgument = 2,  ///< Invalid argument provided to a function.
-    SizeMismatch = 3,     ///< Input/output sizes are incompatible.
-    AllocationError = 4,  ///< Memory allocation failed.
-    BackendError = 5,     ///< Error originating from the backend library (e.g.,
-                          ///< MKL, IPP).
-    NotInitialized = 6,   ///< Object or plan was not properly initialized.
-    InvalidOperation = 7,    ///< Operation is not valid in the current state.
-    UnsupportedFeature = 8,  ///< Requested feature is not supported by the
-                             ///< backend or configuration.
-    OutOfBounds = 9,         ///< Index or access was out of bounds.
-    Timeout = 10,            ///< Operation timed out (if applicable).
-    NotImplemented = 11,     ///< Feature or function is not implemented yet.
-    // Add more specific codes as needed
+    Success = 0,
+    Failure = 1,
+    InvalidArgument = 2,
+    SizeMismatch = 3,
+    AllocationError = 4,
+    BackendError = 5,
+    NotInitialized = 6,
+    InvalidOperation = 7,
+    UnsupportedFeature = 8,
+    OutOfBounds = 9,
+    Timeout = 10,
+    NotImplemented = 11,
   };
 
-  /**
-   * @brief Converts a Status enum to a human-readable string representation.
-   * @param status The status code enum value.
-   * @return A string_view describing the status. Useful for logging or error
-   * messages.
-   */
   inline std::string_view get_status_string(Status status) noexcept
   {
     switch (status) {
@@ -74,26 +61,8 @@ namespace OmniDSP {
   }
 
   // --- BackendType Selection Enum ---
+  enum class BackendType { Default, Accelerate, OneMKL, IntelIPP };
 
-  /**
-   * @brief Specifies the backend implementation library to use for
-   * computations.
-   * @details Allows selecting between different optimized libraries or a
-   * default portable implementation at runtime via OmniDSP::create.
-   */
-  enum class BackendType {
-    Default,  ///< Portable C++ implementation with potential SIMD acceleration.
-    Accelerate,  ///< Apple Accelerate framework (macOS/iOS).
-    OneMKL,      ///< Intel oneMKL library.
-    IntelIPP     ///< Intel Integrated Performance Primitives library.
-    // Add other backends here (e.g., CUDA, OpenCL, ArmComputeLibrary)
-  };
-
-  /**
-   * @brief Gets the string name corresponding to a BackendType enum value.
-   * @param backend The backend enum value.
-   * @return A string_view representing the backend name.
-   */
   inline std::string_view get_backend_name(BackendType backend) noexcept
   {
     switch (backend) {
@@ -106,85 +75,87 @@ namespace OmniDSP {
       case BackendType::IntelIPP:
         return "IntelIPP";
       default:
-        // Handle potential future additions gracefully
         return "Unknown BackendType";
     }
   }
 
+  // --- Convolution/Correlation Enums (Moved from convolution.hpp) ---
+  /** @brief Specifies the type (output size/boundary handling) for
+   * convolution/correlation. */
+  enum class ConvolutionType { Full, Same, Valid };
+
+  /** @brief Specifies the underlying algorithm to use for
+   * convolution/correlation. */
+  enum class ConvolutionMethod { Direct, FFT, Auto };
+
+  /** @brief Gets the string name corresponding to a ConvolutionType. */
+  inline std::string_view get_convolution_type_name(
+      ConvolutionType type) noexcept
+  {
+    switch (type) {
+      case ConvolutionType::Full:
+        return "Full";
+      case ConvolutionType::Same:
+        return "Same";
+      case ConvolutionType::Valid:
+        return "Valid";
+      default:
+        return "Unknown ConvolutionType";
+    }
+  }
+
+  /** @brief Gets the string name corresponding to a ConvolutionMethod. */
+  inline std::string_view get_convolution_method_name(
+      ConvolutionMethod method) noexcept
+  {
+    switch (method) {
+      case ConvolutionMethod::Direct:
+        return "Direct";
+      case ConvolutionMethod::FFT:
+        return "FFT";
+      case ConvolutionMethod::Auto:
+        return "Auto";
+      default:
+        return "Unknown ConvolutionMethod";
+    }
+  }
+
   // --- Type Aliases ---
+  using F32 = float;
+  using F64 = double;
+  using C32 = std::complex<F32>;
+  using C64 = std::complex<F64>;
 
-  using F32 = float;   ///< 32-bit floating point type.
-  using F64 = double;  ///< 64-bit floating point type.
-  using C32
-      = std::complex<F32>;  ///< Complex 32-bit float type (float complex).
-  using C64
-      = std::complex<F64>;  ///< Complex 64-bit float type (double complex).
-
-  using F32Vec = std::vector<F32>;  ///< Vector of 32-bit floats.
-  using F64Vec = std::vector<F64>;  ///< Vector of 64-bit floats.
-  using C32Vec = std::vector<C32>;  ///< Vector of 32-bit complex floats.
-  using C64Vec = std::vector<C64>;  ///< Vector of 64-bit complex floats.
+  using F32Vec = std::vector<F32>;
+  using F64Vec = std::vector<F64>;
+  using C32Vec = std::vector<C32>;
+  using C64Vec = std::vector<C64>;
 
   // --- OmniExpected Alias ---
-
-  /**
-   * @brief Alias for std::expected using OmniDSP::Status as the error type.
-   * @tparam T The expected value type.
-   */
   template <typename T>
   using OmniExpected = std::expected<T, Status>;
 
   // --- OmniException Definition ---
-
-  /**
-   * @brief Base exception class for OmniDSP runtime errors,
-   * particularly useful for constructor failures. Aligns with OmniExpected.
-   */
   class OmniException : public std::runtime_error {
    private:
-    Status error_status_;  // Store the associated status code
+    Status error_status_;
 
    public:
-    /**
-     * @brief Construct with an error message and status code.
-     * @param message A descriptive error message.
-     * @param status The OmniDSP::Status code representing the error type.
-     * Defaults to Status::Failure.
-     */
     explicit OmniException(
         const std::string& message, Status status = Status::Failure)
         : std::runtime_error(message), error_status_(status)
     {}
-
-    /**
-     * @brief Construct with an error message (C-string) and status code.
-     * @param message A descriptive error message (C-string).
-     * @param status The OmniDSP::Status code representing the error type.
-     * Defaults to Status::Failure.
-     */
     explicit OmniException(const char* message, Status status = Status::Failure)
         : std::runtime_error(message), error_status_(status)
     {}
-
-    /**
-     * @brief Get the OmniDSP status code associated with this exception.
-     * @return Status The status code.
-     */
     Status get_status() const noexcept { return error_status_; }
-
-    // what() is inherited from std::runtime_error to get the message string.
   };
 
   // --- Utility Type Traits ---
   namespace Utils {
-    /**
-     * @brief Metafunction to get the complex type corresponding to a real or
-     * complex type.
-     * @tparam T The input type (F32, F64, C32, C64).
-     */
     template <typename T>
-    struct GetComplex {   // Renamed from GetComplexType
-      using type = void;  // Default to void for non-handled types
+    struct GetComplex {
+      using type = void;
     };
     template <>
     struct GetComplex<F32> {
@@ -197,37 +168,26 @@ namespace OmniDSP {
     template <>
     struct GetComplex<C32> {
       using type = C32;
-    };  // Complex maps to itself
+    };
     template <>
     struct GetComplex<C64> {
       using type = C64;
-    };  // Complex maps to itself
-
-    /**
-     * @brief Alias template for GetComplex<T>::type.
-     * @tparam T The input type.
-     */
+    };
     template <typename T>
-    using GetComplexType =
-        typename GetComplex<T>::type;  // Renamed from GetComplexT
+    using GetComplexType = typename GetComplex<T>::type;
 
-    /**
-     * @brief Metafunction to get the real type corresponding to a real or
-     * complex type.
-     * @tparam T The input type (F32, F64, C32, C64).
-     */
     template <typename T>
-    struct GetReal {      // Renamed from GetRealType
-      using type = void;  // Default to void
+    struct GetReal {
+      using type = void;
     };
     template <>
     struct GetReal<F32> {
       using type = F32;
-    };  // Real maps to itself
+    };
     template <>
     struct GetReal<F64> {
       using type = F64;
-    };  // Real maps to itself
+    };
     template <>
     struct GetReal<C32> {
       using type = F32;
@@ -236,35 +196,17 @@ namespace OmniDSP {
     struct GetReal<C64> {
       using type = F64;
     };
-
-    /**
-     * @brief Alias template for GetReal<T>::type.
-     * @tparam T The input type.
-     */
     template <typename T>
-    using GetRealType = typename GetReal<T>::type;  // Renamed from GetRealT
+    using GetRealType = typename GetReal<T>::type;
 
-    /**
-     * @brief Type trait to check if a type is OmniDSP::C32 or OmniDSP::C64.
-     * @tparam T The type to check.
-     */
     template <typename T>
-    struct IsComplex : std::false_type {
-    };  // Renamed from is_complex (PascalCase)
-
+    struct IsComplex : std::false_type {};
     template <>
-    struct IsComplex<C32> : std::true_type {};  // Specialization for C32
+    struct IsComplex<C32> : std::true_type {};
     template <>
-    struct IsComplex<C64> : std::true_type {};  // Specialization for C64
-
-    /**
-     * @brief Helper variable template for IsComplex. True if T is C32 or C64.
-     * @tparam T The type to check.
-     */
+    struct IsComplex<C64> : std::true_type {};
     template <typename T>
-    inline constexpr bool IsComplex_v
-        = IsComplex<T>::value;  // Renamed from is_complex_v (using _v suffix)
-
+    inline constexpr bool IsComplex_v = IsComplex<T>::value;
   }  // namespace Utils
 
 }  // namespace OmniDSP

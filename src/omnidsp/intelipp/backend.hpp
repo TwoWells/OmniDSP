@@ -1,10 +1,10 @@
 /**
  * @file backend.hpp (IntelIPP)
  * @brief Declares the concrete Intel IPP backend implementation class.
- * @details This class inherits from Backend and overrides functions
- * where Intel IPP provides optimized implementations (FFT, windowing,
- * resampling, filtering). Convolution/Correlation and CQT functions are
- * inherited.
+ * @details This class inherits from Default::Backend and overrides functions
+ * where Intel IPP provides optimized implementations (FFT, specific windowing,
+ * resampling, filtering). Other functionalities are inherited from
+ * Default::Backend.
  */
 
 #ifndef OMNIDSP_INTELIPP_BACKEND_HPP
@@ -14,24 +14,28 @@
 #include <span>    // For std::span
 #include <vector>  // For vector types
 
-// *** Inherit from Backend instead of AbstractBackend ***
-#include "../default/backend.hpp"
+#include "../default/backend.hpp"  // Inherits from Default::Backend
 
 // Include necessary types referenced in method signatures
 #include <OmniDSP/core_types.hpp>
-// #include <OmniDSP/convolution.hpp>
-// #include <OmniDSP/cqt.hpp>
-#include <OmniDSP/fft.hpp>
-#include <OmniDSP/filter.hpp>
-#include <OmniDSP/resample.hpp>
-#include <OmniDSP/window.hpp>
+#include <OmniDSP/fft.hpp>  // For public FFTPlan, RFFTPlan (though we return Impl)
+#include <OmniDSP/filter.hpp>  // For public FIRFilterPlan, IIRFilterPlan, IIRFilterCoef
+#include <OmniDSP/resample.hpp>  // For public ResamplePlan, ResampleSpec
+#include <OmniDSP/window.hpp>    // For WindowSetup, specific window params
 
-// Include the headers declaring the IntelIPP Plan implementations
-#include "fft.hpp"         // Defines IntelIPPFFTPlanImpl etc.
-#include "fir_filter.hpp"  // Defines IntelIPPFIRFilterPlanImpl etc.
-#include "iir_filter.hpp"  // Defines IntelIPPFIRFilterPlanImpl etc.
-#include "resample.hpp"    // Defines IntelIPPResamplePlanImpl
-#include "window.hpp"      // Defines IntelIPP window helpers (if overridden)
+// Forward declare or include Abstract Plan Impl types (needed for return types)
+// These are defined in "omnidsp/interface/backend.hpp"
+// #include "omnidsp/interface/backend.hpp" // Already included via
+// default/backend.hpp
+
+// Include the headers declaring the IntelIPP Plan *Implementations*
+// These define classes like IntelIPP::FFTPlanImpl<T>
+#include "fft.hpp"  // Defines IntelIPP::FFTPlanImpl, IntelIPP::RFFTPlanImpl
+#include "fir_filter.hpp"  // Defines IntelIPP::FIRFilterPlanImpl
+#include "iir_filter.hpp"  // Defines IntelIPP::IIRFilterPlanImpl
+#include "resample.hpp"    // Defines IntelIPP::ResamplePlanImpl
+// "window.hpp" for IntelIPP might contain helpers if specific window overrides
+// call them.
 
 namespace OmniDSP::IntelIPP {
 
@@ -41,113 +45,105 @@ namespace OmniDSP::IntelIPP {
 
   /**
    * @brief Concrete Intel IPP backend implementation. Inherits from
-   * Backend.
+   * Default::Backend.
    */
   class Backend final : public Default::Backend {
    public:
     // --- Constructor / Destructor ---
     Backend();
-    // Destructor override is inherited from Backend (which overrides
-    // AbstractBackend)
     ~Backend() override;
 
     // --- Core ---
-    // MUST override to identify this backend
     BackendType get_backend() const override;
 
     // --- Override functions optimized by Intel IPP ---
-    // --- If a function is NOT overridden, the Backend implementation is
-    // used ---
+    // If a function is NOT overridden, the Default::Backend implementation is
+    // used.
 
     // Window Generation (Override functions implemented efficiently in IPP)
+    // These override the specific virtual window functions from
+    // Abstract::Backend (which Default::Backend also overrides).
     [[nodiscard]] Status bartlett_window_f32(
-        size_t length,
-        std::span<F32> output) const override;  // IPP specialized
+        size_t length, std::span<F32> output) const override;
     [[nodiscard]] Status bartlett_window_f64(
-        size_t length,
-        std::span<F64> output) const override;  // IPP specialized
+        size_t length, std::span<F64> output) const override;
     [[nodiscard]] Status blackman_window_f32(
-        size_t length,
-        std::span<F32> output) const override;  // IPP specialized
+        size_t length, std::span<F32> output) const override;
     [[nodiscard]] Status blackman_window_f64(
-        size_t length,
-        std::span<F64> output) const override;  // IPP specialized
-    // [[nodiscard]] Status flattop_window_f32(...) const override; // NOT
-    // specialized - Inherited from Backend
-    // [[nodiscard]] Status flattop_window_f64(...) const override; // NOT
-    // specialized - Inherited from Backend
-    // [[nodiscard]] Status gaussian_window_f32(...) const override; // NOT
-    // specialized - Inherited from Backend
-    // [[nodiscard]] Status gaussian_window_f64(...) const override; // NOT
-    // specialized - Inherited from Backend
+        size_t length, std::span<F64> output) const override;
+    // Flattop and Gaussian are inherited from Default::Backend as per original
+    // file.
     [[nodiscard]] Status hamming_window_f32(
-        size_t length,
-        std::span<F32> output) const override;  // IPP specialized
+        size_t length, std::span<F32> output) const override;
     [[nodiscard]] Status hamming_window_f64(
-        size_t length,
-        std::span<F64> output) const override;  // IPP specialized
-    [[nodiscard]] Status hann_window_f32(size_t length, std::span<F32> output)
-        const override;  // IPP specialized
-    [[nodiscard]] Status hann_window_f64(size_t length, std::span<F64> output)
-        const override;  // IPP specialized
+        size_t length, std::span<F64> output) const override;
+    [[nodiscard]] Status hann_window_f32(
+        size_t length, std::span<F32> output) const override;
+    [[nodiscard]] Status hann_window_f64(
+        size_t length, std::span<F64> output) const override;
     [[nodiscard]] Status kaiser_window_f32(
-        size_t length,
-        double beta,
-        std::span<F32> output) const override;  // IPP specialized
+        size_t length, double beta, std::span<F32> output) const override;
     [[nodiscard]] Status kaiser_window_f64(
-        size_t length,
-        double beta,
-        std::span<F64> output) const override;  // IPP specialized
+        size_t length, double beta, std::span<F64> output) const override;
     [[nodiscard]] Status rectangular_window_f32(
-        size_t length,
-        std::span<F32> output) const override;  // IPP specialized
+        size_t length, std::span<F32> output) const override;
     [[nodiscard]] Status rectangular_window_f64(
-        size_t length,
-        std::span<F64> output) const override;  // IPP specialized
+        size_t length, std::span<F64> output) const override;
     [[nodiscard]] Status triangular_window_f32(
-        size_t length, std::span<F32> output)
-        const override;  // IPP specialized (via Bartlett)
+        size_t length, std::span<F32> output) const override;
     [[nodiscard]] Status triangular_window_f64(
-        size_t length, std::span<F64> output)
-        const override;  // IPP specialized (via Bartlett)
+        size_t length, std::span<F64> output) const override;
 
-    // Plan Factories (MUST override to return IntelIPP plans where applicable)
-    [[nodiscard]] OmniExpected<std::unique_ptr<FFTPlan<C32>>>
-    create_fft_plan_c32(size_t length) const override;
-    [[nodiscard]] OmniExpected<std::unique_ptr<FFTPlan<C64>>>
-    create_fft_plan_c64(size_t length) const override;
-    [[nodiscard]] OmniExpected<std::unique_ptr<RFFTPlan<F32>>>
-    create_rfft_plan_f32(size_t length) const override;
-    [[nodiscard]] OmniExpected<std::unique_ptr<RFFTPlan<F64>>>
-    create_rfft_plan_f64(size_t length) const override;
-    [[nodiscard]] OmniExpected<std::unique_ptr<ResamplePlan<F32>>>
-    create_resample_plan_f32(const ResampleSpec& spec) const override;
-    [[nodiscard]] OmniExpected<std::unique_ptr<ResamplePlan<F64>>>
-    create_resample_plan_f64(const ResampleSpec& spec) const override;
-    [[nodiscard]] OmniExpected<std::unique_ptr<FIRFilterPlan<F32>>>
-    create_fir_filter_plan_f32(const F32Vec& coefficients) const override;
-    [[nodiscard]] OmniExpected<std::unique_ptr<FIRFilterPlan<F64>>>
-    create_fir_filter_plan_f64(const F64Vec& coefficients) const override;
-    [[nodiscard]] OmniExpected<std::unique_ptr<FIRFilterPlan<C32>>>
-    create_fir_filter_plan_c32(const C32Vec& coefficients) const override;
-    [[nodiscard]] OmniExpected<std::unique_ptr<FIRFilterPlan<C64>>>
-    create_fir_filter_plan_c64(const C64Vec& coefficients) const override;
-    [[nodiscard]] OmniExpected<std::unique_ptr<IIRFilterPlan<F32>>>
-    create_iir_filter_plan_f32(
+    // --- Plan Impl Factories (Overrides) ---
+    // These methods override the corresponding pure virtual
+    // `create_*_plan_impl_*` methods from Abstract::Backend (which
+    // Default::Backend provides default implementations for). They return
+    // unique_ptr to the backend-specific *Impl objects.
+    [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C32>>>
+    create_fft_plan_impl_c32(size_t length) const override;
+    [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C64>>>
+    create_fft_plan_impl_c64(size_t length) const override;
+
+    [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::RFFTPlanImpl<F32>>>
+    create_rfft_plan_impl_f32(size_t length) const override;
+    [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::RFFTPlanImpl<F64>>>
+    create_rfft_plan_impl_f64(size_t length) const override;
+
+    [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::ResamplePlanImpl<F32>>>
+    create_resample_plan_impl_f32(const ResampleSpec& spec) const override;
+    [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::ResamplePlanImpl<F64>>>
+    create_resample_plan_impl_f64(const ResampleSpec& spec) const override;
+
+    [[nodiscard]] OmniExpected<
+        std::unique_ptr<Abstract::FIRFilterPlanImpl<F32>>>
+    create_fir_filter_plan_impl_f32(const F32Vec& coefficients) const override;
+    [[nodiscard]] OmniExpected<
+        std::unique_ptr<Abstract::FIRFilterPlanImpl<F64>>>
+    create_fir_filter_plan_impl_f64(const F64Vec& coefficients) const override;
+    [[nodiscard]] OmniExpected<
+        std::unique_ptr<Abstract::FIRFilterPlanImpl<C32>>>
+    create_fir_filter_plan_impl_c32(const C32Vec& coefficients) const override;
+    [[nodiscard]] OmniExpected<
+        std::unique_ptr<Abstract::FIRFilterPlanImpl<C64>>>
+    create_fir_filter_plan_impl_c64(const C64Vec& coefficients) const override;
+
+    [[nodiscard]] OmniExpected<
+        std::unique_ptr<Abstract::IIRFilterPlanImpl<F32>>>
+    create_iir_filter_plan_impl_f32(
         const std::vector<IIRFilterCoef>& sos_coefficients) const override;
-    [[nodiscard]] OmniExpected<std::unique_ptr<IIRFilterPlan<F64>>>
-    create_iir_filter_plan_f64(
+    [[nodiscard]] OmniExpected<
+        std::unique_ptr<Abstract::IIRFilterPlanImpl<F64>>>
+    create_iir_filter_plan_impl_f64(
         const std::vector<IIRFilterCoef>& sos_coefficients) const override;
 
-    // NOTE: Convolution/Correlation/CQT plan factories are NOT overridden.
-    // They will inherit the Backend implementation, which will
-    // use the overridden IntelIPP FFT/Resample plans created by *this* backend.
+    // NOTE: create_cqt_plan_impl_*, create_convolution_plan_impl_*,
+    // create_correlation_plan_impl_* are NOT overridden here, so they will be
+    // inherited from Default::Backend. If IntelIPP had specialized versions,
+    // they would be overridden here.
 
-    // NOTE: One-off operations (convolve_*, fft_*, correlate_*) are NOT
-    // declared here. They are inherited directly from Backend.
-
-    // NOTE: Filter design methods are NOT declared here.
-    // They are inherited directly from Backend.
+    // NOTE: One-off operations (convolve_*, fft_*, correlate_*) and filter
+    // design methods are inherited from Default::Backend as they are not
+    // overridden here.
 
    private:
     // Any private members specific to the IntelIPP backend's state (if any)
@@ -155,7 +151,10 @@ namespace OmniDSP::IntelIPP {
 
   // Factory function declaration (definition in .cpp file)
   // This still returns a pointer to the ABSTRACT base, which is correct.
-  std::unique_ptr<Abstract::Backend> create_intelipp_backend();
+  // This function is typically declared in "omnidsp/interface/backend.hpp"
+  // and defined in the intelipp backend's .cpp file.
+  // For completeness, if it's specific to this backend's header:
+  // std::unique_ptr<Abstract::Backend> create_intelipp_backend();
 
 }  // namespace OmniDSP::IntelIPP
 

@@ -1,32 +1,35 @@
 /**
  * @file backend.cpp (Accelerate)
- * @brief Implements the Backend class methods.
- * @details This simplified version only overrides the FFT/RFFT plan factories,
- * inheriting all other functionality from Backend. Includes fallback
- * to Backend for unsupported FFT lengths.
+ * @brief Implements the Accelerate::Backend class methods.
+ * @details This backend overrides FFT/RFFT plan implementation factories.
+ * It includes fallback to Default::Backend's *Impl methods if Accelerate
+ * cannot support a requested FFT length or encounters an error.
  */
-
-#include <OmniDSP/omnidsp_config.hpp>  // For OMNIDSP_BACKEND_ACCELERATE_ENABLED (used by CMake to set OMNIDSP_INTERNAL_USE_ACCELERATE)
-#ifdef OMNIDSP_INTERNAL_USE_ACCELERATE
 
 #include "backend.hpp"  // Corresponding header for Accelerate backend declarations
 
-// Include headers for the public Plan classes (needed for factory return types)
-#include <OmniDSP/core_types.hpp>  // For Status, OmniExpected, OmniException, Backend enum etc.
-#include <OmniDSP/fft.hpp>
+#include <OmniDSP/omnidsp_config.hpp>  // For OMNIDSP_BACKEND_ACCELERATE_ENABLED etc.
+#ifdef OMNIDSP_INTERNAL_USE_ACCELERATE  // Guard for Accelerate-specific code
 
-// Include necessary standard library headers
-#include <expected>   // For std::unexpected
-#include <iostream>   // For std::cerr (error logging)
-#include <memory>     // For std::make_unique
+// Public API headers (primarily for types if not fully covered by backend.hpp)
+#include <OmniDSP/core_types.hpp>  // For Status, OmniExpected, OmniException, BackendType etc.
+// #include <OmniDSP/fft.hpp> // Public FFTPlan, RFFTPlan not directly created
+// here
+
+// Standard library headers
+#include <expected>  // For std::unexpected
+#include <iostream>  // For std::cerr (error logging), though spdlog is preferred
+#include <memory>    // For std::make_unique, std::unique_ptr
 #include <stdexcept>  // For std::runtime_error, std::bad_alloc
 
-// Include headers for the *Accelerate* Plan implementations
-#include "fft.hpp"  // Defines AccelerateFFTPlanImpl, AccelerateRFFTPlanImpl
+// spdlog for logging
+#include "spdlog/spdlog.h"
 
-// Include the interface backend header for AbstractBackend (needed for factory
-// func return type)
-#include "../interface/backend.hpp"
+// Include headers for the *Accelerate* Plan *Implementations*
+#include "fft.hpp"  // Defines Accelerate::FFTPlanImpl, Accelerate::RFFTPlanImpl
+
+// Abstract::Backend for factory function return type
+#include "interface/backend.hpp"
 
 namespace OmniDSP::Accelerate {
 
@@ -36,164 +39,272 @@ namespace OmniDSP::Accelerate {
 
   Backend::Backend()
   {
-    // std::cout << "Accelerate BackendType Initialized." << std::endl; // Debug
-    // message
+    auto logger = spdlog::get("OmniDSP");
+    if (!logger) {
+      logger = spdlog::default_logger();
+    }
+    logger->info("Accelerate backend initialized.");
+    // Perform any Accelerate-specific initialization if needed.
   }
 
   Backend::~Backend()
   {
-    // std::cout << "Accelerate BackendType Destroyed." << std::endl; // Debug
-    // message
+    // auto logger = spdlog::get("OmniDSP");
+    // if (logger) logger->trace("Accelerate::Backend destructed.");
   }
 
   BackendType Backend::get_backend() const { return BackendType::Accelerate; }
 
-  // --- Plan Factories (FFT/RFFT Overrides Only with Fallback) ---
+  // --- Plan Impl Factories (FFT/RFFT Overrides Only with Fallback) ---
 
-  [[nodiscard]] OmniExpected<std::unique_ptr<FFTPlan<C32>>>
-  Backend::create_fft_plan_c32(size_t length) const
+  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C32>>>
+  Backend::create_fft_plan_impl_c32(size_t length) const
   {
+    auto logger = spdlog::get("OmniDSP");
+    if (!logger) {
+      logger = spdlog::default_logger();
+    }
+
     // Check if length is supported by Accelerate vDSP DFT
-    if (FFTPlanImpl<C32>::is_vdsp_dft_supported_length(length)) {
+    // Assuming
+    // Accelerate::FFTPlanImpl<C32>::is_vdsp_dft_supported_length(length) exists
+    if (Accelerate::FFTPlanImpl<C32>::is_vdsp_dft_supported_length(length)) {
       try {
-        auto pimpl = std::make_unique<Accelerate::FFTPlanImpl<C32>>(length);
-        return FFTPlan<C32>::create_from_impl(std::move(pimpl));
+        return std::make_unique<Accelerate::FFTPlanImpl<C32>>(length);
+      }
+      catch (const OmniException& e) {
+        logger->warn(
+            "Accelerate::create_fft_plan_impl_c32 (length {}) failed: {} "
+            "(Status: {}). Falling back to Default::Backend impl.",
+            length,
+            e.what(),
+            static_cast<int>(e.get_status()));
+        return Default::Backend::create_fft_plan_impl_c32(
+            length);  // Fallback to Default's Impl
+      }
+      catch (const std::bad_alloc& e) {
+        logger->warn(
+            "Accelerate::create_fft_plan_impl_c32 (length {}) allocation "
+            "failed: {}. Falling back to Default::Backend impl.",
+            length,
+            e.what());
+        return Default::Backend::create_fft_plan_impl_c32(length);
       }
       catch (const std::exception& e) {
-        std::cerr << "Error creating Accelerate FFTPlan<C32> (length " << length
-                  << "): " << e.what() << ". Falling back to Default."
-                  << std::endl;
-        // Fallback to default implementation if Accelerate fails
-        return Backend::create_fft_plan_c32(length);
+        logger->warn(
+            "Accelerate::create_fft_plan_impl_c32 (length {}) general "
+            "exception: {}. Falling back to Default::Backend impl.",
+            length,
+            e.what());
+        return Default::Backend::create_fft_plan_impl_c32(length);
       }
       catch (...) {
-        std::cerr << "Unknown error creating Accelerate FFTPlan<C32> (length "
-                  << length << "). Falling back to Default." << std::endl;
-        return Backend::create_fft_plan_c32(length);
+        logger->warn(
+            "Accelerate::create_fft_plan_impl_c32 (length {}) unknown error. "
+            "Falling back to Default::Backend impl.",
+            length);
+        return Default::Backend::create_fft_plan_impl_c32(length);
       }
     }
     else {
-      // Length not supported by Accelerate, use Default directly
-      // std::cout << "Accelerate backend: FFT length " << length << " not
-      // supported by vDSP DFT, using Default backend." << std::endl; // Debug
-      return Backend::create_fft_plan_c32(length);
+      logger->debug(
+          "Accelerate backend: FFTPlan<C32> length {} not directly supported "
+          "by vDSP DFT, using Default::Backend impl.",
+          length);
+      return Default::Backend::create_fft_plan_impl_c32(
+          length);  // Fallback to Default's Impl
     }
   }
 
-  [[nodiscard]] OmniExpected<std::unique_ptr<FFTPlan<C64>>>
-  Backend::create_fft_plan_c64(size_t length) const
+  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C64>>>
+  Backend::create_fft_plan_impl_c64(size_t length) const
   {
-    // Check if length is supported by Accelerate vDSP DFT
-    if (FFTPlanImpl<C64>::is_vdsp_dft_supported_length(length)) {
+    auto logger = spdlog::get("OmniDSP");
+    if (!logger) {
+      logger = spdlog::default_logger();
+    }
+
+    if (Accelerate::FFTPlanImpl<C64>::is_vdsp_dft_supported_length(length)) {
       try {
-        auto pimpl_backend = std::make_unique<FFTPlanImpl<C64>>(length);
-        auto plan = FFTPlan<C64>::create_from_impl(std::move(pimpl_backend));
-        if (!plan) {
-          return std::unexpected(Status::Failure);
-        }
-        return plan;
+        return std::make_unique<Accelerate::FFTPlanImpl<C64>>(length);
+      }
+      catch (const OmniException& e) {
+        logger->warn(
+            "Accelerate::create_fft_plan_impl_c64 (length {}) failed: {} "
+            "(Status: {}). Falling back to Default::Backend impl.",
+            length,
+            e.what(),
+            static_cast<int>(e.get_status()));
+        return Default::Backend::create_fft_plan_impl_c64(length);
+      }
+      catch (const std::bad_alloc& e) {
+        logger->warn(
+            "Accelerate::create_fft_plan_impl_c64 (length {}) allocation "
+            "failed: {}. Falling back to Default::Backend impl.",
+            length,
+            e.what());
+        return Default::Backend::create_fft_plan_impl_c64(length);
       }
       catch (const std::exception& e) {
-        std::cerr << "Error creating Accelerate FFTPlan<C64> (length " << length
-                  << "): " << e.what() << ". Falling back to Default."
-                  << std::endl;
-        return Backend::create_fft_plan_c64(length);
+        logger->warn(
+            "Accelerate::create_fft_plan_impl_c64 (length {}) general "
+            "exception: {}. Falling back to Default::Backend impl.",
+            length,
+            e.what());
+        return Default::Backend::create_fft_plan_impl_c64(length);
       }
       catch (...) {
-        std::cerr << "Unknown error creating Accelerate FFTPlan<C64> (length "
-                  << length << "). Falling back to Default." << std::endl;
-        return Backend::create_fft_plan_c64(length);
+        logger->warn(
+            "Accelerate::create_fft_plan_impl_c64 (length {}) unknown error. "
+            "Falling back to Default::Backend impl.",
+            length);
+        return Default::Backend::create_fft_plan_impl_c64(length);
       }
     }
     else {
-      // Length not supported by Accelerate, use Default directly
-      // std::cout << "Accelerate backend: FFT length " << length << " not
-      // supported by vDSP DFT, using Default backend." << std::endl; // Debug
-      return Backend::create_fft_plan_c64(length);
+      logger->debug(
+          "Accelerate backend: FFTPlan<C64> length {} not directly supported "
+          "by vDSP DFT, using Default::Backend impl.",
+          length);
+      return Default::Backend::create_fft_plan_impl_c64(length);
     }
   }
 
-  [[nodiscard]] OmniExpected<std::unique_ptr<RFFTPlan<F32>>>
-  Backend::create_rfft_plan_f32(size_t length) const
+  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::RFFTPlanImpl<F32>>>
+  Backend::create_rfft_plan_impl_f32(size_t length) const
   {
-    // Check if length is supported by Accelerate vDSP DFT (checks N/2)
-    if (RFFTPlanImpl<F32>::is_vdsp_dft_supported_length(length)) {
+    auto logger = spdlog::get("OmniDSP");
+    if (!logger) {
+      logger = spdlog::default_logger();
+    }
+
+    // Assuming Accelerate::RFFTPlanImpl<F32>::is_vdsp_dft_supported_length
+    // checks N (real length)
+    if (Accelerate::RFFTPlanImpl<F32>::is_vdsp_dft_supported_length(length)) {
       try {
-        auto pimpl_backend = std::make_unique<RFFTPlanImpl<F32>>(length);
-        auto plan = RFFTPlan<F32>::create_from_impl(std::move(pimpl_backend));
-        if (!plan) {
-          return std::unexpected(Status::Failure);
-        }
-        return plan;
+        return std::make_unique<Accelerate::RFFTPlanImpl<F32>>(length);
+      }
+      catch (const OmniException& e) {
+        logger->warn(
+            "Accelerate::create_rfft_plan_impl_f32 (length {}) failed: {} "
+            "(Status: {}). Falling back to Default::Backend impl.",
+            length,
+            e.what(),
+            static_cast<int>(e.get_status()));
+        return Default::Backend::create_rfft_plan_impl_f32(length);
+      }
+      catch (const std::bad_alloc& e) {
+        logger->warn(
+            "Accelerate::create_rfft_plan_impl_f32 (length {}) allocation "
+            "failed: {}. Falling back to Default::Backend impl.",
+            length,
+            e.what());
+        return Default::Backend::create_rfft_plan_impl_f32(length);
       }
       catch (const std::exception& e) {
-        std::cerr << "Error creating Accelerate RFFTPlan<F32> (length "
-                  << length << "): " << e.what() << ". Falling back to Default."
-                  << std::endl;
-        return Backend::create_rfft_plan_f32(length);
+        logger->warn(
+            "Accelerate::create_rfft_plan_impl_f32 (length {}) general "
+            "exception: {}. Falling back to Default::Backend impl.",
+            length,
+            e.what());
+        return Default::Backend::create_rfft_plan_impl_f32(length);
       }
       catch (...) {
-        std::cerr << "Unknown error creating Accelerate RFFTPlan<F32> (length "
-                  << length << "). Falling back to Default." << std::endl;
-        return Backend::create_rfft_plan_f32(length);
+        logger->warn(
+            "Accelerate::create_rfft_plan_impl_f32 (length {}) unknown error. "
+            "Falling back to Default::Backend impl.",
+            length);
+        return Default::Backend::create_rfft_plan_impl_f32(length);
       }
     }
     else {
-      // Length not supported by Accelerate, use Default directly
-      // std::cout << "Accelerate backend: RFFT length " << length << " not
-      // supported by vDSP DFT, using Default backend." << std::endl; // Debug
-      return Backend::create_rfft_plan_f32(length);
+      logger->debug(
+          "Accelerate backend: RFFTPlan<F32> length {} not directly supported "
+          "by vDSP DFT, using Default::Backend impl.",
+          length);
+      return Default::Backend::create_rfft_plan_impl_f32(length);
     }
   }
 
-  [[nodiscard]] OmniExpected<std::unique_ptr<RFFTPlan<F64>>>
-  Backend::create_rfft_plan_f64(size_t length) const
+  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::RFFTPlanImpl<F64>>>
+  Backend::create_rfft_plan_impl_f64(size_t length) const
   {
-    // Check if length is supported by Accelerate vDSP DFT (checks N/2)
-    if (RFFTPlanImpl<F64>::is_vdsp_dft_supported_length(length)) {
+    auto logger = spdlog::get("OmniDSP");
+    if (!logger) {
+      logger = spdlog::default_logger();
+    }
+
+    if (Accelerate::RFFTPlanImpl<F64>::is_vdsp_dft_supported_length(length)) {
       try {
-        auto pimpl_backend = std::make_unique<RFFTPlanImpl<F64>>(length);
-        auto plan = RFFTPlan<F64>::create_from_impl(std::move(pimpl_backend));
-        if (!plan) {
-          return std::unexpected(Status::Failure);
-        }
-        return plan;
+        return std::make_unique<Accelerate::RFFTPlanImpl<F64>>(length);
+      }
+      catch (const OmniException& e) {
+        logger->warn(
+            "Accelerate::create_rfft_plan_impl_f64 (length {}) failed: {} "
+            "(Status: {}). Falling back to Default::Backend impl.",
+            length,
+            e.what(),
+            static_cast<int>(e.get_status()));
+        return Default::Backend::create_rfft_plan_impl_f64(length);
+      }
+      catch (const std::bad_alloc& e) {
+        logger->warn(
+            "Accelerate::create_rfft_plan_impl_f64 (length {}) allocation "
+            "failed: {}. Falling back to Default::Backend impl.",
+            length,
+            e.what());
+        return Default::Backend::create_rfft_plan_impl_f64(length);
       }
       catch (const std::exception& e) {
-        std::cerr << "Error creating Accelerate RFFTPlan<F64> (length "
-                  << length << "): " << e.what() << ". Falling back to Default."
-                  << std::endl;
-        return Backend::create_rfft_plan_f64(length);
+        logger->warn(
+            "Accelerate::create_rfft_plan_impl_f64 (length {}) general "
+            "exception: {}. Falling back to Default::Backend impl.",
+            length,
+            e.what());
+        return Default::Backend::create_rfft_plan_impl_f64(length);
       }
       catch (...) {
-        std::cerr << "Unknown error creating Accelerate RFFTPlan<F64> (length "
-                  << length << "). Falling back to Default." << std::endl;
-        return Backend::create_rfft_plan_f64(length);
+        logger->warn(
+            "Accelerate::create_rfft_plan_impl_f64 (length {}) unknown error. "
+            "Falling back to Default::Backend impl.",
+            length);
+        return Default::Backend::create_rfft_plan_impl_f64(length);
       }
     }
     else {
-      // Length not supported by Accelerate, use Default directly
-      // std::cout << "Accelerate backend: RFFT length " << length << " not
-      // supported by vDSP DFT, using Default backend." << std::endl; // Debug
-      return Backend::create_rfft_plan_f64(length);
+      logger->debug(
+          "Accelerate backend: RFFTPlan<F64> length {} not directly supported "
+          "by vDSP DFT, using Default::Backend impl.",
+          length);
+      return Default::Backend::create_rfft_plan_impl_f64(length);
     }
   }
 
-  // --- Other Methods REMOVED ---
-  // (No implementations needed for one-off ops, windowing, filter design,
-  // other plan factories, as they are inherited from Backend)
+  // All other methods are inherited from Default::Backend.
 
 }  // namespace OmniDSP::Accelerate
 
-// *** ADDED Factory Function Definition (Outside namespace) ***
-// This function needs to be defined in the global OmniDSP::Abstract namespace
-// as declared in interface/backend.hpp
+// --- Factory function for Accelerate Backend ---
 namespace OmniDSP::Abstract {
   std::unique_ptr<Backend> create_accelerate_backend()
   {
-    // Use the concrete class from the Accelerate namespace
-    return std::make_unique<::OmniDSP::Accelerate::Backend>();
+#ifdef OMNIDSP_INTERNAL_USE_ACCELERATE
+    return std::make_unique<OmniDSP::Accelerate::Backend>();
+#else
+    // This case should ideally be handled by the main OmniDSP::create factory
+    // by not attempting to call this if OMNIDSP_BACKEND_ACCELERATE_ENABLED is
+    // false. Returning nullptr indicates the backend is not available.
+    auto logger = spdlog::get("OmniDSP");
+    if (!logger) {
+      logger = spdlog::default_logger();
+    }
+    logger->warn(
+        "Attempted to create Accelerate backend, but it's not "
+        "enabled/supported in this build.");
+    return nullptr;
+#endif
   }
 }  // namespace OmniDSP::Abstract
 
-#endif  // OMNIDSP_INTERNAL_USE_ACCELERATE
+#endif  // OMNIDSP_INTERNAL_USE_ACCELERATE (Matches the guard at the top of the
+        // original .cpp)

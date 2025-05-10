@@ -47,6 +47,7 @@ message(STATUS "    Found Intel IPP (IPP::IPP target). Version: ${IPP_VERSION}")
 # --- Define Intel IPP Backend Source Files ---
 set(INTELIPP_BACKEND_SOURCES_INTERNAL
     "${CMAKE_CURRENT_SOURCE_DIR}/backend.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/details.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/fft.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/fir_filter.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/iir_filter.cpp"

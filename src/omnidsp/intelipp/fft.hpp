@@ -337,10 +337,10 @@ namespace OmniDSP::IntelIPP {
   // IntelIPP Real FFT Plan Implementation
   //--------------------------------------------------------------------------
   template <typename T_Real>
-  class IntelIPPRFFTPlanImpl final : public Abstract::RFFTPlanImpl<T_Real> {
+  class RFFTPlanImpl final : public Abstract::RFFTPlanImpl<T_Real> {
     static_assert(
         std::is_same_v<T_Real, F32> || std::is_same_v<T_Real, F64>,
-        "IntelIPPRFFTPlanImpl supports only F32 or F64.");
+        "RFFTPlanImpl supports only F32 or F64.");
     // *** Use type helpers from Utils namespace ***
     using T_Complex = ::OmniDSP::Utils::GetComplexType<
         T_Real>;  // Get corresponding complex type from core_types
@@ -350,13 +350,13 @@ namespace OmniDSP::IntelIPP {
     using IPP_Spec_Type = Details::GetIPPFFTSpec<T_Real>;
 
    public:
-    explicit IntelIPPRFFTPlanImpl(size_t length);
-    ~IntelIPPRFFTPlanImpl() override = default;
+    explicit RFFTPlanImpl(size_t length);
+    ~RFFTPlanImpl() override = default;
 
-    IntelIPPRFFTPlanImpl(const IntelIPPRFFTPlanImpl&) = delete;
-    IntelIPPRFFTPlanImpl& operator=(const IntelIPPRFFTPlanImpl&) = delete;
-    IntelIPPRFFTPlanImpl(IntelIPPRFFTPlanImpl&&) = delete;
-    IntelIPPRFFTPlanImpl& operator=(IntelIPPRFFTPlanImpl&&) = delete;
+    RFFTPlanImpl(const RFFTPlanImpl&) = delete;
+    RFFTPlanImpl& operator=(const RFFTPlanImpl&) = delete;
+    RFFTPlanImpl(RFFTPlanImpl&&) = delete;
+    RFFTPlanImpl& operator=(RFFTPlanImpl&&) = delete;
 
     [[nodiscard]] Status rfft(  // Use 'rfft' to match abstract base
         std::span<const T_Real> input,

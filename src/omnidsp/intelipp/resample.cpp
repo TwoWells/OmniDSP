@@ -2,50 +2,40 @@
  * @file resample.cpp (IntelIPP)
  * @brief Implements the Intel IPP backend ResamplePlanImpl class using Intel
  * IPP FIRMR.
- * @details Designs the FIR filter coefficients using a common utility function
- * before initializing the IPP state using ippsFIRMRInit_*.
  */
 
 #include "resample.hpp"  // Include the corresponding header file
 
-#include "backend.hpp"  // Include the backend header for IntelIPPBackend definition
-#include "utils.hpp"  // Include the intelipp utility header
-
-// Include IPP signal processing header
 #include <ipps.h>
-// Include IPP core header for ippGetStatusString
-#include <ippcore.h>
 
-#include <cmath>     // For std::ceil, std::max, std::abs, std::pow
-#include <iostream>  // For error messages (used by utils)
-#include <memory>    // For std::unique_ptr
-#include <numeric>   // For std::gcd (needed by helper)
+#include "details.hpp"  // Include the intelipp utility header for IPP status checks
+// #include <ippcore.h> // For ippGetStatusString (optional)
+
+#include <OmniDSP/core_types.hpp>
+#include <OmniDSP/filter.hpp>
+#include <OmniDSP/resample.hpp>
+#include <OmniDSP/window.hpp>
+#include <cmath>
+#include <iostream>
+#include <memory>
+#include <numeric>
 #include <span>
-#include <stdexcept>  // For std::runtime_error, std::invalid_argument
-#include <string>     // For std::string in error message
+#include <stdexcept>
+#include <string>
 #include <vector>
 
-// Include necessary OmniDSP headers
-#include <OmniDSP/core_types.hpp>
-#include <OmniDSP/filter.hpp>  // For FIRFilterSpec, FilterType, FIRCoefs
-#include <OmniDSP/resample.hpp>
-#include <OmniDSP/window.hpp>  // For WindowSpec
+#include "spdlog/spdlog.h"
+#include "utils/filter_design.hpp"
+#include "utils/resample.hpp"
 
-// Include the common utility headers
-#include "../utils/filter_design.hpp"  // Renamed include
-#include "../utils/resample.hpp"       // For calculate_resampling_factors
-
-// Changed namespace
 namespace OmniDSP::IntelIPP {
 
-  // using directive for OmniException
   using ::OmniDSP::OmniException;
 
   //--------------------------------------------------------------------------
   // ResamplePlanImpl Method Definitions
   //--------------------------------------------------------------------------
 
-  // Constructor Implementation
   template <typename T>
   ResamplePlanImpl<T>::ResamplePlanImpl(
       const Abstract::Backend* owner, const ResampleSpec& spec)
@@ -53,57 +43,63 @@ namespace OmniDSP::IntelIPP {
         output_rate_(spec.output_rate),
         quality_(spec.quality)
   {
-    // Check owner pointer
-    if (!owner) {
-      throw OmniException(
-          "ResamplePlanImpl requires a non-null owner backend pointer.",
-          Status::InvalidArgument);
-    }
-    if (!spec.validate()) {
-      throw OmniException(
-          "Invalid ResampleSpec provided.", Status::InvalidArgument);
+    auto logger = spdlog::get("OmniDSP");
+    if (!logger) {
+      logger = spdlog::default_logger();
     }
 
-    // --- Filter Design ---
-    IppStatus status = ippStsErr;
+    if (!owner) {
+      std::string msg
+          = "IntelIPP::ResamplePlanImpl requires a non-null owner backend "
+            "pointer.";
+      logger->error(msg);
+      throw OmniException(msg, Status::InvalidArgument);
+    }
+    // ResampleSpec constructor performs its own validation.
+    // WindowSetup within spec.window_setup is also validated by its
+    // constructor.
+
+    IppStatus ipp_status = ippStsNoErr;
     size_t L = 0, M = 0;
-    // Use the common factor calculation utility
+
     Status factor_status
         = Utils::calculate_resampling_factors(input_rate_, output_rate_, L, M);
     if (factor_status != Status::Success || L == 0 || M == 0) {
-      throw OmniException(
-          "Failed to calculate valid integer resampling factors L="
-              + std::to_string(L) + ", M=" + std::to_string(M) + " for IPP.",
-          factor_status);
+      std::string msg
+          = "IntelIPP::ResamplePlanImpl: Failed to calculate valid integer "
+            "resampling factors L="
+            + std::to_string(L) + ", M=" + std::to_string(M) + ".";
+      logger->error(msg);
+      throw OmniException(msg, factor_status);
     }
+
     int upFactor = static_cast<int>(L);
     int downFactor = static_cast<int>(M);
-    int upPhase = 0;    // Start phase for upsampler
-    int downPhase = 0;  // Start phase for downsampler
+    int upPhase = 0;
+    int downPhase = 0;
 
-    // 1. Design the prototype FIR filter using the common utility function
-    //    which internally calls the owner's design method.
     OmniExpected<FIRCoefs<T>> coeffs_expected
         = Utils::design_resampling_prototype_filter<T>(
-            owner, L, M, quality_, spec.window);
+            owner, L, M, quality_, spec.window_setup);
 
     if (!coeffs_expected) {
-      throw OmniException(
-          "IPP Resample: Failed to design internal filter using utility.",
-          coeffs_expected.error());
+      std::string msg
+          = "IntelIPP::ResamplePlanImpl: Failed to design internal filter. "
+            "Status: "
+            + std::string(get_status_string(coeffs_expected.error()));
+      logger->error(msg);
+      throw OmniException(msg, coeffs_expected.error());
     }
-    FIRCoefs<T> pTaps
-        = std::move(coeffs_expected.value());  // Already scaled by L in utility
+    FIRCoefs<T> pTaps = std::move(coeffs_expected.value());
     if (pTaps.empty()) {
-      throw OmniException(
-          "IPP Resample: Internal filter design resulted in empty "
-          "coefficients.",
-          Status::Failure);
+      std::string msg
+          = "IntelIPP::ResamplePlanImpl: Internal filter design resulted in "
+            "empty coefficients.";
+      logger->error(msg);
+      throw OmniException(msg, Status::Failure);
     }
     int tapsLen = static_cast<int>(pTaps.size());
-    // --- End Filter Design ---
 
-    // Determine IPP data type
     IppDataType ippDataType;
     if constexpr (std::is_same_v<T, float>) {
       ippDataType = ipp32f;
@@ -111,167 +107,197 @@ namespace OmniDSP::IntelIPP {
     else if constexpr (std::is_same_v<T, double>) {
       ippDataType = ipp64f;
     }
-    else { /* static assert in header prevents this */
+    else {
+      std::string msg = "IntelIPP::ResamplePlanImpl: Unsupported data type.";
+      logger->critical(msg);
+      throw OmniException(msg, Status::UnsupportedFeature);
     }
 
-    // 2. Get sizes for spec and buffer using the *actual* tapsLen
-    status = ippsFIRMRGetSize(
-        tapsLen, upFactor, downFactor, ippDataType, &spec_size_, &buffer_size_);
-    // Use the macro from IntelIPP/Utils.hpp
-    OMNI_CHECK_IPP_STATUS_THROW(
-        status, "IPP Resample: ippsFIRMRGetSize failed");
+    // Get sizes for IPP FIRMR Spec structure AND the work buffer
+    ipp_status = ippsFIRMRGetSize(
+        tapsLen,
+        upFactor,
+        downFactor,
+        ippDataType,
+        &spec_mem_size_,
+        &buffer_size_);
+    OMNI_CHECK_IPP_STATUS_THROW(ipp_status, "ippsFIRMRGetSize failed");
 
-    // 3. Allocate memory
-    p_spec_ = ippsMalloc_8u(spec_size_);
-    p_buffer_ = (buffer_size_ > 0) ? ippsMalloc_8u(buffer_size_) : nullptr;
-    if (!p_spec_ || (buffer_size_ > 0 && !p_buffer_)) {
-      ippsFree(p_spec_);
-      ippsFree(p_buffer_);
-      p_spec_ = nullptr;
+    p_spec_mem_ = ippsMalloc_8u(spec_mem_size_);
+    if (buffer_size_ > 0) {  // Allocate buffer only if needed
+      p_buffer_ = ippsMalloc_8u(buffer_size_);
+    }
+
+    if (!p_spec_mem_ || (buffer_size_ > 0 && !p_buffer_)) {
+      ippsFree(p_spec_mem_);  // Safe to call on nullptr
+      ippsFree(p_buffer_);    // Safe to call on nullptr
+      p_spec_mem_ = nullptr;
       p_buffer_ = nullptr;
-      throw OmniException(
-          "IPP Resample: Failed to allocate spec or buffer memory.",
-          Status::AllocationError);
+      std::string msg
+          = "IntelIPP::ResamplePlanImpl: Failed to allocate memory for IPP "
+            "FIRMR spec or buffer.";
+      logger->error(msg);
+      throw OmniException(msg, Status::AllocationError);
     }
 
-    // 4. Initialize the spec structure using the designed taps
-    // Cast taps pointer to the IPP type
     const Details::GetIPPType<T>* pTaps_ipp
         = reinterpret_cast<const Details::GetIPPType<T>*>(pTaps.data());
 
     if constexpr (std::is_same_v<T, float>) {
-      IppsFIRSpec_32f* typed_spec = reinterpret_cast<IppsFIRSpec_32f*>(p_spec_);
-      status = ippsFIRMRInit_32f(
+      p_ipp_fir_spec_ = reinterpret_cast<IppsFIRSpec_32f*>(p_spec_mem_);
+      ipp_status = ippsFIRMRInit_32f(
           pTaps_ipp,
           tapsLen,
           upFactor,
           upPhase,
           downFactor,
           downPhase,
-          typed_spec);
-      p_ipp_spec_typed_ = typed_spec;  // Store typed pointer
+          static_cast<IppsFIRSpec_32f*>(p_ipp_fir_spec_));
     }
     else {  // double
-      IppsFIRSpec_64f* typed_spec = reinterpret_cast<IppsFIRSpec_64f*>(p_spec_);
-      status = ippsFIRMRInit_64f(
+      p_ipp_fir_spec_ = reinterpret_cast<IppsFIRSpec_64f*>(p_spec_mem_);
+      ipp_status = ippsFIRMRInit_64f(
           pTaps_ipp,
           tapsLen,
           upFactor,
           upPhase,
           downFactor,
           downPhase,
-          typed_spec);
-      p_ipp_spec_typed_ = typed_spec;  // Store typed pointer
+          static_cast<IppsFIRSpec_64f*>(p_ipp_fir_spec_));
     }
 
-    if (status != ippStsNoErr) {
-      ippsFree(p_spec_);
+    if (ipp_status != ippStsNoErr) {
+      ippsFree(p_spec_mem_);
       ippsFree(p_buffer_);
-      p_spec_ = nullptr;
+      p_spec_mem_ = nullptr;
       p_buffer_ = nullptr;
-      p_ipp_spec_typed_ = nullptr;
-      // Use the macro from IntelIPP/Utils.hpp
-      OMNI_CHECK_IPP_STATUS_THROW(status, "IPP Resample: ippsFIRMRInit failed");
+      p_ipp_fir_spec_ = nullptr;
+      OMNI_CHECK_IPP_STATUS_THROW(ipp_status, "ippsFIRMRInit failed");
     }
+    logger->debug(
+        "IntelIPP::ResamplePlanImpl created: IR={}, OR={}, Q={}, Taps={}, "
+        "L={}, M={}",
+        input_rate_,
+        output_rate_,
+        quality_,
+        tapsLen,
+        L,
+        M);
   }
 
-  // Destructor Implementation
   template <typename T>
   ResamplePlanImpl<T>::~ResamplePlanImpl()
   {
-    ippsFree(p_spec_);    // Safe to call on nullptr
-    ippsFree(p_buffer_);  // Safe to call on nullptr
+    ippsFree(p_spec_mem_);
+    ippsFree(p_buffer_);
+    // auto logger = spdlog::get("OmniDSP");
+    // if (logger) logger->trace("IntelIPP::ResamplePlanImpl destructed.");
   }
 
-  // Execute Method Implementation
   template <typename T>
   Status ResamplePlanImpl<T>::execute(
       std::span<const T> input, std::span<T> output)
   {
-    if (!p_ipp_spec_typed_) {           // Check typed pointer
-      return Status::InvalidOperation;  // Not initialized
+    if (!p_ipp_fir_spec_) {
+      return Status::NotInitialized;
     }
 
     size_t input_len = input.size();
-    size_t output_len_required
-        = get_output_length(input_len);  // Use estimation
-
     if (input_len == 0) {
-      Status reset_status = reset();  // Attempt to reset state
-      if (reset_status != Status::Success) {
-        std::cerr << "Warning: Reset failed within execute when input_len is 0."
-                  << std::endl;
-        // Return the reset error status
-        return reset_status;
-      }
-      // Zero the output buffer if input is empty
       std::fill(output.begin(), output.end(), T{0});
       return Status::Success;
     }
 
-    IppStatus status = ippStsErr;
-    // IPP FIRMR takes the number of *output* samples to generate.
+    // As per IPP docs, for ippsFIRMR_*, numIters is the number of *output*
+    // samples to generate. The caller must ensure output.size() is correctly
+    // pre-calculated. get_output_length() provides this.
     int numOutputSamples = static_cast<int>(output.size());
-    if (numOutputSamples <= 0) {
-      return Status::Success;  // Nothing to generate
+    if (numOutputSamples <= 0
+        && input_len > 0) {  // If input exists but output size is 0, it's
+                             // likely an issue.
+      // If input is also 0, it's handled above.
+      spdlog::get("OmniDSP")->warn(
+          "IntelIPP::ResamplePlanImpl::execute: numOutputSamples is 0 but "
+          "input exists.");
+      return Status::SizeMismatch;  // Or InvalidArgument, depending on desired
+                                    // strictness
+    }
+    if (numOutputSamples == 0
+        && input_len == 0) {  // No input, no output to generate
+      return Status::Success;
     }
 
-    // Cast pointers to IPP types
+    IppStatus ipp_status = ippStsNoErr;
     const Details::GetIPPType<T>* p_in_ipp
         = reinterpret_cast<const Details::GetIPPType<T>*>(input.data());
     Details::GetIPPType<T>* p_out_ipp
         = reinterpret_cast<Details::GetIPPType<T>*>(output.data());
 
-    // Call the correct IPP function based on type T
+    // The pDlySrc and pDlyDst are for external management of delay lines.
+    // If NULL, IPP manages them internally within the pSpec structure.
+    // This is typical for FIRMR.
     if constexpr (std::is_same_v<T, float>) {
-      status = ippsFIRMR_32f(
-          p_in_ipp,          // pSrc
-          p_out_ipp,         // pDst
-          numOutputSamples,  // numIters (number of output samples to generate)
-          static_cast<IppsFIRSpec_32f*>(
-              p_ipp_spec_typed_),  // pSpec (use typed pointer)
-          nullptr,                 // pDlySrc (not managing external delay)
-          nullptr,                 // pDlyDst (not managing external delay)
-          p_buffer_                // pBuf
+      ipp_status = ippsFIRMR_32f(
+          p_in_ipp,
+          p_out_ipp,
+          numOutputSamples,  // Number of output samples to generate
+          static_cast<IppsFIRSpec_32f*>(p_ipp_fir_spec_),
+          nullptr,   // pDlySrc
+          nullptr,   // pDlyDst
+          p_buffer_  // pBuf
       );
     }
     else {  // double
-      status = ippsFIRMR_64f(
-          p_in_ipp,          // pSrc
-          p_out_ipp,         // pDst
-          numOutputSamples,  // numIters
-          static_cast<IppsFIRSpec_64f*>(
-              p_ipp_spec_typed_),  // pSpec (use typed pointer)
-          nullptr,                 // pDlySrc
-          nullptr,                 // pDlyDst
-          p_buffer_                // pBuf
+      ipp_status = ippsFIRMR_64f(
+          p_in_ipp,
+          p_out_ipp,
+          numOutputSamples,
+          static_cast<IppsFIRSpec_64f*>(p_ipp_fir_spec_),
+          nullptr,   // pDlySrc
+          nullptr,   // pDlyDst
+          p_buffer_  // pBuf
       );
     }
-
-    // Use the function from IntelIPP/Utils.hpp
-    return Details::ipp_status_to_omnidsp_status(status);
+    return Details::ipp_status_to_omnidsp_status(ipp_status);
   }
 
-  // Reset Method Implementation
   template <typename T>
   Status ResamplePlanImpl<T>::reset()
   {
-    if (!p_ipp_spec_typed_) {  // Check typed pointer
-      return Status::InvalidOperation;
+    if (!p_ipp_fir_spec_) {
+      return Status::NotInitialized;
     }
-    // IPP FIRMR state is contained within the spec structure.
-    // There isn't a specific "reset" function. Zeroing the buffer
-    // might not be sufficient. Re-initializing is the safest bet,
-    // but requires storing all init parameters (taps, factors, phases).
-    // For now, just zero the work buffer as a minimal attempt.
+    // For ippsFIRMR, the state (delay lines) is within the IppsFIRSpec
+    // structure. There isn't a direct "reset" function in IPP for this that
+    // just zeros delay lines. The most correct way to reset would be to
+    // re-initialize the spec with ippsFIRMRInit_*, which requires the original
+    // taps and parameters. A simpler approach, if only the delay lines need
+    // clearing, might be to process enough zero samples to flush the filter,
+    // but this is complex. Zeroing the work buffer (p_buffer_) might not reset
+    // the internal filter state. For now, this reset is a conceptual marker. A
+    // true state reset would require re-initialization or a different IPP
+    // approach if available.
     if (p_buffer_ && buffer_size_ > 0) {
-      IppStatus status = ippsZero_8u(p_buffer_, buffer_size_);
-      return Details::ipp_status_to_omnidsp_status(status);
+      IppStatus ipp_status = ippsZero_8u(p_buffer_, buffer_size_);
+      if (ipp_status != ippStsNoErr) {
+        spdlog::get("OmniDSP")->warn(
+            "IntelIPP::ResamplePlanImpl::reset: Failed to zero work buffer, "
+            "IPP status: {}",
+            static_cast<int>(ipp_status));
+        return Details::ipp_status_to_omnidsp_status(ipp_status);
+      }
     }
-    return Status::Success;  // No buffer to zero
+    // To truly reset the filter's internal delay lines within p_ipp_fir_spec_,
+    // one would typically re-run ippsFIRMRInit with the original taps and
+    // phases. This is omitted here for simplicity but would be necessary for a
+    // full state reset.
+    spdlog::get("OmniDSP")->debug(
+        "IntelIPP::ResamplePlanImpl::reset() called. Work buffer zeroed (if "
+        "exists). Internal filter state reset requires re-initialization (not "
+        "performed by this minimal reset).");
+    return Status::Success;
   }
 
-  // Getters Implementation
   template <typename T>
   double ResamplePlanImpl<T>::get_input_rate() const
   {
@@ -287,23 +313,23 @@ namespace OmniDSP::IntelIPP {
   template <typename T>
   size_t ResamplePlanImpl<T>::get_output_length(size_t input_length) const
   {
-    if (input_rate_ <= 0.0 || output_rate_ <= 0.0 || input_length == 0)
+    if (input_rate_ <= 0.0 || output_rate_ <= 0.0 || input_length == 0) {
       return 0;
-    double ratio = output_rate_ / input_rate_;
-    // Using ceil(input_length * ratio) + some margin is a common estimation.
-    size_t estimated_len = static_cast<size_t>(
-        std::ceil(static_cast<double>(input_length) * ratio));
-    // Add a margin related to potential filter delay/transients.
-    // This is hard to get exactly right without knowing the filter length used
-    // by Init. Adding 2 is a minimal margin, might need adjustment based on
-    // testing.
-    estimated_len += 2;
-    return estimated_len;
+    }
+    size_t L, M;
+    Status factor_status
+        = Utils::calculate_resampling_factors(input_rate_, output_rate_, L, M);
+    if (factor_status != Status::Success || M == 0) {
+      return static_cast<size_t>(std::ceil(
+          static_cast<double>(input_length) * (output_rate_ / input_rate_)));
+    }
+    // According to IPP docs for ippsFIRMR, if numIters is the number of output
+    // samples, the number of input samples consumed is approximately numIters *
+    // M / L. So, to get output length from input length: OutputLength =
+    // ceil(InputLength * L / M).
+    return (input_length * L + M - 1) / M;
   }
 
-  //--------------------------------------------------------------------------
-  // Explicit Template Instantiations
-  //--------------------------------------------------------------------------
   template class ResamplePlanImpl<float>;
   template class ResamplePlanImpl<double>;
 

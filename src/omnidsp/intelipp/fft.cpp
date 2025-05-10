@@ -177,10 +177,10 @@ namespace OmniDSP::IntelIPP {
   // get_length() is already defined in the header
 
   //--------------------------------------------------------------------------
-  // IntelIPPRFFTPlanImpl Method Definitions (Real FFT)
+  // RFFTPlanImpl Method Definitions (Real FFT)
   //--------------------------------------------------------------------------
   template <typename T_Real>
-  IntelIPPRFFTPlanImpl<T_Real>::IntelIPPRFFTPlanImpl(size_t length)
+  RFFTPlanImpl<T_Real>::RFFTPlanImpl(size_t length)
       // Initialize declared members correctly
       : length_(length),
         p_spec_(nullptr),
@@ -286,7 +286,7 @@ namespace OmniDSP::IntelIPP {
   // Destructor implementation remains default or empty
 
   template <typename T_Real>
-  Status IntelIPPRFFTPlanImpl<T_Real>::rfft(
+  Status RFFTPlanImpl<T_Real>::rfft(
       std::span<const T_Real> input, std::span<T_Complex> output) const
   {
     if (p_spec_ == nullptr) return Status::NotInitialized;
@@ -339,8 +339,7 @@ namespace OmniDSP::IntelIPP {
   }
 
   template <typename T_Real>
-  Status
-  IntelIPPRFFTPlanImpl<T_Real>::irfft(  // Renamed from irfft to match base
+  Status RFFTPlanImpl<T_Real>::irfft(  // Renamed from irfft to match base
       std::span<const T_Complex> input,
       std::span<T_Real> output) const
   {
@@ -392,7 +391,7 @@ namespace OmniDSP::IntelIPP {
   // These ensure the compiler generates code for these specific types.
   template class FFTPlanImpl<C32>;
   template class FFTPlanImpl<C64>;
-  template class IntelIPPRFFTPlanImpl<F32>;
-  template class IntelIPPRFFTPlanImpl<F64>;
+  template class RFFTPlanImpl<F32>;
+  template class RFFTPlanImpl<F64>;
 
 }  // namespace OmniDSP::IntelIPP
