@@ -7,15 +7,15 @@
 #define OMNIDSP_DEFAULT_CQT_HPP
 
 #include <OmniDSP/core_types.hpp>
-#include <OmniDSP/cqt.hpp>  // For Abstract::CQTPlanImpl and public CQTPlan (if needed for context)
-#include <OmniDSP/fft.hpp>  // For RFFTPlan (used internally)
-#include <OmniDSP/resample.hpp>  // For ResamplePlan (used internally) and ResampleSpec
-#include <OmniDSP/window.hpp>  // For WindowSetup
-#include <memory>              // For std::unique_ptr
+#include <OmniDSP/cqt.hpp>       // For Abstract::CQTPlanImpl and CQTSpec
+#include <OmniDSP/fft.hpp>       // For RFFTPlan (used internally)
+#include <OmniDSP/resample.hpp>  // For ResamplePlan (used internally)
+#include <OmniDSP/window.hpp>    // For WindowSetup
+#include <memory>                // For std::unique_ptr
+#include <span>
 #include <vector>
 
-// Forward declare Abstract::Backend if owner_backend_ is of that type
-// and not Default::Backend specifically.
+// Forward declare Abstract::Backend
 namespace OmniDSP::Abstract {
   class Backend;
 }
@@ -33,25 +33,13 @@ namespace OmniDSP::Default {
 
    public:
     /**
-     * @brief Constructs a CQTPlanImpl.
+     * @brief Constructs a CQTPlanImpl using a fully resolved CQTSpec.
      * @param owner_backend Pointer to the backend instance creating this plan
-     * (for creating FFT/Resample plans).
-     * @param sample_rate Sample rate of the input signal.
-     * @param min_freq Minimum frequency for CQT bins.
-     * @param max_freq Maximum frequency for CQT bins.
-     * @param bins_per_octave Number of CQT bins per octave.
-     * @param window_setup Window setup for the CQT analysis windows.
-     * @throws std::invalid_argument if parameters are invalid.
+     * (for creating FFT/Resample sub-plans).
+     * @param spec The fully resolved Constant-Q Transform specification.
      * @throws OmniException if internal plan creation or setup fails.
      */
-    CQTPlanImpl(
-        const Abstract::Backend* owner_backend,
-        T sample_rate,
-        T min_freq,
-        T max_freq,
-        int bins_per_octave,
-        const WindowSetup&
-            window_setup);  // WindowSetup for CQT analysis windows
+    CQTPlanImpl(const Abstract::Backend* owner_backend, const CQTSpec& spec);
 
     ~CQTPlanImpl() override;
 
@@ -70,30 +58,49 @@ namespace OmniDSP::Default {
 
    private:
     const Abstract::Backend* owner_backend_;  // Non-owning pointer
-    T sample_rate_;
-    int bins_per_octave_;
-    size_t hop_length_;
+    CQTSpec spec_;  // Store the resolved specification
 
-    struct CQTOctave {
-      T octave_sample_rate;
+    // Internal structure to hold processed data for each octave
+    struct ProcessedCQTOctave {
+      double octave_sample_rate;
       std::unique_ptr<ResamplePlan<T>>
-          resampler;  // Plan to resample to this octave's rate
+          resampler;  // Plan to resample to this octave's rate (nullable if
+                      // original SR)
       std::unique_ptr<RFFTPlan<T>> rfft_plan;  // FFT plan for this octave
-      std::vector<T> kernel_lengths;  // Length of each CQT kernel (window) in
-                                      // samples at this octave_sample_rate
       std::vector<std::vector<Complex>>
-          sparse_kernels;    // Pre-computed FFTs of CQT windows
-      std::vector<T> freqs;  // Center frequencies for this octave
-      size_t fft_length;     // FFT length used for this octave
-    };
-    std::vector<CQTOctave> octaves_;
-    std::vector<T>
-        all_bin_frequencies_;  // All CQT bin frequencies across octaves
+          sparse_kernels_fft;  // Pre-computed FFTs of CQT analysis kernels for
+                               // this octave
+      size_t fft_length;       // FFT length used for this octave (from spec)
+      std::vector<double>
+          bin_frequencies;  // Frequencies processed in this octave (from spec)
+      // kernel_lengths_samples are in
+      // spec_.octave_specs[i].kernel_lengths_samples
 
-    // Internal buffer for resampled audio per octave
+      // Constructor for ProcessedCQTOctave
+      ProcessedCQTOctave(
+          double osr,
+          std::unique_ptr<ResamplePlan<T>> rs_plan,
+          std::unique_ptr<RFFTPlan<T>> rf_plan,
+          std::vector<std::vector<Complex>> sk_fft,
+          size_t fl,
+          std::vector<double> bf)
+          : octave_sample_rate(osr),
+            resampler(std::move(rs_plan)),
+            rfft_plan(std::move(rf_plan)),
+            sparse_kernels_fft(std::move(sk_fft)),
+            fft_length(fl),
+            bin_frequencies(std::move(bf))
+      {}
+    };
+    std::vector<ProcessedCQTOctave> processed_octaves_;
+
+    // Internal buffers (mutable for use in const execute method)
     mutable std::vector<T> resampled_buffer_;
-    // Internal buffer for FFT output per octave
-    mutable std::vector<Complex> fft_output_buffer_;
+    mutable std::vector<Complex>
+        frame_fft_buffer_;  // For FFT of input audio frame
+    mutable std::vector<T>
+        temp_kernel_real_buffer_;  // For constructing real part of CQT kernel
+                                   // before FFT
   };
 
   // Explicit template instantiations

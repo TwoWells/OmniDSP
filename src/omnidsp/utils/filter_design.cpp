@@ -1,198 +1,195 @@
 /**
  * @file filter_design.cpp
- * @brief Implements utility functions for common filter design tasks.
+ * @brief Implements utility functions for common filter design tasks,
+ * including FIR filter specification creation.
  */
-#include "filter_design.hpp"
+#include "filter_design.hpp"  // May contain other design utilities, or can be more specific
 
-#include <OmniDSP/core_types.hpp>
-#include <OmniDSP/filter.hpp>  // For FIRFilterSpec, FilterType
-#include <OmniDSP/window.hpp>  // For WindowSetup, WindowType, WindowParams
-#include <algorithm>           // For std::max
-#include <cmath>               // For std::ceil, std::log10, std::abs
-#include <stdexcept>           // For std::runtime_error
-#include <string>              // For error messages
+#include <algorithm>  // For std::max, std::min
+#include <cmath>      // For std::ceil, std::log10, std::abs, std::round
+#include <stdexcept>  // For std::runtime_error, std::invalid_argument
+#include <string>     // For error messages
 #include <vector>
 
-#include "interface/backend.hpp"  // For AbstractBackend definition
-#include "spdlog/spdlog.h"        // For logging
+#include "OmniDSP/core_types.hpp"  // For OmniExpected, Status
+#include "OmniDSP/filter.hpp"      // For FIRFilterSpec, FilterType
+#include "OmniDSP/params/fir_filter.hpp"
+#include "OmniDSP/utils.hpp"   // For the declaration of Utils::create_spec
+#include "OmniDSP/window.hpp"  // For WindowSetup, WindowType, WindowParams
+
+// spdlog for logging, typically included in .cpp files
+#include "spdlog/spdlog.h"
+// Make sure spdlog is properly linked or made available (e.g., header-only
+// version)
 
 namespace OmniDSP::Utils {
 
-  // Heuristic to estimate FIR filter order for resampling based on quality.
-  size_t estimate_resampling_fir_order(
-      size_t L,
-      size_t M,
-      int quality,
-      double normalized_transition_width_factor)
+  // Helper function to estimate FIR filter order (Kaiser's formula or similar)
+  // This can be a static helper within this .cpp file or a free function in an
+  // internal utils namespace.
+  static size_t estimate_fir_order_from_specs(
+      double sample_rate,
+      double transition_width_hz,
+      double stopband_attenuation_db)
   {
-    double dF;
-    if (quality <= 5) {
-      dF = 0.2 * normalized_transition_width_factor;
+    if (sample_rate <= 0 || transition_width_hz <= 0
+        || stopband_attenuation_db <= 0) {
+      // spdlog::get("OmniDSP")->warn("Invalid inputs to
+      // estimate_fir_order_from_specs."); Return a default or indicate error.
+      // For now, let's assume valid inputs based on FIRFilterParams validation.
+      // Or, throw std::invalid_argument here.
+      // For simplicity, let's assume FIRFilterParams validation caught basic
+      // errors. A more robust implementation would handle this.
+      if (transition_width_hz <= 0)
+        transition_width_hz = 0.01 * sample_rate;  // Avoid division by zero
     }
-    else if (quality <= 10) {
-      dF = 0.1 * normalized_transition_width_factor;
+
+    // Ensure attenuation is at least 21dB for the formula
+    double atten_db = std::max(21.0, stopband_attenuation_db);
+
+    // Kaiser's formula for filter order N:
+    // N approx = (Atten_dB - 7.95) / (2.285 *
+    // (TransitionWidth_normalized_by_Fs)) TransitionWidth_normalized_by_Fs =
+    // transition_width_hz / sample_rate
+    double normalized_transition_width = transition_width_hz / sample_rate;
+    if (normalized_transition_width
+        <= 0.0) {  // Should be caught by checks above
+      normalized_transition_width
+          = 0.01;  // Fallback to prevent division by zero
     }
-    else {
-      dF = 0.05 * normalized_transition_width_factor;
-    }
-    if (dF < 1e-6) dF = 1e-6;
 
-    double desired_atten_dB = 40.0 + quality * 3.0;
-    if (desired_atten_dB < 21) desired_atten_dB = 21;
-    if (desired_atten_dB > 120) desired_atten_dB = 120;
+    double order_double
+        = (atten_db - 7.95) / (2.285 * normalized_transition_width);
+    size_t order = static_cast<size_t>(std::ceil(order_double));
 
-    size_t order = static_cast<size_t>(
-        std::ceil((desired_atten_dB - 7.95) / (2.285 * (2.0 * dF))));
-
-    size_t min_order_factor = 2;
-    if (quality > 10)
-      min_order_factor = 4;
-    else if (quality > 5)
-      min_order_factor = 3;
-
-    size_t min_order = min_order_factor * std::max(L, M);
-    if (order < min_order) order = min_order;
-
-    if (order < 16) order = 16;
-    if (order > 2048) order = 2048;
-
+    // Ensure order is odd for Type I (symmetric, even length taps = order + 1)
+    // or even for Type II (symmetric, odd length taps = order + 1)
+    // Most windowed sinc designs aim for Type I (linear phase, non-zero DC gain
+    // for LP) which means N_taps = order + 1 should be odd, so order should be
+    // even.
     if (order % 2 != 0) {
       order++;
     }
+    // Ensure a minimum practical order
+    if (order < 4) order = 4;  // Arbitrary minimum, adjust as needed
+    // spdlog::get("OmniDSP")->debug("Estimated FIR order: {} from TW={}Hz,
+    // Atten={}dB, SR={}Hz", order, transition_width_hz,
+    // stopband_attenuation_db, sample_rate);
     return order;
   }
 
-  template <typename T>
-  [[nodiscard]] OmniExpected<FIRCoefs<T>> design_resampling_prototype_filter(
-      const Abstract::Backend* owner_backend,
-      size_t L,
-      size_t M,
-      int quality,
-      const WindowSetup& input_window_setup)
+  OmniExpected<FIRFilterSpec> create_spec(const FIRFilterParams& params)
   {
+    // FIRFilterParams constructor already performed initial validation.
+    // Here, we resolve any estimations (like order) and finalize the Spec.
+
     auto logger = spdlog::get("OmniDSP");
-    if (!logger) {
-      logger = spdlog::default_logger();
+    if (!logger) {  // Fallback if named logger isn't registered
+      logger = spdlog::default_logger();  // Or handle error
     }
 
-    if (!owner_backend) {
-      logger->error(
-          "design_resampling_prototype_filter: owner_backend is null.");
-      return std::unexpected(Status::InvalidArgument);
+    size_t final_order;
+
+    if (params.order.has_value()) {
+      final_order = params.order.value();
+      // If order is given, characteristics might be for reference or ignored
+      // for order calc. We could add a warning if characteristics are also
+      // given but order is taking precedence.
+      logger->debug("Using user-specified FIR order: {}", final_order);
     }
-    if (L == 0 || M == 0) {
-      logger->error(
-          "design_resampling_prototype_filter: L ({}) or M ({}) is zero.",
-          L,
-          M);
-      return std::unexpected(Status::InvalidArgument);
-    }
-
-    double normalized_cutoff
-        = 1.0 / (2.0 * static_cast<double>(std::max(L, M)));
-    double normalized_transition_width_factor_for_estimation
-        = normalized_cutoff;
-    size_t estimated_order = estimate_resampling_fir_order(
-        L, M, quality, normalized_transition_width_factor_for_estimation);
-    size_t num_taps = estimated_order + 1;
-
-    logger->debug(
-        "Resampling filter design: L={}, M={}, Q={}, NormCutoff={}, "
-        "EstOrder={}, Taps={}",
-        L,
-        M,
-        quality,
-        normalized_cutoff,
-        estimated_order,
-        num_taps);
-
-    // Create the FIRFilterSpec to pass to the backend's design function
-    FIRFilterSpec prototype_fir_spec;
-    prototype_fir_spec.type = FilterType::Lowpass;
-    prototype_fir_spec.order = estimated_order;
-    prototype_fir_spec.sample_rate = 1.0;  // Design is normalized
-    prototype_fir_spec.cutoff1 = normalized_cutoff;
-    // prototype_fir_spec.cutoff2 is std::nullopt by default, which is correct
-    // for lowpass.
-
-    // Correctly populate the window_setup member of FIRFilterSpec
-    prototype_fir_spec.window_setup.type = input_window_setup.type;
-    prototype_fir_spec.window_setup.params
-        = input_window_setup.params;  // Copies the std::optional<WindowParams>
-    prototype_fir_spec.window_setup.length = static_cast<int>(
-        num_taps);  // CRITICAL: Set length based on estimated order
-
-    // The members 'transition_width' and 'stopband_attenuation_db' are NOT part
-    // of the current FIRFilterSpec struct. Do NOT attempt to set them.
-
-    // Validate the constructed FIRFilterSpec before passing it to the backend.
-    if (!prototype_fir_spec.validate()) {
-      logger->error(
-          "design_resampling_prototype_filter: Constructed internal "
-          "FIRFilterSpec is invalid. Order={}, WindowLength={}",
-          prototype_fir_spec.order,
-          prototype_fir_spec.window_setup.length);
-      return std::unexpected(Status::InvalidArgument);
-    }
-
-    OmniExpected<FIRCoefs<T>> coeffs_expected;
-    if constexpr (std::is_same_v<T, float>) {
-      coeffs_expected
-          = owner_backend->design_fir_filter_f32(prototype_fir_spec);
-    }
-    else if constexpr (std::is_same_v<T, double>) {
-      coeffs_expected
-          = owner_backend->design_fir_filter_f64(prototype_fir_spec);
+    else if (
+        params.transition_width.has_value()
+        && params.stopband_attenuation_db.has_value()) {
+      // Estimate order based on characteristics
+      if (params.sample_rate
+          <= 0.0) {  // Should have been caught by Params constructor
+        return std::unexpected(Status::InvalidArgument);
+      }
+      final_order = estimate_fir_order_from_specs(
+          params.sample_rate,
+          params.transition_width.value(),
+          params.stopband_attenuation_db.value());
+      logger->debug(
+          "Estimated FIR order: {} from characteristics.", final_order);
     }
     else {
+      // This case should have been caught by FIRFilterParams constructor
+      // validation
       logger->error(
-          "design_resampling_prototype_filter: Unsupported data type.");
-      return std::unexpected(Status::UnsupportedFeature);
+          "FIRFilterParams has insufficient information to determine filter "
+          "order.");
+      return std::unexpected(Status::InvalidArgument);
     }
 
-    if (!coeffs_expected) {
-      logger->error(
-          "design_resampling_prototype_filter: Backend FIR filter design "
-          "failed with status: {}",
-          static_cast<int>(coeffs_expected.error()));
-      return std::unexpected(coeffs_expected.error());
+    if (final_order > 10000
+        && params.design_method
+               == FIRFilterDesignMethod::WindowSinc) {  // Arbitrary sanity
+                                                        // check limit
+      logger->warn(
+          "Calculated FIR filter order ({}) is very high. This may lead to "
+          "long computation times or memory issues.",
+          final_order);
     }
 
-    FIRCoefs<T> prototype_coeffs = std::move(coeffs_expected.value());
+    // The WindowSetup from params already has the type and its specific
+    // parameters (e.g., beta). We now set the definitive length for the window
+    // based on the final_order.
+    WindowSetup final_window_setup
+        = params.window_setup;  // Copy type and params
+    final_window_setup.length
+        = static_cast<int>(final_order + 1);  // Set definitive length
 
-    if (prototype_coeffs.empty()) {
+    // Validate the newly constructed WindowSetup with its length.
+    // The WindowSetup constructor itself should validate its parameters.
+    try {
+      WindowSetup validated_final_window_setup(
+          final_window_setup.type,
+          final_window_setup.length,
+          final_window_setup.params  // Pass the optional params
+      );
+      // If it constructs without throwing, it's valid.
+      final_window_setup = validated_final_window_setup;
+    }
+    catch (const std::invalid_argument& e) {
       logger->error(
-          "design_resampling_prototype_filter: Backend FIR filter design "
-          "succeeded but returned empty coefficients.");
+          "Failed to create a valid WindowSetup for FIRFilterSpec: {}. Window "
+          "type: {}, Length: {}, Params given: {}",
+          e.what(),
+          static_cast<int>(final_window_setup.type),
+          final_window_setup.length,
+          final_window_setup.params.has_value());
+      return std::unexpected(Status::InvalidArgument);
+    }
+
+    // Construct the FIRFilterSpec
+    try {
+      FIRFilterSpec spec(
+          params.type,
+          final_order,
+          params.sample_rate,
+          params.cutoff1,
+          params.cutoff2,  // std::optional is moved/copied
+          final_window_setup);
+      // Perform a final consistency check on the created spec if desired
+      if (!spec.validate_consistency()) {
+        logger->error(
+            "Internal consistency validation failed for created "
+            "FIRFilterSpec.");
+        return std::unexpected(Status::Failure);  // Internal error
+      }
+      return spec;
+    }
+    catch (
+        const std::exception& e) {  // Catch potential errors from FIRFilterSpec
+                                    // constructor (e.g. asserts if enabled)
+      logger->error(
+          "Exception during FIRFilterSpec construction: {}", e.what());
       return std::unexpected(Status::Failure);
     }
-
-    T scale_factor = static_cast<T>(L);
-    for (T& coeff : prototype_coeffs) {
-      coeff *= scale_factor;
-    }
-
-    logger->debug(
-        "Resampling filter designed successfully. Num taps: {}, First coeff "
-        "(scaled): {}",
-        prototype_coeffs.size(),
-        prototype_coeffs.empty() ? 0.0 : prototype_coeffs[0]);
-
-    return prototype_coeffs;
   }
 
-  // Explicit template instantiations
-  template OmniExpected<FIRCoefs<F32>> design_resampling_prototype_filter<F32>(
-      const Abstract::Backend* owner_backend,
-      size_t L,
-      size_t M,
-      int quality,
-      const WindowSetup& input_window_setup);
-  template OmniExpected<FIRCoefs<F64>> design_resampling_prototype_filter<F64>(
-      const Abstract::Backend* owner_backend,
-      size_t L,
-      size_t M,
-      int quality,
-      const WindowSetup& input_window_setup);
+  // Explicit template instantiations for design_resampling_prototype_filter
+  // (if they were in this file, but they are in their own filter_design.cpp
+  // from utils) This file is now focused on Utils::create_spec for FIR.
 
 }  // namespace OmniDSP::Utils

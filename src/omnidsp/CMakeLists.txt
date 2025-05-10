@@ -44,24 +44,39 @@ set(OMNIDSP_BACKEND_INTELIPP_ENABLED 0)
 
 # --- Define Core Library Sources ---
 set(OMNIDSP_CORE_HEADERS
-    "${CMAKE_SOURCE_DIR}/include/OmniDSP/omnidsp.hpp"
-    "${CMAKE_SOURCE_DIR}/include/OmniDSP/core_types.hpp"
-    "${CMAKE_SOURCE_DIR}/include/OmniDSP/fft.hpp"
-    "${CMAKE_SOURCE_DIR}/include/OmniDSP/cqt.hpp"
     "${CMAKE_SOURCE_DIR}/include/OmniDSP/convolution.hpp"
-    "${CMAKE_SOURCE_DIR}/include/OmniDSP/resample.hpp"
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/core_types.hpp"
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/cqt.hpp"
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/fft.hpp"
     "${CMAKE_SOURCE_DIR}/include/OmniDSP/filter.hpp"
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/omnidsp.hpp"
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/resample.hpp"
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/utils.hpp"
     "${CMAKE_SOURCE_DIR}/include/OmniDSP/window.hpp"
+    # include/OmniDSP/params
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/params/fir_filter.hpp"
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/params/resample.hpp"
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/params/cqt.hpp"
+    # include/OmniDSP/types
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/types/filter.hpp"
 )
 set(OMNIDSP_CORE_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/omnidsp.cpp" # Main class implementation
-    "${CMAKE_CURRENT_SOURCE_DIR}/utils/resample.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/utils/filter_design.cpp"
+    # Params implementations (constructors)
+    "${CMAKE_CURRENT_SOURCE_DIR}/params/fir_filter.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/params/resample.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/params/cqt.cpp"
+    # Interface implementations (Pimpl wrappers)
     "${CMAKE_CURRENT_SOURCE_DIR}/interface/fft.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/interface/cqt.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/interface/convolution.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/interface/resample.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/interface/filter.cpp"
+    # Utils implementations
+    "${CMAKE_CURRENT_SOURCE_DIR}/utils/cqt_design.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/utils/filter_design.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/utils/resample_design.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/utils/resample.cpp"
 )
 
 # --- Create the Main 'OmniDSP' Library Target ---
@@ -84,7 +99,8 @@ target_include_directories(OmniDSP
         # This ensures the compiler can find headers in PROJECT_BINARY_DIR/include
         $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>
     PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR} # For internal includes like "interface/backend.hpp" from "omnidsp.cpp"
+                                    # or "utils/internal_helper.hpp" from "utils/some_util.cpp"
 )
 
 # --- Common Dependencies ---

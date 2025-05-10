@@ -16,70 +16,57 @@
 #include <utility>    // For std::move
 #include <vector>
 
-#include "OmniDSP/omnidsp_export.hpp"
-#include "core_types.hpp"  // For Status, OmniExpected, Utils::IsComplex_v, F32, F64 etc.
-#include "window.hpp"  // For WindowSetup
+#include "OmniDSP/core_types.hpp"  // For Status, OmniExpected, Utils::IsComplex_v, F32, F64 etc.
+#include "OmniDSP/filter.hpp"  // For FIRFilterSpec (which ResampleSpec will embed)
+#include "OmniDSP/omnidsp_export.hpp"  // For OMNIDSP_EXPORT
+#include "OmniDSP/window.hpp"  // For WindowSetup (used by ResampleParams, and indirectly by FIRFilterSpec)
+#include "interface/backend.hpp"  // Defines Abstract::Backend and Abstract::ResamplePlanImpl
 
-// Include Abstract::Backend for the static create method
-#include "interface/backend.hpp"  // Defines Abstract::Backend
-
-// spdlog for logging errors in ResampleSpec constructor (if not already
-// included via core_types or window) #include "spdlog/spdlog.h"
-
-// Forward declare backend Impl class (already present)
-namespace OmniDSP::Abstract {
-  template <typename T>
-  class ResamplePlanImpl;
-}  // namespace OmniDSP::Abstract
+// Forward declaration for ResampleParams, defined in
+// "OmniDSP/params/resample.hpp" namespace OmniDSP { struct ResampleParams; }
 
 namespace OmniDSP {
 
-  // class OmniDSPImpl; // Forward declaration if needed by friends
-
   /**
-   * @brief Specification for creating a resampling plan.
-   * Validated upon construction.
+   * @brief Fully resolved specification for creating a resampling plan.
+   * This struct is typically the output of `OmniDSP::Utils::create_spec(const
+   * ResampleParams&)` and serves as direct input for creating a `ResamplePlan`.
+   * It contains the definitive parameters for the resampling operation,
+   * including the specification for the internal anti-aliasing/anti-imaging
+   * filter.
    */
   struct OMNIDSP_EXPORT ResampleSpec {
-    double input_rate;
-    double output_rate;
-    int quality;
-    WindowSetup window_setup;
+    double input_rate;     ///< Input sample rate in Hz.
+    double output_rate;    ///< Desired output sample rate in Hz.
+    int quality;           ///< Quality setting used for the resampling process
+                           ///< (influences filter design).
+    size_t up_factor_L;    ///< Calculated upsampling factor.
+    size_t down_factor_M;  ///< Calculated downsampling factor.
+    FIRFilterSpec prototype_fir_spec;  ///< Specification for the internal
+                                       ///< prototype FIR filter.
 
     explicit ResampleSpec(
-        double ir,
-        double or_rate,
-        int q,
-        WindowSetup ws
-        = WindowSetup{WindowType::Kaiser, 32, WindowParams{{"beta", 5.0}}})
-        : input_rate(ir),
-          output_rate(or_rate),
-          quality(q),
-          window_setup(std::move(ws))
+        double p_input_rate,
+        double p_output_rate,
+        int p_quality,
+        size_t p_up_factor_L,
+        size_t p_down_factor_M,
+        FIRFilterSpec p_prototype_fir_spec)
+        : input_rate(p_input_rate),
+          output_rate(p_output_rate),
+          quality(p_quality),
+          up_factor_L(p_up_factor_L),
+          down_factor_M(p_down_factor_M),
+          prototype_fir_spec(std::move(p_prototype_fir_spec))
     {
-      auto logger = spdlog::get("OmniDSP");
-      if (!logger) {
-        logger = spdlog::default_logger();
+      if (input_rate <= 0.0 || output_rate <= 0.0) {
+        throw std::logic_error(
+            "ResampleSpec: Input/Output rates must be positive.");
       }
-
-      if (input_rate <= 0.0) {
-        std::string msg = "ResampleSpec construction failed: input_rate ("
-                          + std::to_string(input_rate) + ") must be positive.";
-        if (logger) logger->error(msg);
-        throw std::invalid_argument(msg);
-      }
-      if (output_rate <= 0.0) {
-        std::string msg = "ResampleSpec construction failed: output_rate ("
-                          + std::to_string(output_rate) + ") must be positive.";
-        if (logger) logger->error(msg);
-        throw std::invalid_argument(msg);
-      }
-      if (quality < 0 || quality > 15) {
-        std::string msg = "ResampleSpec construction failed: quality ("
-                          + std::to_string(quality)
-                          + ") is out of expected range [0, 15].";
-        if (logger) logger->error(msg);
-        throw std::invalid_argument(msg);
+      if (up_factor_L == 0 || down_factor_M == 0) {
+        throw std::logic_error(
+            "ResampleSpec: Upsampling/Downsampling factors L/M cannot be "
+            "zero.");
       }
     }
   };
@@ -93,13 +80,11 @@ namespace OmniDSP {
     static_assert(
         !Utils::IsComplex_v<T>,
         "ResamplePlan requires a real type (F32 or F64).");
-    // friend class OmniDSPImpl;
 
    public:
-    ~ResamplePlan();                              // Definition in .cpp
-    ResamplePlan(ResamplePlan&& other) noexcept;  // Definition in .cpp
-    ResamplePlan& operator=(
-        ResamplePlan&& other) noexcept;  // Definition in .cpp
+    ~ResamplePlan();
+    ResamplePlan(ResamplePlan&& other) noexcept;
+    ResamplePlan& operator=(ResamplePlan&& other) noexcept;
     ResamplePlan(const ResamplePlan&) = delete;
     ResamplePlan& operator=(const ResamplePlan&) = delete;
 
@@ -109,55 +94,33 @@ namespace OmniDSP {
     double get_output_rate() const;
     size_t get_output_length(size_t input_length) const;
 
-    /**
-     * @brief Creates a ResamplePlan using the provided backend and
-     * specification.
-     * @param backend A reference to the backend implementation to use.
-     * @param spec The ResampleSpec detailing the resampling parameters.
-     * @return An OmniExpected containing a unique_ptr to the ResamplePlan on
-     * success, or a Status on failure.
-     */
+    // Declaration of the static create method
     [[nodiscard]] static OmniExpected<std::unique_ptr<ResamplePlan<T>>> create(
-        const Abstract::Backend& backend, const ResampleSpec& spec)
-    {
-      OmniExpected<std::unique_ptr<Abstract::ResamplePlanImpl<T>>>
-          pimpl_expected;
-      if constexpr (std::is_same_v<T, F32>) {
-        pimpl_expected = backend.create_resample_plan_impl_f32(spec);
-      }
-      else if constexpr (std::is_same_v<T, F64>) {
-        pimpl_expected = backend.create_resample_plan_impl_f64(spec);
-      }
-      else {
-        // static_assert(always_false<T>::value, "Unsupported real type for
-        // ResamplePlan::create");
-        return std::unexpected(Status::UnsupportedFeature);
-      }
+        const Abstract::Backend& backend, const ResampleSpec& spec);
 
-      if (!pimpl_expected) {
-        return std::unexpected(pimpl_expected.error());
-      }
-
-      auto plan = ResamplePlan<T>::create_from_impl(
-          std::move(pimpl_expected.value()));
-      if (!plan) {
-        return std::unexpected(Status::Failure);  // Or AllocationError
-      }
-      return plan;
-    }
-
+    // Definition of create_from_impl remains in the header as it's simple and
+    // commonly inlined
     static std::unique_ptr<ResamplePlan<T>> create_from_impl(
         std::unique_ptr<Abstract::ResamplePlanImpl<T>> pimpl)
     {
       if (!pimpl) {
         return nullptr;
       }
+      // Use private constructor
       return std::unique_ptr<ResamplePlan<T>>(
           new ResamplePlan<T>(std::move(pimpl)));
     }
 
    private:
-    explicit ResamplePlan(std::unique_ptr<Abstract::ResamplePlanImpl<T>> pimpl);
+    // Private constructor, called by create_from_impl
+    explicit ResamplePlan(std::unique_ptr<Abstract::ResamplePlanImpl<T>> pimpl)
+        : pimpl_(std::move(pimpl))
+    {
+      if (!pimpl_) {
+        throw std::runtime_error(
+            "ResamplePlan constructed with null implementation pointer.");
+      }
+    }
     std::unique_ptr<Abstract::ResamplePlanImpl<T>> pimpl_;
   };
 

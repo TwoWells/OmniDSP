@@ -145,21 +145,10 @@ namespace OmniDSP::Default {
     [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::RFFTPlanImpl<F64>>>
     create_rfft_plan_impl_f64(size_t length) const;
 
-    // Ensure WindowSetup is used if Abstract::Backend is updated
     [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTPlanImpl<F32>>>
-    create_cqt_plan_impl_f32(
-        F32 sample_rate,
-        F32 min_freq,
-        F32 max_freq,
-        int bins_per_octave,
-        const WindowSetup& window_setup) const;
+    create_cqt_plan_impl_f32(const CQTSpec& spec) const;
     [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTPlanImpl<F64>>>
-    create_cqt_plan_impl_f64(
-        F64 sample_rate,
-        F64 min_freq,
-        F64 max_freq,
-        int bins_per_octave,
-        const WindowSetup& window_setup) const;
+    create_cqt_plan_impl_f64(const CQTSpec& spec) const;
 
     [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::ResamplePlanImpl<F32>>>
     create_resample_plan_impl_f32(const ResampleSpec& spec) const;

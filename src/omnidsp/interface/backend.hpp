@@ -42,6 +42,9 @@ namespace OmniDSP {
   // From resample.hpp
   struct ResampleSpec;  // Forward declaration
 
+  // From cqt.hpp
+  struct CQTSpec;  // Forward declaration
+
   // From convolution.hpp
   enum class ConvolutionType;    // Forward declaration
   enum class ConvolutionMethod;  // Forward declaration
@@ -334,21 +337,9 @@ namespace OmniDSP::Abstract {
     create_rfft_plan_impl_f64(size_t length) const = 0;
 
     [[nodiscard]] virtual OmniExpected<std::unique_ptr<CQTPlanImpl<F32>>>
-    create_cqt_plan_impl_f32(
-        F32 sample_rate,
-        F32 min_freq,
-        F32 max_freq,
-        int bins_per_octave,
-        const WindowSetup& window_setup) const
-        = 0;
+    create_cqt_plan_impl_f32(const CQTSpec& spec) const = 0;
     [[nodiscard]] virtual OmniExpected<std::unique_ptr<CQTPlanImpl<F64>>>
-    create_cqt_plan_impl_f64(
-        F64 sample_rate,
-        F64 min_freq,
-        F64 max_freq,
-        int bins_per_octave,
-        const WindowSetup& window_setup) const
-        = 0;
+    create_cqt_plan_impl_f64(const CQTSpec& spec) const = 0;
 
     [[nodiscard]] virtual OmniExpected<std::unique_ptr<ResamplePlanImpl<F32>>>
     create_resample_plan_impl_f32(const ResampleSpec& spec) const = 0;

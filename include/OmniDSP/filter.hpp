@@ -1,7 +1,7 @@
 /**
  * @file filter.hpp
  * @brief Defines the public API for FIR and IIR filter design and execution
- * Plans.
+ * Plans, and their Specifications.
  */
 
 #ifndef OMNIDSP_FILTER_HPP
@@ -15,13 +15,11 @@
 #include <utility>  // For std::move
 #include <vector>
 
-#include "OmniDSP/omnidsp_export.hpp"
-#include "core_types.hpp"  // For Status, OmniExpected, F32, C32, Utils::IsComplex_v etc.
-#include "window.hpp"  // For WindowSetup
+#include "OmniDSP/core_types.hpp"  // For Status, OmniExpected, F32, C32, Utils::IsComplex_v etc.
+#include "OmniDSP/types/filter.hpp"  // For FilterType, FIRFilterDesignMethod, IIRFilterFormat
+#include "OmniDSP/window.hpp"  // For WindowSetup
 
 // Corrected include path for Abstract::Backend.
-// This assumes "src" is an include directory for the library's compilation,
-// allowing "omnidsp/interface/backend.hpp" to be found.
 #include "interface/backend.hpp"  // Defines Abstract::Backend
 
 // Forward declare backend Impl classes (already present)
@@ -34,82 +32,156 @@ namespace OmniDSP::Abstract {
 
 namespace OmniDSP {
 
-  // class OmniDSPImpl; // Forward declaration if needed by friends
-
-  /** @brief Enumeration of standard filter types. */
-  enum class FilterType { Lowpass, Highpass, Bandpass, Bandstop };
-
-  /** @brief Specification for designing an FIR filter. */
+  /**
+   * @brief Fully resolved specification for a Finite Impulse Response (FIR)
+   * filter. This struct is typically the output of a utility function like
+   * `OmniDSP::Utils::create_spec` and serves as direct input for creating an
+   * `FIRFilterPlan`. It contains all necessary parameters, with filter order
+   * and window length definitively set.
+   */
   struct OMNIDSP_EXPORT FIRFilterSpec {
-    FilterType type = FilterType::Lowpass;
-    size_t order = 64;
-    double sample_rate = 1.0;
-    double cutoff1 = 0.1;
-    std::optional<double> cutoff2 = std::nullopt;
-    WindowSetup window_setup{WindowType::Hamming, static_cast<int>(64 + 1)};
+    FilterType type;  ///< Type of filter (Lowpass, Highpass, etc.).
+    size_t order;  ///< Filter order (number of taps - 1). This is definitively
+                   ///< set.
+    double sample_rate;             ///< Sample rate of the signal in Hz.
+    double cutoff1;                 ///< Primary cutoff frequency in Hz.
+    std::optional<double> cutoff2;  ///< Optional secondary cutoff frequency in
+                                    ///< Hz (for bandpass/bandstop).
+    WindowSetup window_setup;  ///< Windowing function setup to be used. Its
+                               ///< `length` member will be `order + 1`.
+    // FIRFilterDesignMethod design_method; // This might be part of Params, but
+    // Spec is the result. The backend uses the spec to generate coeffs, method
+    // isn't needed by backend *after* spec is made. However, if different
+    // backends might generate coeffs differently from the *same* spec, it could
+    // be here. For now, assuming design_method guides Utils::create_spec.
 
-    [[nodiscard]] bool validate() const
+    /**
+     * @brief Constructor for FIRFilterSpec.
+     * Primarily intended for internal use by `Utils::create_spec`.
+     * Assumes parameters have been validated and resolved.
+     */
+    explicit FIRFilterSpec(
+        FilterType p_type,
+        size_t p_order,
+        double p_sample_rate,
+        double p_cutoff1,
+        std::optional<double> p_cutoff2,
+        WindowSetup p_window_setup  // WindowSetup's length should be consistent
+                                    // with p_order
+        )
+        : type(p_type),
+          order(p_order),
+          sample_rate(p_sample_rate),
+          cutoff1(p_cutoff1),
+          cutoff2(std::move(p_cutoff2)),
+          window_setup(std::move(p_window_setup))
+    {
+      // Basic internal consistency check: window_setup.length should match
+      // order + 1
+      if (static_cast<size_t>(this->window_setup.length) != (this->order + 1)) {
+        // This indicates an internal error in how Utils::create_spec populated
+        // this. Consider throwing or logging a critical error. For now, we
+        // could adjust it, or rely on Utils::create_spec to set it correctly.
+        // Let's assume Utils::create_spec sets it correctly.
+        // If not, an assert could be useful here during debugging:
+        // assert(static_cast<size_t>(this->window_setup.length) == (this->order
+        // + 1));
+      }
+    }
+
+    // Default constructor might be needed if it's a member of another class
+    // that's default-constructed. However, a Spec should ideally always be
+    // fully initialized. FIRFilterSpec() = default; // Or delete it if it
+    // should always be fully specified.
+
+    [[nodiscard]] size_t num_taps() const { return order + 1; }
+
+    // A simple validation, mostly for internal consistency.
+    // The main validation burden is on FIRFilterParams constructor and
+    // Utils::create_spec.
+    [[nodiscard]] bool validate_consistency() const
     {
       if (sample_rate <= 0.0) return false;
       if (cutoff1 <= 0.0 || cutoff1 >= 0.5 * sample_rate) return false;
       if (type == FilterType::Bandpass || type == FilterType::Bandstop) {
-        if (!cutoff2.has_value()) return false;
-        if (cutoff2.value() <= 0.0 || cutoff2.value() >= 0.5 * sample_rate)
+        if (!cutoff2.has_value() || cutoff2.value() <= 0.0
+            || cutoff2.value() >= 0.5 * sample_rate
+            || cutoff2.value() <= cutoff1) {
           return false;
-        if (cutoff2.value() <= cutoff1) return false;
+        }
       }
       else {
         if (cutoff2.has_value()) return false;
       }
-      if (window_setup.length <= 0
-          || static_cast<size_t>(window_setup.length) != (order + 1)) {
-        // Consider logging this specific validation failure if spdlog is
-        // available spdlog::get("OmniDSP")->warn("FIRFilterSpec validation:
-        // window_setup.length ({}) != order + 1 ({})", window_setup.length,
-        // order + 1);
+      if (static_cast<size_t>(window_setup.length) != (order + 1)
+          && window_setup.length != 0) {
+        // Allow length 0 if it means "to be set by order", but by this stage it
+        // should be set. This check is more of an assertion that
+        // Utils::create_spec did its job.
         return false;
       }
-      // WindowSetup itself is validated on construction.
       return true;
     }
   };
 
-  /**
-   * @brief Represents coefficients for a single second-order section (SOS) of
+  /** @brief Represents coefficients for a single second-order section (SOS) of
    * an IIR filter.
    */
   struct OMNIDSP_EXPORT IIRFilterCoef {
     double b0 = 1.0;
     double b1 = 0.0;
     double b2 = 0.0;
-    double a0 = 1.0;
+    double a0 = 1.0;  // Typically normalized to 1 for SOS
     double a1 = 0.0;
     double a2 = 0.0;
   };
 
-  template <typename T>
-  using FIRCoefs = std::vector<T>;
-
   /** @brief Specification for designing an IIR filter. */
   struct OMNIDSP_EXPORT IIRFilterSpec {
     FilterType type = FilterType::Lowpass;
-    size_t order = 4;
+    size_t order = 4;  // Effective order
     double sample_rate = 1.0;
     double cutoff1 = 0.1;
     std::optional<double> cutoff2 = std::nullopt;
-    std::optional<double> passband_ripple_db = std::nullopt;
-    std::optional<double> stopband_attenuation_db = std::nullopt;
+    std::optional<double> passband_ripple_db
+        = std::nullopt;  // e.g., for Chebyshev, Elliptic
+    std::optional<double> stopband_attenuation_db
+        = std::nullopt;  // e.g., for Chebyshev, Elliptic, Kaiserord (FIR)
+    IIRFilterFormat output_format
+        = IIRFilterFormat::SOS;  // Preferred output format for coefficients
 
-    [[nodiscard]] bool validate() const
+    // Constructor for member initialization (used by Utils::create_spec)
+    explicit IIRFilterSpec(
+        FilterType p_type,
+        size_t p_order,
+        double p_sample_rate,
+        double p_cutoff1,
+        std::optional<double> p_cutoff2,
+        std::optional<double> p_passband_ripple_db,
+        std::optional<double> p_stopband_attenuation_db,
+        IIRFilterFormat p_output_format = IIRFilterFormat::SOS)
+        : type(p_type),
+          order(p_order),
+          sample_rate(p_sample_rate),
+          cutoff1(p_cutoff1),
+          cutoff2(std::move(p_cutoff2)),
+          passband_ripple_db(std::move(p_passband_ripple_db)),
+          stopband_attenuation_db(std::move(p_stopband_attenuation_db)),
+          output_format(p_output_format)
+    {}
+
+    // Basic validation
+    [[nodiscard]] bool validate_consistency() const
     {
       if (order == 0) return false;
       if (sample_rate <= 0.0) return false;
       if (cutoff1 <= 0.0 || cutoff1 >= 0.5 * sample_rate) return false;
       if (type == FilterType::Bandpass || type == FilterType::Bandstop) {
-        if (!cutoff2.has_value()) return false;
-        if (cutoff2.value() <= 0.0 || cutoff2.value() >= 0.5 * sample_rate)
+        if (!cutoff2.has_value() || cutoff2.value() <= 0.0
+            || cutoff2.value() >= 0.5 * sample_rate
+            || cutoff2.value() <= cutoff1) {
           return false;
-        if (cutoff2.value() <= cutoff1) return false;
+        }
       }
       else {
         if (cutoff2.has_value()) return false;
@@ -123,15 +195,17 @@ namespace OmniDSP {
     }
   };
 
+  template <typename T>
+  using FIRCoefs = std::vector<T>;  // This alias is fine here or in core_types
+                                    // if very general
+
   /** @brief Plan object for executing Finite Impulse Response (FIR) filters. */
   template <typename T>  // T can be F32, F64, C32, C64
   class OMNIDSP_EXPORT FIRFilterPlan {
-    // friend class OmniDSPImpl;
    public:
-    ~FIRFilterPlan();                               // Definition in .cpp
-    FIRFilterPlan(FIRFilterPlan&& other) noexcept;  // Definition in .cpp
-    FIRFilterPlan& operator=(
-        FIRFilterPlan&& other) noexcept;  // Definition in .cpp
+    ~FIRFilterPlan();
+    FIRFilterPlan(FIRFilterPlan&& other) noexcept;
+    FIRFilterPlan& operator=(FIRFilterPlan&& other) noexcept;
     FIRFilterPlan(const FIRFilterPlan&) = delete;
     FIRFilterPlan& operator=(const FIRFilterPlan&) = delete;
 
@@ -140,63 +214,14 @@ namespace OmniDSP {
     size_t get_order() const;
     size_t get_num_taps() const;
 
-    /**
-     * @brief Creates a FIRFilterPlan using the provided backend and
-     * coefficients.
-     * @param backend A reference to the backend implementation to use.
-     * @param coefficients The FIR filter coefficients (taps).
-     * @return An OmniExpected containing a unique_ptr to the FIRFilterPlan on
-     * success, or a Status on failure.
-     */
     [[nodiscard]] static OmniExpected<std::unique_ptr<FIRFilterPlan<T>>> create(
-        const Abstract::Backend& backend, const std::vector<T>& coefficients)
-    {
-      OmniExpected<std::unique_ptr<Abstract::FIRFilterPlanImpl<T>>>
-          pimpl_expected;
-      if constexpr (std::is_same_v<T, F32>) {
-        pimpl_expected = backend.create_fir_filter_plan_impl_f32(coefficients);
-      }
-      else if constexpr (std::is_same_v<T, F64>) {
-        pimpl_expected = backend.create_fir_filter_plan_impl_f64(coefficients);
-      }
-      else if constexpr (std::is_same_v<T, C32>) {
-        pimpl_expected = backend.create_fir_filter_plan_impl_c32(coefficients);
-      }
-      else if constexpr (std::is_same_v<T, C64>) {
-        pimpl_expected = backend.create_fir_filter_plan_impl_c64(coefficients);
-      }
-      else {
-        // This case should ideally be caught by a static_assert if T is
-        // constrained. For now, returning UnsupportedFeature.
-        // static_assert(always_false<T>::value, "Unsupported type for
-        // FIRFilterPlan::create");
-        return std::unexpected(Status::UnsupportedFeature);
-      }
+        const Abstract::Backend& backend, const FIRFilterSpec& spec);
 
-      if (!pimpl_expected) {
-        return std::unexpected(pimpl_expected.error());
-      }
-
-      auto plan = FIRFilterPlan<T>::create_from_impl(
-          std::move(pimpl_expected.value()));
-      if (!plan) {
-        // This could happen if 'new FIRFilterPlan<T>(...)' fails (e.g.
-        // bad_alloc) or if pimpl_expected.value() was somehow null after a
-        // success.
-        return std::unexpected(Status::Failure);
-      }
-      return plan;
-    }
+    [[nodiscard]] static OmniExpected<std::unique_ptr<FIRFilterPlan<T>>> create(
+        const Abstract::Backend& backend, const FIRCoefs<T>& coefficients);
 
     static std::unique_ptr<FIRFilterPlan<T>> create_from_impl(
-        std::unique_ptr<Abstract::FIRFilterPlanImpl<T>> pimpl)
-    {
-      if (!pimpl) {
-        return nullptr;
-      }
-      return std::unique_ptr<FIRFilterPlan<T>>(
-          new FIRFilterPlan<T>(std::move(pimpl)));
-    }
+        std::unique_ptr<Abstract::FIRFilterPlanImpl<T>> pimpl);
 
    private:
     explicit FIRFilterPlan(
@@ -211,12 +236,11 @@ namespace OmniDSP {
     static_assert(
         !Utils::IsComplex_v<T>,
         "IIRFilterPlan typically requires a real type (F32 or F64).");
-    // friend class OmniDSPImpl;
+
    public:
-    ~IIRFilterPlan();                               // Definition in .cpp
-    IIRFilterPlan(IIRFilterPlan&& other) noexcept;  // Definition in .cpp
-    IIRFilterPlan& operator=(
-        IIRFilterPlan&& other) noexcept;  // Definition in .cpp
+    ~IIRFilterPlan();
+    IIRFilterPlan(IIRFilterPlan&& other) noexcept;
+    IIRFilterPlan& operator=(IIRFilterPlan&& other) noexcept;
     IIRFilterPlan(const IIRFilterPlan&) = delete;
     IIRFilterPlan& operator=(const IIRFilterPlan&) = delete;
 
@@ -225,55 +249,15 @@ namespace OmniDSP {
     size_t get_order() const;
     size_t get_num_sections() const;
 
-    /**
-     * @brief Creates an IIRFilterPlan using the provided backend and SOS
-     * coefficients.
-     * @param backend A reference to the backend implementation to use.
-     * @param sos_coefficients A vector of second-order section coefficients.
-     * @return An OmniExpected containing a unique_ptr to the IIRFilterPlan on
-     * success, or a Status on failure.
-     */
+    [[nodiscard]] static OmniExpected<std::unique_ptr<IIRFilterPlan<T>>> create(
+        const Abstract::Backend& backend, const IIRFilterSpec& spec);
+
     [[nodiscard]] static OmniExpected<std::unique_ptr<IIRFilterPlan<T>>> create(
         const Abstract::Backend& backend,
-        const std::vector<IIRFilterCoef>& sos_coefficients)
-    {
-      OmniExpected<std::unique_ptr<Abstract::IIRFilterPlanImpl<T>>>
-          pimpl_expected;
-      if constexpr (std::is_same_v<T, F32>) {
-        pimpl_expected
-            = backend.create_iir_filter_plan_impl_f32(sos_coefficients);
-      }
-      else if constexpr (std::is_same_v<T, F64>) {
-        pimpl_expected
-            = backend.create_iir_filter_plan_impl_f64(sos_coefficients);
-      }
-      else {
-        // static_assert(always_false<T>::value, "Unsupported type for
-        // IIRFilterPlan::create");
-        return std::unexpected(Status::UnsupportedFeature);
-      }
-
-      if (!pimpl_expected) {
-        return std::unexpected(pimpl_expected.error());
-      }
-
-      auto plan = IIRFilterPlan<T>::create_from_impl(
-          std::move(pimpl_expected.value()));
-      if (!plan) {
-        return std::unexpected(Status::Failure);
-      }
-      return plan;
-    }
+        const std::vector<IIRFilterCoef>& sos_coefficients);
 
     static std::unique_ptr<IIRFilterPlan<T>> create_from_impl(
-        std::unique_ptr<Abstract::IIRFilterPlanImpl<T>> pimpl)
-    {
-      if (!pimpl) {
-        return nullptr;
-      }
-      return std::unique_ptr<IIRFilterPlan<T>>(
-          new IIRFilterPlan<T>(std::move(pimpl)));
-    }
+        std::unique_ptr<Abstract::IIRFilterPlanImpl<T>> pimpl);
 
    private:
     explicit IIRFilterPlan(

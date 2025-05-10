@@ -9,11 +9,10 @@
 #include <ipps.h>  // IPP Signal Processing header
 
 #include <OmniDSP/core_types.hpp>  // For Status, F32, F64, Utils::IsComplex_v
-#include <OmniDSP/resample.hpp>  // For ResampleSpec definition (which now uses WindowSetup)
-                                 // and Abstract::ResamplePlanImpl
-#include <OmniDSP/window.hpp>  // For WindowSetup (though ResampleSpec includes it)
-#include <cstddef>             // For size_t
-#include <memory>              // For std::unique_ptr
+#include <OmniDSP/resample.hpp>    // For ResampleSpec definition
+#include <OmniDSP/window.hpp>      // For WindowSetup
+#include <cstddef>                 // For size_t
+#include <memory>                  // For std::unique_ptr
 #include <span>
 #include <vector>
 
@@ -57,6 +56,14 @@ namespace OmniDSP::IntelIPP {
 
    private:
     // --- Configuration ---
+    // Store the full ResampleSpec to access L/M factors and other resolved
+    // parameters.
+    ResampleSpec spec_;
+    // Individual members for frequently accessed or IPP-specific parameters can
+    // still be kept if it improves clarity or avoids frequent spec_.member
+    // access, but spec_ holds the truth. For now, input_rate_, output_rate_,
+    // quality_ are initialized from spec in the .cpp and can be accessed
+    // directly or via spec_ as needed.
     double input_rate_;
     double output_rate_;
     int quality_;
@@ -68,7 +75,6 @@ namespace OmniDSP::IntelIPP {
     int buffer_size_ = 0;          // Size of the p_buffer_
 
     // Typed pointer to the initialized IPP FIR Spec structure
-    // This will be IppsFIRSpec_32f* or IppsFIRSpec_64f*
     void* p_ipp_fir_spec_ = nullptr;
   };
 

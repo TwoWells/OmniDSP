@@ -7,11 +7,12 @@ message(STATUS "  Configuring Default backend...")
 # List all .cpp files for the default backend implementation.
 set(DEFAULT_BACKEND_SOURCES_INTERNAL # Use a distinct variable name
     "${CMAKE_CURRENT_SOURCE_DIR}/backend.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/fft.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/cqt.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/convolution.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/cqt.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/fft.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/fir_filter.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/iir_filter.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/resample.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filter.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/window.cpp"
 )
 

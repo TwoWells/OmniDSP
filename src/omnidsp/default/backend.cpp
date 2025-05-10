@@ -9,8 +9,9 @@
 #include "convolution.hpp"  // Defines Default::ConvolutionPlanImpl etc.
 #include "cqt.hpp"          // Defines Default::CQTPlanImpl
 #include "fft.hpp"  // Defines Default::FFTPlanImpl, Default::RFFTPlanImpl
-#include "filter.hpp"  // Defines Default::FIRFilterPlanImpl, Default::IIRFilterPlanImpl
-#include "resample.hpp"  // Defines Default::ResamplePlanImpl
+#include "fir_filter.hpp"  // Defines Default::FIRFilterPlanImpl
+#include "iir_filter.hpp"  // Defines Default::IIRFilterPlanImpl
+#include "resample.hpp"    // Defines Default::ResamplePlanImpl
 // The local "default/window.hpp" is used by the specific window overrides.
 
 // Public API headers (needed for types used in method signatures and for public
@@ -1000,40 +1001,57 @@ namespace OmniDSP::Default {
 
   [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTPlanImpl<F32>>>
   Backend::create_cqt_plan_impl_f32(
-      F32 sample_rate,
-      F32 min_freq,
-      F32 max_freq,
-      int bins_per_octave,
-      const WindowSetup& window_setup) const
+      const CQTSpec& spec) const  // Updated signature
   {
     try {
-      return std::make_unique<CQTPlanImpl<F32>>(
-          this, sample_rate, min_freq, max_freq, bins_per_octave, window_setup);
+      // Call the CQTPlanImpl constructor with 'this' (owner_backend) and the
+      // 'spec'
+      return std::make_unique<CQTPlanImpl<F32>>(this, spec);
+    }
+    catch (const OmniException& e) {  // Catch OmniException specifically if
+                                      // thrown by CQTPlanImpl
+      spdlog::get("OmniDSP")->error(
+          "Error creating Default::CQTPlanImpl<F32> from CQTSpec: {} (Status: "
+          "{})",
+          e.what(),
+          static_cast<int>(e.get_status()));
+      return OmniExpected<std::unique_ptr<Abstract::CQTPlanImpl<F32>>>(
+          std::unexpect, e.get_status());
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error(
-          "Error creating Default::CQTPlanImpl<F32>: {}", e.what());
+          "Error creating Default::CQTPlanImpl<F32> from CQTSpec: {}",
+          e.what());
       return OmniExpected<std::unique_ptr<Abstract::CQTPlanImpl<F32>>>(
-          std::unexpect, Status::Failure);
+          std::unexpect,
+          Status::Failure);  // Or a more specific error if identifiable
     }
   }
+
   [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTPlanImpl<F64>>>
   Backend::create_cqt_plan_impl_f64(
-      F64 sample_rate,
-      F64 min_freq,
-      F64 max_freq,
-      int bins_per_octave,
-      const WindowSetup& window_setup) const
+      const CQTSpec& spec) const  // Updated signature
   {
     try {
-      return std::make_unique<CQTPlanImpl<F64>>(
-          this, sample_rate, min_freq, max_freq, bins_per_octave, window_setup);
+      // Call the CQTPlanImpl constructor with 'this' (owner_backend) and the
+      // 'spec'
+      return std::make_unique<Default::CQTPlanImpl<F64>>(this, spec);
+    }
+    catch (const OmniException& e) {
+      spdlog::get("OmniDSP")->error(
+          "Error creating Default::CQTPlanImpl<F64> from CQTSpec: {} (Status: "
+          "{})",
+          e.what(),
+          static_cast<int>(e.get_status()));
+      return OmniExpected<std::unique_ptr<Abstract::CQTPlanImpl<F64>>>(
+          std::unexpect, e.get_status());
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error(
-          "Error creating Default::CQTPlanImpl<F64>: {}", e.what());
+          "Error creating Default::CQTPlanImpl<F64> from CQTSpec: {}",
+          e.what());
       return OmniExpected<std::unique_ptr<Abstract::CQTPlanImpl<F64>>>(
-          std::unexpect, Status::Failure);
+          std::unexpect, Status::Failure);  // Or a more specific error
     }
   }
 
