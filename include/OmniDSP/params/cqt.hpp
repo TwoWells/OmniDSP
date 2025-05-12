@@ -6,11 +6,11 @@
 #ifndef OMNIDSP_PARAMS_CQT_HPP
 #define OMNIDSP_PARAMS_CQT_HPP
 
-#include <optional>  // For potential future optional parameters
-#include <string>    // For std::string in validation messages
-
-#include "OmniDSP/core_types.hpp"  // For OMNIDSP_EXPORT
-#include "OmniDSP/window.hpp"      // For WindowSetup, WindowType
+#include <OmniDSP/core_types.hpp>  // For OMNIDSP_EXPORT
+#include <OmniDSP/window.hpp>      // For WindowSetup, WindowType
+#include <optional>                // For potential future optional parameters
+#include <string>                  // For std::string in validation messages
+#include <utility>                 // For std::move
 
 namespace OmniDSP {
 
@@ -22,26 +22,24 @@ namespace OmniDSP {
    * parameters for the CQT.
    *
    * Construction of this object validates the provided parameters.
+   * Fluent setters are available for modifying parameters after construction.
    */
   struct OMNIDSP_EXPORT CQTParams {
-    double sample_rate;  ///< Sample rate of the input signal in Hz. Must be
-                         ///< positive.
-    double min_freq;     ///< Minimum frequency for the CQT bins in Hz. Must be
-                         ///< positive and less than sample_rate / 2.
-    double max_freq;     ///< Maximum frequency for the CQT bins in Hz. Must be
-                      ///< greater than min_freq and less than sample_rate / 2.
-    int bins_per_octave;  ///< Number of CQT bins per octave. Must be positive.
+    double sample_rate_;  ///< Sample rate of the input signal in Hz. Must be
+                          ///< positive.
+    double min_freq_;     ///< Minimum frequency for the CQT bins in Hz. Must be
+                          ///< positive and less than sample_rate / 2.
+    double max_freq_;     ///< Maximum frequency for the CQT bins in Hz. Must be
+                       ///< greater than min_freq and less than sample_rate / 2.
+    int bins_per_octave_;  ///< Number of CQT bins per octave. Must be positive.
     WindowSetup
-        window_setup;  ///< Windowing function setup for the CQT analysis
-                       ///< windows. The `length` field of this `WindowSetup` is
-                       ///< typically ignored by `Utils::create_spec`, as CQT
-                       ///< kernel lengths are frequency-dependent and
-                       ///< determined internally. The user should specify the
-                       ///< window type and its parameters (e.g., beta for
-                       ///< Kaiser).
-    // std::optional<double> quality_factor_q; // Optional: Override default Q
-    // calculation based on bins_per_octave. std::optional<double>
-    // hop_length_ms;    // Optional: Specify hop length in milliseconds.
+        window_setup_;  ///< Windowing function setup for the CQT analysis
+                        ///< windows. The `length` field of this `WindowSetup`
+                        ///< is typically ignored by `Utils::create_spec`, as
+                        ///< CQT kernel lengths are frequency-dependent and
+                        ///< determined internally. The user should specify the
+                        ///< window type and its parameters (e.g., beta for
+                        ///< Kaiser).
 
     /**
      * @brief Explicit constructor that validates parameters.
@@ -61,7 +59,49 @@ namespace OmniDSP {
         int p_bins_per_octave,
         WindowSetup p_window_setup = WindowSetup{WindowType::Hann, 0});
 
-    // Add any helper methods if needed.
+    // --- Fluent Setters (Declarations Only) ---
+
+    /**
+     * @brief Sets the sample rate.
+     * @param val The new sample rate in Hz.
+     * @return A reference to this CQTParams object.
+     * @throws std::invalid_argument if val is not positive.
+     */
+    CQTParams& sample_rate(double val);
+
+    /**
+     * @brief Sets the minimum frequency.
+     * @param val The new minimum frequency in Hz.
+     * @return A reference to this CQTParams object.
+     * @throws std::invalid_argument if val is not positive or other frequency
+     * constraints are violated.
+     */
+    CQTParams& min_freq(double val);
+
+    /**
+     * @brief Sets the maximum frequency.
+     * @param val The new maximum frequency in Hz.
+     * @return A reference to this CQTParams object.
+     * @throws std::invalid_argument if val is not positive or other frequency
+     * constraints are violated.
+     */
+    CQTParams& max_freq(double val);
+
+    /**
+     * @brief Sets the number of bins per octave.
+     * @param val The new number of bins per octave.
+     * @return A reference to this CQTParams object.
+     * @throws std::invalid_argument if val is not positive.
+     */
+    CQTParams& bins_per_octave(int val);
+
+    /**
+     * @brief Sets the window setup.
+     * @param val The new WindowSetup object. WindowSetup's own constructor
+     * handles its validation.
+     * @return A reference to this CQTParams object.
+     */
+    CQTParams& window_setup(WindowSetup val);
   };
 
 }  // namespace OmniDSP

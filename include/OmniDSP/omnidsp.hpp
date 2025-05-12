@@ -27,7 +27,7 @@
 #include "window.hpp"    // Includes WindowSetup
 
 // Include the backend interface definition - needed for pimpl_ type
-#include "../src/omnidsp/interface/backend.hpp"  // Defines Abstract::Backend
+#include "interface/backend.hpp"  // Defines Abstract::Backend
 
 namespace OmniDSP {
 

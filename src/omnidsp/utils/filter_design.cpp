@@ -90,25 +90,25 @@ namespace OmniDSP::Utils {
 
     size_t final_order;
 
-    if (params.order.has_value()) {
-      final_order = params.order.value();
+    if (params.order_.has_value()) {
+      final_order = params.order_.value();
       // If order is given, characteristics might be for reference or ignored
       // for order calc. We could add a warning if characteristics are also
       // given but order is taking precedence.
       logger->debug("Using user-specified FIR order: {}", final_order);
     }
     else if (
-        params.transition_width.has_value()
-        && params.stopband_attenuation_db.has_value()) {
+        params.transition_width_.has_value()
+        && params.stopband_attenuation_db_.has_value()) {
       // Estimate order based on characteristics
-      if (params.sample_rate
+      if (params.sample_rate_
           <= 0.0) {  // Should have been caught by Params constructor
         return std::unexpected(Status::InvalidArgument);
       }
       final_order = estimate_fir_order_from_specs(
-          params.sample_rate,
-          params.transition_width.value(),
-          params.stopband_attenuation_db.value());
+          params.sample_rate_,
+          params.transition_width_.value(),
+          params.stopband_attenuation_db_.value());
       logger->debug(
           "Estimated FIR order: {} from characteristics.", final_order);
     }
@@ -122,7 +122,7 @@ namespace OmniDSP::Utils {
     }
 
     if (final_order > 10000
-        && params.design_method
+        && params.design_method_
                == FIRFilterDesignMethod::WindowSinc) {  // Arbitrary sanity
                                                         // check limit
       logger->warn(
@@ -135,7 +135,7 @@ namespace OmniDSP::Utils {
     // parameters (e.g., beta). We now set the definitive length for the window
     // based on the final_order.
     WindowSetup final_window_setup
-        = params.window_setup;  // Copy type and params
+        = params.window_setup_;  // Copy type and params
     final_window_setup.length
         = static_cast<int>(final_order + 1);  // Set definitive length
 
@@ -164,11 +164,11 @@ namespace OmniDSP::Utils {
     // Construct the FIRFilterSpec
     try {
       FIRFilterSpec spec(
-          params.type,
+          params.filter_type_,
           final_order,
-          params.sample_rate,
-          params.cutoff1,
-          params.cutoff2,  // std::optional is moved/copied
+          params.sample_rate_,
+          params.cutoff1_,
+          params.cutoff2_,  // std::optional is moved/copied
           final_window_setup);
       // Perform a final consistency check on the created spec if desired
       if (!spec.validate_consistency()) {

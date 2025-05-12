@@ -155,24 +155,11 @@ if(OMNIDSP_BACKEND_INTELIPP_ENABLED AND TARGET OmniDSP::IntelIPP)
 endif()
 
 # --- Generate Export Header for 'OmniDSP' library ---
-message(STATUS "DEBUG: Attempting to generate export header for OmniDSP target...")
-# Ensure EXPORT_FILE_NAME is an absolute path to place it in PROJECT_BINARY_DIR/include
 set(EXPORT_HEADER_ABSOLUTE_PATH "${PROJECT_BINARY_DIR}/include/OmniDSP/omnidsp_export.hpp")
 generate_export_header(OmniDSP
     BASE_NAME OMNIDSP
     EXPORT_FILE_NAME "${EXPORT_HEADER_ABSOLUTE_PATH}" # Use absolute path
 )
-
-# --- DIAGNOSTICS: Check if export header file was created ---
-# The EXPORT_HEADER_PATH variable is now consistent with EXPORT_HEADER_ABSOLUTE_PATH
-if(EXISTS "${EXPORT_HEADER_ABSOLUTE_PATH}")
-    message(STATUS "DEBUG: SUCCESS - omnidsp_export.hpp was generated at ${EXPORT_HEADER_ABSOLUTE_PATH}")
-else()
-    message(WARNING "DEBUG: FAILURE - omnidsp_export.hpp was NOT generated at ${EXPORT_HEADER_ABSOLUTE_PATH}")
-    message(WARNING "DEBUG:   Check OMNIDSP_LIBRARY_TYPE ('${OMNIDSP_LIBRARY_TYPE}') and BUILD_SHARED_LIBS ('${BUILD_SHARED_LIBS}').")
-    message(WARNING "DEBUG:   Actual target type of OmniDSP is '${OMNIDSP_ACTUAL_TARGET_TYPE}'.")
-    message(WARNING "DEBUG:   generate_export_header might not create a file for certain target types (e.g., INTERFACE) or under specific conditions.")
-endif()
 
 # --- Configure omnidsp_config.h ---
 # Reflecting .hpp extension as seen in user's CMake log

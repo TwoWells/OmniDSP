@@ -16,11 +16,11 @@
 #include <utility>    // For std::move
 #include <vector>
 
-#include "OmniDSP/core_types.hpp"  // For Status, OmniExpected, Utils::IsComplex_v, F32, F64 etc.
-#include "OmniDSP/filter.hpp"  // For FIRFilterSpec (which ResampleSpec will embed)
 #include "OmniDSP/omnidsp_export.hpp"  // For OMNIDSP_EXPORT
-#include "OmniDSP/window.hpp"  // For WindowSetup (used by ResampleParams, and indirectly by FIRFilterSpec)
+#include "core_types.hpp"  // For Status, OmniExpected, Utils::IsComplex_v, F32, F64 etc.
+#include "filter.hpp"  // For FIRFilterSpec (which ResampleSpec will embed)
 #include "interface/backend.hpp"  // Defines Abstract::Backend and Abstract::ResamplePlanImpl
+#include "window.hpp"  // For WindowSetup (used by ResampleParams, and indirectly by FIRFilterSpec)
 
 // Forward declaration for ResampleParams, defined in
 // "OmniDSP/params/resample.hpp" namespace OmniDSP { struct ResampleParams; }

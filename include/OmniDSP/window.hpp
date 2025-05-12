@@ -26,7 +26,7 @@
 #include "core_types.hpp"  // For Status, F32, F64, OmniExpected, OmniException etc.
 
 // Include Boost header for Bessel functions
-#include <boost/math/special_functions/bessel.hpp>
+#include "boost/math/special_functions/bessel.hpp"
 
 // Include spdlog for logging
 #include "spdlog/spdlog.h"

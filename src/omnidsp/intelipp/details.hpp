@@ -7,13 +7,13 @@
 #ifndef OMNIDSP_INTELIPP_UTILS_HPP
 #define OMNIDSP_INTELIPP_UTILS_HPP
 
-#include <ippcore.h>  // For IppStatus, ippGetStatusString, IppDataType, Ipp* types
-#include <ipps.h>  // For IPP Spec/State types (IppsFIRSpec_*, IppsIIRState_*)
+#include <iostream>     // For std::cerr
+#include <string>       // For std::string, std::to_string
+#include <type_traits>  // For std::is_same_v
 
-#include <OmniDSP/core_types.hpp>  // For OmniDSP::Status, OmniException, F32, C32 etc.
-#include <iostream>                // For std::cerr
-#include <string>                  // For std::string, std::to_string
-#include <type_traits>             // For std::is_same_v
+#include "OmniDSP/core_types.hpp"  // For OmniDSP::Status, OmniException, F32, C32 etc.
+#include "ipp/ippcore.h"  // For IppStatus, ippGetStatusString, IppDataType, Ipp* types
+#include "ipp/ipps.h"  // For IPP Spec/State types (IppsFIRSpec_*, IppsIIRState_*)
 
 namespace OmniDSP::IntelIPP::Details {
 

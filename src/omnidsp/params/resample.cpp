@@ -1,67 +1,130 @@
 /**
  * @file resample.cpp
- * @brief Implements the constructor for ResampleParams.
+ * @brief Implements the constructor and fluent setters for ResampleParams.
  */
 
-#include <OmniDSP/params/resample.hpp>  // Corresponding header
-#include <stdexcept>                    // For std::invalid_argument
-#include <string>   // For std::to_string, string concatenation
-#include <utility>  // For std::move
+#include <spdlog/spdlog.h>  // Include spdlog for logging
 
-// spdlog could be included here if detailed logging during construction is
-// desired, but typically, throwing an exception is sufficient for parameter
-// validation. #include "spdlog/spdlog.h"
+#include <OmniDSP/params/resample.hpp>  // Corresponding header
+#include <OmniDSP/window.hpp>  // For WindowSetup related to default args
+#include <stdexcept>           // For std::invalid_argument
+#include <string>              // For std::to_string, string concatenation
+#include <utility>             // For std::move
 
 namespace OmniDSP {
 
+  // Constructor (with spdlog integration)
   ResampleParams::ResampleParams(
       double p_input_rate,
       double p_output_rate,
       int p_quality,
       WindowSetup p_window_setup)
-      : input_rate(p_input_rate),
-        output_rate(p_output_rate),
-        quality(p_quality),
-        window_setup(std::move(p_window_setup))  // WindowSetup is validated on
-                                                 // its own construction
+      : input_rate_(p_input_rate),
+        output_rate_(p_output_rate),
+        quality_(p_quality),
+        window_setup_(std::move(p_window_setup))
   {
-    // auto logger = spdlog::get("OmniDSP"); // Example if logging
-    // if (!logger) { logger = spdlog::default_logger(); }
-
-    if (input_rate <= 0.0) {
-      // if(logger) logger->error("ResampleParams: input_rate ({}) must be
-      // positive.", input_rate);
-      throw std::invalid_argument(
-          "ResampleParams: input_rate (" + std::to_string(input_rate)
-          + ") must be positive.");
+    auto logger = spdlog::get("OmniDSP");
+    if (!logger) {
+      logger = spdlog::default_logger();
     }
-    if (output_rate <= 0.0) {
-      // if(logger) logger->error("ResampleParams: output_rate ({}) must be
-      // positive.", output_rate);
-      throw std::invalid_argument(
-          "ResampleParams: output_rate (" + std::to_string(output_rate)
-          + ") must be positive.");
-    }
-    if (quality < 0 || quality > 15) {  // Example quality range, adjust as per
-                                        // your library's design
-      // if(logger) logger->error("ResampleParams: quality ({}) is out of
-      // expected range [0, 15].", quality);
-      throw std::invalid_argument(
-          "ResampleParams: quality (" + std::to_string(quality)
-          + ") is out of the typical range [0, 15].");
-    }
+    std::string msg;
 
-    // The `window_setup` member is of type WindowSetup, which already validates
-    // its own parameters (like window type, beta for Kaiser, etc.) upon its
-    // construction. The `length` field within `p_window_setup` is explicitly
-    // set to 0 in the default argument of ResampleParams' constructor,
-    // signifying that the actual window length for the prototype FIR filter
-    // will be determined by the `Utils::create_spec(const ResampleParams&)`
-    // function based on `input_rate`, `output_rate`, and `quality`.
+    if (input_rate_ <= 0.0) {
+      msg = "ResampleParams Constructor: input_rate_ ("
+            + std::to_string(input_rate_) + ") must be positive.";
+      if (logger) logger->error(msg);
+      throw std::invalid_argument(msg);
+    }
+    if (output_rate_ <= 0.0) {
+      msg = "ResampleParams Constructor: output_rate ("
+            + std::to_string(output_rate_) + ") must be positive.";
+      if (logger) logger->error(msg);
+      throw std::invalid_argument(msg);
+    }
+    if (quality_ < 0 || quality_ > 15) {
+      msg = "ResampleParams Constructor: quality (" + std::to_string(quality_)
+            + ") is out of the typical range [0, 15].";
+      if (logger)
+        logger->error(msg);  // Log as error as it's a validation failure
+      throw std::invalid_argument(msg);
+    }
+    // WindowSetup is validated by its own constructor.
+    if (logger)
+      logger->trace(
+          "ResampleParams constructed: IR={}, OR={}, Q={}, WinType={}",
+          input_rate_,
+          output_rate_,
+          quality_,
+          static_cast<int>(window_setup_.type));
+  }
 
-    // if(logger) logger->trace("ResampleParams constructed: IR={}, OR={}, Q={},
-    // WinType={}", input_rate, output_rate, quality,
-    // static_cast<int>(window_setup.type));
+  // --- Fluent Setter Definitions ---
+
+  ResampleParams& ResampleParams::input_rate(double val)
+  {
+    auto logger = spdlog::get("OmniDSP");
+    if (!logger) {
+      logger = spdlog::default_logger();
+    }
+    if (val <= 0.0) {
+      std::string msg = "ResampleParams::input_rate: value ("
+                        + std::to_string(val) + ") must be positive.";
+      if (logger) logger->error(msg);
+      throw std::invalid_argument(msg);
+    }
+    input_rate_ = val;
+    if (logger) logger->trace("ResampleParams::input_rate to {}", val);
+    return *this;
+  }
+
+  ResampleParams& ResampleParams::output_rate(double val)
+  {
+    auto logger = spdlog::get("OmniDSP");
+    if (!logger) {
+      logger = spdlog::default_logger();
+    }
+    if (val <= 0.0) {
+      std::string msg = "ResampleParams::output_rate: value ("
+                        + std::to_string(val) + ") must be positive.";
+      if (logger) logger->error(msg);
+      throw std::invalid_argument(msg);
+    }
+    output_rate_ = val;
+    if (logger) logger->trace("ResampleParams::output_rate to {}", val);
+    return *this;
+  }
+
+  ResampleParams& ResampleParams::quality(int val)
+  {
+    auto logger = spdlog::get("OmniDSP");
+    if (!logger) {
+      logger = spdlog::default_logger();
+    }
+    if (val < 0 || val > 15) {  // Example quality range
+      std::string msg = "ResampleParams::quality: value (" + std::to_string(val)
+                        + ") is out of the typical range [0, 15].";
+      if (logger) logger->error(msg);
+      throw std::invalid_argument(msg);
+    }
+    quality_ = val;
+    if (logger) logger->trace("ResampleParams::quality to {}", val);
+    return *this;
+  }
+
+  ResampleParams& ResampleParams::window_setup(WindowSetup val)
+  {
+    // WindowSetup's constructor handles its own validation and logging.
+    window_setup_ = std::move(val);
+    auto logger = spdlog::get("OmniDSP");
+    if (!logger) {
+      logger = spdlog::default_logger();
+    }
+    if (logger)
+      logger->trace(
+          "ResampleParams::window_setup to type {}",
+          static_cast<int>(window_setup_.type));
+    return *this;
   }
 
 }  // namespace OmniDSP

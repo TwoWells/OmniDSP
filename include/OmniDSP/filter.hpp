@@ -17,9 +17,7 @@
 
 #include "OmniDSP/core_types.hpp"  // For Status, OmniExpected, F32, C32, Utils::IsComplex_v etc.
 #include "OmniDSP/types/filter.hpp"  // For FilterType, FIRFilterDesignMethod, IIRFilterFormat
-#include "OmniDSP/window.hpp"  // For WindowSetup
-
-// Corrected include path for Abstract::Backend.
+#include "OmniDSP/window.hpp"     // For WindowSetup
 #include "interface/backend.hpp"  // Defines Abstract::Backend
 
 // Forward declare backend Impl classes (already present)
@@ -214,11 +212,13 @@ namespace OmniDSP {
     size_t get_order() const;
     size_t get_num_taps() const;
 
-    [[nodiscard]] static OmniExpected<std::unique_ptr<FIRFilterPlan<T>>> create(
-        const Abstract::Backend& backend, const FIRFilterSpec& spec);
+    // [[nodiscard]] static OmniExpected<std::unique_ptr<FIRFilterPlan<T>>>
+    // create(
+    //     const Abstract::Backend& backend, const FIRFilterSpec& spec);
 
-    [[nodiscard]] static OmniExpected<std::unique_ptr<FIRFilterPlan<T>>> create(
-        const Abstract::Backend& backend, const FIRCoefs<T>& coefficients);
+    // [[nodiscard]] static OmniExpected<std::unique_ptr<FIRFilterPlan<T>>>
+    // create(
+    //     const Abstract::Backend& backend, const FIRCoefs<T>& coefficients);
 
     static std::unique_ptr<FIRFilterPlan<T>> create_from_impl(
         std::unique_ptr<Abstract::FIRFilterPlanImpl<T>> pimpl);
@@ -249,12 +249,14 @@ namespace OmniDSP {
     size_t get_order() const;
     size_t get_num_sections() const;
 
-    [[nodiscard]] static OmniExpected<std::unique_ptr<IIRFilterPlan<T>>> create(
-        const Abstract::Backend& backend, const IIRFilterSpec& spec);
+    // [[nodiscard]] static OmniExpected<std::unique_ptr<IIRFilterPlan<T>>>
+    // create(
+    //     const Abstract::Backend& backend, const IIRFilterSpec& spec);
 
-    [[nodiscard]] static OmniExpected<std::unique_ptr<IIRFilterPlan<T>>> create(
-        const Abstract::Backend& backend,
-        const std::vector<IIRFilterCoef>& sos_coefficients);
+    // [[nodiscard]] static OmniExpected<std::unique_ptr<IIRFilterPlan<T>>>
+    // create(
+    //     const Abstract::Backend& backend,
+    //     const std::vector<IIRFilterCoef>& sos_coefficients);
 
     static std::unique_ptr<IIRFilterPlan<T>> create_from_impl(
         std::unique_ptr<Abstract::IIRFilterPlanImpl<T>> pimpl);

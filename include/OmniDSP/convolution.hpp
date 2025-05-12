@@ -14,12 +14,11 @@
 #include <utility>  // For std::move
 #include <vector>
 
+#include "OmniDSP/core_types.hpp"  // Includes Status, OmniExpected, F32, C32,
 #include "OmniDSP/omnidsp_export.hpp"
-#include "core_types.hpp"  // Includes Status, OmniExpected, F32, C32,
-                           // AND NOW ConvolutionType, ConvolutionMethod
-
+// AND NOW ConvolutionType, ConvolutionMethod
 // Include Abstract::Backend for the static create method
-#include "../src/omnidsp/interface/backend.hpp"  // Defines Abstract::Backend
+#include "interface/backend.hpp"  // Defines Abstract::Backend
 
 // Forward declare Abstract Impl classes
 namespace OmniDSP::Abstract {

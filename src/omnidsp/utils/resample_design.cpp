@@ -88,13 +88,13 @@ namespace OmniDSP::Utils {
     // and declared in "src/omnidsp/utils/resample.hpp" (which might need
     // adjustment if it's a public util)
     Status factor_status = calculate_resampling_factors(
-        params.input_rate, params.output_rate, L, M);
+        params.input_rate_, params.output_rate_, L, M);
     if (factor_status != Status::Success) {
       logger->error(
           "Failed to calculate resampling factors L/M for IR={}, OR={}. "
           "Status: {}",
-          params.input_rate,
-          params.output_rate,
+          params.input_rate_,
+          params.output_rate_,
           static_cast<int>(factor_status));
       return std::unexpected(factor_status);
     }
@@ -111,8 +111,8 @@ namespace OmniDSP::Utils {
         "Calculated resampling factors: L={}, M={} for IR={}, OR={}",
         L,
         M,
-        params.input_rate,
-        params.output_rate);
+        params.input_rate_,
+        params.output_rate_);
 
     double normalized_prototype_cutoff
         = 1.0 / (2.0 * static_cast<double>(std::max(L, M)));
@@ -120,13 +120,13 @@ namespace OmniDSP::Utils {
     // Call the helper from the Internal namespace
     size_t prototype_order
         = Internal::estimate_prototype_fir_order_for_resample(
-            L, M, params.quality, normalized_prototype_cutoff);
+            L, M, params.quality_, normalized_prototype_cutoff);
     logger->debug(
         "Estimated prototype FIR filter order: {} for L={}, M={}, Quality={}",
         prototype_order,
         L,
         M,
-        params.quality);
+        params.quality_);
 
     double prototype_design_sample_rate = 2.0;
 
@@ -138,7 +138,7 @@ namespace OmniDSP::Utils {
         prototype_order,
         std::nullopt,
         std::nullopt,
-        params.window_setup,
+        params.window_setup_,
         FIRFilterDesignMethod::WindowSinc);
 
     // Call the public Utils::create_spec for FIRFilterParams
@@ -158,9 +158,9 @@ namespace OmniDSP::Utils {
 
     try {
       ResampleSpec spec(
-          params.input_rate,
-          params.output_rate,
-          params.quality,
+          params.input_rate_,
+          params.output_rate_,
+          params.quality_,
           L,
           M,
           std::move(final_prototype_fir_spec));

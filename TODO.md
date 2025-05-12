@@ -89,7 +89,7 @@
 
 ### **Resampling Module** (Processor - Stateful)
 
-- \[ \] Define `ResampleParams`, `ResampleSpec`. (Already Done?)
+- \[x\] Define `ResampleParams`, `ResampleSpec`. (Already Done?)
 - \[ \] Implement `ResampleProcessor` class (with `execute`, `reset`).
 - \[ \] Implement `create_resample_processor_impl` in `Abstract::Backend` / `Default::Backend`.
 - \[ \] Review/Implement `Default::ResampleProcessorImpl` managing internal state (e.g., filter state, phase) and `reset`.

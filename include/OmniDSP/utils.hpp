@@ -7,26 +7,15 @@
 #ifndef OMNIDSP_UTILS_HPP
 #define OMNIDSP_UTILS_HPP
 
-#include "OmniDSP/core_types.hpp"  // For OmniExpected, Status
-
-// Forward declare Params and Spec types to avoid full header includes here if
-// possible, or include them if they are lightweight and frequently needed
-// together. For now, let's include them as they define the interface.
-#include "OmniDSP/cqt.hpp"     // For CQTSpec
-#include "OmniDSP/filter.hpp"  // For FIRFilterSpec (and later IIRFilterSpec)
-#include "OmniDSP/params/cqt.hpp"  // For CQTParams
-#include "OmniDSP/params/fir_filter.hpp"
-#include "OmniDSP/params/resample.hpp"
-#include "OmniDSP/resample.hpp"  // For ResampleSpec
-
-// Add other Params/Spec includes as more Utils::create_spec overloads are added
-
-namespace OmniDSP {
-  // Forward declarations for Spec types if not fully included above
-  // struct FIRFilterSpec; (already included via filter.hpp)
-  // struct ResampleSpec;  (already included via resample.hpp)
-  // struct CQTSpec;       (already included via cqt.hpp)
-}
+#include "core_types.hpp"  // For OmniExpected, Status
+// Params
+#include "params/cqt.hpp"
+#include "params/fir_filter.hpp"
+#include "params/resample.hpp"
+// Specs
+#include "cqt.hpp"
+#include "filter.hpp"
+#include "resample.hpp"
 
 namespace OmniDSP::Utils {
 

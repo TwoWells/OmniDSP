@@ -42,19 +42,19 @@ namespace OmniDSP::Utils {
 
     // 1. Calculate Quality Factor (Q)
     // Q = 1 / (2^(1/B) - 1), where B is bins_per_octave
-    if (params.bins_per_octave
+    if (params.bins_per_octave_
         <= 0) {  // Should be caught by CQTParams constructor
       return std::unexpected(Status::InvalidArgument);
     }
     double q_factor
         = 1.0
-          / (std::pow(2.0, 1.0 / static_cast<double>(params.bins_per_octave))
+          / (std::pow(2.0, 1.0 / static_cast<double>(params.bins_per_octave_))
              - 1.0);
     if (q_factor <= 0) {
       logger->error(
           "Calculated Q factor ({}) is not positive. Bins per octave: {}",
           q_factor,
-          params.bins_per_octave);
+          params.bins_per_octave_);
       return std::unexpected(Status::Failure);  // Mathematical impossibility
                                                 // with valid bins_per_octave
     }
@@ -72,16 +72,16 @@ namespace OmniDSP::Utils {
     // from params.min_freq. A more advanced approach might adjust min_freq to
     // align with a base like C0.
 
-    double current_freq = params.min_freq;
+    double current_freq = params.min_freq_;
     while (current_freq
-           <= params.max_freq
+           <= params.max_freq_
                   + 1e-6) {  // Add epsilon for floating point comparison
-      if (current_freq >= params.min_freq - 1e-6
-          && current_freq < params.sample_rate / 2.0) {
+      if (current_freq >= params.min_freq_ - 1e-6
+          && current_freq < params.sample_rate_ / 2.0) {
         all_bin_frequencies.push_back(current_freq);
       }
       current_freq
-          *= std::pow(2.0, 1.0 / static_cast<double>(params.bins_per_octave));
+          *= std::pow(2.0, 1.0 / static_cast<double>(params.bins_per_octave_));
       if (all_bin_frequencies.size() > 10000) {  // Safety break
         logger->warn(
             "CQT bin generation exceeded 10000 bins, breaking. Check frequency "
@@ -94,9 +94,9 @@ namespace OmniDSP::Utils {
       logger->error(
           "No CQT bins generated for the given parameters. MinFreq={}, "
           "MaxFreq={}, SR={}",
-          params.min_freq,
-          params.max_freq,
-          params.sample_rate);
+          params.min_freq_,
+          params.max_freq_,
+          params.sample_rate_);
       return std::unexpected(Status::InvalidArgument);
     }
     std::sort(all_bin_frequencies.begin(), all_bin_frequencies.end());
@@ -110,7 +110,7 @@ namespace OmniDSP::Utils {
     // all_bin_frequencies[0]. Hop length can be a fraction of the longest
     // kernel.
     double longest_kernel_len_approx_samples
-        = q_factor * params.sample_rate / all_bin_frequencies[0];
+        = q_factor * params.sample_rate_ / all_bin_frequencies[0];
     size_t hop_length = static_cast<size_t>(std::max(
         1.0,
         std::round(
@@ -137,11 +137,11 @@ namespace OmniDSP::Utils {
 
       for (double bin_freq : all_bin_frequencies) {
         if (bin_freq
-            < params.sample_rate
+            < params.sample_rate_
                   / 2.0) {  // Ensure below Nyquist of the original sample rate
           current_octave_bins.push_back(bin_freq);
           int N_k = static_cast<int>(std::max(
-              1.0, std::round(q_factor * params.sample_rate / bin_freq)));
+              1.0, std::round(q_factor * params.sample_rate_ / bin_freq)));
           current_octave_kernel_lengths.push_back(N_k);
           if (static_cast<size_t>(N_k) > max_kernel_len_at_orig_sr) {
             max_kernel_len_at_orig_sr = N_k;
@@ -152,7 +152,7 @@ namespace OmniDSP::Utils {
               "CQT bin frequency {} Hz is at or above Nyquist ({} Hz), "
               "skipping.",
               bin_freq,
-              params.sample_rate / 2.0);
+              params.sample_rate_ / 2.0);
         }
       }
 
@@ -173,7 +173,7 @@ namespace OmniDSP::Utils {
         }
 
         WindowSetup octave_win_setup
-            = params.window_setup;  // Corrected: use params.window_setup
+            = params.window_setup_;  // Corrected: use params.window_setup
         // Length in octave_win_setup is per-kernel, not a single value for the
         // octave. The CQTOctaveSpec's window_setup_for_octave is the *template*
         // (type, params). Actual window generation uses
@@ -181,8 +181,8 @@ namespace OmniDSP::Utils {
         octave_win_setup.length = 0;  // Signify that length varies per kernel
 
         octave_specs.emplace_back(
-            params.sample_rate,  // Effective SR for this "single" octave
-                                 // processing
+            params.sample_rate_,  // Effective SR for this "single" octave
+                                  // processing
             fft_len,
             current_octave_bins,  // Use the filtered list of bins for this
                                   // octave
@@ -206,11 +206,11 @@ namespace OmniDSP::Utils {
     // 5. Construct and return CQTSpec
     try {
       CQTSpec spec(
-          params.sample_rate,
-          params.min_freq,
-          params.max_freq,
-          params.bins_per_octave,
-          params.window_setup,  // Pass the original window_setup from params
+          params.sample_rate_,
+          params.min_freq_,
+          params.max_freq_,
+          params.bins_per_octave_,
+          params.window_setup_,  // Pass the original window_setup from params
           q_factor,
           hop_length,
           all_bin_frequencies,  // This will be the filtered list if some bins

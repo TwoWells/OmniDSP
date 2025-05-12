@@ -6,9 +6,6 @@
 #ifndef OMNIDSP_INTELIPP_FFT_HPP
 #define OMNIDSP_INTELIPP_FFT_HPP
 
-#include <ipp.h>  // Main IPP header including ipps.h
-
-#include <OmniDSP/core_types.hpp>  // For F32, C32, F64, C64, Status, OmniException, Utils::* etc.
 #include <cmath>  // For log2
 #include <complex>
 #include <memory>       // For std::unique_ptr
@@ -17,8 +14,10 @@
 #include <type_traits>  // For std::is_same_v
 #include <vector>
 
-#include "../interface/backend.hpp"  // Defines abstract::FFTPlanImpl, abstract::RFFTPlanImpl
+#include "OmniDSP/core_types.hpp"  // For F32, C32, F64, C64, Status, OmniException, Utils::* etc.
 #include "details.hpp"
+#include "interface/backend.hpp"  // Defines abstract::FFTPlanImpl, abstract::RFFTPlanImpl
+#include "ipp.h"                  // Main IPP header including ipps.h
 
 namespace OmniDSP::IntelIPP {
 

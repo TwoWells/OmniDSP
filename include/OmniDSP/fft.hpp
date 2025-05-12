@@ -13,8 +13,8 @@
 #include <utility>  // For std::move
 #include <vector>
 
+#include "OmniDSP/core_types.hpp"
 #include "OmniDSP/omnidsp_export.hpp"
-#include "core_types.hpp"
 
 // Forward declare backend Impl class
 namespace OmniDSP::Abstract {
