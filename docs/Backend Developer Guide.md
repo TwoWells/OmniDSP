@@ -1,99 +1,90 @@
-## OmniDSP Backend Developer Guide
+## OmniDSP Backend Developer Guide (Post-Refactor)
 
-This document provides a roadmap and guidelines for developers looking to integrate a new computation backend (e.g., for specific hardware like GPUs/FPGAs, or a different acceleration library) into the OmniDSP library. It outlines the necessary steps and architectural patterns involved.
+This document provides guidelines for developers integrating new computation backends into the OmniDSP library, reflecting the architecture using distinct stateless `Plan` and stateful `Processor` objects, created via `create_plan`/`create_processor` factory methods.
 
-Refer to the main Design Philosophy.md for the overarching architectural goals.
+Refer to the main `Design Philosophy.md` for overarching goals.
 
 **1\. Overview: Directory Structure**
 
-The core C++ source code (src/omnidsp/) is organized as follows:
-
-- **interface/**: Defines the abstract backend contract (`AbstractBackend`, `*PlanImpl` interfaces) in the `OmniDSP::abstract` namespace. Also implements the public Plan class wrappers (e.g., `FFTPlan`, `CQTPlan`) which forward calls to the backend-specific `*PlanImpl` via the Pimpl pattern.
-- **default/**: Contains the default backend implementation using **standard C++** in the `OmniDSP::default` namespace.
-  - backend.hpp/.cpp: Defines and implements `DefaultBackend`. **Crucially, `DefaultBackend` inherits from `abstract::AbstractBackend` and provides baseline implementations for all virtual methods.**
-  - fft.cpp, cqt.cpp, etc.: Implementations of `DefaultFFTPlanImpl`, `DefaultCQTPlanImpl`, etc.
-  - window.cpp: Implementation of default window generation helper functions.
-  - filter_design.cpp (Example): Implementation of default filter design functions.
-- **accelerate/**, **onemkl/**, **intelipp/**, **(your_backend)/**: Directories for specific backend implementations (e.g., in `OmniDSP::accelerate`, `OmniDSP::onemkl`, `OmniDSP::intelipp` namespaces), mirroring the structure of `default/`.
-- **omnidsp.cpp**: Implementation of the main public `OmniDSP` class (factory, dispatch logic).
-- **utils/**: Contains common utility functions (e.g., resampling factor calculation, filter design helpers) potentially used by multiple backends.
+- **`interface/`**: Defines abstract contracts in `OmniDSP::abstract`.
+  - `backend.hpp`: `Abstract::Backend` interface.
+  - `plan_impl.hpp` (example): Abstract interfaces like `Abstract::FFTPlanImpl`, `Abstract::ConvolutionPlanImpl`.
+  - `processor_impl.hpp` (example): Abstract interfaces like `Abstract::FIRFilterProcessorImpl`, `Abstract::ResampleProcessorImpl`.
+  - `fft.cpp`, `filter.cpp`, etc.: Public `Plan`/`Processor` wrappers (`FFTPlan`, `FIRFilterProcessor`) using Pimpl.
+- **`default/`**: Contains the default C++ backend in `OmniDSP::default`.
+  - `backend.hpp/.cpp`: `Default::Backend` class (inherits `Abstract::Backend`).
+  - `fft_plan.cpp`, `fir_filter_processor.cpp`, etc.: Implementations of `Default::*PlanImpl` and `Default::*ProcessorImpl`.
+- **`dispatcher/`**: `Dispatcher::Backend` implementation (inherits `Abstract::Backend`).
+- **`accelerate/`, `onemkl/`, `intelipp/`, `(your_namespace)/`**: Specific backend implementations (e.g., `Accelerate::Backend`).
+  - **Must inherit `OmniDSP::Default::Backend`**.
+  - Implementations of `YourNamespace::*PlanImpl` and `YourNamespace::*ProcessorImpl`.
+- **`params/`**: `[Type]Params` source files.
+- **`utils/`**: `Utils::create_spec` implementations.
+- **`omnidsp.cpp`**: `OmniDSP` class implementation.
 
 **2\. Overview: Backend Architecture**
 
-OmniDSP uses a combination of the **Pimpl (Pointer to Implementation) idiom** and the **Strategy pattern** (with implementation inheritance) to support multiple backends:
+- **`OmniDSP` (Public Class):** User-facing entry point. Holds `pimpl_` (`std::unique_ptr<Abstract::Backend>`). Created via `OmniDSP::create()`. Acts as factory via `create_plan`/`create_processor`.
+- **`Abstract::Backend` (Interface):** Defines the pure virtual contract (`get_backend()`) and distinct virtual factory methods for creating plan/processor implementations:
+  - `create_*_plan_impl(const SetupOrSpecOrCoefs&)` -> `OmniExpected<std::unique_ptr<Abstract::*PlanImpl>>`
+  - `create_*_processor_impl(const SetupOrSpecOrCoefs&)` -> `OmniExpected<std::unique_ptr<Abstract::*ProcessorImpl>>`
+    Also defines virtual methods for one-off operations (`convolve_impl`, etc.).
+- **`Default::Backend` (Base Implementation):** Inherits `Abstract::Backend`. Provides standard C++ implementations for **all** virtual methods. **Base class for optimized backends.**
+- **`YourNamespace::Backend` (Optimized Backend):** Inherits `OmniDSP::Default::Backend`. Overrides methods it optimizes (specific `create_*_plan_impl`, `create_*_processor_impl`, one-offs).
+- **`Dispatcher::Backend` (Dispatching Strategy):** Inherits `Abstract::Backend`. Holds primary and override backend instances. Overrides all factory/one-off methods to route calls.
+- **`Abstract::*PlanImpl` (Stateless Impl Interface):** Defines interface for backend-specific stateless plan implementations (e.g., `execute`).
+- **`Abstract::*ProcessorImpl` (Stateful Impl Interface):** Defines interface for backend-specific stateful processor implementations (e.g., `execute`, `reset`, internal state management).
+- **`YourNamespace::*PlanImpl` / `YourNamespace::*ProcessorImpl` (Concrete Impls):** Implement the respective interfaces using the backend's API.
 
-- **OmniDSP (Public Class):** The user-facing class (`OmniDSP/include/OmniDSP/omnidsp.hpp`). Holds `pimpl_` (a `std::unique_ptr<OmniDSP::abstract::AbstractBackend>`). Uses templates for its public methods.
-- **AbstractBackend (Backend Interface):** An abstract base class (`src/omnidsp/interface/backend.hpp`) in the `OmniDSP::abstract` namespace defining the virtual interface.
-  - **Pure Virtual Functions (= 0):** Define methods that _every_ backend (including Default) absolutely must provide a unique implementation for (e.g., `get_backend()`).
-  - **Virtual Functions (No \= 0):** Define methods where a reasonable default implementation is possible (e.g., one-off operations, plan factories, design functions). `DefaultBackend` provides these baseline implementations. Concrete backends can optionally override these for optimization.
-- **DefaultBackend (Default Backend Class):** A concrete implementation (`src/omnidsp/default/`) in the `OmniDSP::default` namespace, derived from `abstract::AbstractBackend`. Provides baseline implementations (using standard C++) for all virtual methods defined in `AbstractBackend`. **Serves as the base class for other optimized backends.**
-- **YourBackend (Concrete Backend Class):** The class you create (e.g., `CudaBackend`) in its own namespace (e.g., `OmniDSP::cuda`). **Should inherit from `OmniDSP::default::DefaultBackend`**. Overrides functions for optimization, relying on `DefaultBackend` for non-optimized operations.
-- **\*PlanImpl (Plan Interfaces):** Abstract base classes (e.g., `abstract::FFTPlanImpl`) in `src/omnidsp/interface/backend.hpp` defining the interfaces for backend-specific plan implementations.
-- **YourBackend\*PlanImpl (Concrete Plan Classes):** Classes implementing the `*PlanImpl` interfaces using your backend's API (e.g., `cuda::CudaFFTPlanImpl`). These are created by `YourBackend::create_*_plan_*` methods (which override the corresponding methods from `DefaultBackend`).
-- **OmniDSP::create (Factory):** Static factory (`src/omnidsp/omnidsp.cpp`) instantiating the correct concrete `*Backend` class (e.g., `default::DefaultBackend`, `accelerate::AccelerateBackend`, `intelipp::IntelIPPBackend`, `onemkl::OneMKLBackend`, `your_backend::YourBackend`).
+**3\. Implementing the Core Backend Class (`YourNamespace::Backend`)**
 
-**3\. Implementing the Core Backend Class (YourBackend)**
-
-- **Inheritance:** Your class (e.g., `namespace OmniDSP::your_backend { class YourBackend final : public OmniDSP::default::DefaultBackend { ... }; }`) **should inherit from `OmniDSP::default::DefaultBackend`**. This allows you to only override the methods you want to optimize.
-- **Location:** Define in `src/omnidsp/your_backend/backend.hpp` and `.cpp`.
+- **Inheritance:** `namespace OmniDSP::your_namespace { class Backend final : public OmniDSP::Default::Backend { ... }; }`.
 - **Override Virtual Functions:**
-  - **`get_backend():`** You **must** override this pure virtual function to return your backend's unique `Backend` enum value.
-  - **Focus on Optimizations:** Identify operations your backend accelerates better than the default implementation provided by `DefaultBackend`.
-  - **Override Plan Factories (`create_*_plan_*`):** If your backend provides an optimized Plan implementation (e.g., `your_backend::YourFFTPlanImpl`), you **must** override the corresponding factory method (e.g., `create_fft_plan_c32`) from `DefaultBackend`. Your override should:
-    - Attempt to create an instance of your backend-specific implementation (e.g., `std::make_unique<your_backend::YourFFTPlanImpl<C32>>(...)`). Catch any exceptions.
-    - If creation fails, return `std::unexpected(Status::Failure)` or a more specific error code.
-    - If creation succeeds, return the implementation pointer wrapped in the public Plan interface using the static factory: `return FFTPlan<C32>::create_from_impl(std::move(your_impl_ptr));`.
-  - **Override Others (Optional):** Override one-off operations (`convolve_*`, `fft_*`), window generation, or filter design methods _only if_ your backend offers specific, optimized implementations superior to the default provided by `DefaultBackend`. For methods you don't override, the implementation from `DefaultBackend` will be used automatically via inheritance.
-- **Use `override`:** Mark all overridden virtual functions with the `override` keyword.
+  - **`get_backend()`:** **Must** override.
+  - **Plan Factories (`create_*_plan_impl`):** Override if your backend provides an optimized stateless `YourNamespace::*PlanImpl`. Implement overrides for relevant `Setup`, `Spec`, or `Coefs` inputs.
+  - **Processor Factories (`create_*_processor_impl`):** Override if your backend provides an optimized stateful `YourNamespace::*ProcessorImpl`. Implement overrides for relevant `Setup`, `Spec`, or `Coefs` inputs.
+  - **Coefficient/Resource Generation (`generate_*_coeffs`):** Override if optimized generation from `Spec` exists.
+  - **One-Off Operations:** Override if specifically optimized.
+- Use `override`. If a factory method is not overridden, the call falls through to `Default::Backend`.
 
-**4\. Implementing Plan Classes (YourBackend\*PlanImpl)**
+**4\. Implementing Plan Implementation Classes (`YourNamespace::*PlanImpl`) - Stateless**
 
-- **Inheritance:** Create classes (e.g., `your_backend::YourFFTPlanImpl`) inheriting from the corresponding base interface (`abstract::FFTPlanImpl<C32>`, etc.).
-- **Location:** Define within your backend-specific directory (`src/omnidsp/your_backend/`).
-- **Implementation:** Implement the constructor (setup backend resources, precompute data), destructor (cleanup backend resources), `execute`, `reset` (if stateful), and getter methods required by the `*PlanImpl` interface, using your backend's specific API calls. Ensure constructors throw appropriate exceptions on failure.
+- **Inheritance:** Inherit from `Abstract::*PlanImpl<DataType>`.
+- **Constructor:** Takes `Setup`, `Spec`, or `Coefs`. Performs backend setup, precomputation. Throws on failure.
+- **Destructor:** Cleans up backend resources.
+- **`execute(...)`:** Implements the core stateless DSP operation using your backend's API. Must be reentrant if intended for sharing across threads.
 
-**5\. Example: Leveraging Inheritance and Overridden Plans**
+**5\. Implementing Processor Implementation Classes (`YourNamespace::*ProcessorImpl`) - Stateful**
 
-- If `MyBackend` inherits `DefaultBackend` and only overrides `create_fft_plan_c32`, then:
-  - A call to `myBackendInstance->create_fft_plan_c32(...)` will execute `MyBackend`'s overridden factory, returning a `MyFFTPlanImpl`.
-  - A call to `myBackendInstance->create_convolution_plan_f32(...)` will execute `DefaultBackend`'s implementation (since `MyBackend` didn't override it).
-  - If a complex plan implementation inherited from `DefaultBackend` (e.g., `default::DefaultCQTPlanImpl`) needs an FFT plan, it will call `owner->create_fft_plan_c32(...)`. Since the `owner` is actually `MyBackend`, this virtual call will correctly dispatch to `MyBackend::create_fft_plan_c32`, thus using the optimized FFT plan within the otherwise default CQT logic.
+- **Inheritance:** Inherit from `Abstract::*ProcessorImpl<DataType>`.
+- **Internal State:** Define member variables to hold the necessary operational state (e.g., delay lines).
+- **Constructor:** Takes `Setup`, `Spec`, or `Coefs`. Performs backend setup, precomputation, **and initializes internal state**. Throws on failure.
+- **Destructor:** Cleans up backend resources and state.
+- **`execute(...)`:** Implements the core stateful DSP operation, **reading and modifying internal state**.
+- **`reset()`:** Implements the logic to reset the internal state variables to their initial conditions.
 
-**6\. Integrating with the Factory (OmniDSP::create)**
+**6\. The `Dispatcher::Backend`**
 
-- Add an enum value to `Backend` in `OmniDSP/include/OmniDSP/core_types.hpp`.
-- Add a case `Backend::YourBackend:` block in the `switch` statement in `src/omnidsp/omnidsp.cpp`, guarded by an `#if OMNIDSP_ENABLED_BACKEND_YOURBACKEND` (or similar CMake variable defined in `omnidsp_config.h`), to instantiate `YourBackend`: `pimpl = abstract::create_your_backend();`.
-- Conditionally include `your_backend/backend.hpp` in `src/omnidsp/omnidsp.cpp` using `#if`.
-- Implement the factory function `std::unique_ptr<abstract::AbstractBackend> abstract::create_your_backend()` in `src/omnidsp/your_backend/backend.cpp` (outside the namespace) to return `std::make_unique<your_backend::YourBackend>()`.
+- **Location:** `src/omnidsp/dispatcher/backend.hpp` and `.cpp`.
+- **Inheritance:** `class DispatcherBackend final : public OmniDSP::Abstract::Backend { ... };`.
+- **Constructor:** Takes primary `Abstract::Backend` and map of `OperationCategory` to override `Abstract::Backend` instances.
+- **Override All Factory/One-Off Methods:** For every `create_*_plan_impl`, `create_*_processor_impl`, and one-off method in `Abstract::Backend`:
+  1. Determine the `OperationCategory`.
+  2. Check override map.
+  3. Forward call to override backend instance or primary backend instance.
 
-**7\. Integrating with the Build System (CMake)**
+**7\. Integrating with the Factory (`OmniDSP::create`)**
 
-- Add a CMake option (`OMNIDSP_ENABLE_YOURBACKEND`) in `cmake/project_options.cmake` (or `cmake/backend.cmake`).
-- Create `cmake/backend/yourbackend.cmake`:
-  - Check the `OMNIDSP_ENABLE_YOURBACKEND` option.
-  - If enabled, check platform compatibility if necessary.
-  - Use `find_package` to find your backend's external dependencies (libraries, headers).
-  - If dependencies are found:
-    - Set `OMNIDSP_ENABLED_YOURBACKEND` to `TRUE` (using `CACHE BOOL FORCE`).
-    - Create an `INTERFACE IMPORTED GLOBAL` target named `OmniDSP::yourbackend`.
-    - Set the `INTERFACE_INCLUDE_DIRECTORIES`, `INTERFACE_LINK_LIBRARIES`, `INTERFACE_COMPILE_DEFINITIONS`, etc., properties on `OmniDSP::yourbackend` based on the found dependencies.
-    - Add any necessary compile definitions specifically for enabling your backend's code paths (e.g., `target_compile_definitions(OmniDSP::yourbackend INTERFACE OMNIDSP_USE_YOURBACKEND_IMPL=1)`).
-  - If dependencies are not found or the option is disabled, ensure `OMNIDSP_ENABLED_YOURBACKEND` is set to `FALSE`.
-- Update `cmake/backend.cmake` to unconditionally `include(cmake/backend/yourbackend.cmake)`.
-- Update `cmake/target_definitions.cmake`:
-  - Define a list variable `YOURBACKEND_SOURCES` containing all `.cpp` files for your backend implementation.
-  - Conditionally add your backend's source files to the main `omnidsp` library target using a generator expression: `target_sources(omnidsp PRIVATE $<$<BOOL:${OMNIDSP_ENABLED_YOURBACKEND}>:${YOURBACKEND_SOURCES}>)`.
-  - Conditionally link the main `omnidsp` target against your backend's interface target: `target_link_libraries(omnidsp PRIVATE $<$<BOOL:${OMNIDSP_ENABLED_YOURBACKEND}>:OmniDSP::yourbackend>)`.
-- Update `cmake/omnidsp_config.h.in`:
-  - Add `#cmakedefine OMNIDSP_ENABLED_BACKEND_YOURBACKEND @OMNIDSP_ENABLED_YOURBACKEND@`
-  - Add `#ifndef OMNIDSP_ENABLED_BACKEND_YOURBACKEND` / `#define OMNIDSP_ENABLED_BACKEND_YOURBACKEND 0` / `#endif` block.
+- (Remains the same as previous version - `OmniDSP::create` handles instantiation of single backends or the `Dispatcher::Backend`).
 
-**8\. Adhering to API Conventions**
+**8\. Integrating with the Build System (CMake)**
 
-- Use `std::span<T>` for output parameters in functions like window generators and `Plan::execute`. Always check `output.size()` against required size.
-- Use `double` for configuration parameters in Spec objects (sample rates, window shape params) for consistency. The backend implementation can cast to `float` internally if needed.
-- Return `Status` or `OmniExpected<T>` from all fallible operations, including Plan factories and execute methods. Use the error checking macros (`OMNI_CHECK_*_STATUS_THROW`, `OMNI_CHECK_*_STATUS_RETURN`) provided in backend utility headers (e.g., `intelipp/utils.hpp`) or define your own.
-- Ensure `*PlanImpl` constructors throw appropriate exceptions (`OmniException` with a relevant `Status` code, `std::invalid_argument`, `std::runtime_error`, `std::bad_alloc`) on setup failure. The corresponding `AbstractBackend::create_*_plan_*` method (whether in `DefaultBackend` or your override) should catch these and return `std::unexpected(Status::Failure)` or a more specific error code.
-- Use the core type utilities (`Utils::IsComplex_v`, `Utils::GetRealType`, `Utils::GetComplexType`) from `core_types.hpp` for type checking and mapping.
+- (Remains the same as previous version - `Dispatcher::Backend` is a core component).
 
-By inheriting from `DefaultBackend` and selectively overriding methods, you can efficiently integrate new, partially or fully optimized backends.
+**9\. Adhering to API Conventions**
+
+- Use `std::span`, `OmniExpected`, error handling, exceptions.
+- `*PlanImpl` / `*ProcessorImpl` constructors throw exceptions on failure. Factory methods (`create_*_plan_impl`, `create_*_processor_impl`) catch these and return `std::unexpected`.
+- Ensure `*ProcessorImpl` correctly manages internal state and implements `reset()`.
+
+This structure provides clear separation between stateless (`Plan`) and stateful (`Processor`) operations, reflected both in the user-facing API (`create_plan`/`create_processor`) and the backend implementation interfaces (`Abstract::*PlanImpl`/`Abstract::*ProcessorImpl`).

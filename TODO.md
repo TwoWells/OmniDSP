@@ -1,160 +1,179 @@
-# **OmniDSP Project TODO List (Cleaned)**
+# **OmniDSP Project TODO List (Post-Refactor Proposal)**
 
-**Goal:** Outline the development tasks for the OmniDSP library, including C++ core features, backend implementations, Python bindings, build system refactoring, testing, and documentation, ensuring alignment with the design philosophy and current architecture.
+**Goal:** Outline development tasks reflecting the `Plan` (stateless) vs. `Processor` (stateful) distinction, `create_plan`/`create_processor` factories, and internal state management for Processors.
 
 **Directory Structure Reminder:**
 
-- src/omnidsp/interface/: Abstract interfaces (`AbstractBackend`, `*PlanImpl`) in `OmniDSP::abstract` namespace and public Plan wrappers (fft.cpp, cqt.cpp, etc.).
-- src/omnidsp/default/: Default backend implementation (`DefaultBackend`, `Default*PlanImpl`, etc.) in `OmniDSP::default` namespace.
-- src/omnidsp/{accelerate, onemkl, intelipp, your_backend}/: Specific backend implementations inheriting from `DefaultBackend` in their respective namespaces (e.g., `OmniDSP::accelerate`).
-- src/omnidsp/omnidsp.cpp: Public `OmniDSP` class implementation (factory, dispatch).
-- src/omnidsp/utils/: Common utilities (resampling factors, filter design helpers).
+- `include/OmniDSP/`: Public API headers (`OmniDSP`, `FFTPlan`, `FIRFilterProcessor`, etc.).
+- `include/OmniDSP/params/`: `[Type]Params` structs.
+- `include/OmniDSP/types/`: Domain-specific enums (`OperationCategory`, etc.).
+- `src/omnidsp/interface/`: `Abstract::Backend`, `Abstract::*PlanImpl`, `Abstract::*ProcessorImpl`, public `Plan`/`Processor` wrappers.
+- `src/omnidsp/default/`: `Default::Backend`, `Default::*PlanImpl`, `Default::*ProcessorImpl`.
+- `src/omnidsp/dispatcher/`: `Dispatcher::Backend`.
+- `src/omnidsp/{accelerate, onemkl, intelipp}/`: Specific backends (e.g., `Accelerate::Backend`).
+- `src/omnidsp/params/`: `Params` constructors/fluent methods.
+- `src/omnidsp/utils/`: `Utils::create_spec` implementations.
+- `src/omnidsp/omnidsp.cpp`: `OmniDSP` class implementation.
+- `src/omnidsp_py/`: Python bindings.
+
+---
 
 ## **High Priority / Blocking Tasks**
 
-- **Implement Filter Module:** _(Crucial core feature)_
-  - \[x\] Implement `IntelIPPFIRFilterPlanImpl` (src/omnidsp/intelipp/filter.cpp) - _(Structure exists, needs IPP implementation)_.
-  - \[x\] Implement `IntelIPPIIRFilterPlanImpl` (src/omnidsp/intelipp/filter.cpp) - _(Structure exists, needs IPP implementation)_.
-  - \[x\] Implement `create_fir_filter_plan_*` factory methods in `IntelIPPBackend`.
-  - \[x\] Implement `create_iir_filter_plan_*` factory methods in `IntelIPPBackend`.
-  - \[ \] Implement `design_iir_filter_*` methods in `DefaultBackend` (src/omnidsp/default/filter_design.cpp or similar).
-  - \[ \] Add Python bindings for Filter Plans and design methods.
-  - \[ \] Add comprehensive C++ and Python tests for the Filter module across all backends _(See Testing section)_.
-- **Complete ResamplePlan Infrastructure:**
-  - \[ \] **Add/Update Tests:** _(See Testing section)_.
-  - \[ \] **Update Python Bindings:**
-    - Ensure Python `create_resample_plan` wrapper (src/omnidsp_py/api.py) correctly passes `ResampleSpec` information.
-    - Ensure `src/omnidsp_py/bindings.cpp` binds the `create_resample_plan` C++ signature taking `ResampleSpec`.
-- **Review Core Implementations:**
-  - \[ \] Review C++ implementations (.cpp files) across `interface/`, `default/`, `accelerate/`, `onemkl/`, `intelipp/` against the latest `design_philosophy.md` and `backend_developer_guide.md` to ensure compliance with Pimpl, inheritance (`DefaultBackend`), API contracts, and naming conventions (`abstract::AbstractBackend`, `default::DefaultBackend`, etc.).
-  - \[ \] Review error propagation from backends (ensure sufficient detail is captured/logged via `OmniException` or return status).
+- **Implement `Dispatcher::Backend` & Advanced Configuration:**
+  - \[ \] Define `OperationCategory` enum.
+  - \[ \] Implement `Dispatcher::Backend` class.
+  - \[ \] Implement `OmniDSP::create` overloads supporting overrides.
+  - \[ \] Add tests for `Dispatcher::Backend` configurations.
+- **Implement Core Factory Methods & Execution Objects:**
+  - \[ \] Implement `OmniDSP::create_plan` overloads (taking `Params`/`Coefs`) for stateless operations (FFT, Conv?, Corr?).
+  - \[ \] Implement `OmniDSP::create_processor` overloads (taking `Params`/`Coefs`) for stateful operations (FIR, IIR, Resample, CQT?).
+  - \[ \] Define public `[Type]Plan` classes (e.g., `FFTPlan`) with `execute`.
+  - \[ \] Define public `[Type]Processor` classes (e.g., `FIRFilterProcessor`) with `execute` and `reset`.
+  - \[ \] Add `create_*_plan_impl` virtual methods to `Abstract::Backend`.
+  - \[ \] Add `create_*_processor_impl` virtual methods to `Abstract::Backend`.
+  - \[ \] Implement these factory methods in `Default::Backend` and optimized backends.
+  - \[ \] Implement `Default::*PlanImpl` classes (stateless).
+  - \[ \] Implement `Default::*ProcessorImpl` classes (stateful, internal state, `reset` logic).
+- **Complete `Params` -> `Setup`/`Spec` Internal Flow:**
+  - \[ \] Finalize `[Type]Params` fluent interfaces.
+  - \[ \] Implement internal `Params::to_setup()` / `Params::to_spec()` methods.
+  - \[ \] Ensure validation logic is called correctly during conversion.
+  - \[ \] Refine/Confirm role of `Utils::create_spec` (likely called by `Params::to_spec`).
+- **Implement IIR Filter Module:**
+  - \[ \] Define `IIRFilterParams`, `IIRFilterSpec`, `IIRFilterCoefs`.
+  - \[ \] Implement `IIRFilterProcessor` class (with `execute`, `reset`).
+  - \[ \] Implement `create_iir_filter_processor_impl` in `Abstract::Backend` / `Default::Backend`.
+  - \[ \] Python bindings and tests for `IIRFilterProcessor`.
+- **Implement Zero-Phase Filtering (`filtfilt`):**
+  - \[ \] Add `OmniDSP::zero_phase_filter` methods (likely stateless one-off).
+  - \[ \] Add `zero_phase_filter_impl` to `Abstract::Backend`.
+  - \[ \] Implement in `Default::Backend`.
+  - \[ \] Python bindings and tests.
+- **Define Core Enums:**
+  - \[ \] Define `PaddingMode` enum.
+  - \[ \] Move `ConvolutionType`, `ConvolutionMethod` to `types/convolution.hpp`.
 
 ## **Core Library Features**
 
-### **Default Backend Highway Refactor**
+### **Convolution / Correlation Module** (Likely Plan - Stateless)
 
-- \[x] **Build System:** Ensure Highway dependency is correctly found/configured in CMake (`cmake/depend/highway.cmake`) and linked to the `DefaultBackend`. _(Completed)_
-- \[ \] **Incremental Refactoring:** _(Approach incrementally, benchmark each step)_
-  - \[ \] Refactor simpler functions first (e.g., window generation helpers in `default/window.cpp`, basic math within filters).
-  - \[ \] Refactor core filtering loops (FIR/IIR in `default/filter.cpp`, polyphase in `default/resample.cpp`).
-  - \[ \] Refactor convolution/correlation (`default/convolution.cpp`) if direct methods are used or FFT steps can be optimized.
-  - \[ \] Refactor FFT (`default/fft.cpp`) last (potentially complex).
-  - \[ \] Review CQT (`default/cqt.cpp`) for optimizable loops.
-- \[ \] **Utilities:** Review/update `src/omnidsp/utils/hwy.hpp` with any necessary helper functions for the refactoring.
-- \[ \] **Testing:** Add specific tests comparing Highway implementations against non-SIMD results within the Default backend.
-- \[ \] **Benchmarking:** Benchmark Highway-enabled Default backend against the pure C++ version and other backends.
+- \[ \] Define `ConvolutionParams`, `CorrelationParams`, `ConvolutionSetup`?, `CorrelationSetup`?, `ConvolutionCoefs<T>`, `CorrelationCoefs<T>`.
+- \[ \] Implement `ConvolutionPlan`, `CorrelationPlan` classes (with `execute`).
+- \[ \] Implement `OmniDSP::create_plan` for Conv/Corr.
+- \[ \] Implement `create_convolution_plan_impl`, `create_correlation_plan_impl` in `Abstract::Backend` / `Default::Backend`.
+- \[ \] Implement `Default::ConvolutionPlanImpl`, `Default::CorrelationPlanImpl`.
+- \[ \] Implement one-off `convolve_*`/`correlate_*` in `OmniDSP`.
+- \[ \] (Opt) `OneMKL::ConvolutionPlanImpl` / `OneMKL::CorrelationPlanImpl`.
+- \[ \] (Opt) `IntelIPP::ConvolutionPlanImpl` / `IntelIPP::CorrelationPlanImpl`.
+- \[ \] Python bindings and tests.
 
-### **Intel IPP Backend Enhancements** _(Medium-to-High Priority)_
+### **Default Backend Highway Refactor** _(Ongoing)_
 
-- \[ \] **Arbitrary Length FFT/DFT:** Modify `IntelIPPFFTPlanImpl` and `IntelIPPRFFTPlanImpl` (`intelipp/fft.cpp`) to use `ippsDFT*` functions when the length is not a power of two, allowing `FFTPlan`/`RFFTPlan` to support arbitrary lengths with this backend.
-- \[ \] **DCT Implementation:** Implement `IntelIPPDCTPlanImpl` using IPP DCT routines (`src/omnidsp/intelipp/dct.cpp` - New files). _(See DCT/DST Module)_
-- \[ \] **DST Implementation:** Implement `IntelIPPDSTPlanImpl` using IPP RFFT routines (`src/omnidsp/intelipp/dst.cpp` - New files). _(See DCT/DST Module)_
-- \[ \] **DWT Implementation:** Implement `IntelIPPDWTPlanImpl` using IPP Wavelet routines (`src/omnidsp/intelipp/dwt.cpp` - New files). _(See DWT/DHT Module)_
-- \[ \] **DHT Implementation:** Implement `IntelIPPDHTPlanImpl` using IPP Hilbert routines (`src/omnidsp/intelipp/dht.cpp` - New files). _(See DWT/DHT Module)_
-- \[ \] **Convolution/Correlation:** Implement `IntelIPPConvolutionPlanImpl` / `IntelIPPCorrelationPlanImpl` (Optional optimization, possibly using IPP's own Conv/Corr).
+- \[ \] Continue applying Highway SIMD to `Default::Backend` implementations.
 
-### **CQT Module**
+### **Intel IPP Backend Enhancements (`IntelIPP::Backend`)**
 
-- \[ \] Review CQT Plan implementation (`interface/cqt.cpp`, `default/cqt.cpp`) - Ensure `DefaultCQTPlanImpl` correctly uses the owner's `create_fft_plan_*` and `create_resample_plan_*` methods.
-- \[ \] Optimize CQT kernel calculation (`default/cqt.cpp`).
-- \[ \] Refine hop length handling in recursive CQT implementation.
-- \[ \] Tune CQT scaling factor.
+- \[ \] Arbitrary Length FFT/DFT in `IntelIPP::FFTPlanImpl`.
+- \[ \] `IntelIPP::DCTPlanImpl`/`IntelIPP::DSTPlanImpl`.
+- \[ \] `IntelIPP::DWTPlanImpl`/`IntelIPP::DHTPlanImpl`.
+- \[ \] Implement `IntelIPP::FIRFilterProcessorImpl`, `IntelIPP::IIRFilterProcessorImpl`, `IntelIPP::ResampleProcessorImpl` (including internal state and `reset`).
 
-### **Convolution / Correlation Module**
+### **CQT Module** (Likely Processor - Stateful due to recursive nature/overlap)
 
-- \[ \] Implement 'same' and 'full' modes correctly in one-off `convolve_*`/`correlate_*` methods in `DefaultBackend` (`default/backend.cpp`). _(Plan implementations handle this, but one-off functions need review)_.
-- \[ \] **Implement oneMKL Convolution/Correlation Plans:** _(Optional optimization)_
-  - \[ \] Create `src/omnidsp/onemkl/convolution.hpp` and `src/omnidsp/onemkl/convolution.cpp`.
-  - \[ \] Implement `OneMKLConvolutionPlanImpl` using `vslConvNewTask1D`, `vslsConvExec1D`, `vslConvDeleteTask` (and `d` variants).
-  - \[ \] Implement `OneMKLCorrelationPlanImpl` using `vslCorrNewTask1D`, `vslsCorrExec1D`, `vslCorrDeleteTask` (and `d` variants).
-  - \[ \] Override `create_convolution_plan_*` / `create_correlation_plan_*` in `OneMKLBackend` to return these plans.
-  - \[ \] Add tests specifically for the oneMKL convolution/correlation implementations.
-- \[ \] Add C++ and Python tests covering all convolution/correlation modes for one-off functions and plans.
+- \[ \] Define `CQTParams`, `CQTSpec`.
+- \[ \] Implement `CQTProcessor` class (with `execute`, `reset`).
+- \[ \] Implement `create_cqt_processor_impl` in `Abstract::Backend` / `Default::Backend`.
+- \[ \] Review/Implement `Default::CQTProcessorImpl` constructor taking `CQTSpec`, managing internal state, and `reset`.
+- \[ \] Python bindings and tests for `CQTProcessor`.
 
-### **STFT Module**
+### **Resampling Module** (Processor - Stateful)
 
-- \[ \] Design `STFTPlan` interface (consider using `FFTPlan` or `RFFTPlan` internally).
-- \[ \] Implement `DefaultSTFTPlanImpl` (`default/stft.cpp` - New file).
-- \[x] ~~Implement `OneMKLSTFTPlanImpl`~~ _(Inherited from Default)_.
-- \[x] ~~Implement `IntelIPPSTFTPlanImpl`~~ _(Inherited from Default)_.
-- \[ \] Implement `abstract::AbstractBackend::create_stft_plan_*` factory methods (pure virtual).
-- \[ \] Implement factory methods in `DefaultBackend` and other relevant backends.
-- \[ \] Include inverse STFT (ISTFT) capability.
-- \[ \] Add Python bindings for STFT/ISTFT.
-- \[ \] Add tests for STFT module.
+- \[ \] Define `ResampleParams`, `ResampleSpec`. (Already Done?)
+- \[ \] Implement `ResampleProcessor` class (with `execute`, `reset`).
+- \[ \] Implement `create_resample_processor_impl` in `Abstract::Backend` / `Default::Backend`.
+- \[ \] Review/Implement `Default::ResampleProcessorImpl` managing internal state (e.g., filter state, phase) and `reset`.
+- \[ \] Review/Implement `IntelIPP::ResampleProcessorImpl`.
+- \[ \] Python bindings and tests for `ResampleProcessor`.
 
-### **DCT/DST Module** _(Medium Priority)_
+### **STFT Module** (Likely Plan - Stateless, assumes user handles framing/overlap)
 
-- \[ \] Design public `DCTPlan` / `DSTPlan` interfaces (consider different types I-IV).
-- \[ \] Define `abstract::DCTPlanImpl` / `abstract::DSTPlanImpl` interfaces.
-- \[ \] Implement `DefaultDCTPlanImpl` / `DefaultDSTPlanImpl` (likely using FFT-based algorithms).
-- \[ \] Implement `OneMKLDCTPlanImpl` / `OneMKLDSTPlanImpl` using oneMKL Trigonometric Transform routines (`src/omnidsp/onemkl/dct_dst.cpp` - New files).
-- \[ \] Implement `IntelIPPDCTPlanImpl` _(See IPP Enhancements)_.
-- \[ \] Implement `IntelIPPDSTPlanImpl` _(See IPP Enhancements)_.
-- \[ \] Add `create_dct_plan_*` / `create_dst_plan_*` factory methods to `AbstractBackend` (pure virtual).
-- \[ \] Implement factory methods in `DefaultBackend`, `OneMKLBackend`, and `IntelIPPBackend`.
-- \[ \] Add Python bindings for DCT/DST.
-- \[ \] Add tests for DCT/DST module, comparing backends.
+- \[ \] Design `STFTParams`, `STFTSetup`.
+- \[ \] Implement `STFTPlan` class (with `execute`).
+- \[ \] Add `create_stft_plan_impl` to `Abstract::Backend`. Python bindings & tests.
 
-### **DWT/DHT Module** _(Low-to-Medium Priority)_
+### **DCT/DST Module** (Likely Plan - Stateless transform)
 
-- \[ \] Design `DWTPlan` / `DHTPlan` interfaces.
-- \[ \] Define `abstract::DWTPlanImpl` / `abstract::DHTPlanImpl` interfaces.
-- \[ \] Implement Default versions (likely complex or using FFT).
-- \[ \] Implement `IntelIPPDWTPlanImpl` _(See IPP Enhancements)_.
-- \[ \] Implement `IntelIPPDHTPlanImpl` _(See IPP Enhancements)_.
-- \[ \] Add factory methods to `AbstractBackend` and relevant backends.
-- \[ \] Add Python bindings and tests.
+- \[ \] Design `DCTParams`/`DSTParams`, `DCTSetup`/`DSTSetup`.
+- \[ \] Implement `DCTPlan`/`DSTPlan` classes (with `execute`).
+- \[ \] Implement `OneMKL::DCTPlanImpl`/`OneMKL::DSTPlanImpl`.
+- \[ \] Implement `IntelIPP::DCTPlanImpl`/`IntelIPP::DSTPlanImpl`.
+- \[ \] Add `create_dct_plan_impl`/`create_dst_plan_impl` to `Abstract::Backend`. Python bindings & tests.
+
+### **DWT/DHT Module** (Likely Plan - Stateless transform)
+
+- \[ \] Design `DWTParams`/`DHTParams`, `DWTSetup`/`DHTSetup`.
+- \[ \] Implement `DWTPlan`/`DHTPlan` classes (with `execute`).
+- \[ \] Implement `IntelIPP::DWTPlanImpl`/`IntelIPP::DHTPlanImpl`. Python bindings & tests.
 
 ## **Python Bindings (omnidsp_py)**
 
-- \[ \] Review/Add bindings for Convolution/Correlation modes ('same'/'full') in one-off functions (`bindings.cpp`).
-- \[ \] Ensure seamless NumPy integration (dtype handling, `std::span` usage in Plan wrappers).
-- \[ \] Investigate memory view / zero-copy support for NumPy arrays passed to Plan `execute`.
-- \[ \] Expose more Plan parameters via getters if useful (e.g., CQT frequencies).
-- \[ \] Allow pre-allocated output arrays in convenience functions (`api.py`).
-- \[ \] Review overall Python API for "Pythonic" feel and ease of use.
+- \[ \] Bind all `[Type]Params`, `[Type]Coefs`.
+- \[ \] Bind `[Type]Plan` classes and their `execute`.
+- \[ \] Bind `[Type]Processor` classes and their `execute`, `reset`.
+- \[ \] Bind `OmniDSP::create_plan`, `OmniDSP::create_processor` overloads.
+- \[ \] Bind `OmniDSP::zero_phase_filter`.
 
 ## **Build System & CI**
 
-- **CI Configuration:** _(Set up early to catch issues)_
-  - \[ \] Configure full CI via GitHub Actions (or similar) for Linux, macOS, and Windows.
-  - \[ \] Include builds for all available backends.
-  - \[ \] Integrate C++ and Python test execution.
-  - \[ \] Add code coverage checks (ensure CMake flags don't hide code).
-- **Packaging:** _(Plan early)_
-  - \[ \] Investigate static linking options for dependencies.
-  - \[ \] Create Conan package for the C++ library.
-  - \[ \] Build Python wheels for distribution on PyPI (handle backend selection/inclusion robustly).
+- \[ \] Full CI for Linux, macOS, Windows.
+- \[ \] Code coverage checks.
+- \[ \] Conan package, Python wheels.
 
 ## **Testing** _(High Priority)_
 
-- **Coverage:**
-  - \[ \] Add tests for Filter module (once implemented).
-  - \[ \] Add tests for STFT module (once implemented).
-  - \[ \] Add specific tests for Convolution/Correlation modes ('same'/'full') in one-off functions.
-  - \[ \] Add tests specifically for the IntelIPP backend implementations (FFT/DFT, Filter, Resample, Window, **DCT**, **DWT**, **DHT**).
-  - \[ \] Increase parameter coverage for existing tests (edge cases, different lengths, zero-length, etc.).
-  - \[ \] Test arbitrary FFT lengths for IPP backend.
-- **Correctness:**
-  - \[ \] Add backend-specific tests to verify optimized implementations (Accelerate FFT, IntelIPP\*, OneMKL FFT, **OneMKL Conv/Corr**, **OneMKL DCT/DST**) against the default/reference results.
-  - \[ \] Test inherited methods for optimized backends (ensure fallback to `DefaultBackend` works correctly and uses correct sub-plans).
-  - \[ \] Test backend fallback logic (e.g., unsupported FFT lengths for Accelerate/oneMKL).
-- **Performance:**
-  - \[ \] Formalize and run a performance benchmarking suite across backends.
+- \[ \] Test `OmniDSP::create_plan`, `OmniDSP::create_processor` paths.
+- \[ \] Test `[Type]Plan::execute`.
+- \[ \] Test `[Type]Processor::execute` and `[Type]Processor::reset` statefulness.
+- \[ \] Test `OmniDSP::zero_phase_filter`.
+- \[ \] Test IIR, Conv/Corr, STFT, DCT/DST, DWT/DHT modules.
+- \[ \] Test specific backend implementations (e.g., `IntelIPP::*`, `OneMKL::*`) against `Default::*`.
+- \[ \] Test `Dispatcher::Backend` with various backend override combinations.
 
-## **Documentation & Examples** _(Update incrementally)_
+## **Documentation & Examples** _(Update Incrementally)_
 
-- \[ \] Update/Generate Doxygen documentation for the latest C++ API (including Filter module, ResampleSpec, updated namespaces, IntelIPP backend).
-- \[ \] Update/Generate Sphinx documentation for the Python API (including Filter module, ResampleSpec).
-- \[ \] Add C++ and Python usage examples for the Filter module.
-- \[ \] Add C++ and Python usage examples for the Resample module.
-- \[ \] Update README and CONTRIBUTING.md if any procedures changed significantly (e.g., build steps, contribution guide reflecting new structure).
-- \[ \] Add backend-specific performance notes or usage guidelines to documentation.
+- \[ \] **Update `Design Philosophy.md`** (In progress - reflect `Plan`/`Processor`, factories).
+- \[ \] **Update `Backend Developer Guide.md`** (Needs update for `Plan`/`Processor`, factories, `*Impl` state).
+- \[ \] **Update `README.md`** (In progress - reflect `Plan`/`Processor`, factories).
+- \[ \] Doxygen for C++ API, Sphinx for Python API.
+- \[ \] Add/Update examples demonstrating `Plan` vs `Processor` usage, including `reset()`.
 
 ## **Backend Enhancements / Future Work**
 
-- \[ \] Refine backend selection logic (`OmniDSP::create`) and error handling/reporting.
-- \[ \] Add `OmniDSP::get_available_backends()` method.
-- \[ \] Add support for GPU acceleration (CUDA/OpenCL) via optional backends (`src/omnidsp/cuda/`...).
-- \[ \] Explore asynchronous execution model (e.g., Submission object pattern).
+- \[ \] Refine `OmniDSP::create` logic, error handling.
+- \[ \] `OmniDSP::get_available_backends()`.
+- \[ \] GPU acceleration (e.g., `CUDA::Backend`).
+- \[ \] Asynchronous execution (May require rethinking internal state if applied to Processors).
+
+---
+
+**DONE (Conceptual & Partial):**
+
+- \[x] Refactor `WindowSpec` to `WindowSetup`.
+- \[x] Define `FIRFilterParams`, `ResampleParams`, `CQTParams`.
+- \[x] Establish new directory structure.
+- \[x] Define `FilterType`, `FIRFilterDesignMethod`, `IIRFilterFormat`.
+- \[x] Refine/Define `FIRFilterSpec`, `ResampleSpec`, `CQTSpec`.
+- \[x] Implement `Utils::create_spec` for FIR, Resample, CQT.
+- \[x] Establish "Params -> Spec -> Plan/Processor" pipeline conceptually.
+- \[x] Update CMakeLists.txt & Includes.
+- \[x] Establish `Optimized::Backend` inherits `Default::Backend` pattern.
+- \[x] Resolve `ResamplePlan<T>::create` linker issues (Note: This task might be obsolete or need renaming if Resampling becomes a Processor).
+- \[x] Update backend `create_cqt_plan_impl` for `CQTSpec` (Note: Needs changing to `create_cqt_processor_impl`).
+- \[x] Update `Default::ResamplePlanImpl`, `IntelIPP::ResamplePlanImpl`, `Default::CQTPlanImpl` for `Spec` (Note: Needs changing to `*ProcessorImpl`).
+
+---
+
+**REMOVED / OBSOLETE:**
+
+- ~~Standardize State Management (Implement `Plan::initialize_state()`, Define `StateType`, Update `Plan::execute` to accept `StateType&`)~~ - Replaced by internal state in `Processor`.

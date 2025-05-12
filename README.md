@@ -2,7 +2,7 @@
 
 OmniDSP is a C++ library designed for high-performance Digital Signal Processing tasks, with Python bindings provided via pybind11. It aims to offer efficient implementations of common DSP algorithms by abstracting optimized backend libraries like Intel oneMKL (including IPP) and Apple Accelerate.
 
-**Core Design Philosophy:** OmniDSP centralizes backend management. Users create an `OmniDSP` object, which selects and initializes the appropriate backend (MKL or Accelerate) based on the build environment. This instance then serves as the primary interface for accessing all DSP functionalities. This approach makes the link between backend configuration and function execution explicit, ensuring clarity and control, rather than using standalone functions that might obscure their dependence on the backend state or setup. It also provides a foundation for flexibility, such as allowing multiple backend instances or _potential_ runtime switching in the _future_.
+**Core Design Philosophy:** OmniDSP centralizes backend management. Users create an `OmniDSP` object using `OmniDSP::create(BackendType)`, which selects and initializes the appropriate backend (e.g., `Default::Backend`, `OneMKL::Backend`). This instance serves as the primary interface for all DSP functionalities. Users configure operations using `[Type]Params` objects and then call distinct factory methods: `create_plan(...)` for stateless operations (returning a `[Type]Plan`) or `create_processor(...)` for stateful operations (returning a `[Type]Processor`). `Processor` objects manage their internal state. Advanced configurations allow dispatching operations to different backends per category using a `Dispatcher::Backend`.
 
 ## Table of Contents
 
@@ -21,84 +21,100 @@ OmniDSP is a C++ library designed for high-performance Digital Signal Processing
 
 ## Features
 
-- **Centralized Backend Management:** The main `OmniDSP` class handles backend selection (Intel oneMKL/IPP or Apple Accelerate), initialization, and serves as the explicit context for all operations.
-- **Plan-Based Operations:** Uses efficient, stateful `Plan` objects for operations requiring setup (FFT, CQT, Resampling). Plans are created via factory methods on an `OmniDSP` instance, ensuring they operate within the correct backend context.
-  - **Fast Fourier Transforms (FFT):** `FFTPlan` and `RFFTPlan` for Complex-to-Complex, Real-to-Complex, and Complex-to-Real transforms with configurable normalization.
-  - **Constant-Q Transform (CQT):** `CQTPlan` for efficient recursive CQT computation with configurable parameters.
-  - **Resampling:** `ResamplePlan` for configurable FIR filtering and downsampling/upsampling.
-- **Stateless Operations:** Common DSP operations accessed directly via methods on an `OmniDSP` instance, making their execution context clear.
-  - **Convolution / Correlation:** 1D linear convolution and correlation (`valid` mode currently implemented).
-  - **Window Coefficient Generation:** Methods to generate coefficients for standard windows (Hann, Hamming, Kaiser, Flattop).
-- **Optimized Backends:** Leverages MKL/IPP or Accelerate/vDSP for performance, selected automatically at build time. Includes a stub backend for compatibility.
-- **PIMPL Idiom:** Uses the Pointer-to-Implementation pattern extensively to hide backend details, ensure ABI stability, and improve compile times.
-- **Python Bindings:** Easy-to-use Python API mirroring the C++ structure via pybind11, requiring an `OmniDSP` instance.
+- **Flexible Backend Management:** The `OmniDSP` class, created via `OmniDSP::create()`, handles backend selection.
+  - Supports single backend mode (e.g., `IntelIPP::Backend`, `Accelerate::Backend`, `Default::Backend`).
+  - Supports `Dispatcher::Backend` mode for per-operation-category backend overrides.
+- **Distinct Execution Objects:**
+  - **`[Type]Plan` (Stateless):** For operations like FFT. Created via `OmniDSP::create_plan(...)`. Thread-safe for concurrent `execute` if backend is reentrant.
+  - **`[Type]Processor` (Stateful):** For operations like Filters, Resampling. Created via `OmniDSP::create_processor(...)`. Manages internal state, modified by `execute`. Provides `reset()` method. **Not thread-safe** for concurrent `execute` on the same instance.
+- **Unified Configuration:**
+  - **`[Type]Params` Structs:** Fluent interface for user configuration (in `include/OmniDSP/params/`).
+  - **`[Type]Coefs` Structs:** For providing pre-calculated coefficients/kernels.
+- **Internal Representations:** Uses intermediate `[Type]Setup` and `[Type]Spec` objects internally for backend communication.
+- **Core Operations:** FFT (`FFTPlan`), Filtering (`FIRFilterProcessor`, `IIRFilterProcessor`, `filtfilt`), CQT (`CQTProcessor`?), Resampling (`ResampleProcessor`), Convolution/Correlation (`ConvolutionPlan`?), Windowing.
+- **Optimized Backends:** Leverages MKL/IPP, Accelerate/vDSP. Includes a portable `Default::Backend`.
+- **PIMPL Idiom:** Hides implementation details, ensures ABI stability.
+- **Python Bindings:** Easy-to-use Python API via pybind11.
 
 ## Dependencies
 
-OmniDSP requires the following to build and run:
-
-- A C++23 compliant compiler (e.g., GCC, Clang, MSVC)
-- CMake (version 3.21 or higher)
-- Python (version 3.8 or higher, if building Python bindings)
-- **Boost C++ Libraries:** Required for certain cross-platform mathematical functions (specifically, the Bessel function needed for Kaiser window generation).
-- Optional: Intel oneMKL (including IPP) for the MKL backend (recommended on Linux/Windows for performance).
-- Optional: macOS users automatically use the Accelerate framework backend if oneMKL is not preferred/available.
-
-**Note:** All required dependencies (except for the C++ compiler and the macOS Accelerate framework) are managed via the provided Conda `environment.yml` file. Please see the Installation section for details on setting up the environment.
+- C++23 compiler, CMake (3.21+), Python (3.8+ for bindings).
+- Boost C++ Libraries.
+- Optional: Intel oneMKL/IPP, Apple Accelerate framework.
+- Conda for dependency management is recommended.
 
 ## Project Status
 
-- Core FFT, CQT (recursive), Convolution/Correlation (valid mode), and Windowing functionalities are implemented within the new architecture.
-- **Recent Refactoring:** The library structure has been refactored around a central `OmniDSP` class that manages the backend and acts as a factory for `Plan` objects (`FFTPlan`, `CQTPlan`, `ResamplePlan`). Standalone functions and the static `Window` class have been removed from the public API to promote clarity about the backend execution context.
-- **Current Work:** Implementing `ResamplePlan`, updating CQT to use it, adding convolution modes, resolving any remaining test failures post-refactor, tuning CQT scaling, and setting up CI. See `TODO.md`.
+- **Major Refactoring Ongoing:** Implementing `Dispatcher::Backend`, `Plan`/`Processor` distinction, `create_plan`/`create_processor` methods, internal state management (`reset()`), `[Type]Coefs` paths, IIR filters, `filtfilt`.
+- See `TODO.md` for detailed current tasks.
 
 ## Project Structure
 
-- `include/OmniDSP/`: Public C++ headers defining the API (`omnidsp.h`, `fft.h`, `cqt.h`, `resample.h`, `core_types.h`).
-- `src/omnidsp/`: Core C++ library implementation files (`omnidsp.cpp`, `fft.cpp`, `cqt.cpp`, `resample.cpp`). These implement the public API classes and forward calls to the backend implementations via PIMPL.
-- `src/omnidsp/backend/`: Contains backend-specific implementations and the internal interface header.
-  - `backend.h`: Internal header defining implementation class interfaces/signatures (within `OmniDSP::backend` namespace). **Not part of the public API.**
-  - `onemkl/`: Implementations using Intel oneMKL/IPP (namespace `OmniDSP::backend::oneMKL`).
-  - `accelerate/`: Implementations using Apple Accelerate/vDSP (namespace `OmniDSP::backend::Accelerate`).
-  - `stub/`: Stub implementations that throw runtime errors (namespace `OmniDSP::backend::Stub`).
-- `src/omnidsp_py/`: Python bindings source code (pybind11 wrappers).
-- `tests/`: Unit tests.
-  - `cpp/`: C++ tests using GoogleTest.
-  - `python/`: Python tests using pytest.
-- `examples/`: Usage examples.
-  - `cpp/`: C++ examples.
-  - `notebooks/`: Python examples using Jupyter notebooks.
-- `environment.yml`, `environment-dev.yml`, `conda-*.lock`: Conda environment files.
-- `.pre-commit-config.yaml`: Configuration for developer Git hooks.
-- `CMakeLists.txt`: Main CMake build script.
-- `pyproject.toml`: Python packaging configuration.
-- `TODO.md`: Current development tasks.
-- `CONTRIBUTING.md`: Guidelines for contributors.
+- `include/OmniDSP/`: Public API headers.
+- `include/OmniDSP/params/`: `[Type]Params` structs.
+- `include/OmniDSP/types/`: Domain-specific enums (e.g., `OperationCategory`).
+- `src/omnidsp/`: Core C++ implementation.
+  - `interface/`: `Abstract::Backend`, `Abstract::*PlanImpl`, `Abstract::*ProcessorImpl` interfaces, public `Plan`/`Processor` wrappers.
+  - `default/`: `Default::Backend`, `Default::*PlanImpl`, `Default::*ProcessorImpl`. **Base for optimized backends.**
+  - `dispatcher/`: `Dispatcher::Backend` implementation.
+  - `accelerate/`, `onemkl/`, `intelipp/`: Optimized backends (e.g., `Accelerate::Backend`).
+  - `params/`: `Params` constructors.
+  - `utils/`: `Utils::create_spec` implementations.
+  - `omnidsp.cpp`: `OmniDSP` class implementation.
+- `src/omnidsp_py/`: Python bindings.
+- `tests/`, `examples/`, `cmake/`, `docs/`.
 
 ## Getting Started and Installation
 
-Using OmniDSP requires **Conda** to manage dependencies.
+Using OmniDSP requires **Conda** to manage dependencies, especially for the C++ toolchain and optional backend libraries like Intel oneMKL/IPP.
 
-1.  **Set up Conda Environment:**
+1.  **Clone the Repository:**
 
-    - Clone the repository.
-    - Create and activate the environment using the provided lock files (recommended) or `environment.yml`. Choose the file matching your platform (e.g., `linux-64`, `osx-arm64`, `win-64`):
+    ```bash
+    git clone <repository-url>
+    cd OmniDSP
+    ```
+
+2.  **Set up Conda Environment:**
+    We provide environment lock files for reproducible environments. Choose the file matching your platform (e.g., `linux-64`, `osx-arm64`, `win-64`). Using lock files is recommended.
+
+    - **Using Lock Files (Recommended):**
+
       ```bash
-      # Example for Linux:
+      # Example for Linux x86_64:
       conda create --name omnidsp --file conda-linux-64.lock
-      conda activate omnidsp
       ```
-    - **Important:** Always ensure the `omnidsp` Conda environment is activated before building or using the library.
 
-2.  **Install OmniDSP Python Package:**
+      Replace `conda-linux-64.lock` with the appropriate file for your system (`conda-osx-arm64.lock`, `conda-win-64.lock`, etc.).
 
-    - Once the `omnidsp` environment is activated, install the package from the project root directory:
+    - **Using `environment.yml` (If lock file is unavailable/problematic):**
+      This file defines the core dependencies.
       ```bash
-      pip install . -v
+      conda env create --name omnidsp --file environment.yml
       ```
-    - This compiles the C++ library and Python bindings and installs them into your active Conda environment.
+      _Note: This might result in slightly different package versions than tested._
 
-3.  **(Optional) Build C++ Library Only:** Refer to `CONTRIBUTING.md` for instructions using CMake directly.
+3.  **Activate the Conda Environment:**
+    You must activate the environment before building or using OmniDSP.
+
+    ```bash
+    conda activate omnidsp
+    ```
+
+    Your terminal prompt should now indicate that the `omnidsp` environment is active.
+
+4.  **Install OmniDSP Python Package:**
+    From the root directory of the cloned repository (where `pyproject.toml` is located), run pip install. The `-v` flag provides verbose output, helpful for debugging build issues.
+
+    ```bash
+    pip install . -v
+    ```
+
+    This command triggers the CMake build process via `scikit-build-core` (configured in `pyproject.toml`), compiling the C++ library and the pybind11 Python bindings. The resulting package is then installed into your active `omnidsp` Conda environment.
+
+5.  **(Optional) Build C++ Library Only:** Refer to `CONTRIBUTING.md` for instructions using CMake directly without the Python package installation.
+
+Now you should be able to import and use the `omnidsp_py` module in Python scripts run within the activated `omnidsp` environment.
 
 ## Basic Usage
 
@@ -106,164 +122,150 @@ Using OmniDSP requires **Conda** to manage dependencies.
 
 ```python
 import numpy as np
-import omnidsp_py as ods # Assuming this is the import name
+import omnidsp_py as omni
 
-# 1. Create an OmniDSP instance (manages the backend)
+# 1. Create an OmniDSP instance
 try:
-    dsp = ods.OmniDSP()
+    dsp = omni.OmniDSP.create(omni.BackendType.Default)
 except RuntimeError as e:
-    print(f"Error creating OmniDSP instance (backend issue?): {e}")
+    print(f"Error creating OmniDSP instance: {e}")
     exit()
 
-# --- FFT Example ---
+# --- FFT Example (Stateless Plan) ---
 fs = 1000
-t = np.arange(fs) / fs
-signal_in_real = np.sin(2 * np.pi * 50 * t) + 0.5 * np.sin(2 * np.pi * 120 * t)
-signal_in_real = signal_in_real.astype(np.float32)
+signal_in_real = np.random.randn(fs).astype(np.float32)
 
-# Create an RFFT plan using the factory method on the dsp instance
 try:
-    # Specify length, precision via factory
-    rfft_plan = dsp.create_rfft_plan(
-        length=len(signal_in_real),
-        precision=ods.Precision.SINGLE
-    )
+    # Configure using Params
+    fft_params = omni.FFTParams(length=len(signal_in_real))
+    # Create a stateless Plan
+    rfft_plan_e = dsp.create_plan(fft_params) # Use create_plan
+    if not rfft_plan_e: raise RuntimeError(f"RFFT plan error: {rfft_plan_e.error()}")
+    rfft_plan = rfft_plan_e.value()
+
     # Execute the plan
     complex_spectrum = rfft_plan.execute(signal_in_real)
-    print(f"RFFT Output shape: {complex_spectrum.shape}") # Should be N/2 + 1
+    print(f"RFFT Output shape: {complex_spectrum.shape}")
 
-    # Create an IRFFT plan
-    irfft_plan = dsp.create_irfft_plan(
-        length=len(signal_in_real), # Target output length N
-        precision=ods.Precision.SINGLE
+except Exception as e:
+    print(f"FFT Error: {e}")
+
+
+# --- FIR Filter Example (Stateful Processor) ---
+try:
+    # Configure using Params
+    fir_params = omni.FIRFilterParams(
+        filter_type=omni.FilterType.Lowpass, order=100,
+        cutoff_freq_low=100.0, sample_rate=float(fs),
+        window_setup=omni.WindowSetup(omni.WindowType.Hann, 101)
     )
-    signal_out_real = irfft_plan.execute(complex_spectrum)
-    print(f"IRFFT Output shape: {signal_out_real.shape}") # Should be N
+    # Create a stateful Processor
+    fir_processor_e = dsp.create_processor(fir_params) # Use create_processor
+    if not fir_processor_e: raise RuntimeError(f"FIR processor error: {fir_processor_e.error()}")
+    fir_processor = fir_processor_e.value()
 
-except RuntimeError as e:
-    print(f"FFT Plan Error: {e}")
-except AttributeError as e:
-    print(f"API Error: Method might not exist yet ({e})")
+    # Execute the processor (modifies internal state)
+    filtered_signal_chunk1 = fir_processor.execute(signal_in_real[:fs//2])
+    filtered_signal_chunk2 = fir_processor.execute(signal_in_real[fs//2:])
+    print(f"Filtered signal chunk1 shape: {filtered_signal_chunk1.shape}")
+    print(f"Filtered signal chunk2 shape: {filtered_signal_chunk2.shape}")
 
+    # Reset the processor's internal state to process a new stream
+    fir_processor.reset()
+    print("FIR Processor reset.")
+    # filtered_signal_new_stream = fir_processor.execute(another_signal)
 
-# --- CQT Example ---
-try:
-    # Window function example using numpy
-    def numpy_hann_window(arr):
-        return np.hanning(len(arr)).astype(arr.dtype)
-
-    # Create CQT plan using the factory method on the dsp instance
-    cqt_plan = dsp.create_cqt_plan(
-        sample_rate=44100.0,
-        hop_length=512,
-        lowest_freq=55.0,
-        highest_freq=1760.0,
-        bins_per_octave=12,
-        window_function=numpy_hann_window,
-        precision=ods.Precision.SINGLE
-    )
-    # Generate a test signal
-    sr = 44100.0
-    test_signal = np.sin(2 * np.pi * 440.0 * np.arange(int(sr)) / sr).astype(np.float32)
-    cqt_result = cqt_plan.execute(test_signal) # Input is real for CQT
-    print(f"CQT Output shape: {cqt_result.shape} (Bins, Frames)")
-except RuntimeError as e:
-    print(f"CQT Error (check backend/params): {e}")
-except AttributeError as e:
-    print(f"API Error: Method might not exist yet ({e})")
-
-
-# --- Convolution Example (Stateless method on dsp object) ---
-signal = np.array([1, 2, 3, 4, 5, 6, 7, 8], dtype=np.float32)
-kernel = np.array([0.5, 1.0, 0.5], dtype=np.float32)
-# Correlate (e.g., for FIR filtering)
-try:
-    # Call method on the dsp instance
-    correlation_result = dsp.correlate1d(signal, kernel) # Default mode is 'valid'
-    print(f"Correlation result: {correlation_result}")
-    # Convolve
-    convolution_result = dsp.convolve1d(signal, kernel) # Default mode is 'valid'
-    print(f"Convolution result: {convolution_result}")
-except AttributeError as e:
-    print(f"API Error: Method might not exist yet ({e})")
-
-# --- Windowing Example (Stateless method on dsp object) ---
-try:
-    # Call method on the dsp instance to get coefficients
-    hann_coeffs = dsp.get_hann_coeffs(len(signal), ods.Precision.SINGLE)
-    print(f"Hann coeffs: {hann_coeffs}")
-    # Apply manually
-    windowed_signal = signal * hann_coeffs
-    print(f"Hann windowed signal: {windowed_signal}")
-except AttributeError as e:
-    print(f"API Error: Method might not exist yet ({e})")
+except Exception as e:
+    print(f"FIR Filter Error: {e}")
 
 ```
 
 ### C++
 
-Include necessary headers (e.g., `<OmniDSP/omnidsp.h>`, `<OmniDSP/fft.h>`) and link against the built library.
-
 ```cpp
-#include <OmniDSP/omnidsp.h>
-#include <OmniDSP/fft.h> // Include Plan headers
-#include <OmniDSP/cqt.h>
+#include <OmniDSP/omnidsp.hpp>
+#include <OmniDSP/fft.hpp> // For FFTPlan, FFTParams
+#include <OmniDSP/filter.hpp> // For FIRFilterProcessor
+#include <OmniDSP/window.hpp>
+#include <OmniDSP/params/fft.hpp> // For FFTParams
+#include <OmniDSP/params/fir_filter.hpp> // For FIRFilterParams
+#include <OmniDSP/utils.hpp>
+#include <OmniDSP/core_types.hpp>
+#include <OmniDSP/types/operation.hpp>
+
 #include <vector>
 #include <complex>
 #include <iostream>
-#include <memory> // For std::unique_ptr
+#include <map>
+
+// Helper to check std::expected results (same as before)
+template <typename T>
+T check_expected(OmniExpected<T>& expected_val, const std::string& error_msg) {
+    if (!expected_val) {
+        throw std::runtime_error(error_msg + ": Status " + std::to_string(static_cast<int>(expected_val.error())));
+    }
+    return std::move(expected_val.value());
+}
 
 int main() {
-    // 1. Create an OmniDSP instance
-    OmniDSP::OmniDSP dsp; // Constructor selects and initializes backend
-
-    // Example: FFT
-    std::vector<float> real_signal = { /* ... data ... */ };
-    std::vector<std::complex<float>> spectrum(real_signal.size() / 2 + 1); // Pre-allocate
-
     try {
-        // Create plan using factory method on the dsp instance
-        auto rfft_plan = dsp.create_rfft_plan<float>(
-            real_signal.size(),
-            OmniDSP::Precision::SINGLE
-        );
+        // 1. Create an OmniDSP instance
+        auto dsp_e = OmniDSP::OmniDSP::create(OmniDSP::BackendType::Default);
+        auto dsp = check_expected(dsp_e, "Failed to create OmniDSP (Default)");
 
-        // Execute the plan
-        rfft_plan->execute(real_signal, spectrum); // Use -> for unique_ptr
+        // --- Example: FFT (Stateless Plan) ---
+        std::vector<float> real_signal(1024); // Example data
+        std::vector<std::complex<float>> spectrum;
+
+        OmniDSP::FFTParams fft_params; // Assuming default constructor + setters or direct init
+        fft_params.length = static_cast<int>(real_signal.size());
+        // Or: auto fft_params = OmniDSP::FFTParams().length(1024);
+
+        // Create stateless Plan
+        auto rfft_plan_e = dsp->create_plan(fft_params); // Use create_plan
+        auto rfft_plan = check_expected(rfft_plan_e, "RFFT plan");
+
+        auto status = rfft_plan->execute(real_signal, spectrum);
+        if (status != OmniDSP::Status::Success) throw std::runtime_error("RFFT exec");
         std::cout << "Spectrum size: " << spectrum.size() << std::endl;
 
-        // Example: Get Hann coefficients using method on dsp instance
-        auto hann_coeffs = dsp.get_hann_coeffs<float>(1024);
-        std::cout << "Generated Hann coeffs size: " << hann_coeffs.size() << std::endl;
+        // --- Example: FIR Filter (Stateful Processor) ---
+        float sample_rate = 1000.0f;
+        int filter_order = 100;
+        std::vector<float> filtered_signal;
+
+        OmniDSP::FIRFilterParams fir_params( // Using constructor directly here
+            OmniDSP::FilterType::Lowpass, filter_order, 100.0, 0.0, sample_rate,
+            OmniDSP::WindowSetup(OmniDSP::WindowType::Hann, filter_order + 1)
+        );
+        // Or: auto fir_params = OmniDSP::FIRFilterParams().filter_type(...).order(...)...;
+
+        // Create stateful Processor
+        auto fir_processor_e = dsp->create_processor(fir_params); // Use create_processor
+        auto fir_processor = check_expected(fir_processor_e, "FIR processor");
+
+        // Execute (modifies internal state)
+        status = fir_processor->execute(real_signal, filtered_signal);
+        if (status != OmniDSP::Status::Success) throw std::runtime_error("FIR exec");
+        std::cout << "Filtered signal size: " << filtered_signal.size() << std::endl;
+
+        // Reset internal state
+        fir_processor->reset();
+        std::cout << "FIR Processor reset." << std::endl;
+
 
     } catch (const std::exception& e) {
         std::cerr << "OmniDSP Error: " << e.what() << std::endl;
         return 1;
     }
-
-    // Example: CQT Plan (requires a window generator function)
-    // auto my_window_gen = [](size_t len) { /* ... return std::vector<float>(len) ... */ };
-    // try {
-    //     // Create plan using factory method on the dsp instance
-    //     auto cqt_plan = dsp.create_cqt_plan<float>(
-    //         44100.0, 512, 55.0, 1760.0, 12, my_window_gen, OmniDSP::Precision::SINGLE
-    //     );
-    //     std::vector<std::vector<std::complex<float>>> cqt_output;
-    //     cqt_plan->execute(real_signal, cqt_output);
-    //     std::cout << "CQT Output bins: " << cqt_output.size() << std::endl;
-    // } catch (const std::exception& e) {
-    //     std::cerr << "CQT Error: " << e.what() << std::endl;
-    // }
-
-
     return 0;
 }
 ```
 
 ## Contributing
 
-Contributions are welcome! Please see `CONTRIBUTING.md` for guidelines on setting up the development environment, building, running tests, and submitting pull requests. Check `TODO.md` for current tasks.
+Contributions welcome! See `CONTRIBUTING.md` and `TODO.md`.
 
 ## License
 
-_(Add License Information Here - e.g., MIT, Apache 2.0)_
+_(Add License Information Here)_
