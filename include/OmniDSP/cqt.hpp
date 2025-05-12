@@ -184,10 +184,6 @@ namespace OmniDSP {
     size_t get_num_output_frames(size_t input_length) const;
     size_t get_hop_length() const;  // Hop length at original sample rate
 
-    // Factory method now takes CQTSpec
-    [[nodiscard]] static OmniExpected<std::unique_ptr<CQTPlan<T>>> create(
-        const Abstract::Backend& backend, const CQTSpec& spec);  // Updated
-
     static std::unique_ptr<CQTPlan<T>> create_from_impl(
         std::unique_ptr<Abstract::CQTPlanImpl<T>> pimpl);
 
