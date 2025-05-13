@@ -7,7 +7,7 @@
 #define OMNIDSP_UTILS_FILTER_DESIGN_HPP
 
 #include <OmniDSP/core_types.hpp>  // For Status, OmniExpected, F32, F64
-#include <OmniDSP/filter.hpp>  // For FIRFilterSpec, FIRCoefs (FIRFilterSpec now uses WindowSetup)
+#include <OmniDSP/filter.hpp>  // For Design::FIRFilter, FIRCoefs (Design::FIRFilter now uses WindowSetup)
 #include <OmniDSP/window.hpp>  // For WindowSetup
 #include <cstddef>             // For size_t
 #include <vector>
@@ -38,7 +38,7 @@ namespace OmniDSP::Utils {
    * order/parameters.
    * @param input_window_setup The window setup (type and parameters like beta)
    * to use for the FIR design. The 'length' field in this input_window_setup is
-   * ignored by this function when setting up the FIRFilterSpec's
+   * ignored by this function when setting up the Design::FIRFilter's
    * window_setup.length; filter order (and thus window length for design) is
    * determined internally by this utility.
    * @return An OmniExpected containing the designed FIR coefficients

@@ -1,6 +1,6 @@
 /**
  * @file resample_design.hpp
- * @brief Declares internal utility functions for creating ResampleSpec.
+ * @brief Declares internal utility functions for creating Design::Resample.
  * These are not part of the public OmniDSP::Utils API.
  */
 
@@ -10,16 +10,8 @@
 #include <cstddef>  // For size_t
 
 #include "OmniDSP/core_types.hpp"  // For Status, OmniExpected (though not directly used by estimate_prototype_fir_order_for_resample)
-
-namespace OmniDSP {
-  // Forward declare ResampleParams and ResampleSpec if their full definitions
-  // are not needed by the function signatures in this internal header.
-  // However, create_spec itself is public and declared in
-  // include/OmniDSP/utils.hpp This header is for *internal* helpers for the
-  // .cpp.
-  struct ResampleParams;  // From "OmniDSP/params/resample.hpp"
-  struct ResampleSpec;    // From "OmniDSP/resample.hpp"
-}  // namespace OmniDSP
+#include "OmniDSP/design/resample.hpp"
+#include "OmniDSP/params/resample.hpp"
 
 namespace OmniDSP::Utils::Internal {
 

@@ -16,6 +16,7 @@
 
 // Include core types for aliases like F32, F64 used in instantiations
 #include <OmniDSP/core_types.hpp>
+#include <OmniDSP/omnidsp_export.hpp>  // For OMNIDSP_EXPORT
 
 namespace OmniDSP {
 
@@ -67,24 +68,22 @@ namespace OmniDSP {
    */
   template <typename T>  // T is REAL type
   [[nodiscard]] Status CQTPlan<T>::execute(
-      std::span<const T> input,
-      std::span<Complex> output) const  // Use T and Complex alias
-  {
+      std::span<const T> input, std::span<Complex> output) const
+  {  // Use T and Complex alias
     if (!pimpl_) {
       return Status::InvalidOperation;
     }
-    // Add size checks for robustness
+    // Add size checks for robustness (optional, could be in Impl)
     size_t expected_output_size
         = get_num_bins() * get_num_output_frames(input.size());
-    if (output.size() < expected_output_size) {
-      // Potentially log warning or return SizeMismatch immediately
-      // std::cerr << "Warning: CQTPlan execute output span size (" <<
-      // output.size()
-      //           << ") is smaller than expected (" << expected_output_size <<
-      //           ")." << std::endl;
-      // return Status::SizeMismatch; // Or let the backend handle it
+    if (output.size() < expected_output_size
+        && expected_output_size
+               > 0) {  // Check if expected_output_size is non-zero
+      // spdlog or other logging mechanism might be useful here.
+      // For now, rely on backend Impl to potentially return SizeMismatch.
+      // Or, return Status::SizeMismatch directly:
+      // return Status::SizeMismatch;
     }
-    // Forward the call to the actual backend implementation.
     return pimpl_->execute(input, output);
   }
 
@@ -128,12 +127,21 @@ namespace OmniDSP {
   }
 
   //--------------------------------------------------------------------------
-  // Explicit Template Instantiations
+  // Explicit Template Instantiations for CQTPlan class
   //--------------------------------------------------------------------------
-  // Instantiate templates for common types (float, double) to ensure code
-  // generation for the public CQTPlan class.
+  // This ensures that the code for CQTPlan<F32> and CQTPlan<F64> is generated
+  // in this translation unit. The OMNIDSP_EXPORT macro will handle visibility
+  // if this is part of a shared library.
 
-  template class CQTPlan<F32>;  // float
-  template class CQTPlan<F64>;  // double
+  template class OMNIDSP_EXPORT CQTPlan<F32>;  // float
+  template class OMNIDSP_EXPORT CQTPlan<F64>;  // double
+
+  // The static create_from_impl method is defined inline in the header,
+  // so it does not need separate explicit instantiation here.
+  // The warnings C4661 were likely because the compiler was looking for a
+  // non-inline definition due to an explicit instantiation request for the
+  // static method itself, or the class instantiation was somehow problematic
+  // without the inline definition visible. By defining it inline in the header,
+  // it's available wherever the class template is used.
 
 }  // namespace OmniDSP

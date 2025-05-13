@@ -8,7 +8,7 @@
 #define OMNIDSP_DEFAULT_FIR_FILTER_HPP
 
 #include <OmniDSP/core_types.hpp>  // Status, F32, F64, C32, C64, OmniExpected, FIRCoefs
-#include <OmniDSP/filter.hpp>  // For FIRFilterSpec (public spec)
+#include <OmniDSP/filter.hpp>  // For Design::FIRFilter (public spec)
 #include <complex>
 #include <cstddef>  // For size_t
 #include <span>     // For std::span
@@ -63,13 +63,13 @@ namespace OmniDSP::Default {
    * @brief Designs FIR filter coefficients using the windowed sinc method for
    * the Default backend.
    * @tparam T Data type for coefficients (F32 or F64).
-   * @param spec The fully resolved FIRFilterSpec.
+   * @param spec The fully resolved Design::FIRFilter.
    * @return OmniExpected<FIRCoefs<T>> The designed coefficients or an error
    * status.
    */
   template <typename T>
   [[nodiscard]] OmniExpected<FIRCoefs<T>> generate_fir_filter_coeffs(
-      const FIRFilterSpec& spec);
+      const Design::FIRFilter& spec);
 
   // Explicit template instantiations (declarations for linking)
   extern template class FIRFilterPlanImpl<F32>;
@@ -78,9 +78,9 @@ namespace OmniDSP::Default {
   extern template class FIRFilterPlanImpl<C64>;
 
   extern template OmniExpected<FIRCoefs<F32>> generate_fir_filter_coeffs<F32>(
-      const FIRFilterSpec& spec);
+      const Design::FIRFilter& spec);
   extern template OmniExpected<FIRCoefs<F64>> generate_fir_filter_coeffs<F64>(
-      const FIRFilterSpec& spec);
+      const Design::FIRFilter& spec);
 
 }  // namespace OmniDSP::Default
 

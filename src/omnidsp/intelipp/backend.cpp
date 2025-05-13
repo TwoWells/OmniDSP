@@ -14,8 +14,8 @@
 // #include <OmniDSP/filter.hpp>
 // #include <OmniDSP/resample.hpp>
 #include <OmniDSP/filter.hpp>  // For IIRFilterCoef (used in method signatures)
-#include <OmniDSP/resample.hpp>  // For ResampleSpec (used in method signatures)
-#include <OmniDSP/window.hpp>  // For WindowSetup, ResampleSpec (used in method signatures)
+#include <OmniDSP/resample.hpp>  // For Design::Resample (used in method signatures)
+#include <OmniDSP/window.hpp>  // For WindowSetup, Design::Resample (used in method signatures)
 #include <exception>  // For std::exception, std::bad_alloc
 #include <iostream>  // For error logging (std::cerr), though spdlog is preferred
 #include <memory>    // For std::unique_ptr, std::make_unique
@@ -283,12 +283,12 @@ namespace OmniDSP::IntelIPP {
   }
 
   [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::ResamplePlanImpl<F32>>>
-  Backend::create_resample_plan_impl_f32(const ResampleSpec& spec) const
+  Backend::create_resample_plan_impl_f32(const Design::Resample& spec) const
   {
     try {
       // Pass 'this' if the IPP ResamplePlanImpl needs to access other backend
       // features (e.g. filter design) For now, assuming it's self-contained or
-      // takes what it needs from ResampleSpec.
+      // takes what it needs from Design::Resample.
       return std::make_unique<IntelIPP::ResamplePlanImpl<F32>>(this, spec);
     }
     catch (const OmniException& e) {
@@ -315,7 +315,7 @@ namespace OmniDSP::IntelIPP {
   }
 
   [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::ResamplePlanImpl<F64>>>
-  Backend::create_resample_plan_impl_f64(const ResampleSpec& spec) const
+  Backend::create_resample_plan_impl_f64(const Design::Resample& spec) const
   {
     try {
       return std::make_unique<IntelIPP::ResamplePlanImpl<F64>>(this, spec);

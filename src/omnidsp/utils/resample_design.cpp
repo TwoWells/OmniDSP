@@ -1,6 +1,6 @@
 /**
  * @file resample_design.cpp
- * @brief Implements utility functions for creating ResampleSpec.
+ * @brief Implements utility functions for creating Design::Resample.
  */
 #include "resample_design.hpp"  // Internal declarations for this file
 
@@ -12,10 +12,10 @@
 #include <utility>  // For std::move
 
 #include "OmniDSP/core_types.hpp"         // For OmniExpected, Status
-#include "OmniDSP/filter.hpp"             // For FIRFilterSpec
+#include "OmniDSP/filter.hpp"             // For Design::FIRFilter
 #include "OmniDSP/params/fir_filter.hpp"  // For FIRFilterParams
 #include "OmniDSP/params/resample.hpp"
-#include "OmniDSP/resample.hpp"      // For ResampleSpec
+#include "OmniDSP/resample.hpp"      // For Design::Resample
 #include "OmniDSP/types/filter.hpp"  // For FilterType, FIRFilterDesignMethod
 #include "OmniDSP/utils.hpp"  // For the public declaration of Utils::create_spec
 #include "OmniDSP/window.hpp"  // For WindowSetup, WindowType
@@ -75,7 +75,7 @@ namespace OmniDSP::Utils::Internal {
 
 namespace OmniDSP::Utils {
 
-  OmniExpected<ResampleSpec> create_spec(const ResampleParams& params)
+  OmniExpected<Design::Resample> create_spec(const ResampleParams& params)
   {
     // ResampleParams constructor already performed initial validation.
     auto logger = spdlog::get("OmniDSP");
@@ -142,22 +142,22 @@ namespace OmniDSP::Utils {
         FIRFilterDesignMethod::WindowSinc);
 
     // Call the public Utils::create_spec for FIRFilterParams
-    OmniExpected<FIRFilterSpec> prototype_fir_spec_expected
+    OmniExpected<Design::FIRFilter> prototype_fir_spec_expected
         = create_spec(prototype_fir_params);
 
     if (!prototype_fir_spec_expected) {
       logger->error(
-          "Failed to create FIRFilterSpec for resampling prototype filter. "
+          "Failed to create Design::FIRFilter for resampling prototype filter. "
           "Error: {}",
           static_cast<int>(prototype_fir_spec_expected.error()));
       return std::unexpected(prototype_fir_spec_expected.error());
     }
 
-    FIRFilterSpec final_prototype_fir_spec
+    Design::FIRFilter final_prototype_fir_spec
         = std::move(prototype_fir_spec_expected.value());
 
     try {
-      ResampleSpec spec(
+      Design::Resample spec(
           params.input_rate_,
           params.output_rate_,
           params.quality_,
@@ -167,7 +167,8 @@ namespace OmniDSP::Utils {
       return spec;
     }
     catch (const std::exception& e) {
-      logger->error("Exception during ResampleSpec construction: {}", e.what());
+      logger->error(
+          "Exception during Design::Resample construction: {}", e.what());
       return std::unexpected(Status::Failure);
     }
   }

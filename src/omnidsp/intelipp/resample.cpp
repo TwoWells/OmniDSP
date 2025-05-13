@@ -9,8 +9,8 @@
 #include <ipps.h>  // For IPP functions
 
 #include <OmniDSP/core_types.hpp>  // For Status, OmniException, F32, F64, FIRCoefs
-#include <OmniDSP/filter.hpp>      // For FIRFilterSpec (part of ResampleSpec)
-#include <OmniDSP/resample.hpp>  // For ResampleSpec definition
+#include <OmniDSP/filter.hpp>  // For Design::FIRFilter (part of Design::Resample)
+#include <OmniDSP/resample.hpp>  // For Design::Resample definition
 
 #include "details.hpp"  // Include the intelipp utility header for IPP status checks and type helpers
 // Window.hpp is included via filter.hpp or resample.hpp as needed
@@ -28,7 +28,7 @@
 #include "interface/backend.hpp"  // For Abstract::Backend
 #include "spdlog/spdlog.h"
 // "utils/filter_design.hpp" and "utils/resample.hpp" are no longer directly
-// needed here for design/factor calculation as ResampleSpec provides this
+// needed here for design/factor calculation as Design::Resample provides this
 // information.
 
 namespace OmniDSP::IntelIPP {
@@ -39,7 +39,7 @@ namespace OmniDSP::IntelIPP {
 
   template <typename T>
   ResamplePlanImpl<T>::ResamplePlanImpl(
-      const Abstract::Backend* owner, const ResampleSpec& spec)
+      const Abstract::Backend* owner, const Design::Resample& spec)
       : spec_(spec),  // Initialize the spec_ member
         input_rate_(spec.input_rate),
         output_rate_(spec.output_rate),
@@ -59,8 +59,8 @@ namespace OmniDSP::IntelIPP {
       logger->error(msg);
       throw OmniException(msg, Status::InvalidArgument);
     }
-    // ResampleSpec's constructor and Utils::create_spec should have validated
-    // its contents, including the embedded prototype_fir_spec.
+    // Design::Resample's constructor and Utils::create_spec should have
+    // validated its contents, including the embedded prototype_fir_spec.
 
     IppStatus ipp_status = ippStsNoErr;
     size_t L = spec_.up_factor_L;    // Use spec_ member
@@ -83,12 +83,12 @@ namespace OmniDSP::IntelIPP {
     // prototype_fir_spec
     OmniExpected<FIRCoefs<T>> coeffs_expected;
     if constexpr (std::is_same_v<T, float>) {
-      coeffs_expected = owner->design_fir_filter_f32(
-          spec_.prototype_fir_spec);  // Use spec_ member
+      coeffs_expected
+          = owner->design_fir_filter_f32(spec_.prototype_fir_design);
     }
     else if constexpr (std::is_same_v<T, double>) {
-      coeffs_expected = owner->design_fir_filter_f64(
-          spec_.prototype_fir_spec);  // Use spec_ member
+      coeffs_expected
+          = owner->design_fir_filter_f64(spec_.prototype_fir_design);
     }
     else {
       std::string msg

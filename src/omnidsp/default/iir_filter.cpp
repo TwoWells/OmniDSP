@@ -6,7 +6,7 @@
 #include "iir_filter.hpp"  // Corresponding header
 
 #include <OmniDSP/core_types.hpp>    // Core types, Status, OmniExpected
-#include <OmniDSP/filter.hpp>        // Public IIRFilterSpec, IIRFilterCoef
+#include <OmniDSP/filter.hpp>        // Public Design::IIRFilter, IIRFilterCoef
 #include <OmniDSP/types/filter.hpp>  // For FilterType enum
 #include <algorithm>                 // For std::fill, std::min
 #include <cmath>                     // For std::abs
@@ -25,7 +25,7 @@ namespace OmniDSP::Default {
   // IIR Filter Design Implementation (Placeholder)
   //--------------------------------------------------------------------------
   [[nodiscard]] OmniExpected<std::vector<IIRFilterCoef>>
-  generate_iir_filter_coeffs(const IIRFilterSpec& spec)
+  generate_iir_filter_coeffs(const Design::IIRFilter& spec)
   {
     auto logger = spdlog::get("OmniDSP");
     if (!logger) {
@@ -34,7 +34,7 @@ namespace OmniDSP::Default {
 
     if (!spec.validate_consistency()) {
       logger->error(
-          "Invalid IIRFilterSpec provided to "
+          "Invalid Design::IIRFilter provided to "
           "Default::generate_iir_filter_coeffs.");
       return std::unexpected(Status::InvalidArgument);
     }

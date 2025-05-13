@@ -1,74 +1,40 @@
 /**
  * @file utils.hpp
  * @brief Declares general utility functions for the OmniDSP library,
- * such as spec creation functions.
+ * such as functions to create Design objects from Params objects.
  */
 
 #ifndef OMNIDSP_UTILS_HPP
 #define OMNIDSP_UTILS_HPP
 
 #include "core_types.hpp"  // For OmniExpected, Status
-// Params
+// Params - these are the inputs to create_spec
 #include "params/cqt.hpp"
 #include "params/fir_filter.hpp"
+#include "params/iir_filter.hpp"
 #include "params/resample.hpp"
-// Specs
-#include "cqt.hpp"
-#include "filter.hpp"
-#include "resample.hpp"
+
+// Design types - these are the outputs of create_spec
+// Include from the new 'design' subdirectory
+#include "OmniDSP/omnidsp_export.hpp"
+#include "design/cqt.hpp"         // For Design::CQT
+#include "design/fir_filter.hpp"  // For Design::FIRFilter
+#include "design/iir_filter.hpp"  // For Design::IIRFilter
+#include "design/resample.hpp"    // For Design::Resample
 
 namespace OmniDSP::Utils {
 
-  // Forward declarations for Params types if not fully included above
-  // struct FIRFilterParams; (already included via params/fir_filter.hpp)
-  // struct ResampleParams; (already included via params/resample.hpp)
-  // struct CQTParams;     (already included via params/cqt.hpp)
-
-  /**
-   * @brief Creates a fully resolved FIRFilterSpec from user-provided
-   * parameters.
-   *
-   * This function takes `FIRFilterParams` (which should have already been
-   * validated upon its own construction) and performs necessary calculations,
-   * such as estimating the filter order if not explicitly provided, to produce
-   * a complete `FIRFilterSpec`.
-   *
-   * @param params The user-defined parameters for the FIR filter.
-   * @return An OmniExpected containing the `FIRFilterSpec` on success, or a
-   * `Status` code on failure.
-   */
-  [[nodiscard]] OMNIDSP_EXPORT OmniExpected<FIRFilterSpec> create_spec(
+  [[nodiscard]] OMNIDSP_EXPORT OmniExpected<Design::FIRFilter> create_spec(
       const FIRFilterParams& params);
 
-  /**
-   * @brief Creates a fully resolved ResampleSpec from user-provided parameters.
-   *
-   * This function takes `ResampleParams` and determines the internal prototype
-   * FIR filter specification needed for the resampling process.
-   *
-   * @param params The user-defined parameters for the resampling operation.
-   * @return An OmniExpected containing the `ResampleSpec` on success, or a
-   * `Status` code on failure.
-   */
-  [[nodiscard]] OMNIDSP_EXPORT OmniExpected<ResampleSpec> create_spec(
+  [[nodiscard]] OMNIDSP_EXPORT OmniExpected<Design::IIRFilter> create_spec(
+      const IIRFilterParams& params);
+
+  [[nodiscard]] OMNIDSP_EXPORT OmniExpected<Design::Resample> create_spec(
       const ResampleParams& params);
 
-  /**
-   * @brief Creates a fully resolved CQTSpec from user-provided CQT parameters.
-   *
-   * This function takes `CQTParams` and calculates all necessary derived
-   * parameters for the CQT, including bin frequencies, Q factor, hop length,
-   * and per-octave processing details like FFT lengths and kernel sizes.
-   *
-   * @param params The user-defined parameters for the Constant-Q Transform.
-   * @return An OmniExpected containing the `CQTSpec` on success, or a `Status`
-   * code on failure.
-   */
-  [[nodiscard]] OMNIDSP_EXPORT OmniExpected<CQTSpec> create_spec(
+  [[nodiscard]] OMNIDSP_EXPORT OmniExpected<Design::CQT> create_spec(
       const CQTParams& params);
-
-  // Add declarations for other Utils::create_spec overloads here as they are
-  // developed e.g., for IIRFilterParams, etc.
 
 }  // namespace OmniDSP::Utils
 

@@ -8,7 +8,7 @@
 #define OMNIDSP_DEFAULT_IIR_FILTER_HPP
 
 #include <OmniDSP/core_types.hpp>  // Status, F32, F64, OmniExpected
-#include <OmniDSP/filter.hpp>  // For IIRFilterSpec, IIRFilterCoef (public specs)
+#include <OmniDSP/filter.hpp>  // For Design::IIRFilter, IIRFilterCoef (public specs)
 #include <complex>
 #include <cstddef>  // For size_t
 #include <span>     // For std::span
@@ -74,12 +74,12 @@ namespace OmniDSP::Default {
   /**
    * @brief Designs IIR filter coefficients for the Default backend
    * (Placeholder).
-   * @param spec The fully resolved IIRFilterSpec.
+   * @param spec The fully resolved Design::IIRFilter.
    * @return OmniExpected<std::vector<IIRFilterCoef>> The designed SOS
    * coefficients or an error status.
    */
   [[nodiscard]] OmniExpected<std::vector<IIRFilterCoef>>
-  generate_iir_filter_coeffs(const IIRFilterSpec& spec);
+  generate_iir_filter_coeffs(const Design::IIRFilter& spec);
 
   // Explicit template instantiations (declarations for linking)
   extern template class IIRFilterPlanImpl<F32>;

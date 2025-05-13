@@ -2,6 +2,8 @@
  * @file filter.cpp
  * @brief Implements the FIRFilterPlan and IIRFilterPlan class methods,
  * forwarding calls to backend implementations (Pimpl pattern).
+ * TODO: Rename to FIRFilterProcessor and IIRFilterProcessor if these become
+ * stateful.
  */
 
 #include "OmniDSP/filter.hpp"  // Corresponding header
@@ -13,12 +15,16 @@
 #include <utility>    // For std::move
 #include <vector>     // For explicit template instantiations
 
-#include "backend.hpp"
+#include "backend.hpp"  // Defines Abstract::FIRFilterPlanImpl, Abstract::IIRFilterPlanImpl
+// TODO: These should become Abstract::FIRFilterProcessorImpl etc.
+#include "OmniDSP/core_types.hpp"      // For F32, F64, C32, C64
+#include "OmniDSP/omnidsp_export.hpp"  // For OMNIDSP_EXPORT
 
 namespace OmniDSP {
 
   //--------------------------------------------------------------------------
   // FIRFilterPlan Method Definitions
+  // TODO: Rename to FIRFilterProcessor if stateful
   //--------------------------------------------------------------------------
 
   /**
@@ -28,225 +34,183 @@ namespace OmniDSP {
    * @throws std::runtime_error if pimpl is null.
    */
   template <typename T>
-  FIRFilterPlan<T>::FIRFilterPlan(
-      std::unique_ptr<Abstract::FIRFilterPlanImpl<T>> pimpl)
+  FIRFilterPlan<T>::FIRFilterPlan(  // Or FIRFilterProcessor
+      std::unique_ptr<Abstract::FIRFilterPlanImpl<T>>
+          pimpl)  // Adjust Impl type
       : pimpl_(std::move(pimpl))
   {
     if (!pimpl_) {
       throw std::runtime_error(
-          "FIRFilterPlan cannot be created with a null implementation "
-          "pointer.");
+          "FIRFilterPlan/Processor cannot be created with a null "
+          "implementation pointer.");
     }
   }
 
   /**
    * @brief Destructor.
-   * The unique_ptr pimpl_ automatically deletes the managed implementation
-   * object.
    */
   template <typename T>
-  FIRFilterPlan<T>::~FIRFilterPlan() = default;
+  FIRFilterPlan<T>::~FIRFilterPlan() = default;  // Or FIRFilterProcessor
 
   /**
    * @brief Move constructor.
-   * Transfers ownership of the implementation pointer.
    */
   template <typename T>
-  FIRFilterPlan<T>::FIRFilterPlan(FIRFilterPlan&& other) noexcept = default;
+  FIRFilterPlan<T>::FIRFilterPlan(FIRFilterPlan&& other) noexcept
+      = default;  // Or FIRFilterProcessor
 
   /**
    * @brief Move assignment operator.
-   * Transfers ownership of the implementation pointer.
    */
   template <typename T>
   FIRFilterPlan<T>& FIRFilterPlan<T>::operator=(FIRFilterPlan&& other) noexcept
-      = default;
+      = default;  // Or FIRFilterProcessor
 
   /**
-   * @brief Applies the FIR filter to an input signal by calling the backend
-   * implementation.
-   * @param input A span representing the input signal segment.
-   * @param output A span representing the output buffer. Must be large enough
-   * to hold the corresponding output segment.
-   * @return Status::Success on success, or an error code on failure.
-   * Returns Status::InvalidOperation if the plan's implementation is missing.
+   * @brief Applies the FIR filter to an input signal.
    */
   template <typename T>
-  [[nodiscard]] Status FIRFilterPlan<T>::execute(
-      std::span<const T> input, std::span<T> output)
-  {
+  [[nodiscard]] Status FIRFilterPlan<T>::execute(  // Or FIRFilterProcessor
+      std::span<const T> input,
+      std::span<T> output)
+  {  // Potentially non-const if Processor
     if (!pimpl_) {
       return Status::InvalidOperation;
     }
-    // Forward the call to the backend implementation.
-    // The Impl execute might modify state, but the public interface is const.
-    // We assume the Impl handles state correctly (e.g., mutable members).
-    // If Impl::execute were const, this const_cast wouldn't be needed.
-    // Since FIR filter state IS modified, Impl::execute must be non-const.
     return pimpl_->execute(input, output);
   }
 
   /**
-   * @brief Resets the internal state of the filter by calling the backend
-   * implementation.
-   * @return Status::Success on success, or an error code if resetting fails.
-   * Returns Status::InvalidOperation if the plan's implementation is missing.
+   * @brief Resets the internal state of the filter.
    */
   template <typename T>
   Status FIRFilterPlan<T>::reset()
-  {
+  {  // Or FIRFilterProcessor
     if (!pimpl_) {
       return Status::InvalidOperation;
     }
-    // Forward the call to the backend implementation.
     return pimpl_->reset();
   }
 
   /**
-   * @brief Gets the order of the FIR filter by calling the backend
-   * implementation.
-   * @return The filter order (number of taps - 1).
-   * @throws std::runtime_error if the plan's implementation is missing.
+   * @brief Gets the order of the FIR filter.
    */
   template <typename T>
   size_t FIRFilterPlan<T>::get_order() const
-  {
+  {  // Or FIRFilterProcessor
     if (!pimpl_) {
       throw std::runtime_error(
-          "Invalid FIRFilterPlan instance: Implementation pointer is null in "
-          "get_order.");
+          "Invalid FIRFilterPlan/Processor instance: Implementation pointer is "
+          "null in get_order.");
     }
     return pimpl_->get_order();
   }
 
   /**
-   * @brief Gets the number of taps (coefficients) in the FIR filter by calling
-   * the backend implementation.
-   * @return The number of filter taps.
-   * @throws std::runtime_error if the plan's implementation is missing.
+   * @brief Gets the number of taps (coefficients) in the FIR filter.
    */
   template <typename T>
   size_t FIRFilterPlan<T>::get_num_taps() const
-  {
+  {  // Or FIRFilterProcessor
     if (!pimpl_) {
       throw std::runtime_error(
-          "Invalid FIRFilterPlan instance: Implementation pointer is null in "
-          "get_num_taps.");
+          "Invalid FIRFilterPlan/Processor instance: Implementation pointer is "
+          "null in get_num_taps.");
     }
     return pimpl_->get_num_taps();
   }
 
   //--------------------------------------------------------------------------
   // IIRFilterPlan Method Definitions
+  // TODO: Rename to IIRFilterProcessor if stateful
   //--------------------------------------------------------------------------
 
   /**
    * @brief Private constructor used by OmniDSP factory methods.
-   * Takes ownership of the backend-specific implementation object.
-   * @param pimpl A unique_ptr to the backend-specific implementation.
-   * @throws std::runtime_error if pimpl is null.
    */
   template <typename T>
-  IIRFilterPlan<T>::IIRFilterPlan(
-      std::unique_ptr<Abstract::IIRFilterPlanImpl<T>> pimpl)
+  IIRFilterPlan<T>::IIRFilterPlan(  // Or IIRFilterProcessor
+      std::unique_ptr<Abstract::IIRFilterPlanImpl<T>>
+          pimpl)  // Adjust Impl type
       : pimpl_(std::move(pimpl))
   {
     if (!pimpl_) {
       throw std::runtime_error(
-          "IIRFilterPlan cannot be created with a null implementation "
-          "pointer.");
+          "IIRFilterPlan/Processor cannot be created with a null "
+          "implementation pointer.");
     }
   }
 
   /**
    * @brief Destructor.
-   * The unique_ptr pimpl_ automatically deletes the managed implementation
-   * object.
    */
   template <typename T>
-  IIRFilterPlan<T>::~IIRFilterPlan() = default;
+  IIRFilterPlan<T>::~IIRFilterPlan() = default;  // Or IIRFilterProcessor
 
   /**
    * @brief Move constructor.
-   * Transfers ownership of the implementation pointer.
    */
   template <typename T>
-  IIRFilterPlan<T>::IIRFilterPlan(IIRFilterPlan&& other) noexcept = default;
+  IIRFilterPlan<T>::IIRFilterPlan(IIRFilterPlan&& other) noexcept
+      = default;  // Or IIRFilterProcessor
 
   /**
    * @brief Move assignment operator.
-   * Transfers ownership of the implementation pointer.
    */
   template <typename T>
   IIRFilterPlan<T>& IIRFilterPlan<T>::operator=(IIRFilterPlan&& other) noexcept
-      = default;
+      = default;  // Or IIRFilterProcessor
 
   /**
-   * @brief Applies the IIR filter (cascade of SOS) to an input signal by
-   * calling the backend implementation.
-   * @param input A span representing the input signal segment.
-   * @param output A span representing the output buffer. Must be large enough
-   * to hold the corresponding output segment.
-   * @return Status::Success on success, or an error code on failure.
-   * Returns Status::InvalidOperation if the plan's implementation is missing.
+   * @brief Applies the IIR filter (cascade of SOS) to an input signal.
    */
   template <typename T>
-  [[nodiscard]] Status IIRFilterPlan<T>::execute(
-      std::span<const T> input, std::span<T> output)
-  {
+  [[nodiscard]] Status IIRFilterPlan<T>::execute(  // Or IIRFilterProcessor
+      std::span<const T> input,
+      std::span<T> output)
+  {  // Potentially non-const if Processor
     if (!pimpl_) {
       return Status::InvalidOperation;
     }
-    // Forward the call to the backend implementation.
     return pimpl_->execute(input, output);
   }
 
   /**
-   * @brief Resets the internal state of the filter (delay elements) by calling
-   * the backend implementation.
-   * @return Status::Success on success, or an error code if resetting fails.
-   * Returns Status::InvalidOperation if the plan's implementation is missing.
+   * @brief Resets the internal state of the filter (delay elements).
    */
   template <typename T>
   Status IIRFilterPlan<T>::reset()
-  {
+  {  // Or IIRFilterProcessor
     if (!pimpl_) {
       return Status::InvalidOperation;
     }
-    // Forward the call to the backend implementation.
     return pimpl_->reset();
   }
 
   /**
-   * @brief Gets the order of the IIR filter by calling the backend
-   * implementation.
-   * @return The filter order.
-   * @throws std::runtime_error if the plan's implementation is missing.
+   * @brief Gets the order of the IIR filter.
    */
   template <typename T>
   size_t IIRFilterPlan<T>::get_order() const
-  {
+  {  // Or IIRFilterProcessor
     if (!pimpl_) {
       throw std::runtime_error(
-          "Invalid IIRFilterPlan instance: Implementation pointer is null in "
-          "get_order.");
+          "Invalid IIRFilterPlan/Processor instance: Implementation pointer is "
+          "null in get_order.");
     }
     return pimpl_->get_order();
   }
 
   /**
-   * @brief Gets the number of second-order sections used in the filter
-   * implementation by calling the backend implementation.
-   * @return The number of SOS sections.
-   * @throws std::runtime_error if the plan's implementation is missing.
+   * @brief Gets the number of second-order sections used in the filter.
    */
   template <typename T>
   size_t IIRFilterPlan<T>::get_num_sections() const
-  {
+  {  // Or IIRFilterProcessor
     if (!pimpl_) {
       throw std::runtime_error(
-          "Invalid IIRFilterPlan instance: Implementation pointer is null in "
-          "get_num_sections.");
+          "Invalid IIRFilterPlan/Processor instance: Implementation pointer is "
+          "null in get_num_sections.");
     }
     return pimpl_->get_num_sections();
   }
@@ -254,16 +218,20 @@ namespace OmniDSP {
   //--------------------------------------------------------------------------
   // Explicit Template Instantiations
   //--------------------------------------------------------------------------
-  // Instantiate templates for common types to ensure code generation.
 
   // FIRFilterPlan (Real and Complex)
-  template class FIRFilterPlan<F32>;
-  template class FIRFilterPlan<F64>;
-  template class FIRFilterPlan<C32>;
-  template class FIRFilterPlan<C64>;
+  // TODO: Rename to FIRFilterProcessor if stateful
+  template class OMNIDSP_EXPORT FIRFilterPlan<F32>;
+  template class OMNIDSP_EXPORT FIRFilterPlan<F64>;
+  template class OMNIDSP_EXPORT FIRFilterPlan<C32>;
+  template class OMNIDSP_EXPORT FIRFilterPlan<C64>;
 
   // IIRFilterPlan (Typically Real)
-  template class IIRFilterPlan<F32>;
-  template class IIRFilterPlan<F64>;
+  // TODO: Rename to IIRFilterProcessor if stateful
+  template class OMNIDSP_EXPORT IIRFilterPlan<F32>;
+  template class OMNIDSP_EXPORT IIRFilterPlan<F64>;
+
+  // The static create_from_impl methods are defined inline in the header,
+  // so they do not need separate explicit instantiation here.
 
 }  // namespace OmniDSP

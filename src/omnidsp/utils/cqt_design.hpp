@@ -1,6 +1,6 @@
 /**
  * @file cqt_design.hpp
- * @brief Declares internal utility functions for creating CQTSpec.
+ * @brief Declares internal utility functions for creating Design::CQT.
  * These are not part of the public OmniDSP::Utils API and are for use
  * within the cqt_design.cpp implementation or other internal utilities.
  */
@@ -15,13 +15,13 @@
 
 // Forward declare any types from public headers if needed by internal helpers,
 // to avoid including full public headers here if possible.
-// However, if helpers take CQTParams or CQTSpec, those headers would be needed.
-// For now, this is a placeholder.
+// However, if helpers take CQTParams or Design::CQT, those headers would be
+// needed. For now, this is a placeholder.
 
 namespace OmniDSP {
   // Forward declare if needed and not wanting to include the full header.
   // struct CQTParams; // From "OmniDSP/params/cqt.hpp"
-  // struct CQTSpec;   // From "OmniDSP/cqt.hpp"
+  // struct Design::CQT;   // From "OmniDSP/cqt.hpp"
 }
 
 namespace OmniDSP::Utils::Internal {

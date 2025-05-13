@@ -14,69 +14,24 @@
 #include <vector>
 
 // Core types are fundamental and are included directly.
-#include <OmniDSP/core_types.hpp>  // For Status, OmniExpected, F32, C32, BackendType etc.
-#include <OmniDSP/types/convolution.hpp>  // << NEW INCLUDE HERE for ConvolutionType, ConvolutionMethod
+#include <OmniDSP/core_types.hpp>  // For Status, OmniExpected, F32, C32, BackendType, Utils::GetComplexType etc.
+#include <OmniDSP/types/convolution.hpp>  // For ConvolutionType, ConvolutionMethod
+#include <OmniDSP/window.hpp>  // For WindowSetup (used in some design method params if any, or by Design structs)
 
-// Forward declarations for Spec and Plan types used in the interface.
-// The full definitions will be included in the .cpp files of concrete backends
-// or in the public API headers that use this interface (like Plan headers).
-namespace OmniDSP {
-  // From core_types.hpp (already included, but good to be aware of what's used)
-  // enum class Status;
-  // template <typename T> class OmniExpected;
-  // using F32 = float; ...
+// Design specifications (needed for method parameters)
+#include <OmniDSP/design/cqt.hpp>         // Defines Design::CQT
+#include <OmniDSP/design/fir_filter.hpp>  // Defines Design::FIRFilter
+#include <OmniDSP/design/iir_filter.hpp>  // Defines Design::IIRFilter
+#include <OmniDSP/design/resample.hpp>    // Defines Design::Resample
 
-  // From window.hpp
-  struct WindowSetup;  // Forward declaration
-
-  // From filter.hpp
-  struct FIRFilterSpec;  // Forward declaration
-  struct IIRFilterSpec;  // Forward declaration
-  struct IIRFilterCoef;  // Forward declaration
-  template <typename T>
-  using FIRCoefs
-      = std::vector<T>;  // Alias can be here if T is known (it is via F32/F64)
-                         // Or FIRCoefs itself would need to be forward declared
-                         // if it's a class template. Since it's a using alias,
-                         // this is fine.
-
-  // From resample.hpp
-  struct ResampleSpec;  // Forward declaration
-
-  // From cqt.hpp
-  struct CQTSpec;  // Forward declaration
-
-  // ConvolutionType and ConvolutionMethod are now included from
-  // types/convolution.hpp
-
-  // Public Plan classes (forward declared as they appear in return types of
-  // OmniDSP facade, but Abstract::Backend primarily deals with Impl classes for
-  // creation)
-  template <typename T>
-  class FFTPlan;
-  template <typename T>
-  class RFFTPlan;
-  template <typename T>
-  class CQTPlan;
-  template <typename T>
-  class ResamplePlan;
-  template <typename T>
-  class ConvolutionPlan;
-  template <typename T>
-  class CorrelationPlan;
-  template <typename T>
-  class FIRFilterPlan;
-  template <typename T>
-  class IIRFilterPlan;
-
-}  // namespace OmniDSP
+#include "OmniDSP/coefs/fir_filter.hpp"
+#include "OmniDSP/coefs/iir_filter.hpp"
 
 namespace OmniDSP::Abstract {
 
   //--------------------------------------------------------------------------
-  // Plan Implementation Interfaces (Abstract Base Classes)
-  // These define the private PIMPL interfaces for Plan objects.
-  // They use types from core_types.hpp and forward-declared Spec types.
+  // Plan / Processor Implementation Interfaces (Abstract Base Classes)
+  // TODO: Rename *PlanImpl to *ProcessorImpl for stateful operations.
   //--------------------------------------------------------------------------
   template <typename T>
   class FFTPlanImpl {
@@ -105,7 +60,7 @@ namespace OmniDSP::Abstract {
     virtual size_t get_length() const = 0;
   };
 
-  template <typename T>
+  template <typename T>  // TODO: Rename to ResampleProcessorImpl
   class ResamplePlanImpl {
    public:
     virtual ~ResamplePlanImpl() = default;
@@ -146,7 +101,7 @@ namespace OmniDSP::Abstract {
     [[nodiscard]] virtual ConvolutionMethod get_method() const = 0;
   };
 
-  template <typename T>
+  template <typename T>  // TODO: Rename to FIRFilterProcessorImpl
   class FIRFilterPlanImpl {
    public:
     virtual ~FIRFilterPlanImpl() = default;
@@ -158,7 +113,7 @@ namespace OmniDSP::Abstract {
     virtual size_t get_num_taps() const = 0;
   };
 
-  template <typename T>
+  template <typename T>  // TODO: Rename to IIRFilterProcessorImpl
   class IIRFilterPlanImpl {
    public:
     virtual ~IIRFilterPlanImpl() = default;
@@ -170,7 +125,7 @@ namespace OmniDSP::Abstract {
     virtual size_t get_num_sections() const = 0;
   };
 
-  template <typename T>
+  template <typename T>  // TODO: Rename to CQTProcessorImpl
   class CQTPlanImpl {
    public:
     using Complex = Utils::GetComplexType<T>;
@@ -183,195 +138,154 @@ namespace OmniDSP::Abstract {
     virtual size_t get_hop_length() const = 0;
   };
 
-  //--------------------------------------------------------------------------
-  // Main Backend Implementation Interface (Abstract Base Class)
-  // All methods are pure virtual.
-  //--------------------------------------------------------------------------
   class Backend {
    public:
     virtual ~Backend() = default;
     virtual BackendType get_backend() const = 0;
 
-    // --- One-off DSP Operations ---
+    // One-off DSP Operations
     [[nodiscard]] virtual OmniExpected<F32Vec> convolve_f32(
-        const F32Vec& input,
-        const F32Vec& kernel,
-        ConvolutionType type,
-        ConvolutionMethod method = ConvolutionMethod::Auto) const
+        const F32Vec&, const F32Vec&, ConvolutionType, ConvolutionMethod) const
         = 0;
     [[nodiscard]] virtual OmniExpected<F64Vec> convolve_f64(
-        const F64Vec& input,
-        const F64Vec& kernel,
-        ConvolutionType type,
-        ConvolutionMethod method = ConvolutionMethod::Auto) const
+        const F64Vec&, const F64Vec&, ConvolutionType, ConvolutionMethod) const
         = 0;
     [[nodiscard]] virtual OmniExpected<C32Vec> convolve_c32(
-        const C32Vec& input,
-        const C32Vec& kernel,
-        ConvolutionType type,
-        ConvolutionMethod method = ConvolutionMethod::Auto) const
+        const C32Vec&, const C32Vec&, ConvolutionType, ConvolutionMethod) const
         = 0;
     [[nodiscard]] virtual OmniExpected<C64Vec> convolve_c64(
-        const C64Vec& input,
-        const C64Vec& kernel,
-        ConvolutionType type,
-        ConvolutionMethod method = ConvolutionMethod::Auto) const
+        const C64Vec&, const C64Vec&, ConvolutionType, ConvolutionMethod) const
         = 0;
-
     [[nodiscard]] virtual OmniExpected<F32Vec> correlate_f32(
-        const F32Vec& input,
-        const F32Vec& kernel,
-        ConvolutionType type,
-        ConvolutionMethod method = ConvolutionMethod::Auto) const
+        const F32Vec&, const F32Vec&, ConvolutionType, ConvolutionMethod) const
         = 0;
     [[nodiscard]] virtual OmniExpected<F64Vec> correlate_f64(
-        const F64Vec& input,
-        const F64Vec& kernel,
-        ConvolutionType type,
-        ConvolutionMethod method = ConvolutionMethod::Auto) const
+        const F64Vec&, const F64Vec&, ConvolutionType, ConvolutionMethod) const
         = 0;
     [[nodiscard]] virtual OmniExpected<C32Vec> correlate_c32(
-        const C32Vec& input,
-        const C32Vec& kernel,
-        ConvolutionType type,
-        ConvolutionMethod method = ConvolutionMethod::Auto) const
+        const C32Vec&, const C32Vec&, ConvolutionType, ConvolutionMethod) const
         = 0;
     [[nodiscard]] virtual OmniExpected<C64Vec> correlate_c64(
-        const C64Vec& input,
-        const C64Vec& kernel,
-        ConvolutionType type,
-        ConvolutionMethod method = ConvolutionMethod::Auto) const
+        const C64Vec&, const C64Vec&, ConvolutionType, ConvolutionMethod) const
         = 0;
-
-    [[nodiscard]] virtual OmniExpected<C32Vec> fft_c32(
-        const C32Vec& input) const
+    [[nodiscard]] virtual OmniExpected<C32Vec> fft_c32(const C32Vec&) const = 0;
+    [[nodiscard]] virtual OmniExpected<C64Vec> fft_c64(const C64Vec&) const = 0;
+    [[nodiscard]] virtual OmniExpected<C32Vec> ifft_c32(const C32Vec&) const
         = 0;
-    [[nodiscard]] virtual OmniExpected<C64Vec> fft_c64(
-        const C64Vec& input) const
+    [[nodiscard]] virtual OmniExpected<C64Vec> ifft_c64(const C64Vec&) const
         = 0;
-    [[nodiscard]] virtual OmniExpected<C32Vec> ifft_c32(
-        const C32Vec& input) const
+    [[nodiscard]] virtual OmniExpected<C32Vec> rfft_f32(const F32Vec&) const
         = 0;
-    [[nodiscard]] virtual OmniExpected<C64Vec> ifft_c64(
-        const C64Vec& input) const
-        = 0;
-    [[nodiscard]] virtual OmniExpected<C32Vec> rfft_f32(
-        const F32Vec& input) const
-        = 0;
-    [[nodiscard]] virtual OmniExpected<C64Vec> rfft_f64(
-        const F64Vec& input) const
+    [[nodiscard]] virtual OmniExpected<C64Vec> rfft_f64(const F64Vec&) const
         = 0;
     [[nodiscard]] virtual OmniExpected<F32Vec> irfft_c32(
-        const C32Vec& input, size_t output_length) const
+        const C32Vec&, size_t) const
         = 0;
     [[nodiscard]] virtual OmniExpected<F64Vec> irfft_c64(
-        const C64Vec& input, size_t output_length) const
+        const C64Vec&, size_t) const
         = 0;
 
-    // --- Specific Window Generation Methods (Pure Virtual) ---
+    // Window Generation Methods
     [[nodiscard]] virtual Status bartlett_window_f32(
-        size_t length, std::span<F32> output) const
+        size_t, std::span<F32>) const
         = 0;
     [[nodiscard]] virtual Status bartlett_window_f64(
-        size_t length, std::span<F64> output) const
+        size_t, std::span<F64>) const
         = 0;
     [[nodiscard]] virtual Status blackman_window_f32(
-        size_t length, std::span<F32> output) const
+        size_t, std::span<F32>) const
         = 0;
     [[nodiscard]] virtual Status blackman_window_f64(
-        size_t length, std::span<F64> output) const
+        size_t, std::span<F64>) const
         = 0;
     [[nodiscard]] virtual Status flattop_window_f32(
-        size_t length, std::span<F32> output) const
+        size_t, std::span<F32>) const
         = 0;
     [[nodiscard]] virtual Status flattop_window_f64(
-        size_t length, std::span<F64> output) const
+        size_t, std::span<F64>) const
         = 0;
     [[nodiscard]] virtual Status gaussian_window_f32(
-        size_t length, double stddev, std::span<F32> output) const
+        size_t, double, std::span<F32>) const
         = 0;
     [[nodiscard]] virtual Status gaussian_window_f64(
-        size_t length, double stddev, std::span<F64> output) const
+        size_t, double, std::span<F64>) const
         = 0;
     [[nodiscard]] virtual Status hamming_window_f32(
-        size_t length, std::span<F32> output) const
+        size_t, std::span<F32>) const
         = 0;
     [[nodiscard]] virtual Status hamming_window_f64(
-        size_t length, std::span<F64> output) const
+        size_t, std::span<F64>) const
         = 0;
-    [[nodiscard]] virtual Status hann_window_f32(
-        size_t length, std::span<F32> output) const
+    [[nodiscard]] virtual Status hann_window_f32(size_t, std::span<F32>) const
         = 0;
-    [[nodiscard]] virtual Status hann_window_f64(
-        size_t length, std::span<F64> output) const
+    [[nodiscard]] virtual Status hann_window_f64(size_t, std::span<F64>) const
         = 0;
     [[nodiscard]] virtual Status kaiser_window_f32(
-        size_t length, double beta, std::span<F32> output) const
+        size_t, double, std::span<F32>) const
         = 0;
     [[nodiscard]] virtual Status kaiser_window_f64(
-        size_t length, double beta, std::span<F64> output) const
+        size_t, double, std::span<F64>) const
         = 0;
     [[nodiscard]] virtual Status rectangular_window_f32(
-        size_t length, std::span<F32> output) const
+        size_t, std::span<F32>) const
         = 0;
     [[nodiscard]] virtual Status rectangular_window_f64(
-        size_t length, std::span<F64> output) const
+        size_t, std::span<F64>) const
         = 0;
     [[nodiscard]] virtual Status triangular_window_f32(
-        size_t length, std::span<F32> output) const
+        size_t, std::span<F32>) const
         = 0;
     [[nodiscard]] virtual Status triangular_window_f64(
-        size_t length, std::span<F64> output) const
+        size_t, std::span<F64>) const
         = 0;
 
-    // --- Plan Impl Factory Methods ---
+    // Plan Impl / Processor Impl Factory Methods
     [[nodiscard]] virtual OmniExpected<std::unique_ptr<FFTPlanImpl<C32>>>
     create_fft_plan_impl_c32(size_t length) const = 0;
     [[nodiscard]] virtual OmniExpected<std::unique_ptr<FFTPlanImpl<C64>>>
     create_fft_plan_impl_c64(size_t length) const = 0;
-
     [[nodiscard]] virtual OmniExpected<std::unique_ptr<RFFTPlanImpl<F32>>>
     create_rfft_plan_impl_f32(size_t length) const = 0;
     [[nodiscard]] virtual OmniExpected<std::unique_ptr<RFFTPlanImpl<F64>>>
     create_rfft_plan_impl_f64(size_t length) const = 0;
 
     [[nodiscard]] virtual OmniExpected<std::unique_ptr<CQTPlanImpl<F32>>>
-    create_cqt_plan_impl_f32(const CQTSpec& spec) const = 0;
+    create_cqt_plan_impl_f32(const Design::CQT& design) const = 0;
     [[nodiscard]] virtual OmniExpected<std::unique_ptr<CQTPlanImpl<F64>>>
-    create_cqt_plan_impl_f64(const CQTSpec& spec) const = 0;
+    create_cqt_plan_impl_f64(const Design::CQT& design) const = 0;
 
     [[nodiscard]] virtual OmniExpected<std::unique_ptr<ResamplePlanImpl<F32>>>
-    create_resample_plan_impl_f32(const ResampleSpec& spec) const = 0;
+    create_resample_plan_impl_f32(const Design::Resample& design) const = 0;
     [[nodiscard]] virtual OmniExpected<std::unique_ptr<ResamplePlanImpl<F64>>>
-    create_resample_plan_impl_f64(const ResampleSpec& spec) const = 0;
+    create_resample_plan_impl_f64(const Design::Resample& design) const = 0;
 
     [[nodiscard]] virtual OmniExpected<
         std::unique_ptr<ConvolutionPlanImpl<F32>>>
     create_convolution_plan_impl_f32(
         const F32Vec& kernel,
         ConvolutionType type,
-        ConvolutionMethod method = ConvolutionMethod::Auto) const
+        ConvolutionMethod method) const
         = 0;
     [[nodiscard]] virtual OmniExpected<
         std::unique_ptr<ConvolutionPlanImpl<F64>>>
     create_convolution_plan_impl_f64(
         const F64Vec& kernel,
         ConvolutionType type,
-        ConvolutionMethod method = ConvolutionMethod::Auto) const
+        ConvolutionMethod method) const
         = 0;
     [[nodiscard]] virtual OmniExpected<
         std::unique_ptr<ConvolutionPlanImpl<C32>>>
     create_convolution_plan_impl_c32(
         const C32Vec& kernel,
         ConvolutionType type,
-        ConvolutionMethod method = ConvolutionMethod::Auto) const
+        ConvolutionMethod method) const
         = 0;
     [[nodiscard]] virtual OmniExpected<
         std::unique_ptr<ConvolutionPlanImpl<C64>>>
     create_convolution_plan_impl_c64(
         const C64Vec& kernel,
         ConvolutionType type,
-        ConvolutionMethod method = ConvolutionMethod::Auto) const
+        ConvolutionMethod method) const
         = 0;
 
     [[nodiscard]] virtual OmniExpected<
@@ -379,28 +293,28 @@ namespace OmniDSP::Abstract {
     create_correlation_plan_impl_f32(
         const F32Vec& kernel,
         ConvolutionType type,
-        ConvolutionMethod method = ConvolutionMethod::Auto) const
+        ConvolutionMethod method) const
         = 0;
     [[nodiscard]] virtual OmniExpected<
         std::unique_ptr<CorrelationPlanImpl<F64>>>
     create_correlation_plan_impl_f64(
         const F64Vec& kernel,
         ConvolutionType type,
-        ConvolutionMethod method = ConvolutionMethod::Auto) const
+        ConvolutionMethod method) const
         = 0;
     [[nodiscard]] virtual OmniExpected<
         std::unique_ptr<CorrelationPlanImpl<C32>>>
     create_correlation_plan_impl_c32(
         const C32Vec& kernel,
         ConvolutionType type,
-        ConvolutionMethod method = ConvolutionMethod::Auto) const
+        ConvolutionMethod method) const
         = 0;
     [[nodiscard]] virtual OmniExpected<
         std::unique_ptr<CorrelationPlanImpl<C64>>>
     create_correlation_plan_impl_c64(
         const C64Vec& kernel,
         ConvolutionType type,
-        ConvolutionMethod method = ConvolutionMethod::Auto) const
+        ConvolutionMethod method) const
         = 0;
 
     [[nodiscard]] virtual OmniExpected<std::unique_ptr<FIRFilterPlanImpl<F32>>>
@@ -421,23 +335,22 @@ namespace OmniDSP::Abstract {
         const std::vector<IIRFilterCoef>& sos_coefficients) const
         = 0;
 
-    // --- Filter Design ---
+    // Filter Design
     [[nodiscard]] virtual OmniExpected<FIRCoefs<F32>> design_fir_filter_f32(
-        const FIRFilterSpec& spec) const
+        const Design::FIRFilter& design) const
         = 0;
     [[nodiscard]] virtual OmniExpected<FIRCoefs<F64>> design_fir_filter_f64(
-        const FIRFilterSpec& spec) const
+        const Design::FIRFilter& design) const
         = 0;
     [[nodiscard]] virtual OmniExpected<std::vector<IIRFilterCoef>>
-    design_iir_filter_f32(const IIRFilterSpec& spec) const = 0;
+    design_iir_filter_f32(const Design::IIRFilter& design) const = 0;
     [[nodiscard]] virtual OmniExpected<std::vector<IIRFilterCoef>>
-    design_iir_filter_f64(const IIRFilterSpec& spec) const = 0;
+    design_iir_filter_f64(const Design::IIRFilter& design) const = 0;
 
    protected:
     Backend() = default;
   };
 
-  // --- Backend Factory Function Declarations ---
   std::unique_ptr<Backend> create_default_backend();
   std::unique_ptr<Backend> create_accelerate_backend();
   std::unique_ptr<Backend> create_onemkl_backend();

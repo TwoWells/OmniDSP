@@ -87,7 +87,7 @@ namespace OmniDSP {
   }
 
   // --- OperationType Enum ---
-  enum class OperationType {
+  enum class OperationCategory {
     FFT,
     RFFT,
     Convolution,
@@ -96,7 +96,8 @@ namespace OmniDSP {
     IIRFilter,
     Resample,
     CQT,
-    Windowing
+    Windowing,
+    GenericFallback
   };
 
   // --- Type Aliases ---

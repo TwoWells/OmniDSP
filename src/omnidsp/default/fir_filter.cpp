@@ -6,7 +6,7 @@
 #include "fir_filter.hpp"  // Corresponding header
 
 #include <OmniDSP/core_types.hpp>    // Core types, Status, OmniExpected
-#include <OmniDSP/filter.hpp>        // Public FIRFilterSpec
+#include <OmniDSP/filter.hpp>        // Public Design::FIRFilter
 #include <OmniDSP/types/filter.hpp>  // For FilterType enum
 #include <OmniDSP/window.hpp>        // For OmniDSP::generate_window
 #include <algorithm>  // For std::copy, std::fill, std::min, std::max
@@ -29,7 +29,7 @@ namespace OmniDSP::Default {
   //--------------------------------------------------------------------------
   template <typename T>
   [[nodiscard]] OmniExpected<FIRCoefs<T>> generate_fir_filter_coeffs(
-      const FIRFilterSpec& spec)
+      const Design::FIRFilter& spec)
   {
     auto logger = spdlog::get("OmniDSP");
     if (!logger) {
@@ -38,7 +38,7 @@ namespace OmniDSP::Default {
 
     if (!spec.validate_consistency()) {
       logger->error(
-          "Invalid FIRFilterSpec provided to "
+          "Invalid Design::FIRFilter provided to "
           "Default::generate_fir_filter_coeffs. Order={}, SR={}, C1={}, "
           "WinLen={}",
           spec.order,
@@ -276,8 +276,8 @@ namespace OmniDSP::Default {
 
   // Explicit template instantiations for generate_fir_filter_coeffs
   template OmniExpected<FIRCoefs<F32>> generate_fir_filter_coeffs<F32>(
-      const FIRFilterSpec& spec);
+      const Design::FIRFilter& spec);
   template OmniExpected<FIRCoefs<F64>> generate_fir_filter_coeffs<F64>(
-      const FIRFilterSpec& spec);
+      const Design::FIRFilter& spec);
 
 }  // namespace OmniDSP::Default

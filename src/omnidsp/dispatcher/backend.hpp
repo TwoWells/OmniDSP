@@ -1,71 +1,86 @@
 /**
- * @file backend.hpp (Default)
- * @brief Defines the Default backend class, inheriting from Abstract::Backend.
+ * @file backend.hpp (dispatcher)
+ * @brief Defines the Dispatcher::Backend class, which delegates operations
+ * to other configured backend implementations based on OperationCategory.
  */
 
-#ifndef OMNIDSP_DEFAULT_BACKEND_HPP
-#define OMNIDSP_DEFAULT_BACKEND_HPP
+#ifndef OMNIDSP_DISPATCHER_BACKEND_HPP
+#define OMNIDSP_DISPATCHER_BACKEND_HPP
 
-#include <spdlog/spdlog.h>  // For logging (optional here, mainly in .cpp)
+#include <map>
+#include <memory>
+#include <string>
+#include <vector>
 
-#include <OmniDSP/core_types.hpp>  // For F32, F64, Status, OmniExpected etc.
-#include <OmniDSP/window.hpp>      // For WindowSetup (used in implementations)
+#include "OmniDSP/core_types.hpp"
+#include "OmniDSP/types/convolution.hpp"
+#include "interface/backend.hpp"
 
-#include "../interface/backend.hpp"  // Abstract::Backend
+// Ensure full definitions for types used in method signatures are available
+#include "OmniDSP/cqt.hpp"  // For Design::CQT
+#include "OmniDSP/filter.hpp"  // For Design::FIRFilter, Design::IIRFilter, IIRFilterCoef, FIRCoefs
+#include "OmniDSP/resample.hpp"  // For Design::Resample
+// WindowSetup is included via core_types or other public headers if needed by
+// interface
 
-namespace OmniDSP::Default {
+namespace OmniDSP {
+  // OperationCategory enum assumed to be available (e.g., via core_types.hpp)
+}
 
-  class Backend : public Abstract::Backend {
+namespace OmniDSP::Dispatcher {
+
+  class Backend final : public Abstract::Backend {
    public:
-    Backend();
-    ~Backend() override;
+    Backend(
+        std::unique_ptr<Abstract::Backend> primary_backend,
+        std::map<OperationCategory, std::shared_ptr<Abstract::Backend>>
+            backend_overrides);
+
+    ~Backend() override = default;
 
     BackendType get_backend() const override;
 
-    // --- DSP Operations (One-Off Implementations) ---
-    // These remain as per your existing structure and Abstract::Backend
-    // interface
+    // --- One-off DSP Operations ---
     [[nodiscard]] OmniExpected<F32Vec> convolve_f32(
         const F32Vec& input,
         const F32Vec& kernel,
         ConvolutionType type,
-        ConvolutionMethod method = ConvolutionMethod::Auto) const override;
-    // ... other convolve, correlate, fft methods ...
+        ConvolutionMethod method) const override;
     [[nodiscard]] OmniExpected<F64Vec> convolve_f64(
         const F64Vec& input,
         const F64Vec& kernel,
         ConvolutionType type,
-        ConvolutionMethod method = ConvolutionMethod::Auto) const override;
+        ConvolutionMethod method) const override;
     [[nodiscard]] OmniExpected<C32Vec> convolve_c32(
         const C32Vec& input,
         const C32Vec& kernel,
         ConvolutionType type,
-        ConvolutionMethod method = ConvolutionMethod::Auto) const override;
+        ConvolutionMethod method) const override;
     [[nodiscard]] OmniExpected<C64Vec> convolve_c64(
         const C64Vec& input,
         const C64Vec& kernel,
         ConvolutionType type,
-        ConvolutionMethod method = ConvolutionMethod::Auto) const override;
+        ConvolutionMethod method) const override;
     [[nodiscard]] OmniExpected<F32Vec> correlate_f32(
         const F32Vec& input,
         const F32Vec& kernel,
         ConvolutionType type,
-        ConvolutionMethod method = ConvolutionMethod::Auto) const override;
+        ConvolutionMethod method) const override;
     [[nodiscard]] OmniExpected<F64Vec> correlate_f64(
         const F64Vec& input,
         const F64Vec& kernel,
         ConvolutionType type,
-        ConvolutionMethod method = ConvolutionMethod::Auto) const override;
+        ConvolutionMethod method) const override;
     [[nodiscard]] OmniExpected<C32Vec> correlate_c32(
         const C32Vec& input,
         const C32Vec& kernel,
         ConvolutionType type,
-        ConvolutionMethod method = ConvolutionMethod::Auto) const override;
+        ConvolutionMethod method) const override;
     [[nodiscard]] OmniExpected<C64Vec> correlate_c64(
         const C64Vec& input,
         const C64Vec& kernel,
         ConvolutionType type,
-        ConvolutionMethod method = ConvolutionMethod::Auto) const override;
+        ConvolutionMethod method) const override;
     [[nodiscard]] OmniExpected<C32Vec> fft_c32(
         const C32Vec& input) const override;
     [[nodiscard]] OmniExpected<C64Vec> fft_c64(
@@ -83,14 +98,7 @@ namespace OmniDSP::Default {
     [[nodiscard]] OmniExpected<F64Vec> irfft_c64(
         const C64Vec& input, size_t output_length) const override;
 
-    // --- Window Generation Overrides ---
-    // These override the specific pure virtual window functions from
-    // Abstract::Backend. Default::Backend provides the concrete default
-    // implementations, typically by constructing a WindowSetup and calling the
-    // free OmniDSP::generate_window function. Optimized backends can inherit
-    // from Default::Backend and override only the window types they wish to
-    // specialize.
-
+    // --- Specific Window Generation Methods ---
     [[nodiscard]] Status bartlett_window_f32(
         size_t length, std::span<F32> output) const override;
     [[nodiscard]] Status bartlett_window_f64(
@@ -128,121 +136,116 @@ namespace OmniDSP::Default {
     [[nodiscard]] Status triangular_window_f64(
         size_t length, std::span<F64> output) const override;
 
-    // The generic generate_window_f32(const WindowSetup&, ...) and _f64
-    // versions are NO LONGER virtual overrides if Abstract::Backend removes
-    // them (which is the current plan). They are not part of the public virtual
-    // interface derived from Abstract::Backend.
-
-    // --- Plan Factories ---
-    // These remain as per your existing structure and Abstract::Backend
-    // interface
+    // --- Plan Impl / Processor Impl Factory Methods ---
     [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C32>>>
-    create_fft_plan_impl_c32(size_t length) const;
+    create_fft_plan_impl_c32(size_t length) const override;
     [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C64>>>
-    create_fft_plan_impl_c64(size_t length) const;
+    create_fft_plan_impl_c64(size_t length) const override;
     [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::RFFTPlanImpl<F32>>>
-    create_rfft_plan_impl_f32(size_t length) const;
+    create_rfft_plan_impl_f32(size_t length) const override;
     [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::RFFTPlanImpl<F64>>>
-    create_rfft_plan_impl_f64(size_t length) const;
-
+    create_rfft_plan_impl_f64(size_t length) const override;
     [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTPlanImpl<F32>>>
-    create_cqt_plan_impl_f32(const Design::CQT& spec) const;
+    create_cqt_plan_impl_f32(
+        const Design::CQT& design) const override;  // Changed to Design::CQT
     [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTPlanImpl<F64>>>
-    create_cqt_plan_impl_f64(const Design::CQT& spec) const;
-
+    create_cqt_plan_impl_f64(
+        const Design::CQT& design) const override;  // Changed to Design::CQT
     [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::ResamplePlanImpl<F32>>>
-    create_resample_plan_impl_f32(const Design::Resample& spec) const;
+    create_resample_plan_impl_f32(const Design::Resample& design)
+        const override;  // Changed to Design::Resample
     [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::ResamplePlanImpl<F64>>>
-    create_resample_plan_impl_f64(const Design::Resample& spec) const;
-
+    create_resample_plan_impl_f64(const Design::Resample& design)
+        const override;  // Changed to Design::Resample
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::ConvolutionPlanImpl<F32>>>
     create_convolution_plan_impl_f32(
         const F32Vec& kernel,
         ConvolutionType type,
-        ConvolutionMethod method) const;
+        ConvolutionMethod method) const override;
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::ConvolutionPlanImpl<F64>>>
     create_convolution_plan_impl_f64(
         const F64Vec& kernel,
         ConvolutionType type,
-        ConvolutionMethod method) const;
+        ConvolutionMethod method) const override;
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::ConvolutionPlanImpl<C32>>>
     create_convolution_plan_impl_c32(
         const C32Vec& kernel,
         ConvolutionType type,
-        ConvolutionMethod method) const;
+        ConvolutionMethod method) const override;
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::ConvolutionPlanImpl<C64>>>
     create_convolution_plan_impl_c64(
         const C64Vec& kernel,
         ConvolutionType type,
-        ConvolutionMethod method) const;
-
+        ConvolutionMethod method) const override;
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::CorrelationPlanImpl<F32>>>
     create_correlation_plan_impl_f32(
         const F32Vec& kernel,
         ConvolutionType type,
-        ConvolutionMethod method) const;
+        ConvolutionMethod method) const override;
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::CorrelationPlanImpl<F64>>>
     create_correlation_plan_impl_f64(
         const F64Vec& kernel,
         ConvolutionType type,
-        ConvolutionMethod method) const;
+        ConvolutionMethod method) const override;
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::CorrelationPlanImpl<C32>>>
     create_correlation_plan_impl_c32(
         const C32Vec& kernel,
         ConvolutionType type,
-        ConvolutionMethod method) const;
+        ConvolutionMethod method) const override;
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::CorrelationPlanImpl<C64>>>
     create_correlation_plan_impl_c64(
         const C64Vec& kernel,
         ConvolutionType type,
-        ConvolutionMethod method) const;
-
+        ConvolutionMethod method) const override;
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::FIRFilterPlanImpl<F32>>>
-    create_fir_filter_plan_impl_f32(const F32Vec& coefficients) const;
+    create_fir_filter_plan_impl_f32(const F32Vec& coefficients) const override;
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::FIRFilterPlanImpl<F64>>>
-    create_fir_filter_plan_impl_f64(const F64Vec& coefficients) const;
+    create_fir_filter_plan_impl_f64(const F64Vec& coefficients) const override;
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::FIRFilterPlanImpl<C32>>>
-    create_fir_filter_plan_impl_c32(const C32Vec& coefficients) const;
+    create_fir_filter_plan_impl_c32(const C32Vec& coefficients) const override;
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::FIRFilterPlanImpl<C64>>>
-    create_fir_filter_plan_impl_c64(const C64Vec& coefficients) const;
-
+    create_fir_filter_plan_impl_c64(const C64Vec& coefficients) const override;
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::IIRFilterPlanImpl<F32>>>
     create_iir_filter_plan_impl_f32(
-        const std::vector<IIRFilterCoef>& sos_coefficients) const;
+        const std::vector<IIRFilterCoef>& sos_coefficients) const override;
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::IIRFilterPlanImpl<F64>>>
     create_iir_filter_plan_impl_f64(
-        const std::vector<IIRFilterCoef>& sos_coefficients) const;
+        const std::vector<IIRFilterCoef>& sos_coefficients) const override;
 
     // --- Filter Design ---
     [[nodiscard]] OmniExpected<FIRCoefs<F32>> design_fir_filter_f32(
-        const Design::FIRFilter& spec) const override;
+        const Design::FIRFilter& design)
+        const override;  // Changed to Design::FIRFilter
     [[nodiscard]] OmniExpected<FIRCoefs<F64>> design_fir_filter_f64(
-        const Design::FIRFilter& spec) const override;
+        const Design::FIRFilter& design)
+        const override;  // Changed to Design::FIRFilter
     [[nodiscard]] OmniExpected<std::vector<IIRFilterCoef>>
-    design_iir_filter_f32(const Design::IIRFilter& spec) const override;
+    design_iir_filter_f32(const Design::IIRFilter& design)
+        const override;  // Changed to Design::IIRFilter
     [[nodiscard]] OmniExpected<std::vector<IIRFilterCoef>>
-    design_iir_filter_f64(const Design::IIRFilter& spec) const override;
+    design_iir_filter_f64(const Design::IIRFilter& design)
+        const override;  // Changed to Design::IIRFilter
 
    private:
-    // The templated helper generate_window_helper is removed as its role is
-    // superseded by Default::Backend directly implementing the specific window
-    // overrides (which in turn call the free OmniDSP::generate_window).
+    std::unique_ptr<Abstract::Backend> primary_backend_;
+    std::map<OperationCategory, std::shared_ptr<Abstract::Backend>> overrides_;
+    Abstract::Backend* select_backend(OperationCategory category) const;
   };
 
-}  // namespace OmniDSP::Default
+}  // namespace OmniDSP::Dispatcher
 
-#endif  // OMNIDSP_DEFAULT_BACKEND_HPP
+#endif  // OMNIDSP_DISPATCHER_BACKEND_HPP

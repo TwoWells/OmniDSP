@@ -9,7 +9,7 @@
 #include <ipps.h>  // IPP Signal Processing header
 
 #include <OmniDSP/core_types.hpp>  // For Status, F32, F64, Utils::IsComplex_v
-#include <OmniDSP/resample.hpp>    // For ResampleSpec definition
+#include <OmniDSP/resample.hpp>    // For Design::Resample definition
 #include <OmniDSP/window.hpp>      // For WindowSetup
 #include <cstddef>                 // For size_t
 #include <memory>                  // For std::unique_ptr
@@ -36,7 +36,7 @@ namespace OmniDSP::IntelIPP {
 
    public:
     explicit ResamplePlanImpl(
-        const Abstract::Backend* owner, const ResampleSpec& spec);
+        const Abstract::Backend* owner, const Design::Resample& spec);
 
     ~ResamplePlanImpl() override;
 
@@ -56,9 +56,9 @@ namespace OmniDSP::IntelIPP {
 
    private:
     // --- Configuration ---
-    // Store the full ResampleSpec to access L/M factors and other resolved
+    // Store the full Design::Resample to access L/M factors and other resolved
     // parameters.
-    ResampleSpec spec_;
+    Design::Resample spec_;
     // Individual members for frequently accessed or IPP-specific parameters can
     // still be kept if it improves clarity or avoids frequent spec_.member
     // access, but spec_ holds the truth. For now, input_rate_, output_rate_,
@@ -69,12 +69,13 @@ namespace OmniDSP::IntelIPP {
     int quality_;
 
     // --- IPP State ---
-    Ipp8u* p_spec_mem_ = nullptr;  // Raw memory for the IPP FIR Spec structure
-    Ipp8u* p_buffer_ = nullptr;    // Pointer to the IPP working buffer
-    int spec_mem_size_ = 0;        // Size of the p_spec_mem_ buffer
-    int buffer_size_ = 0;          // Size of the p_buffer_
+    Ipp8u* p_spec_mem_
+        = nullptr;               // Raw memory for the IPP FIR Design structure
+    Ipp8u* p_buffer_ = nullptr;  // Pointer to the IPP working buffer
+    int spec_mem_size_ = 0;      // Size of the p_spec_mem_ buffer
+    int buffer_size_ = 0;        // Size of the p_buffer_
 
-    // Typed pointer to the initialized IPP FIR Spec structure
+    // Typed pointer to the initialized IPP FIR Design structure
     void* p_ipp_fir_spec_ = nullptr;
   };
 

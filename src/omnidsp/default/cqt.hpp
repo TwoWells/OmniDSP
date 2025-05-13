@@ -7,7 +7,7 @@
 #define OMNIDSP_DEFAULT_CQT_HPP
 
 #include <OmniDSP/core_types.hpp>
-#include <OmniDSP/cqt.hpp>       // For Abstract::CQTPlanImpl and CQTSpec
+#include <OmniDSP/cqt.hpp>       // For Abstract::CQTPlanImpl and Design::CQT
 #include <OmniDSP/fft.hpp>       // For RFFTPlan (used internally)
 #include <OmniDSP/resample.hpp>  // For ResamplePlan (used internally)
 #include <OmniDSP/window.hpp>    // For WindowSetup
@@ -33,13 +33,14 @@ namespace OmniDSP::Default {
 
    public:
     /**
-     * @brief Constructs a CQTPlanImpl using a fully resolved CQTSpec.
+     * @brief Constructs a CQTPlanImpl using a fully resolved Design::CQT.
      * @param owner_backend Pointer to the backend instance creating this plan
      * (for creating FFT/Resample sub-plans).
      * @param spec The fully resolved Constant-Q Transform specification.
      * @throws OmniException if internal plan creation or setup fails.
      */
-    CQTPlanImpl(const Abstract::Backend* owner_backend, const CQTSpec& spec);
+    CQTPlanImpl(
+        const Abstract::Backend* owner_backend, const Design::CQT& spec);
 
     ~CQTPlanImpl() override;
 
@@ -58,7 +59,7 @@ namespace OmniDSP::Default {
 
    private:
     const Abstract::Backend* owner_backend_;  // Non-owning pointer
-    CQTSpec spec_;  // Store the resolved specification
+    Design::CQT spec_;  // Store the resolved specification
 
     // Internal structure to hold processed data for each octave
     struct ProcessedCQTOctave {

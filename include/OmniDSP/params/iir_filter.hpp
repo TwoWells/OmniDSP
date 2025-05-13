@@ -21,7 +21,7 @@ namespace OmniDSP {
    *
    * This structure is typically used as input to a utility function (e.g.,
    * `OmniDSP::Utils::create_spec`) which then calculates a full
-   * `OmniDSP::IIRFilterSpec`.
+   * `OmniDSP::Design::IIRFilter`.
    *
    * Construction of this object validates the provided parameters.
    * Fluent setters are available for modifying parameters after construction.

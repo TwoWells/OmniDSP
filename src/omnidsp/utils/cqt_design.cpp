@@ -1,6 +1,6 @@
 /**
  * @file cqt_design.cpp
- * @brief Implements utility functions for creating CQTSpec from CQTParams.
+ * @brief Implements utility functions for creating Design::CQT from CQTParams.
  */
 #include <algorithm>  // For std::sort, std::min, std::max, std::transform, std::unique
 #include <bit>  // For std::bit_ceil (C++20)
@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "OmniDSP/core_types.hpp"  // For OmniExpected, Status
-#include "OmniDSP/cqt.hpp"         // For CQTSpec, CQTOctaveSpec
+#include "OmniDSP/cqt.hpp"         // For Design::CQT, Design::CQTOctave
 #include "OmniDSP/params/cqt.hpp"
 #include "OmniDSP/utils.hpp"  // For the public declaration of Utils::create_spec
 #include "OmniDSP/window.hpp"  // For WindowSetup
@@ -20,19 +20,7 @@
 
 namespace OmniDSP::Utils {
 
-  // Helper function to calculate the next power of two (if std::bit_ceil is not
-  // available or for older C++) C++20 provides std::bit_ceil. Assuming C++20
-  // for now. static size_t next_power_of_two(size_t n) {
-  //     if (n == 0) return 1; // Or handle error
-  //     size_t p = 1;
-  //     while (p < n) {
-  //         p <<= 1;
-  //         if (p == 0) return 0; // Overflow
-  //     }
-  //     return p;
-  // }
-
-  OmniExpected<CQTSpec> create_spec(const CQTParams& params)
+  OmniExpected<Design::CQT> create_spec(const CQTParams& params)
   {
     // CQTParams constructor already performed initial validation.
     auto logger = spdlog::get("OmniDSP");
@@ -120,7 +108,7 @@ namespace OmniDSP::Utils {
     // param.
 
     // 4. Determine Octaves and Per-Octave Specs (for multi-rate CQT)
-    std::vector<CQTOctaveSpec> octave_specs;
+    std::vector<Design::CQTOctave> octave_specs;
     int num_octaves_to_process = 0;
 
     if (!all_bin_frequencies.empty()) {
@@ -175,8 +163,8 @@ namespace OmniDSP::Utils {
         WindowSetup octave_win_setup
             = params.window_setup_;  // Corrected: use params.window_setup
         // Length in octave_win_setup is per-kernel, not a single value for the
-        // octave. The CQTOctaveSpec's window_setup_for_octave is the *template*
-        // (type, params). Actual window generation uses
+        // octave. The Design::CQTOctave's window_setup_for_octave is the
+        // *template* (type, params). Actual window generation uses
         // kernel_lengths_samples[j].
         octave_win_setup.length = 0;  // Signify that length varies per kernel
 
@@ -203,9 +191,9 @@ namespace OmniDSP::Utils {
       }
     }
 
-    // 5. Construct and return CQTSpec
+    // 5. Construct and return Design::CQT
     try {
-      CQTSpec spec(
+      Design::CQT spec(
           params.sample_rate_,
           params.min_freq_,
           params.max_freq_,
@@ -219,17 +207,20 @@ namespace OmniDSP::Utils {
           std::move(octave_specs));
       return spec;
     }
-    catch (const std::invalid_argument& e) {  // Catch invalid_arguments from
-                                              // CQTOctaveSpec constructor FIRST
+    catch (const std::invalid_argument&
+               e) {  // Catch invalid_arguments from
+                     // Design::CQTOctave constructor FIRST
       logger->error(
-          "Invalid argument during CQTOctaveSpec construction within CQTSpec: "
+          "Invalid argument during Design::CQTOctave construction within "
+          "Design::CQT: "
           "{}",
           e.what());
       return std::unexpected(Status::InvalidArgument);
     }
-    catch (const std::logic_error& e) {  // Catch logic_errors from CQTSpec
+    catch (const std::logic_error& e) {  // Catch logic_errors from Design::CQT
                                          // constructor (more general)
-      logger->error("Logic error during CQTSpec construction: {}", e.what());
+      logger->error(
+          "Logic error during Design::CQT construction: {}", e.what());
       return std::unexpected(Status::Failure);
     }
   }

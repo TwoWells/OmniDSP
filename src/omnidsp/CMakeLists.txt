@@ -79,8 +79,11 @@ set(OMNIDSP_CORE_SOURCES
     # Utils implementations
     "${CMAKE_CURRENT_SOURCE_DIR}/utils/cqt_design.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/utils/filter_design.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/utils/iir_filter_design.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/utils/resample_design.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/utils/resample.cpp"
+    # Dispatcher
+    "${CMAKE_CURRENT_SOURCE_DIR}/dispatcher/backend.cpp"
 )
 
 # --- Create the Main 'OmniDSP' Library Target ---

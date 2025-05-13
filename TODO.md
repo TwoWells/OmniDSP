@@ -22,7 +22,7 @@
 
 - **Implement `Dispatcher::Backend` & Advanced Configuration:**
   - \[x\] Define `OperationCategory` enum.
-  - \[ \] Implement `Dispatcher::Backend` class.
+  - \[x\] Implement `Dispatcher::Backend` class.
   - \[ \] Implement `OmniDSP::create` overloads supporting overrides.
   - \[ \] Add tests for `Dispatcher::Backend` configurations.
 - **Implement Core Factory Methods & Execution Objects:**

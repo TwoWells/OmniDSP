@@ -7,9 +7,9 @@
 #define OMNIDSP_DEFAULT_RESAMPLE_HPP
 
 #include <OmniDSP/core_types.hpp>  // For Status, F32, F64
-#include <OmniDSP/filter.hpp>  // For FIRFilterSpec (used by design_filter indirectly)
-#include <OmniDSP/resample.hpp>  // For ResampleSpec
-#include <OmniDSP/window.hpp>    // For WindowSetup (used by ResampleSpec)
+#include <OmniDSP/filter.hpp>  // For Design::FIRFilter (used by design_filter indirectly)
+#include <OmniDSP/resample.hpp>  // For Design::Resample
+#include <OmniDSP/window.hpp>    // For WindowSetup (used by Design::Resample)
 #include <cstddef>               // For size_t
 #include <memory>                // For std::unique_ptr
 #include <span>                  // For std::span
@@ -44,7 +44,7 @@ namespace OmniDSP::Default {
      * @throws std::runtime_error if filter design or internal setup fails.
      */
     ResamplePlanImpl(
-        const Abstract::Backend* owner_backend, const ResampleSpec& spec);
+        const Abstract::Backend* owner_backend, const Design::Resample& spec);
 
     /**
      * @brief Destructor.
@@ -71,7 +71,8 @@ namespace OmniDSP::Default {
     // --- Configuration ---
     const Abstract::Backend*
         owner_backend_;  // Non-owning pointer to backend for filter design
-    ResampleSpec spec_;  // Stores the user-provided resampling specification
+    Design::Resample
+        spec_;  // Stores the user-provided resampling specification
     size_t interpolation_factor_;  // L
     size_t decimation_factor_;     // M
 

@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "OmniDSP/core_types.hpp"  // For OmniExpected, Status
-#include "OmniDSP/filter.hpp"      // For FIRFilterSpec, FilterType
+#include "OmniDSP/filter.hpp"      // For Design::FIRFilter, FilterType
 #include "OmniDSP/params/fir_filter.hpp"
 #include "OmniDSP/utils.hpp"   // For the declaration of Utils::create_spec
 #include "OmniDSP/window.hpp"  // For WindowSetup, WindowType, WindowParams
@@ -78,10 +78,10 @@ namespace OmniDSP::Utils {
     return order;
   }
 
-  OmniExpected<FIRFilterSpec> create_spec(const FIRFilterParams& params)
+  OmniExpected<Design::FIRFilter> create_spec(const FIRFilterParams& params)
   {
     // FIRFilterParams constructor already performed initial validation.
-    // Here, we resolve any estimations (like order) and finalize the Spec.
+    // Here, we resolve any estimations (like order) and finalize the Design.
 
     auto logger = spdlog::get("OmniDSP");
     if (!logger) {  // Fallback if named logger isn't registered
@@ -152,7 +152,8 @@ namespace OmniDSP::Utils {
     }
     catch (const std::invalid_argument& e) {
       logger->error(
-          "Failed to create a valid WindowSetup for FIRFilterSpec: {}. Window "
+          "Failed to create a valid WindowSetup for Design::FIRFilter: {}. "
+          "Window "
           "type: {}, Length: {}, Params given: {}",
           e.what(),
           static_cast<int>(final_window_setup.type),
@@ -161,9 +162,9 @@ namespace OmniDSP::Utils {
       return std::unexpected(Status::InvalidArgument);
     }
 
-    // Construct the FIRFilterSpec
+    // Construct the Design::FIRFilter
     try {
-      FIRFilterSpec spec(
+      Design::FIRFilter spec(
           params.filter_type_,
           final_order,
           params.sample_rate_,
@@ -174,16 +175,16 @@ namespace OmniDSP::Utils {
       if (!spec.validate_consistency()) {
         logger->error(
             "Internal consistency validation failed for created "
-            "FIRFilterSpec.");
+            "Design::FIRFilter.");
         return std::unexpected(Status::Failure);  // Internal error
       }
       return spec;
     }
-    catch (
-        const std::exception& e) {  // Catch potential errors from FIRFilterSpec
-                                    // constructor (e.g. asserts if enabled)
+    catch (const std::exception&
+               e) {  // Catch potential errors from Design::FIRFilter
+                     // constructor (e.g. asserts if enabled)
       logger->error(
-          "Exception during FIRFilterSpec construction: {}", e.what());
+          "Exception during Design::FIRFilter construction: {}", e.what());
       return std::unexpected(Status::Failure);
     }
   }

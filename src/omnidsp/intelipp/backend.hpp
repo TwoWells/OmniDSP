@@ -20,7 +20,7 @@
 #include <OmniDSP/core_types.hpp>
 #include <OmniDSP/fft.hpp>  // For public FFTPlan, RFFTPlan (though we return Impl)
 #include <OmniDSP/filter.hpp>  // For public FIRFilterPlan, IIRFilterPlan, IIRFilterCoef
-#include <OmniDSP/resample.hpp>  // For public ResamplePlan, ResampleSpec
+#include <OmniDSP/resample.hpp>  // For public ResamplePlan, Design::Resample
 #include <OmniDSP/window.hpp>    // For WindowSetup, specific window params
 
 // Forward declare or include Abstract Plan Impl types (needed for return types)
@@ -110,9 +110,9 @@ namespace OmniDSP::IntelIPP {
     create_rfft_plan_impl_f64(size_t length) const override;
 
     [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::ResamplePlanImpl<F32>>>
-    create_resample_plan_impl_f32(const ResampleSpec& spec) const override;
+    create_resample_plan_impl_f32(const Design::Resample& spec) const override;
     [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::ResamplePlanImpl<F64>>>
-    create_resample_plan_impl_f64(const ResampleSpec& spec) const override;
+    create_resample_plan_impl_f64(const Design::Resample& spec) const override;
 
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::FIRFilterPlanImpl<F32>>>

@@ -20,8 +20,8 @@
 #include <OmniDSP/core_types.hpp>   // For F32, F64, Status, OmniExpected etc.
 #include <OmniDSP/cqt.hpp>          // For CQTPlan
 #include <OmniDSP/fft.hpp>          // For FFTPlan, RFFTPlan
-#include <OmniDSP/filter.hpp>  // For FIRFilterPlan, IIRFilterPlan, FIRCoefs, IIRFilterCoef, FIRFilterSpec, IIRFilterSpec
-#include <OmniDSP/resample.hpp>  // For ResamplePlan, ResampleSpec
+#include <OmniDSP/filter.hpp>  // For FIRFilterPlan, IIRFilterPlan, FIRCoefs, IIRFilterCoef, Design::FIRFilter, Design::IIRFilter
+#include <OmniDSP/resample.hpp>  // For ResamplePlan, Design::Resample
 #include <OmniDSP/window.hpp>  // For WindowSetup, WindowParams, and the free OmniDSP::generate_window
 
 // Standard library headers
@@ -49,9 +49,9 @@ namespace OmniDSP::Default {
   // filter.cpp)
   template <typename T>
   [[nodiscard]] OmniExpected<FIRCoefs<T>> generate_fir_filter_coeffs(
-      const FIRFilterSpec& spec);
+      const Design::FIRFilter& spec);
   [[nodiscard]] OmniExpected<std::vector<IIRFilterCoef>>
-  generate_iir_filter_coeffs(const IIRFilterSpec& spec);
+  generate_iir_filter_coeffs(const Design::IIRFilter& spec);
 
   namespace convolution_detail {
     inline size_t next_power_of_two(size_t n)
@@ -1001,7 +1001,7 @@ namespace OmniDSP::Default {
 
   [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTPlanImpl<F32>>>
   Backend::create_cqt_plan_impl_f32(
-      const CQTSpec& spec) const  // Updated signature
+      const Design::CQT& spec) const  // Updated signature
   {
     try {
       // Call the CQTPlanImpl constructor with 'this' (owner_backend) and the
@@ -1011,7 +1011,8 @@ namespace OmniDSP::Default {
     catch (const OmniException& e) {  // Catch OmniException specifically if
                                       // thrown by CQTPlanImpl
       spdlog::get("OmniDSP")->error(
-          "Error creating Default::CQTPlanImpl<F32> from CQTSpec: {} (Status: "
+          "Error creating Default::CQTPlanImpl<F32> from Design::CQT: {} "
+          "(Status: "
           "{})",
           e.what(),
           static_cast<int>(e.get_status()));
@@ -1020,7 +1021,7 @@ namespace OmniDSP::Default {
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error(
-          "Error creating Default::CQTPlanImpl<F32> from CQTSpec: {}",
+          "Error creating Default::CQTPlanImpl<F32> from Design::CQT: {}",
           e.what());
       return OmniExpected<std::unique_ptr<Abstract::CQTPlanImpl<F32>>>(
           std::unexpect,
@@ -1030,7 +1031,7 @@ namespace OmniDSP::Default {
 
   [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTPlanImpl<F64>>>
   Backend::create_cqt_plan_impl_f64(
-      const CQTSpec& spec) const  // Updated signature
+      const Design::CQT& spec) const  // Updated signature
   {
     try {
       // Call the CQTPlanImpl constructor with 'this' (owner_backend) and the
@@ -1039,7 +1040,8 @@ namespace OmniDSP::Default {
     }
     catch (const OmniException& e) {
       spdlog::get("OmniDSP")->error(
-          "Error creating Default::CQTPlanImpl<F64> from CQTSpec: {} (Status: "
+          "Error creating Default::CQTPlanImpl<F64> from Design::CQT: {} "
+          "(Status: "
           "{})",
           e.what(),
           static_cast<int>(e.get_status()));
@@ -1048,7 +1050,7 @@ namespace OmniDSP::Default {
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error(
-          "Error creating Default::CQTPlanImpl<F64> from CQTSpec: {}",
+          "Error creating Default::CQTPlanImpl<F64> from Design::CQT: {}",
           e.what());
       return OmniExpected<std::unique_ptr<Abstract::CQTPlanImpl<F64>>>(
           std::unexpect, Status::Failure);  // Or a more specific error
@@ -1056,7 +1058,7 @@ namespace OmniDSP::Default {
   }
 
   [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::ResamplePlanImpl<F32>>>
-  Backend::create_resample_plan_impl_f32(const ResampleSpec& spec) const
+  Backend::create_resample_plan_impl_f32(const Design::Resample& spec) const
   {
     try {
       return std::make_unique<ResamplePlanImpl<F32>>(this, spec);
@@ -1069,7 +1071,7 @@ namespace OmniDSP::Default {
     }
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::ResamplePlanImpl<F64>>>
-  Backend::create_resample_plan_impl_f64(const ResampleSpec& spec) const
+  Backend::create_resample_plan_impl_f64(const Design::Resample& spec) const
   {
     try {
       return std::make_unique<ResamplePlanImpl<F64>>(this, spec);
@@ -1488,22 +1490,22 @@ namespace OmniDSP::Default {
 
   // --- Filter Design ---
   [[nodiscard]] OmniExpected<FIRCoefs<F32>> Backend::design_fir_filter_f32(
-      const FIRFilterSpec& spec) const
+      const Design::FIRFilter& spec) const
   {
     return generate_fir_filter_coeffs<F32>(spec);
   }
   [[nodiscard]] OmniExpected<FIRCoefs<F64>> Backend::design_fir_filter_f64(
-      const FIRFilterSpec& spec) const
+      const Design::FIRFilter& spec) const
   {
     return generate_fir_filter_coeffs<F64>(spec);
   }
   [[nodiscard]] OmniExpected<std::vector<IIRFilterCoef>>
-  Backend::design_iir_filter_f32(const IIRFilterSpec& spec) const
+  Backend::design_iir_filter_f32(const Design::IIRFilter& spec) const
   {
     return generate_iir_filter_coeffs(spec);
   }
   [[nodiscard]] OmniExpected<std::vector<IIRFilterCoef>>
-  Backend::design_iir_filter_f64(const IIRFilterSpec& spec) const
+  Backend::design_iir_filter_f64(const Design::IIRFilter& spec) const
   {
     return generate_iir_filter_coeffs(spec);
   }
