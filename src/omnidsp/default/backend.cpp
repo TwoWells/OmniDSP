@@ -19,16 +19,18 @@
 #include <OmniDSP/convolution.hpp>  // For ConvolutionPlan
 #include <OmniDSP/core_types.hpp>   // For F32, F64, Status, OmniExpected etc.
 #include <OmniDSP/cqt.hpp>          // For CQTPlan
-#include <OmniDSP/fft.hpp>          // For FFTPlan, RFFTPlan
-#include <OmniDSP/fir_filter.hpp>  // For FIRFilterPlan, IIRFilterPlan, FIRCoefs, IIRFilterCoef, Design::FIRFilter, Design::IIRFilter
-#include <OmniDSP/iir_filter.hpp>  // For FIRFilterPlan, IIRFilterPlan, FIRCoefs, IIRFilterCoef, Design::FIRFilter, Design::IIRFilter
-#include <OmniDSP/resample.hpp>    // For ResamplePlan, Design::Resample
+#include <OmniDSP/design/fir_filter.hpp>  // For Design::FIRFilter (ensure this is included)
+#include <OmniDSP/design/iir_filter.hpp>  // For Design::IIRFilter
+#include <OmniDSP/fft.hpp>                // For FFTPlan, RFFTPlan
+#include <OmniDSP/fir_filter.hpp>         // For FIRFilterPlan, FIRCoefs
+#include <OmniDSP/iir_filter.hpp>         // For IIRFilterPlan, IIRFilterCoef
+#include <OmniDSP/resample.hpp>           // For ResamplePlan, Design::Resample
 #include <OmniDSP/window.hpp>  // For WindowSetup, WindowParams, and the free OmniDSP::generate_window
 
 // Standard library headers
 #include <algorithm>
 #include <cmath>
-#include <complex>
+#include <complex>  // For std::complex
 #include <expected>
 #include <iostream>
 #include <limits>
@@ -47,23 +49,29 @@
 namespace OmniDSP::Default {
 
   // Forward declare the internal design helper functions (defined in
-  // filter.cpp)
+  // filter.cpp or similar, ensure they are accessible and correctly templated)
+  // Assuming FIRCoefs<T> is std::vector<T>
   template <typename T>
-  [[nodiscard]] OmniExpected<FIRCoefs<T>> generate_fir_filter_coeffs(
+  [[nodiscard]] OmniExpected<std::vector<T>>
+  generate_fir_filter_coeffs(  // Changed FIRCoefs<T> to std::vector<T> for
+                               // clarity
       const Design::FIRFilter& spec);
+
   [[nodiscard]] OmniExpected<std::vector<IIRFilterCoef>>
   generate_iir_filter_coeffs(const Design::IIRFilter& spec);
 
   namespace convolution_detail {
     inline size_t next_power_of_two(size_t n)
     {
-      if (n == 0) return 1;
+      if (n == 0) return 1;  // Should ideally not happen for FFT lengths
+      // Check if n is already a power of two
       if ((n > 0) && ((n & (n - 1)) == 0)) {
         return n;
       }
       size_t power = 1;
       while (power < n
-             && power < (std::numeric_limits<size_t>::max() / 2U) + 1) {
+             && power < (std::numeric_limits<size_t>::max() / 2U)
+                            + 1) {  // Prevent overflow
         power <<= 1;
       }
       return power;
@@ -87,9 +95,10 @@ namespace OmniDSP::Default {
   BackendType Backend::get_backend() const { return BackendType::Default; }
 
   // --- DSP Operations (One-Off Implementations) ---
-  // These create a temporary plan using the backend's *Impl factory,
-  // wrap it in a public Plan object, execute, and return the result.
-
+  // (Implementations for convolve, correlate, fft, ifft, rfft, irfft as
+  // previously provided)
+  // ... (Existing implementations for convolve_f32, etc. - keeping them concise
+  // here for brevity)
   [[nodiscard]] OmniExpected<F32Vec> Backend::convolve_f32(
       const F32Vec& input,
       const F32Vec& kernel,
@@ -537,9 +546,10 @@ namespace OmniDSP::Default {
     }
     return output;
   }
-
   // --- Window Generation (Overrides for specific virtuals from
   // Abstract::Backend) ---
+  // ... (Existing implementations for bartlett_window_f32, etc. - keeping them
+  // concise here)
   Status Backend::bartlett_window_f32(
       size_t length, std::span<F32> output) const
   {
@@ -942,10 +952,8 @@ namespace OmniDSP::Default {
   }
 
   // --- Plan Impl Factories ---
-  // These methods create the Default backend's specific plan implementations.
-  // They are called by the public create_*_plan methods in OmniDSP (via
-  // Abstract::Backend's overridden methods).
-
+  // ... (Existing implementations for create_fft_plan_impl_c32, etc. - keeping
+  // them concise here)
   [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C32>>>
   Backend::create_fft_plan_impl_c32(size_t length) const
   {
@@ -1001,16 +1009,12 @@ namespace OmniDSP::Default {
   }
 
   [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTProcessorImpl<F32>>>
-  Backend::create_cqt_processor_impl_f32(
-      const Design::CQT& spec) const  // Updated signature
+  Backend::create_cqt_processor_impl_f32(const Design::CQT& spec) const
   {
     try {
-      // Call the CQTProcessorImpl constructor with 'this' (owner_backend) and
-      // the 'spec'
       return std::make_unique<CQTProcessorImpl<F32>>(this, spec);
     }
-    catch (const OmniException& e) {  // Catch OmniException specifically if
-                                      // thrown by CQTProcessorImpl
+    catch (const OmniException& e) {
       spdlog::get("OmniDSP")->error(
           "Error creating Default::CQTProcessorImpl<F32> from Design::CQT: {} "
           "(Status: "
@@ -1025,18 +1029,14 @@ namespace OmniDSP::Default {
           "Error creating Default::CQTProcessorImpl<F32> from Design::CQT: {}",
           e.what());
       return OmniExpected<std::unique_ptr<Abstract::CQTProcessorImpl<F32>>>(
-          std::unexpect,
-          Status::Failure);  // Or a more specific error if identifiable
+          std::unexpect, Status::Failure);
     }
   }
 
   [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTProcessorImpl<F64>>>
-  Backend::create_cqt_processor_impl_f64(
-      const Design::CQT& spec) const  // Updated signature
+  Backend::create_cqt_processor_impl_f64(const Design::CQT& spec) const
   {
     try {
-      // Call the CQTProcessorImpl constructor with 'this' (owner_backend) and
-      // the 'spec'
       return std::make_unique<Default::CQTProcessorImpl<F64>>(this, spec);
     }
     catch (const OmniException& e) {
@@ -1054,7 +1054,7 @@ namespace OmniDSP::Default {
           "Error creating Default::CQTProcessorImpl<F64> from Design::CQT: {}",
           e.what());
       return OmniExpected<std::unique_ptr<Abstract::CQTProcessorImpl<F64>>>(
-          std::unexpect, Status::Failure);  // Or a more specific error
+          std::unexpect, Status::Failure);
     }
   }
 
@@ -1107,14 +1107,16 @@ namespace OmniDSP::Default {
               std::unique_ptr<Abstract::ConvolutionPlanImpl<F32>>>(
               std::unexpect, Status::InvalidArgument);
 
-        size_t temp_input_len_for_fft_calc = kernel_length;
+        size_t temp_input_len_for_fft_calc
+            = kernel_length;  // Simplified assumption for FFT length
         size_t fft_len = convolution_detail::next_power_of_two(
             kernel_length + temp_input_len_for_fft_calc - 1);
-        if (fft_len == 0)
+        if (fft_len == 0)  // Should be caught by kernel_length == 0 or
+                           // next_power_of_two returning non-zero
           return OmniExpected<
               std::unique_ptr<Abstract::ConvolutionPlanImpl<F32>>>(
               std::unexpect, Status::InvalidArgument);
-        if (fft_len < 2) fft_len = 2;
+        if (fft_len < 2) fft_len = 2;  // Minimum FFT length for some libraries
 
         auto rfft_plan_expected = this->create_rfft_plan_impl_f32(fft_len);
         if (!rfft_plan_expected)
@@ -1515,18 +1517,44 @@ namespace OmniDSP::Default {
   [[nodiscard]] OmniExpected<FIRCoefs<F32>> Backend::design_fir_filter_f32(
       const Design::FIRFilter& spec) const
   {
+    // Assuming FIRCoefs<F32> is std::vector<F32>
     return generate_fir_filter_coeffs<F32>(spec);
   }
+
   [[nodiscard]] OmniExpected<FIRCoefs<F64>> Backend::design_fir_filter_f64(
       const Design::FIRFilter& spec) const
   {
+    // Assuming FIRCoefs<F64> is std::vector<F64>
     return generate_fir_filter_coeffs<F64>(spec);
   }
+
+  // Implementations for complex FIR filter design
+  [[nodiscard]] OmniExpected<FIRCoefs<C32>> Backend::design_fir_filter_c32(
+      const Design::FIRFilter& spec) const
+  {
+    // generate_fir_filter_coeffs<std::complex<float>> should return
+    // OmniExpected<std::vector<std::complex<float>>> which is compatible with
+    // OmniExpected<C32Vec> if C32Vec is std::vector<std::complex<float>> and
+    // FIRCoefs<T> is std::vector<T>.
+    return generate_fir_filter_coeffs<C32>(spec);
+  }
+
+  [[nodiscard]] OmniExpected<FIRCoefs<C64>> Backend::design_fir_filter_c64(
+      const Design::FIRFilter& spec) const
+  {
+    // generate_fir_filter_coeffs<std::complex<double>> should return
+    // OmniExpected<std::vector<std::complex<double>>> which is compatible with
+    // OmniExpected<C64Vec> if C64Vec is std::vector<std::complex<double>> and
+    // FIRCoefs<T> is std::vector<T>.
+    return generate_fir_filter_coeffs<C64>(spec);
+  }
+
   [[nodiscard]] OmniExpected<std::vector<IIRFilterCoef>>
   Backend::design_iir_filter_f32(const Design::IIRFilter& spec) const
   {
     return generate_iir_filter_coeffs(spec);
   }
+
   [[nodiscard]] OmniExpected<std::vector<IIRFilterCoef>>
   Backend::design_iir_filter_f64(const Design::IIRFilter& spec) const
   {

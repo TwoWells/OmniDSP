@@ -16,7 +16,7 @@
 
 // spdlog include is deferred to .cpp as definitions are moved there.
 
-namespace OmniDSP {
+namespace OmniDSP::Params {
 
   /**
    * @brief Parameters for designing a Finite Impulse Response (FIR) filter.
@@ -28,7 +28,7 @@ namespace OmniDSP {
    * Construction of this object validates the provided parameters.
    * Fluent setters are available for modifying parameters after construction.
    */
-  struct OMNIDSP_EXPORT FIRFilterParams {
+  struct OMNIDSP_EXPORT FIRFilter {
     FilterType filter_type_;  ///< Type of filter (Lowpass, Highpass, etc.).
     double
         sample_rate_;  ///< Sample rate of the signal in Hz. Must be positive.
@@ -73,7 +73,7 @@ namespace OmniDSP {
      * @brief Explicit constructor that validates parameters. Declaration only.
      * Definition is in the corresponding .cpp file.
      */
-    explicit FIRFilterParams(
+    explicit FIRFilter(
         FilterType p_type,
         double p_sample_rate,
         double p_cutoff1,
@@ -93,17 +93,17 @@ namespace OmniDSP {
     [[nodiscard]] std::optional<size_t> num_taps() const;  // Definition in .cpp
 
     // --- Fluent Setters (Declarations) ---
-    FIRFilterParams& filter_type(FilterType val);
-    FIRFilterParams& sample_rate(double val);
-    FIRFilterParams& cutoff1(double val);
-    FIRFilterParams& cutoff2(std::optional<double> val);
-    FIRFilterParams& transition_width(std::optional<double> val);
-    FIRFilterParams& stopband_attenuation_db(std::optional<double> val);
-    FIRFilterParams& order(std::optional<size_t> val);
-    FIRFilterParams& window_setup(WindowSetup val);
-    FIRFilterParams& design_method(FIRFilterDesignMethod val);
+    FIRFilter& filter_type(FilterType val);
+    FIRFilter& sample_rate(double val);
+    FIRFilter& cutoff1(double val);
+    FIRFilter& cutoff2(std::optional<double> val);
+    FIRFilter& transition_width(std::optional<double> val);
+    FIRFilter& stopband_attenuation_db(std::optional<double> val);
+    FIRFilter& order(std::optional<size_t> val);
+    FIRFilter& window_setup(WindowSetup val);
+    FIRFilter& design_method(FIRFilterDesignMethod val);
   };
 
-}  // namespace OmniDSP
+}  // namespace OmniDSP::Params
 
 #endif  // OMNIDSP_PARAMS_FIR_FILTER_HPP

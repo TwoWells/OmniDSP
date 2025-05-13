@@ -540,27 +540,54 @@ namespace OmniDSP::Dispatcher {
   [[nodiscard]] OmniExpected<FIRCoefs<F32>> Backend::design_fir_filter_f32(
       const Design::FIRFilter& spec) const
   {
-    // Filter design can be tricky to categorize. Let's assume FIRFilter
-    // category for now.
-    return select_backend(OperationCategory::FIRFilter)
+    return select_backend(
+               OperationCategory::FIRFilter)  // Or a more general Design
+                                              // category
         ->design_fir_filter_f32(spec);
   }
   [[nodiscard]] OmniExpected<FIRCoefs<F64>> Backend::design_fir_filter_f64(
       const Design::FIRFilter& spec) const
   {
-    return select_backend(OperationCategory::FIRFilter)
+    return select_backend(
+               OperationCategory::FIRFilter)  // Or a more general Design
+                                              // category
         ->design_fir_filter_f64(spec);
   }
+
+  // Implementations for complex FIR filter design
+  [[nodiscard]] OmniExpected<FIRCoefs<C32>> Backend::design_fir_filter_c32(
+      const Design::FIRFilter& design) const
+  {
+    // Assuming FIRFilter category is appropriate for design of complex FIR
+    // filters as well. If there's a more specific category (e.g.,
+    // ComplexFIRFilterDesign), use that.
+    return select_backend(OperationCategory::FIRFilter)
+        ->design_fir_filter_c32(design);
+  }
+
+  [[nodiscard]] OmniExpected<FIRCoefs<C64>> Backend::design_fir_filter_c64(
+      const Design::FIRFilter& design) const
+  {
+    // Assuming FIRFilter category is appropriate for design of complex FIR
+    // filters as well.
+    return select_backend(OperationCategory::FIRFilter)
+        ->design_fir_filter_c64(design);
+  }
+
   [[nodiscard]] OmniExpected<std::vector<IIRFilterCoef>>
   Backend::design_iir_filter_f32(const Design::IIRFilter& spec) const
   {
-    return select_backend(OperationCategory::IIRFilter)
+    return select_backend(
+               OperationCategory::IIRFilter)  // Or a more general Design
+                                              // category
         ->design_iir_filter_f32(spec);
   }
   [[nodiscard]] OmniExpected<std::vector<IIRFilterCoef>>
   Backend::design_iir_filter_f64(const Design::IIRFilter& spec) const
   {
-    return select_backend(OperationCategory::IIRFilter)
+    return select_backend(
+               OperationCategory::IIRFilter)  // Or a more general Design
+                                              // category
         ->design_iir_filter_f64(spec);
   }
 

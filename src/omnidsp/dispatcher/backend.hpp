@@ -149,19 +149,17 @@ namespace OmniDSP::Dispatcher {
     [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::RFFTPlanImpl<F64>>>
     create_rfft_plan_impl_f64(size_t length) const override;
     [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTProcessorImpl<F32>>>
-    create_cqt_processor_impl_f32(
-        const Design::CQT& design) const override;  // Changed to Design::CQT
+    create_cqt_processor_impl_f32(const Design::CQT& design) const override;
     [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTProcessorImpl<F64>>>
-    create_cqt_processor_impl_f64(
-        const Design::CQT& design) const override;  // Changed to Design::CQT
+    create_cqt_processor_impl_f64(const Design::CQT& design) const override;
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::ResampleProcessorImpl<F32>>>
-    create_resample_processor_impl_f32(const Design::Resample& design)
-        const override;  // Changed to Design::Resample
+    create_resample_processor_impl_f32(
+        const Design::Resample& design) const override;
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::ResampleProcessorImpl<F64>>>
-    create_resample_processor_impl_f64(const Design::Resample& design)
-        const override;  // Changed to Design::Resample
+    create_resample_processor_impl_f64(
+        const Design::Resample& design) const override;
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::ConvolutionPlanImpl<F32>>>
     create_convolution_plan_impl_f32(
@@ -236,18 +234,23 @@ namespace OmniDSP::Dispatcher {
         const std::vector<IIRFilterCoef>& sos_coefficients) const override;
 
     // --- Filter Design ---
+    // Real coefficient FIR filter design
     [[nodiscard]] OmniExpected<FIRCoefs<F32>> design_fir_filter_f32(
-        const Design::FIRFilter& design)
-        const override;  // Changed to Design::FIRFilter
+        const Design::FIRFilter& design) const override;
     [[nodiscard]] OmniExpected<FIRCoefs<F64>> design_fir_filter_f64(
-        const Design::FIRFilter& design)
-        const override;  // Changed to Design::FIRFilter
+        const Design::FIRFilter& design) const override;
+
+    // Complex coefficient FIR filter design
+    [[nodiscard]] OmniExpected<FIRCoefs<C32>> design_fir_filter_c32(
+        const Design::FIRFilter& design) const override;
+    [[nodiscard]] OmniExpected<FIRCoefs<C64>> design_fir_filter_c64(
+        const Design::FIRFilter& design) const override;
+
+    // IIR filter design
     [[nodiscard]] OmniExpected<std::vector<IIRFilterCoef>>
-    design_iir_filter_f32(const Design::IIRFilter& design)
-        const override;  // Changed to Design::IIRFilter
+    design_iir_filter_f32(const Design::IIRFilter& design) const override;
     [[nodiscard]] OmniExpected<std::vector<IIRFilterCoef>>
-    design_iir_filter_f64(const Design::IIRFilter& design)
-        const override;  // Changed to Design::IIRFilter
+    design_iir_filter_f64(const Design::IIRFilter& design) const override;
 
    private:
     std::unique_ptr<Abstract::Backend> primary_backend_;

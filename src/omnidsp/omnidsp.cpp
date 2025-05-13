@@ -434,13 +434,13 @@ namespace OmniDSP {
   OmniDSP::create_plan(const ConvolutionParams&, const std::vector<C64>&) const;
 
   template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<FIRFilterProcessor<F32>>>
-  OmniDSP::create_processor(const FIRFilterParams&) const;
+  OmniDSP::create_processor(const Params::FIRFilter&) const;
   template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<FIRFilterProcessor<F64>>>
-  OmniDSP::create_processor(const FIRFilterParams&) const;
+  OmniDSP::create_processor(const Params::FIRFilter&) const;
   template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<FIRFilterProcessor<C32>>>
-  OmniDSP::create_processor(const FIRFilterParams&) const;
+  OmniDSP::create_processor(const Params::FIRFilter&) const;
   template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<FIRFilterProcessor<C64>>>
-  OmniDSP::create_processor(const FIRFilterParams&) const;
+  OmniDSP::create_processor(const Params::FIRFilter&) const;
   template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<FIRFilterProcessor<F32>>>
   OmniDSP::create_processor(const FIRCoefs<F32>&) const;
   template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<FIRFilterProcessor<F64>>>
@@ -479,9 +479,9 @@ namespace OmniDSP {
 
   // Filter Design Methods
   template OMNIDSP_EXPORT OmniExpected<FIRCoefs<F32>>
-  OmniDSP::design_fir_filter<F32>(const FIRFilterParams&) const;
+  OmniDSP::design_fir_filter<F32>(const Params::FIRFilter&) const;
   template OMNIDSP_EXPORT OmniExpected<FIRCoefs<F64>>
-  OmniDSP::design_fir_filter<F64>(const FIRFilterParams&) const;
+  OmniDSP::design_fir_filter<F64>(const Params::FIRFilter&) const;
   template OMNIDSP_EXPORT OmniExpected<std::vector<IIRFilterCoef>>
   OmniDSP::design_iir_filter<F32>(const IIRFilterParams&) const;
   template OMNIDSP_EXPORT OmniExpected<std::vector<IIRFilterCoef>>

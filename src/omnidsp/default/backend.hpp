@@ -8,8 +8,9 @@
 
 #include <spdlog/spdlog.h>  // For logging (optional here, mainly in .cpp)
 
-#include <OmniDSP/core_types.hpp>  // For F32, F64, Status, OmniExpected etc.
-#include <OmniDSP/window.hpp>      // For WindowSetup (used in implementations)
+#include <OmniDSP/core_types.hpp>  // For F32, F64, C32Vec, C64Vec, Status, OmniExpected etc.
+#include <OmniDSP/design/fir_filter.hpp>  // For Design::FIRFilter
+#include <OmniDSP/window.hpp>  // For WindowSetup (used in implementations)
 
 #include "../interface/backend.hpp"  // Abstract::Backend
 
@@ -23,14 +24,11 @@ namespace OmniDSP::Default {
     BackendType get_backend() const override;
 
     // --- DSP Operations (One-Off Implementations) ---
-    // These remain as per your existing structure and Abstract::Backend
-    // interface
     [[nodiscard]] OmniExpected<F32Vec> convolve_f32(
         const F32Vec& input,
         const F32Vec& kernel,
         ConvolutionType type,
         ConvolutionMethod method = ConvolutionMethod::Auto) const override;
-    // ... other convolve, correlate, fft methods ...
     [[nodiscard]] OmniExpected<F64Vec> convolve_f64(
         const F64Vec& input,
         const F64Vec& kernel,
@@ -84,13 +82,6 @@ namespace OmniDSP::Default {
         const C64Vec& input, size_t output_length) const override;
 
     // --- Window Generation Overrides ---
-    // These override the specific pure virtual window functions from
-    // Abstract::Backend. Default::Backend provides the concrete default
-    // implementations, typically by constructing a WindowSetup and calling the
-    // free OmniDSP::generate_window function. Optimized backends can inherit
-    // from Default::Backend and override only the window types they wish to
-    // specialize.
-
     [[nodiscard]] Status bartlett_window_f32(
         size_t length, std::span<F32> output) const override;
     [[nodiscard]] Status bartlett_window_f64(
@@ -128,14 +119,7 @@ namespace OmniDSP::Default {
     [[nodiscard]] Status triangular_window_f64(
         size_t length, std::span<F64> output) const override;
 
-    // The generic generate_window_f32(const WindowSetup&, ...) and _f64
-    // versions are NO LONGER virtual overrides if Abstract::Backend removes
-    // them (which is the current plan). They are not part of the public virtual
-    // interface derived from Abstract::Backend.
-
     // --- Plan Factories ---
-    // These remain as per your existing structure and Abstract::Backend
-    // interface
     [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C32>>>
     create_fft_plan_impl_c32(size_t length) const;
     [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C64>>>
@@ -230,19 +214,27 @@ namespace OmniDSP::Default {
         const std::vector<IIRFilterCoef>& sos_coefficients) const;
 
     // --- Filter Design ---
+    // For real coefficients
     [[nodiscard]] OmniExpected<FIRCoefs<F32>> design_fir_filter_f32(
         const Design::FIRFilter& spec) const override;
     [[nodiscard]] OmniExpected<FIRCoefs<F64>> design_fir_filter_f64(
         const Design::FIRFilter& spec) const override;
+
+    // For complex coefficients (NEWLY ADDED based on Abstract::Backend
+    // requirements)
+    [[nodiscard]] OmniExpected<FIRCoefs<C32>> design_fir_filter_c32(
+        const Design::FIRFilter& spec) const override;
+    [[nodiscard]] OmniExpected<FIRCoefs<C64>> design_fir_filter_c64(
+        const Design::FIRFilter& spec) const override;
+
+    // For IIR filters (real coefficients)
     [[nodiscard]] OmniExpected<std::vector<IIRFilterCoef>>
     design_iir_filter_f32(const Design::IIRFilter& spec) const override;
     [[nodiscard]] OmniExpected<std::vector<IIRFilterCoef>>
     design_iir_filter_f64(const Design::IIRFilter& spec) const override;
 
    private:
-    // The templated helper generate_window_helper is removed as its role is
-    // superseded by Default::Backend directly implementing the specific window
-    // overrides (which in turn call the free OmniDSP::generate_window).
+    // Helper for window generation (if any, or remove if not needed)
   };
 
 }  // namespace OmniDSP::Default

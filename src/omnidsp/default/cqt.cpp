@@ -7,12 +7,12 @@
 
 #include <OmniDSP/core_types.hpp>
 #include <OmniDSP/cqt.hpp>              // For Design::CQT, Design::CQTOctave
-#include <OmniDSP/fft.hpp>              // For RFFTPlan
+#include <OmniDSP/fft.hpp>              // For RFFTPlan, FFTPlan
 #include <OmniDSP/params/resample.hpp>  // For ResampleParams
-#include <OmniDSP/resample.hpp>         // For ResamplePlan, Design::Resample
+#include <OmniDSP/resample.hpp>  // For ResamplePlan, Design::Resample, ResampleProcessor
 #include <OmniDSP/utils.hpp>
 #include <OmniDSP/window.hpp>
-#include <algorithm>
+#include <algorithm>  // For std::fill
 #include <bit>
 #include <cmath>
 #include <numeric>
@@ -30,9 +30,8 @@ namespace OmniDSP::Default {
   // CQTProcessorImpl Method Implementations
   //--------------------------------------------------------------------------
   template <typename T>
-  CQTProcessorImpl<T>::CQTProcessorImpl(  // TODO: Rename to CQTProcessorImpl
-      const Abstract::Backend* owner_backend,
-      const Design::CQT& design_spec)
+  CQTProcessorImpl<T>::CQTProcessorImpl(
+      const Abstract::Backend* owner_backend, const Design::CQT& design_spec)
       : owner_backend_(owner_backend), spec_(design_spec)
   {
     auto logger = spdlog::get("OmniDSP");
@@ -58,14 +57,11 @@ namespace OmniDSP::Default {
         spec_.hop_length,
         spec_.num_octaves_processed);
 
-    processed_octaves_.reserve(spec_.octave_designs.size());  // CHANGED HERE
+    processed_octaves_.reserve(spec_.octave_designs.size());
 
-    size_t max_resample_buf_len = 0;
-    size_t max_fft_len_for_frame = 0;
-    size_t max_kernel_real_len = 0;
+    size_t max_fft_len_for_frame_buf = 0;
 
-    for (const auto& octave_design_item :
-         spec_.octave_designs) {  // CHANGED HERE and loop var name
+    for (const auto& octave_design_item : spec_.octave_designs) {
       logger->debug(
           "Processing OctaveDesign: OctaveSR={}, FFTLen={}, NumBins={}",
           octave_design_item.octave_sample_rate,
@@ -79,10 +75,10 @@ namespace OmniDSP::Default {
           > 1e-6) {
         WindowParams kaiser_params;
         kaiser_params["beta"] = 5.0;
-        ResampleParams resample_params(  // CORRECTED ARGUMENT ORDER
+        ResampleParams resample_params(
             spec_.original_sample_rate,
             octave_design_item.octave_sample_rate,
-            10,  // quality
+            10,
             WindowSetup{WindowType::Kaiser, 0, kaiser_params});
 
         auto internal_resample_design_e = Utils::create_spec(resample_params);
@@ -140,21 +136,23 @@ namespace OmniDSP::Default {
             "Failed to wrap internal RFFTPlanImpl for CQT.", Status::Failure);
       }
 
+      if (octave_design_item.fft_length / 2 + 1 > max_fft_len_for_frame_buf) {
+        max_fft_len_for_frame_buf = octave_design_item.fft_length / 2 + 1;
+      }
+
       std::vector<std::vector<Complex>> octave_sparse_kernels_fft;
       octave_sparse_kernels_fft.reserve(
           octave_design_item.bin_frequencies.size());
 
-      if (octave_design_item.fft_length > max_kernel_real_len) {
-        max_kernel_real_len = octave_design_item.fft_length;
-      }
-      if (octave_design_item.fft_length / 2 + 1 > max_fft_len_for_frame) {
-        max_fft_len_for_frame = octave_design_item.fft_length / 2 + 1;
-      }
+      // This buffer is transient for kernel FFT generation, not part of
+      // persistent state. std::vector<T>
+      // temp_kernel_real_time_domain(octave_design_item.fft_length);
 
       for (size_t k_idx = 0; k_idx < octave_design_item.bin_frequencies.size();
            ++k_idx) {
         double bin_freq = octave_design_item.bin_frequencies[k_idx];
         int N_k = octave_design_item.kernel_lengths_samples[k_idx];
+
         if (N_k <= 0) {
           logger->warn(
               "Kernel length N_k is {} for freq {}. Skipping kernel.",
@@ -174,8 +172,6 @@ namespace OmniDSP::Default {
               "CQT Kernel length exceeds FFT length.", Status::InvalidArgument);
         }
 
-        temp_kernel_real_buffer_.assign(octave_design_item.fft_length, T{0});
-
         WindowSetup kernel_win_setup
             = octave_design_item.window_setup_for_octave;
         kernel_win_setup.length = N_k;
@@ -186,8 +182,7 @@ namespace OmniDSP::Default {
         if (!gen_win_status) {
           logger->error(
               "CQTProcessorImpl: Failed to generate CQT analysis window for "
-              "f={} "
-              "Hz, N_k={}. Status: {}",
+              "f={} Hz, N_k={}. Status: {}",
               bin_freq,
               N_k,
               static_cast<int>(gen_win_status.error()));
@@ -197,6 +192,7 @@ namespace OmniDSP::Default {
         }
 
         T norm_factor = static_cast<T>(1.0) / static_cast<T>(N_k);
+
         std::vector<Complex> complex_kernel_time_domain(
             octave_design_item.fft_length, Complex{T{0.0}, T{0.0}});
         for (int n = 0; n < N_k; ++n) {
@@ -205,7 +201,7 @@ namespace OmniDSP::Default {
           Complex exp_val = std::exp(Complex(
               T{0.0},
               static_cast<T>(
-                  2.0 * std::numbers::pi_v<double> * bin_freq * time_n)));
+                  -2.0 * std::numbers::pi_v<double> * bin_freq * time_n)));
           complex_kernel_time_domain[n]
               = norm_factor * window_values[n] * exp_val;
         }
@@ -264,11 +260,18 @@ namespace OmniDSP::Default {
           octave_design_item.bin_frequencies);
     }
 
-    if (max_kernel_real_len > 0) {
-      // temp_kernel_real_buffer_ might be unused now.
+    if (max_fft_len_for_frame_buf > 0) {
+      frame_fft_buffer_.resize(max_fft_len_for_frame_buf);
     }
-    if (max_fft_len_for_frame > 0) {
-      frame_fft_buffer_.resize(max_fft_len_for_frame);
+
+    size_t max_octave_fft_len = 0;
+    for (const auto& od : spec_.octave_designs) {
+      if (od.fft_length > max_octave_fft_len) {
+        max_octave_fft_len = od.fft_length;
+      }
+    }
+    if (max_octave_fft_len > 0) {
+      resampled_buffer_.resize(max_octave_fft_len);
     }
 
     logger->info(
@@ -294,13 +297,68 @@ namespace OmniDSP::Default {
       logger->warn(
           "Default::CQTProcessorImpl::execute: Plan not initialized (no "
           "processed "
-          "octaves).");
+          "octaves). Output will be zeroed.");
+      std::fill(output.begin(), output.end(), Complex{T{0}, T{0}});
       return Status::NotInitialized;
     }
+
+    // TODO: Implement the actual CQT processing logic using overlap-add or
+    // other framing strategy. This will involve:
+    // 1. Framing the input signal.
+    // 2. For each frame:
+    //    a. For each octave in processed_octaves_:
+    //       i. Resample the current audio frame to octave_sample_rate (if
+    //       resampler exists for this octave).
+    //          Store in resampled_buffer_.
+    //       ii. Take FFT of the (resampled) audio frame using rfft_plan. Store
+    //       in frame_fft_buffer_.
+    //           (Ensure frame_fft_buffer_ is appropriate size for RFFT output).
+    //       iii. For each CQT kernel in sparse_kernels_fft for this octave:
+    //            - Multiply the frame_fft_buffer_ with the pre-computed
+    //            kernel_fft (element-wise).
+    //            - Sum the result (or IFFT and take specific sample if
+    //            time-domain CQT).
+    //              This is spectral convolution, so result is one complex
+    //              number per (frame, bin).
+    //    b. Store/accumulate results into the output span, considering
+    //    hop_length.
+
     logger->warn(
         "Default::CQTProcessorImpl::execute is not fully implemented beyond "
-        "setup.");
-    return Status::NotImplemented;
+        "setup. Output will be zeroed.");
+    std::fill(output.begin(), output.end(), Complex{T{0}, T{0}});
+    return Status::NotImplemented;  // Placeholder
+  }
+
+  template <typename T>
+  Status CQTProcessorImpl<T>::reset()
+  {
+    auto logger = spdlog::get("OmniDSP");
+    if (!logger) {
+      logger = spdlog::default_logger();
+    }
+    logger->trace("Default::CQTProcessorImpl::reset() called.");
+
+    for (auto& octave_data : processed_octaves_) {
+      if (octave_data.resampler) {
+        Status resampler_status = octave_data.resampler->reset();
+        if (resampler_status != Status::Success) {
+          logger->error(
+              "Failed to reset resampler for octave with SR {}. Status: {}",
+              octave_data.octave_sample_rate,
+              static_cast<int>(resampler_status));
+          // Depending on desired strictness, could return resampler_status or
+          // continue resetting others. For now, let's log and continue.
+        }
+      }
+    }
+    // If execute() had other state (e.g., overlap-add buffers), clear them
+    // here. std::fill(resampled_buffer_.begin(), resampled_buffer_.end(),
+    // T{0}); // Optional: clear processing buffers
+    // std::fill(frame_fft_buffer_.begin(), frame_fft_buffer_.end(),
+    // Complex{T{0},T{0}}); // Optional
+
+    return Status::Success;
   }
 
   template <typename T>
@@ -315,31 +373,39 @@ namespace OmniDSP::Default {
     if (spec_.hop_length == 0) return 0;
     if (input_length == 0) return 0;
 
-    size_t longest_kernel_at_original_sr = 0;
-    for (const auto& oct_design : spec_.octave_designs) {  // CHANGED HERE
-      for (int kernel_len_oct_sr : oct_design.kernel_lengths_samples) {
-        double len_at_orig_sr_double
-            = static_cast<double>(kernel_len_oct_sr)
+    size_t max_samples_needed_at_original_sr = 0;
+    if (!spec_.octave_designs.empty()) {
+      for (const auto& oct_design : spec_.octave_designs) {
+        size_t samples_for_this_octave_fft = oct_design.fft_length;
+        double samples_at_original_sr_double
+            = static_cast<double>(samples_for_this_octave_fft)
               * (spec_.original_sample_rate / oct_design.octave_sample_rate);
-        size_t len_at_orig_sr
-            = static_cast<size_t>(std::round(len_at_orig_sr_double));
-        if (len_at_orig_sr > longest_kernel_at_original_sr) {
-          longest_kernel_at_original_sr = len_at_orig_sr;
+        size_t samples_at_original_sr
+            = static_cast<size_t>(std::ceil(samples_at_original_sr_double));
+        if (samples_at_original_sr > max_samples_needed_at_original_sr) {
+          max_samples_needed_at_original_sr = samples_at_original_sr;
         }
       }
     }
-    if (longest_kernel_at_original_sr == 0
+
+    if (max_samples_needed_at_original_sr == 0
         && !spec_.all_bin_frequencies.empty()) {
-      longest_kernel_at_original_sr = static_cast<size_t>(std::round(
+      max_samples_needed_at_original_sr = static_cast<size_t>(std::ceil(
           spec_.quality_factor_q * spec_.original_sample_rate
-          / spec_.all_bin_frequencies[0]));
-      if (longest_kernel_at_original_sr == 0) longest_kernel_at_original_sr = 1;
+          / spec_.min_freq));
+      if (max_samples_needed_at_original_sr == 0)
+        max_samples_needed_at_original_sr = 1;
+    }
+    else if (
+        max_samples_needed_at_original_sr == 0
+        && spec_.all_bin_frequencies.empty()) {
+      return 0;
     }
 
-    if (input_length <= longest_kernel_at_original_sr) {
-      return (input_length > 0) ? 1 : 0;
+    if (input_length < max_samples_needed_at_original_sr) {
+      return 0;
     }
-    return (input_length - longest_kernel_at_original_sr) / spec_.hop_length
+    return (input_length - max_samples_needed_at_original_sr) / spec_.hop_length
            + 1;
   }
 
@@ -349,6 +415,7 @@ namespace OmniDSP::Default {
     return spec_.hop_length;
   }
 
+  // Explicit template instantiations
   template class CQTProcessorImpl<float>;
   template class CQTProcessorImpl<double>;
 

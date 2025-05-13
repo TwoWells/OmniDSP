@@ -13,10 +13,10 @@
 #include <string>                    // For std::to_string, string concatenation
 #include <utility>                   // For std::move
 
-namespace OmniDSP {
+namespace OmniDSP::Params {
 
   // Constructor (with spdlog integration)
-  FIRFilterParams::FIRFilterParams(
+  FIRFilter::FIRFilter(
       FilterType p_type,
       double p_sample_rate,
       double p_cutoff1,
@@ -43,13 +43,14 @@ namespace OmniDSP {
     std::string msg;
 
     if (sample_rate_ <= 0.0) {
-      msg = "FIRFilterParams Constructor: sample_rate must be positive. Got "
+      msg = "Params::FIRFilter Constructor: sample_rate must be positive. Got "
             + std::to_string(sample_rate_);
       if (logger) logger->error(msg);
       throw std::invalid_argument(msg);
     }
     if (cutoff1_ <= 0.0 || cutoff1_ >= sample_rate_ / 2.0) {
-      msg = "FIRFilterParams Constructor: cutoff1 (" + std::to_string(cutoff1_)
+      msg = "Params::FIRFilter Constructor: cutoff1 ("
+            + std::to_string(cutoff1_)
             + ") is out of valid range (0, sample_rate/2 = "
             + std::to_string(sample_rate_ / 2.0) + ").";
       if (logger) logger->error(msg);
@@ -60,14 +61,14 @@ namespace OmniDSP {
         || filter_type_ == FilterType::Bandstop) {
       if (!this->cutoff2_.has_value()) {
         msg
-            = "FIRFilterParams Constructor: cutoff2 is required for "
+            = "Params::FIRFilter Constructor: cutoff2 is required for "
               "Bandpass/Bandstop filters.";
         if (logger) logger->error(msg);
         throw std::invalid_argument(msg);
       }
       if (this->cutoff2_.value() <= 0.0
           || this->cutoff2_.value() >= sample_rate_ / 2.0) {
-        msg = "FIRFilterParams Constructor: cutoff2 ("
+        msg = "Params::FIRFilter Constructor: cutoff2 ("
               + std::to_string(this->cutoff2_.value())
               + ") is out of valid range (0, sample_rate/2 = "
               + std::to_string(sample_rate_ / 2.0) + ").";
@@ -75,7 +76,7 @@ namespace OmniDSP {
         throw std::invalid_argument(msg);
       }
       if (this->cutoff2_.value() <= this->cutoff1_) {
-        msg = "FIRFilterParams Constructor: For Bandpass/Bandstop, cutoff2 ("
+        msg = "Params::FIRFilter Constructor: For Bandpass/Bandstop, cutoff2 ("
               + std::to_string(this->cutoff2_.value())
               + ") must be greater than cutoff1 ("
               + std::to_string(this->cutoff1_) + ").";
@@ -86,7 +87,7 @@ namespace OmniDSP {
     else {
       if (this->cutoff2_.has_value()) {
         msg
-            = "FIRFilterParams Constructor: cutoff2 should only be specified "
+            = "Params::FIRFilter Constructor: cutoff2 should only be specified "
               "for Bandpass/Bandstop filters.";
         if (logger)
           logger->warn(msg);  // Changed to warning as it might not be critical
@@ -97,7 +98,8 @@ namespace OmniDSP {
     if (this->transition_width_.has_value()
         && this->transition_width_.value() <= 0.0) {
       msg
-          = "FIRFilterParams Constructor: transition_width, if specified, must "
+          = "Params::FIRFilter Constructor: transition_width, if specified, "
+            "must "
             "be positive. Got "
             + std::to_string(this->transition_width_.value());
       if (logger) logger->error(msg);
@@ -106,7 +108,7 @@ namespace OmniDSP {
     if (this->stopband_attenuation_db_.has_value()
         && this->stopband_attenuation_db_.value() <= 0.0) {
       msg
-          = "FIRFilterParams Constructor: stopband_attenuation_db, if "
+          = "Params::FIRFilter Constructor: stopband_attenuation_db, if "
             "specified, must be positive. Got "
             + std::to_string(this->stopband_attenuation_db_.value());
       if (logger) logger->error(msg);
@@ -118,18 +120,19 @@ namespace OmniDSP {
             this->transition_width_.has_value()
             && this->stopband_attenuation_db_.has_value())) {
       msg
-          = "FIRFilterParams Constructor: Either 'order' must be specified, or "
+          = "Params::FIRFilter Constructor: Either 'order' must be specified, "
+            "or "
             "both 'transition_width' and 'stopband_attenuation_db' must be "
             "specified for order estimation.";
       if (logger) logger->error(msg);
       throw std::invalid_argument(msg);
     }
     // WindowSetup is validated by its own constructor.
-    if (logger) logger->trace("FIRFilterParams constructed successfully.");
+    if (logger) logger->trace("Params::FIRFilter constructed successfully.");
   }
 
   // Definition for num_taps
-  std::optional<size_t> FIRFilterParams::num_taps() const
+  std::optional<size_t> FIRFilter::num_taps() const
   {
     if (order_.has_value()) {
       return order_.value() + 1;
@@ -139,7 +142,7 @@ namespace OmniDSP {
 
   // --- Fluent Setter Definitions ---
 
-  FIRFilterParams& FIRFilterParams::filter_type(FilterType val)
+  FIRFilter& FIRFilter::filter_type(FilterType val)
   {
     filter_type_ = val;
     auto logger = spdlog::get("OmniDSP");
@@ -148,43 +151,43 @@ namespace OmniDSP {
     }
     if (logger)
       logger->trace(
-          "FIRFilterParams::filter_type to {}", static_cast<int>(val));
+          "Params::FIRFilter::filter_type to {}", static_cast<int>(val));
     // Add validation if type change invalidates cutoff2, or defer to a final
     // validate() call
     return *this;
   }
 
-  FIRFilterParams& FIRFilterParams::sample_rate(double val)
+  FIRFilter& FIRFilter::sample_rate(double val)
   {
     auto logger = spdlog::get("OmniDSP");
     if (!logger) {
       logger = spdlog::default_logger();
     }
     if (val <= 0.0) {
-      std::string msg = "FIRFilterParams::sample_rate: value ("
+      std::string msg = "Params::FIRFilter::sample_rate: value ("
                         + std::to_string(val) + ") must be positive.";
       if (logger) logger->error(msg);
       throw std::invalid_argument(msg);
     }
     sample_rate_ = val;
-    if (logger) logger->trace("FIRFilterParams::sample_rate to {}", val);
+    if (logger) logger->trace("Params::FIRFilter::sample_rate to {}", val);
     return *this;
   }
 
-  FIRFilterParams& FIRFilterParams::cutoff1(double val)
+  FIRFilter& FIRFilter::cutoff1(double val)
   {
     auto logger = spdlog::get("OmniDSP");
     if (!logger) {
       logger = spdlog::default_logger();
     }
     if (val <= 0.0) {
-      std::string msg = "FIRFilterParams::cutoff1: value ("
+      std::string msg = "Params::FIRFilter::cutoff1: value ("
                         + std::to_string(val) + ") must be positive.";
       if (logger) logger->error(msg);
       throw std::invalid_argument(msg);
     }
     if (sample_rate_ > 0.0 && val >= sample_rate_ / 2.0) {
-      std::string msg = "FIRFilterParams::cutoff1: value ("
+      std::string msg = "Params::FIRFilter::cutoff1: value ("
                         + std::to_string(val)
                         + ") must be less than Nyquist frequency ("
                         + std::to_string(sample_rate_ / 2.0) + ").";
@@ -192,11 +195,11 @@ namespace OmniDSP {
       throw std::invalid_argument(msg);
     }
     cutoff1_ = val;
-    if (logger) logger->trace("FIRFilterParams::cutoff1 to {}", val);
+    if (logger) logger->trace("Params::FIRFilter::cutoff1 to {}", val);
     return *this;
   }
 
-  FIRFilterParams& FIRFilterParams::cutoff2(std::optional<double> val)
+  FIRFilter& FIRFilter::cutoff2(std::optional<double> val)
   {
     auto logger = spdlog::get("OmniDSP");
     if (!logger) {
@@ -204,17 +207,18 @@ namespace OmniDSP {
     }
     if (val.has_value()) {
       if (val.value() <= 0.0) {
-        std::string msg = "FIRFilterParams::cutoff2: value ("
+        std::string msg = "Params::FIRFilter::cutoff2: value ("
                           + std::to_string(val.value())
                           + ") must be positive if specified.";
         if (logger) logger->error(msg);
         throw std::invalid_argument(msg);
       }
       if (sample_rate_ > 0.0 && val.value() >= sample_rate_ / 2.0) {
-        std::string msg
-            = "FIRFilterParams::cutoff2: value (" + std::to_string(val.value())
-              + ") must be less than Nyquist frequency ("
-              + std::to_string(sample_rate_ / 2.0) + ") if specified.";
+        std::string msg = "Params::FIRFilter::cutoff2: value ("
+                          + std::to_string(val.value())
+                          + ") must be less than Nyquist frequency ("
+                          + std::to_string(sample_rate_ / 2.0)
+                          + ") if specified.";
         if (logger) logger->error(msg);
         throw std::invalid_argument(msg);
       }
@@ -225,21 +229,21 @@ namespace OmniDSP {
     cutoff2_ = val;
     if (logger) {
       if (val.has_value())
-        logger->trace("FIRFilterParams::cutoff2 to {}", val.value());
+        logger->trace("Params::FIRFilter::cutoff2 to {}", val.value());
       else
-        logger->trace("FIRFilterParams::cutoff2 to nullopt");
+        logger->trace("Params::FIRFilter::cutoff2 to nullopt");
     }
     return *this;
   }
 
-  FIRFilterParams& FIRFilterParams::transition_width(std::optional<double> val)
+  FIRFilter& FIRFilter::transition_width(std::optional<double> val)
   {
     auto logger = spdlog::get("OmniDSP");
     if (!logger) {
       logger = spdlog::default_logger();
     }
     if (val.has_value() && val.value() <= 0.0) {
-      std::string msg = "FIRFilterParams::transition_width: value ("
+      std::string msg = "Params::FIRFilter::transition_width: value ("
                         + std::to_string(val.value())
                         + ") must be positive if specified.";
       if (logger) logger->error(msg);
@@ -248,9 +252,9 @@ namespace OmniDSP {
     transition_width_ = val;
     if (logger) {
       if (val.has_value())
-        logger->trace("FIRFilterParams::transition_width to {}", val.value());
+        logger->trace("Params::FIRFilter::transition_width to {}", val.value());
       else
-        logger->trace("FIRFilterParams::transition_width to nullopt");
+        logger->trace("Params::FIRFilter::transition_width to nullopt");
     }
     // If setting this, and order is also set, it might lead to ambiguity.
     // The constructor handles the logic that one or the other (or
@@ -259,15 +263,14 @@ namespace OmniDSP {
     return *this;
   }
 
-  FIRFilterParams& FIRFilterParams::stopband_attenuation_db(
-      std::optional<double> val)
+  FIRFilter& FIRFilter::stopband_attenuation_db(std::optional<double> val)
   {
     auto logger = spdlog::get("OmniDSP");
     if (!logger) {
       logger = spdlog::default_logger();
     }
     if (val.has_value() && val.value() <= 0.0) {
-      std::string msg = "FIRFilterParams::stopband_attenuation_db: value ("
+      std::string msg = "Params::FIRFilter::stopband_attenuation_db: value ("
                         + std::to_string(val.value())
                         + ") must be positive if specified.";
       if (logger) logger->error(msg);
@@ -277,14 +280,14 @@ namespace OmniDSP {
     if (logger) {
       if (val.has_value())
         logger->trace(
-            "FIRFilterParams::stopband_attenuation_db to {}", val.value());
+            "Params::FIRFilter::stopband_attenuation_db to {}", val.value());
       else
-        logger->trace("FIRFilterParams::stopband_attenuation_db to nullopt");
+        logger->trace("Params::FIRFilter::stopband_attenuation_db to nullopt");
     }
     return *this;
   }
 
-  FIRFilterParams& FIRFilterParams::order(std::optional<size_t> val)
+  FIRFilter& FIRFilter::order(std::optional<size_t> val)
   {
     order_ = val;
     auto logger = spdlog::get("OmniDSP");
@@ -293,16 +296,16 @@ namespace OmniDSP {
     }
     if (logger) {
       if (val.has_value())
-        logger->trace("FIRFilterParams::order to {}", val.value());
+        logger->trace("Params::FIRFilter::order to {}", val.value());
       else
-        logger->trace("FIRFilterParams::order to nullopt");
+        logger->trace("Params::FIRFilter::order to nullopt");
     }
     // If order is set, transition_width and stopband_attenuation_db might
     // become irrelevant for order estimation.
     return *this;
   }
 
-  FIRFilterParams& FIRFilterParams::window_setup(WindowSetup val)
+  FIRFilter& FIRFilter::window_setup(WindowSetup val)
   {
     // WindowSetup's constructor handles its own validation and logging.
     window_setup_ = std::move(val);
@@ -312,12 +315,12 @@ namespace OmniDSP {
     }
     if (logger)
       logger->trace(
-          "FIRFilterParams::window_setup to type {}",
+          "Params::FIRFilter::window_setup to type {}",
           static_cast<int>(window_setup_.type));
     return *this;
   }
 
-  FIRFilterParams& FIRFilterParams::design_method(FIRFilterDesignMethod val)
+  FIRFilter& FIRFilter::design_method(FIRFilterDesignMethod val)
   {
     design_method_ = val;
     auto logger = spdlog::get("OmniDSP");
@@ -326,8 +329,8 @@ namespace OmniDSP {
     }
     if (logger)
       logger->trace(
-          "FIRFilterParams::design_method to {}", static_cast<int>(val));
+          "Params::FIRFilter::design_method to {}", static_cast<int>(val));
     return *this;
   }
 
-}  // namespace OmniDSP
+}  // namespace OmniDSP::Params

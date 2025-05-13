@@ -14,7 +14,7 @@
 #include <vector>
 
 // Core types are fundamental and are included directly.
-#include <OmniDSP/core_types.hpp>  // For Status, OmniExpected, F32, C32, BackendType, Utils::GetComplexType etc.
+#include <OmniDSP/core_types.hpp>  // For Status, OmniExpected, F32, C32, C32Vec, C64Vec, BackendType, Utils::GetComplexType etc.
 #include <OmniDSP/types/convolution.hpp>  // For ConvolutionType, ConvolutionMethod
 #include <OmniDSP/window.hpp>  // For WindowSetup (used in some design method params if any, or by Design structs)
 
@@ -24,14 +24,14 @@
 #include <OmniDSP/design/iir_filter.hpp>  // Defines Design::IIRFilter
 #include <OmniDSP/design/resample.hpp>    // Defines Design::Resample
 
-#include "OmniDSP/coefs/fir_filter.hpp"
-#include "OmniDSP/coefs/iir_filter.hpp"
+// Coefficient types (may be returned by design methods)
+#include <OmniDSP/coefs/fir_filter.hpp>  // Defines FIRCoefs
+#include <OmniDSP/coefs/iir_filter.hpp>  // Defines IIRFilterCoef
 
 namespace OmniDSP::Abstract {
 
   //--------------------------------------------------------------------------
   // Plan / Processor Implementation Interfaces (Abstract Base Classes)
-  // TODO: Rename *PlanImpl to *ProcessorImpl for stateful operations.
   //--------------------------------------------------------------------------
   template <typename T>
   class FFTPlanImpl {
@@ -60,7 +60,7 @@ namespace OmniDSP::Abstract {
     virtual size_t get_length() const = 0;
   };
 
-  template <typename T>  // TODO: Rename to ResampleProcessorImpl
+  template <typename T>
   class ResampleProcessorImpl {
    public:
     virtual ~ResampleProcessorImpl() = default;
@@ -101,7 +101,7 @@ namespace OmniDSP::Abstract {
     [[nodiscard]] virtual ConvolutionMethod get_method() const = 0;
   };
 
-  template <typename T>  // TODO: Rename to FIRFilterProcessorImpl
+  template <typename T>
   class FIRFilterProcessorImpl {
    public:
     virtual ~FIRFilterProcessorImpl() = default;
@@ -113,7 +113,7 @@ namespace OmniDSP::Abstract {
     virtual size_t get_num_taps() const = 0;
   };
 
-  template <typename T>  // TODO: Rename to IIRFilterProcessorImpl
+  template <typename T>
   class IIRFilterProcessorImpl {
    public:
     virtual ~IIRFilterProcessorImpl() = default;
@@ -125,14 +125,16 @@ namespace OmniDSP::Abstract {
     virtual size_t get_num_sections() const = 0;
   };
 
-  template <typename T>  // TODO: Rename to CQTProcessorImpl
+  template <typename T>
   class CQTProcessorImpl {
    public:
     using Complex = Utils::GetComplexType<T>;
     virtual ~CQTProcessorImpl() = default;
     [[nodiscard]] virtual Status execute(
-        std::span<const T> input, std::span<Complex> output) const
+        std::span<const T> input, std::span<Complex> output)
+        const  // Typically CQT execute is stateful if overlapping frames
         = 0;
+    [[nodiscard]] virtual Status reset() = 0;  // Added reset method
     virtual size_t get_num_bins() const = 0;
     virtual size_t get_num_output_frames(size_t input_length) const = 0;
     virtual size_t get_hop_length() const = 0;
@@ -346,12 +348,23 @@ namespace OmniDSP::Abstract {
         = 0;
 
     // Filter Design
+    // For real coefficients
     [[nodiscard]] virtual OmniExpected<FIRCoefs<F32>> design_fir_filter_f32(
         const Design::FIRFilter& design) const
         = 0;
     [[nodiscard]] virtual OmniExpected<FIRCoefs<F64>> design_fir_filter_f64(
         const Design::FIRFilter& design) const
         = 0;
+
+    // For complex coefficients
+    [[nodiscard]] virtual OmniExpected<FIRCoefs<C32>> design_fir_filter_c32(
+        const Design::FIRFilter& design) const
+        = 0;
+    [[nodiscard]] virtual OmniExpected<FIRCoefs<C64>> design_fir_filter_c64(
+        const Design::FIRFilter& design) const
+        = 0;
+
+    // For IIR filters (real coefficients)
     [[nodiscard]] virtual OmniExpected<std::vector<IIRFilterCoef>>
     design_iir_filter_f32(const Design::IIRFilter& design) const = 0;
     [[nodiscard]] virtual OmniExpected<std::vector<IIRFilterCoef>>
@@ -361,6 +374,7 @@ namespace OmniDSP::Abstract {
     Backend() = default;
   };
 
+  // Factory function declarations
   std::unique_ptr<Backend> create_default_backend();
   std::unique_ptr<Backend> create_accelerate_backend();
   std::unique_ptr<Backend> create_onemkl_backend();

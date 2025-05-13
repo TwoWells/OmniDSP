@@ -53,6 +53,7 @@ namespace OmniDSP::Default {
     // Interface methods
     [[nodiscard]] Status execute(
         std::span<const T> input, std::span<Complex> output) const override;
+    [[nodiscard]] Status reset() override;  // Added reset method
     size_t get_num_bins() const override;
     size_t get_num_output_frames(size_t input_length) const override;
     size_t get_hop_length() const override;
@@ -96,12 +97,13 @@ namespace OmniDSP::Default {
     std::vector<ProcessedCQTOctave> processed_octaves_;
 
     // Internal buffers (mutable for use in const execute method)
+    // These are for processing a single input block to execute().
+    // If execute() itself becomes stateful (e.g. overlap-add), more state might
+    // be needed here.
     mutable std::vector<T> resampled_buffer_;
-    mutable std::vector<Complex>
-        frame_fft_buffer_;  // For FFT of input audio frame
-    mutable std::vector<T>
-        temp_kernel_real_buffer_;  // For constructing real part of CQT kernel
-                                   // before FFT
+    mutable std::vector<Complex> frame_fft_buffer_;
+    // temp_kernel_real_buffer_ was used during construction, not a persistent
+    // state for execute/reset.
   };
 
   // Explicit template instantiations

@@ -25,7 +25,7 @@
 namespace OmniDSP::Utils {
 
   [[nodiscard]] OMNIDSP_EXPORT OmniExpected<Design::FIRFilter> create_spec(
-      const FIRFilterParams& params);
+      const Params::FIRFilter& params);
 
   [[nodiscard]] OMNIDSP_EXPORT OmniExpected<Design::IIRFilter> create_spec(
       const IIRFilterParams& params);

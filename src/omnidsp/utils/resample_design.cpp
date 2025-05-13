@@ -13,7 +13,7 @@
 
 #include "OmniDSP/core_types.hpp"         // For OmniExpected, Status
 #include "OmniDSP/design/fir_filter.hpp"  // For Design::FIRFilter
-#include "OmniDSP/params/fir_filter.hpp"  // For FIRFilterParams
+#include "OmniDSP/params/fir_filter.hpp"  // For Params::FIRFilter
 #include "OmniDSP/params/resample.hpp"
 #include "OmniDSP/resample.hpp"      // For Design::Resample
 #include "OmniDSP/types/filter.hpp"  // For FilterType, FIRFilterDesignMethod
@@ -130,7 +130,7 @@ namespace OmniDSP::Utils {
 
     double prototype_design_sample_rate = 2.0;
 
-    FIRFilterParams prototype_fir_params(
+    Params::FIRFilter prototype_fir_params(
         FilterType::Lowpass,
         prototype_design_sample_rate,
         normalized_prototype_cutoff,
@@ -141,7 +141,7 @@ namespace OmniDSP::Utils {
         params.window_setup_,
         FIRFilterDesignMethod::WindowSinc);
 
-    // Call the public Utils::create_spec for FIRFilterParams
+    // Call the public Utils::create_spec for Params::FIRFilter
     OmniExpected<Design::FIRFilter> prototype_fir_spec_expected
         = create_spec(prototype_fir_params);
 

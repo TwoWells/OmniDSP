@@ -178,7 +178,7 @@ namespace OmniDSP {
     template <typename T>
     [[nodiscard]] OmniExpected<
         std::unique_ptr<FIRFilterProcessor<T>>> /* TODO: FIRFilterProcessor */
-    create_processor(const FIRFilterParams& params) const;
+    create_processor(const Params::FIRFilter& params) const;
     template <typename T>
     [[nodiscard]] OmniExpected<
         std::unique_ptr<FIRFilterProcessor<T>>> /* TODO: FIRFilterProcessor */
@@ -211,7 +211,7 @@ namespace OmniDSP {
     // Filter Design Methods (Declarations only)
     template <typename T>
     [[nodiscard]] OmniExpected<FIRCoefs<T>> design_fir_filter(
-        const FIRFilterParams& params) const;
+        const Params::FIRFilter& params) const;
     template <typename T_Real>
     [[nodiscard]] OmniExpected<std::vector<IIRFilterCoef>> design_iir_filter(
         const IIRFilterParams& params) const;

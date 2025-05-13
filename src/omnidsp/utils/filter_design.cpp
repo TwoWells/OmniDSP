@@ -37,10 +37,10 @@ namespace OmniDSP::Utils {
         || stopband_attenuation_db <= 0) {
       // spdlog::get("OmniDSP")->warn("Invalid inputs to
       // estimate_fir_order_from_specs."); Return a default or indicate error.
-      // For now, let's assume valid inputs based on FIRFilterParams validation.
-      // Or, throw std::invalid_argument here.
-      // For simplicity, let's assume FIRFilterParams validation caught basic
-      // errors. A more robust implementation would handle this.
+      // For now, let's assume valid inputs based on Params::FIRFilter
+      // validation. Or, throw std::invalid_argument here. For simplicity, let's
+      // assume Params::FIRFilter validation caught basic errors. A more robust
+      // implementation would handle this.
       if (transition_width_hz <= 0)
         transition_width_hz = 0.01 * sample_rate;  // Avoid division by zero
     }
@@ -79,9 +79,9 @@ namespace OmniDSP::Utils {
     return order;
   }
 
-  OmniExpected<Design::FIRFilter> create_spec(const FIRFilterParams& params)
+  OmniExpected<Design::FIRFilter> create_spec(const Params::FIRFilter& params)
   {
-    // FIRFilterParams constructor already performed initial validation.
+    // Params::FIRFilter constructor already performed initial validation.
     // Here, we resolve any estimations (like order) and finalize the Design.
 
     auto logger = spdlog::get("OmniDSP");
@@ -114,10 +114,10 @@ namespace OmniDSP::Utils {
           "Estimated FIR order: {} from characteristics.", final_order);
     }
     else {
-      // This case should have been caught by FIRFilterParams constructor
+      // This case should have been caught by Params::FIRFilter constructor
       // validation
       logger->error(
-          "FIRFilterParams has insufficient information to determine filter "
+          "Params::FIRFilter has insufficient information to determine filter "
           "order.");
       return std::unexpected(Status::InvalidArgument);
     }
