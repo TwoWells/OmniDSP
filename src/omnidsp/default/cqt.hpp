@@ -80,13 +80,13 @@ namespace OmniDSP::Default {
       // Constructor for ProcessedCQTOctave
       ProcessedCQTOctave(
           double osr,
-          std::unique_ptr<ResampleProcessor<T>> rs_plan,
+          std::unique_ptr<ResampleProcessor<T>> rs_processor,
           std::unique_ptr<RFFTPlan<T>> rf_plan,
           std::vector<std::vector<Complex>> sk_fft,
           size_t fl,
           std::vector<double> bf)
           : octave_sample_rate(osr),
-            resampler(std::move(rs_plan)),
+            resampler(std::move(rs_processor)),
             rfft_plan(std::move(rf_plan)),
             sparse_kernels_fft(std::move(sk_fft)),
             fft_length(fl),

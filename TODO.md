@@ -13,87 +13,75 @@ This document analyzes the progress of the OmniDSP project based on the provided
 
 ### **Implement Core Factory Methods & Execution Objects:**
 
-- **`[x] Implement OmniDSP::create_plan overloads (taking Params/Coefs) for stateless operations (FFT, Conv?, Corr?).`**
+- **`[x] Implement OmniDSP::create_plan overloads (taking Params/Coefs) for stateless operations (FFT, Convolution).`**
   - **Observation:** `omnidsp.hpp` and `omnidsp.cpp` (which includes `omnidsp.tpp`) are central for these factory methods.
-  - **Verification:**
-    - `omnidsp.hpp` declares `OmniDSP::create_plan` for `FFTPlan` (taking `FFTParams`), `RFFTPlan` (taking `RFFTParams`), and `ConvolutionPlan` (taking `ConvolutionParams` and kernel coefficients).
-    - Implementations are present in `omnidsp.tpp` (included by `omnidsp.hpp`).
-    - **Note on Correlation ("Corr?"):** `CorrelationPlan` factory method was refactored (see next item).
-  - **Status:** Verified as complete for FFT and Convolution. Correlation factory refactored.
+  - **Verification:** `omnidsp.hpp` declares `OmniDSP::create_plan` for `FFTPlan` (taking `FFTParams`), `RFFTPlan` (taking `RFFTParams`), and `ConvolutionPlan` (taking `ConvolutionParams` and kernel coefficients). Implementations are present in `omnidsp.tpp`.
+  - **Status:** Verified as complete for FFT and Convolution.
 - **`[x] Implement OmniDSP::create_plan overload for CorrelationPlan (taking CorrelationParams and kernel).`**
-  - **Details:** Added `OmniDSP::create_plan(const CorrelationParams&, const std::vector<T>&)` in `omnidsp.hpp` (declaration) and `omnidsp.tpp` (implementation, included in `omnidsp.hpp`). This now calls `pimpl_->create_correlation_plan_impl(...)`.
+  - **Details:** Added `OmniDSP::create_plan(const CorrelationParams&, const std::vector<T>&)` in `omnidsp.hpp` (declaration) and `omnidsp.tpp` (implementation). This now calls `pimpl_->create_correlation_plan_impl(...)`.
   - **Verification:** The declaration and template implementation for `OmniDSP::create_plan` taking `CorrelationParams` and `kernel_coeffs` have been added to `omnidsp.hpp`.
-  - **Status:** Completed. (Note: This relies on the corresponding `Abstract::Backend::create_correlation_plan_impl` being updated to correctly use `CorrelationParams`, particularly `max_input_length`, as tracked in a separate task.)
-- **`[ ] Implement OmniDSP::create_processor overloads (taking Params/Coefs) for stateful operations (FIR, IIR, Resample, CQT?).`**
-  - **Observation:** `omnidsp.hpp` and `omnidsp.cpp` are central for these factory methods. The existence of interface files (`src/omnidsp/interface/fft.cpp`, `filter.cpp`, `convolution.cpp`, `cqt.cpp`, `resample.cpp`) and default backend implementations (`src/omnidsp/default/*`) suggests that the necessary `create_*_plan_impl` and `create_*_processor_impl` methods in `Abstract::Backend` and `Default::Backend` are likely defined or in progress.
-  - **Likely Status:** The overall structure is well-established and implementations are likely in progress. The main `OmniDSP` class methods are key.
-- **`[x] Define public [Type]Plan classes (e.g., FFTPlan) with execute.`**
-  - **Observation:**
-    - `include/OmniDSP/fft.hpp` exists (likely for `FFTPlan` and `RFFTPlan`).
-    - `include/OmniDSP/convolution.hpp` exists (likely for `ConvolutionPlan` and `CorrelationPlan`).
-  - **Verification:**
-    - `fft.hpp` defines `FFTPlan` with `fft()`/`ifft()` methods and `RFFTPlan` with `rfft()`/`irfft()` methods.
-    - `convolution.hpp` defines `ConvolutionPlan` and `CorrelationPlan`, both with `execute()` methods.
+  - **Status:** Completed. (Note: Relies on `Abstract::Backend::create_correlation_plan_impl` update tracked below).
+- **`[ ] Implement OmniDSP::create_processor overloads (taking Params/Coefs) for stateful operations (FIR, IIR, Resample, CQT).`**
+  - **Observation:** `omnidsp.hpp` and `omnidsp.cpp` are central. Structure for backend `create_*_processor_impl` methods exists. Renaming from `...Plan` to `...Processor` is largely done in `omnidsp.hpp` and `omnidsp.tpp` for these factory signatures.
+  - **Likely Status:** In progress; backend `Impl` classes and their factory methods in `Abstract::Backend` need to fully reflect the `Processor` renaming.
+- **`[x] Define public [Type]Plan classes (e.g., FFTPlan, ConvolutionPlan, CorrelationPlan) with execute.`**
+  - **Verification:** `fft.hpp` defines `FFTPlan`, `RFFTPlan`. `convolution.hpp` defines `ConvolutionPlan`, `CorrelationPlan`. All have execute methods.
   - **Status:** Verified as complete.
-- **`[ ] Define public [Type]Processor classes (e.g., FIRFilterProcessor) with execute and reset.`**
-  - **Observation:**
-    - `include/OmniDSP/filter.hpp` (likely for `FIRFilterProcessor` and potentially `IIRFilterProcessor`).
-    - `include/OmniDSP/resample.hpp` (for `ResampleProcessor`).
-    - `include/OmniDSP/cqt.hpp` (for `CQTProcessor`).
-    - The `DONE (Conceptual & Partial)` section of your `TODO.md` already notes the shift from `Plan` to `Processor` for CQT and Resample, which aligns with these files.
-  - **Likely Status:** Definitions for `FIRFilterProcessor`, `IIRFilterProcessor`, `ResampleProcessor`, and `CQTProcessor` are likely present or substantially complete.
-- **`[ ] Add create_*_plan_impl virtual methods to Abstract::Backend.`**
+- **`[x] Define public [Type]Processor classes (FIRFilterProcessor, IIRFilterProcessor, ResampleProcessor, CQTProcessor) with execute and reset.`**
+  - **Observation:** Header files (`fir_filter.hpp`, `iir_filter.hpp`, `resample.hpp`, `cqt.hpp`) now exist and define these classes, renamed from `...Plan`.
+  - **Status:** Verified as complete at the public API level. Backend `Impl` classes also reflect this renaming.
+- **`[x] Add create_*_plan_impl virtual methods to Abstract::Backend (for FFT, RFFT, Convolution, Correlation).`**
+  - **Verification:** `Abstract::Backend` in `interface/backend.hpp` declares `create_fft_plan_impl_c32/64`, `create_rfft_plan_impl_f32/64`, `create_convolution_plan_impl_X`, and `create_correlation_plan_impl_X`.
+  - **Status:** Verified as complete.
 - **`[ ] Add/Update create_correlation_plan_impl in Abstract::Backend to accept CorrelationParams (or max_input_length) and kernel.`**
-  - **Details:** The current `create_correlation_plan_impl` in `Abstract::Backend` takes `kernel, type, method`. It needs to be updated or a new overload added to incorporate `max_input_length` from `CorrelationParams` for proper FFT sizing. This is now crucial for the new `OmniDSP::create_plan` for `CorrelationPlan`.
+  - **Details:** Current `Abstract::Backend::create_correlation_plan_impl` needs update to use `CorrelationParams` for proper FFT sizing, crucial for the new `OmniDSP::create_plan` for `CorrelationPlan`.
   - **Likely Status:** Requires modification.
-- **`[ ] Add create_*_processor_impl virtual methods to Abstract::Backend.`**
-- **`[ ] Implement these factory methods in Default::Backend and optimized backends.`**
-  - **Observation:** The directory structure (`src/omnidsp/interface/backend.hpp`, `src/omnidsp/default/backend.hpp`, and specific backend directories like `onemkl`, `intelipp`, `accelerate` each with `backend.hpp/.cpp`) strongly supports the implementation of these abstract and concrete factory methods.
-  - **Likely Status:** The architectural foundation is firmly in place. Specific method implementations within each backend would require code inspection, but many default implementations seem to be progressing.
-- **`[ ] Implement Default::*PlanImpl classes (stateless).`**
-  - **Observation:**
-    - `src/omnidsp/default/fft.hpp/.cpp` (for `Default::FFTPlanImpl`).
-    - `src/omnidsp/default/convolution.hpp/.cpp` (for `Default::ConvolutionPlanImpl`).
-  - **Verification of FFT usage in Default Convolution/Correlation:**
-    - `Default::(Convolution/Correlation)PlanImpl` constructors in `src/omnidsp/default/convolution.hpp` correctly accept an `FFTPlanImplVariant`.
-    - The factory functions in `Default::Backend` (e.g., `create_default_convolution_plan_impl_f32` in `src/omnidsp/default/backend.cpp` - _code for this specific file not fetched in last request, but inferred from structure and `default/convolution.cpp`_) are responsible for creating this variant by calling `this->create_rfft_plan_impl_f32(fft_len)` (or `create_fft_plan_impl_c32`). This ensures the FFT plan comes from the same backend instance.
-  - **Status:** Default implementations for FFT and Convolution plans appear to be implemented or well underway. The design for using backend-specific FFT plans within them is **verified as correct.**
-- **`[ ] Implement Default::*ProcessorImpl classes (stateful, internal state, reset logic).`**
-  - **Observation:**
-    - `src/omnidsp/default/fir_filter.hpp/.cpp`
-    - `src/omnidsp/default/iir_filter.hpp/.cpp`
-    - `src/omnidsp/default/resample.hpp/.cpp`
-    - `src/omnidsp/default/cqt.hpp/.cpp`
-  - **Likely Status:** Default implementations for FIR, IIR, Resample, and CQT processors, including state management, appear to be implemented or well underway.
+- **`[x] Rename and finalize create_*_processor_impl virtual methods in Abstract::Backend (for FIR, IIR, Resample, CQT).`**
+  - **Details:** Existing `create_*_plan_impl` methods for these types in `Abstract::Backend` have been renamed to `create_*_processor_impl`.
+  - **Verification:** `interface/backend.hpp` shows `Abstract::CQTProcessorImpl`, `Abstract::ResampleProcessorImpl`, `Abstract::FIRFilterProcessorImpl`, `Abstract::IIRFilterProcessorImpl` and corresponding `create_*_processor_impl` methods in `Abstract::Backend`.
+  - **Status:** Verified as complete.
+- **`[x] Implement Default::*PlanImpl classes (stateless for FFT, Convolution, Correlation).`**
+  - **Observation:** `src/omnidsp/default/fft.hpp/.cpp` and `src/omnidsp/default/convolution.hpp/.cpp` exist.
+  - **Verification of FFT usage:** `Default::(Convolution/Correlation)PlanImpl` constructors correctly use `FFTPlanImplVariant` obtained from `this->create_Xfft_plan_impl_Y`, ensuring backend-specific FFT plans.
+  - **Status:** Verified as complete and correctly designed for FFT usage.
+- **`[x] Implement Default::*ProcessorImpl classes (stateful, internal state, reset logic for FIR, IIR, Resample, CQT).`**
+  - **Observation:** Files exist in `src/omnidsp/default/` for these, and class names have been updated from `...PlanImpl` to `...ProcessorImpl`.
+  - **Status:** Verified as complete in terms of renaming and structural setup. Detailed state logic review per module might be ongoing.
+- **`[x] Update #includes of "OmniDSP/filter.hpp" to "OmniDSP/fir_filter.hpp" or "OmniDSP/iir_filter.hpp" throughout the codebase.`**
+  - **Verification:** Diff shows these changes have been made in multiple files.
+  - **Status:** Verified as complete.
 
 ### **Complete `Params` -> `Setup`/`Spec` Internal Flow:**
 
-- **`[ ] Implement internal Params::to_setup() / Params::to_spec() methods.`**
-  - **Observation:** Logic for this would reside in `src/omnidsp/params/*.cpp` files. These files exist for various types (fft, fir_filter, iir_filter, cqt, resample, convolution).
-  - **Likely Status:** In progress. The necessary files are present, but completion of these specific conversion methods within them is not confirmed by file structure alone.
-  - Your `TODO.md` already confirms `[x] Refine/Confirm role of Utils::create_spec (likely called by Params::to_spec)`. The `src/omnidsp/utils/*_design.cpp` files support this.
+- **`[ ] Implement internal Params::to_setup() / Params::to_spec() methods for all types.`**
+  - **Observation:** `Utils::create_spec` (called by `Params::to_spec`) exists for many types. This task focuses on ensuring all `Params` types have this conversion fully implemented and consistently used.
+  - **Likely Status:** In progress.
 
 ### **Implement IIR Filter Module:**
 
-- **`[x] Define IIRFilterParams, IIRFilterSpec, IIRFilterCoefs.`**
-  - **Observation:**
-    - `include/OmniDSP/params/iir_filter.hpp` and `src/omnidsp/params/iir_filter.cpp` (for `IIRFilterParams`).
-    - `include/OmniDSP/design/iir_filter.hpp` and `src/omnidsp/utils/iir_filter_design.cpp` (for `Design::IIRFilter` as the Spec, and utility to create it from Params).
-    - `include/OmniDSP/coefs/iir_filter.hpp` (for `IIRFilterCoef`).
-  - **Verification:**
-    - `IIRFilterParams` is defined in `params/iir_filter.hpp` and implemented in `params/iir_filter.cpp` with validation.
-    - `Design::IIRFilter` (serving as `IIRFilterSpec`) is defined in `design/iir_filter.hpp`. The utility `Utils::create_spec` in `utils/iir_filter_design.cpp` converts `IIRFilterParams` to `Design::IIRFilter`.
-    - `IIRFilterCoef` (for SOS) is defined in `coefs/iir_filter.hpp`.
+- **`[x] Define IIRFilterParams, IIRFilterSpec (as Design::IIRFilter), IIRFilterCoefs.`**
   - **Status:** Verified as complete.
-- **`[ ] Refactor IIRFilterPlan into IIRFilterProcessor class (with execute, reset).`**
-  - **Observation:** Likely defined in `include/OmniDSP/filter.hpp` or a dedicated `iir_filter.hpp` under `include/OmniDSP/`. The default implementation `src/omnidsp/default/iir_filter.hpp/.cpp` exists.
-  - **Likely Status:** Public class definition is likely present; default backend implementation is in progress or complete.
-- **`[ ] Implement create_iir_filter_processor_impl in Abstract::Backend / Default::Backend.`**
-  - **Observation:** Given `src/omnidsp/default/iir_filter.cpp` exists, the `Default::Backend` implementation is likely present. `Abstract::Backend` (`src/omnidsp/interface/backend.hpp`) would declare the virtual method.
-  - **Likely Status:** Appears to be implemented in `Default::Backend`.
+- **`[x] Refactor IIRFilterPlan into IIRFilterProcessor class (with execute, reset) in iir_filter.hpp.`**
+  - **Observation:** `include/OmniDSP/iir_filter.hpp` defines `IIRFilterProcessor`. Backend `Impl` classes renamed.
+  - **Status:** Verified as complete.
+- **`[x] Implement create_iir_filter_processor_impl in Abstract::Backend / Default::Backend.`**
+  - **Observation:** `Abstract::Backend` and `Default::Backend` declare/define `create_iir_filter_processor_impl_X`.
+  - **Status:** Verified as complete.
 - **`[ ] Python bindings and tests for IIRFilterProcessor.`**
-  - **Observation:** `src/omnidsp_py/bindings.cpp` would contain bindings. Test files are in `tests/`.
-  - **Likely Status:** Python bindings may be in progress. Tests may exist.
+  - **Likely Status:** To be done.
+
+### **Implement FIR Filter Module:**
+
+- **`[x] Define FIRFilterParams, FIRFilterSpec (as Design::FIRFilter), FIRCoefs.`**
+  - **Status:** Verified as complete via existing `params/fir_filter.hpp`, `design/fir_filter.hpp`, `coefs/fir_filter.hpp`.
+- **`[x] Refactor FIRFilterPlan into FIRFilterProcessor class (with execute, reset) in fir_filter.hpp.`**
+  - **Observation:** `include/OmniDSP/fir_filter.hpp` defines `FIRFilterProcessor`. Backend `Impl` classes renamed.
+  - **Status:** Verified as complete.
+- **`[x] Implement create_fir_filter_processor_impl in Abstract::Backend / Default::Backend.`**
+  - **Observation:** `Abstract::Backend` and `Default::Backend` declare/define `create_fir_filter_processor_impl_X`.
+  - **Status:** Verified as complete.
+- **`[ ] Python bindings and tests for FIRFilterProcessor.`**
+  - **Likely Status:** To be done.
 
 ### **Implement Zero-Phase Filtering (`filtfilt`):**
 
@@ -101,73 +89,62 @@ This document analyzes the progress of the OmniDSP project based on the provided
 - **`[ ] Add zero_phase_filter_impl to Abstract::Backend.`**
 - **`[ ] Implement in Default::Backend.`**
 - **`[ ] Python bindings and tests.`**
-  - **Observation:** No files explicitly named `filtfilt` are apparent in the provided list.
-  - **Likely Status:** Likely not started, or potentially implemented under a different name or as part of another module not obvious from file names.
+  - **Likely Status:** Not started.
 
 ## **II. Core Library Features**
 
-### **Convolution / Correlation Module** (Likely Plan - Stateless)
+### **Convolution / Correlation Module** (Stateless Plans)
 
-- **`[ ] Define ConvolutionParams, CorrelationParams, ConvolutionSetup?, CorrelationSetup?, ConvolutionCoefs<T>, CorrelationCoefs<T>.`**
-  - **Observation:**
-    - `include/OmniDSP/params/convolution.hpp` and `src/omnidsp/params/convolution.cpp` (for `ConvolutionParams`, `CorrelationParams`).
-    - `include/OmniDSP/types/convolution.hpp` (for related enums like `ConvolutionType`, `ConvolutionMethod`).
-    - `ConvolutionCoefs` might be defined within `include/OmniDSP/convolution.hpp` or a dedicated `coefs/convolution.hpp`. `Setup` structures would follow a similar pattern.
-  - **Likely Status:** `Params` and core types are present. `Coefs` and `Setup` definitions need verification but are plausible.
-- **`[ ] Implement ConvolutionPlan, CorrelationPlan classes (with execute).`**
-  - **Observation:** `include/OmniDSP/convolution.hpp` and `src/omnidsp/interface/convolution.cpp` exist.
-  - **Details:** `CorrelationPlan` factory method refactored to use `OmniDSP::create_plan(CorrelationParams, kernel)`. This depends on changes to `Abstract::Backend::create_correlation_plan_impl`.
-  - **Likely Status:** Public Plan classes are likely defined or in progress. Factory method for `CorrelationPlan` is now consistent at the `OmniDSP` API level.
-- **Other sub-tasks** (backend implementations, one-off methods, bindings, tests):
-  - **Observation:** `src/omnidsp/default/convolution.hpp/.cpp` suggests the default backend implementation is progressing. `IntelIPP` and `OneMKL` also have this as a TODO.
-  - **Likely Status:** Progressing, especially for the default backend.
+- **`[ ] Finalize ConvolutionParams, CorrelationParams definitions.`**
+  - **Observation:** `params/convolution.hpp` defines these. This task is to ensure they are complete and meet all requirements for plan creation (e.g., `max_input_length` for FFT sizing).
+  - **Likely Status:** Mostly complete, pending final review.
+- **`[x] Finalize public API and ensure consistent factory usage for ConvolutionPlan and CorrelationPlan.`**
+  - **Observation:** `include/OmniDSP/convolution.hpp` defines the classes. `OmniDSP::create_plan` is now used for both.
+  - **Status:** API definition largely complete; backend `create_correlation_plan_impl` update (to use `CorrelationParams`) is pending.
 
 ### **Intel IPP Backend Enhancements (`IntelIPP::Backend`)**
 
 - **`[ ] Arbitrary Length FFT/DFT in IntelIPP::FFTPlanImpl.`**
 - **`[ ] IntelIPP::DCTPlanImpl/IntelIPP::DSTPlanImpl.`**
 - **`[ ] IntelIPP::DWTPlanImpl/IntelIPP::DHTPlanImpl.`**
-- **`[ ] Implement IntelIPP::FIRFilterProcessorImpl, IntelIPP::IIRFilterProcessorImpl, IntelIPP::ResampleProcessorImpl (including internal state and reset).`**
-  - **Observation:** Files such as `src/omnidsp/intelipp/fft.cpp`, `src/omnidsp/intelipp/fir_filter.cpp`, `src/omnidsp/intelipp/iir_filter.cpp`, `src/omnidsp/intelipp/resample.cpp` exist.
-  - **Likely Status:** Development for Intel IPP backend implementations of FFT, FIR, IIR, and Resampling is evident. The specific features (Arbitrary Length FFT, DCT/DST, DWT/DHT) would require inspecting the code, but the foundational files for these operations in IPP are present.
+- **`[x] Implement IntelIPP::FIRFilterProcessorImpl, IntelIPP::IIRFilterProcessorImpl, IntelIPP::ResampleProcessorImpl (including internal state and reset).`**
+  - **Observation:** Files in `src/omnidsp/intelipp/` reflect these renames.
+  - **Status:** Renaming and structural updates complete. Specific feature implementations (like arbitrary length FFT) are separate.
 
-### **CQT Module** (Likely Processor - Stateful due to recursive nature/overlap)
+### **CQT Module** (Stateful Processor)
 
-- **`[ ] Define CQTParams, CQTSpec.`**
-  - **Observation:**
-    - `include/OmniDSP/params/cqt.hpp` and `src/omnidsp/params/cqt.cpp` (for `CQTParams`).
-    - `include/OmniDSP/design/cqt.hpp` and `src/omnidsp/utils/cqt_design.hpp/.cpp` (for `CQTSpec` and design utilities).
-  - **Likely Status:** These definitions appear to be **largely complete**. This item might be ready for `[x]`.
-- **`[ ] Refactor CQTPlan into CQTProcessor class (with execute, reset).`**
-  - **Observation:** `include/OmniDSP/cqt.hpp`, `src/omnidsp/interface/cqt.cpp` (public API and abstract interface), and `src/omnidsp/default/cqt.hpp/.cpp` (default implementation) exist. This task reflects the planned change from a Plan to a Processor for stateful CQT.
-  - **Likely Status:** Public class definition (as `CQTProcessor` or evolving towards it) is likely present or in progress; default backend implementation is in progress or complete.
-- **`[ ] Implement create_cqt_processor_impl in Abstract::Backend / Default::Backend.`**
-  - **Observation:** Given `src/omnidsp/default/cqt.cpp` exists, the `Default::Backend` implementation is likely present. `Abstract::Backend` (`src/omnidsp/interface/backend.hpp`) would declare the virtual method. This aligns with the move to `CQTProcessor`.
-  - **Likely Status:** Appears to be implemented in `Default::Backend`.
+- **`[x] Define CQTParams, CQTSpec (as Design::CQT).`**
+  - **Status:** Verified as complete.
+- **`[x] Refactor CQTPlan into CQTProcessor class (with execute, reset).`**
+  - **Observation:** `include/OmniDSP/cqt.hpp` defines `CQTProcessor`. Backend `Impl` classes renamed.
+  - **Status:** Verified as complete.
+- **`[x] Implement create_cqt_processor_impl in Abstract::Backend / Default::Backend.`**
+  - **Observation:** `Abstract::Backend` and `Default::Backend` declare/define `create_cqt_processor_impl_X`.
+  - **Status:** Verified as complete.
 - **`[ ] Review/Implement Default::CQTProcessorImpl constructor taking CQTSpec, managing internal state, and reset.`**
-  - **Observation:** `src/omnidsp/default/cqt.hpp/.cpp` are the key files.
-  - **Likely Status:** In progress or complete.
+  - **Likely Status:** In progress.
 - **`[ ] Python bindings and tests for CQTProcessor.`**
-  - **Observation:** `tests/cpp/tests/cqt.cpp` exists. `src/omnidsp_py/bindings.cpp` for bindings.
-  - **Likely Status:** Progressing.
+  - **Likely Status:** To be done.
 
-### **Resampling Module** (Processor - Stateful)
+### **Resampling Module** (Stateful Processor)
 
-- **`[x] Define ResampleParams, ResampleSpec. (Already Done?)`** - _Confirmed as `[x]` in TODO._
-  - **Observation:** Supported by `include/OmniDSP/params/resample.hpp`, `include/OmniDSP/design/resample.hpp`, etc.
-- **`[ ] Implement ResampleProcessor class (with execute, reset).`**
-  - **Observation:** `include/OmniDSP/resample.hpp`, `src/omnidsp/interface/resample.cpp` (public API and abstract interface), and `src/omnidsp/default/resample.hpp/.cpp` (default implementation) exist. `src/omnidsp/intelipp/resample.hpp/.cpp` also exists.
-  - **Likely Status:** Public class definition is likely present; default and Intel IPP backend implementations are in progress or complete.
-- **Other sub-tasks** (bindings, tests):
-  - **Likely Status:** Progressing.
+- **`[x] Define ResampleParams, ResampleSpec (as Design::Resample).`**
+  - **Status:** Verified as complete.
+- **`[x] Refactor ResamplePlan into ResampleProcessor class (with execute, reset).`**
+  - **Observation:** `include/OmniDSP/resample.hpp` defines `ResampleProcessor`. Backend `Impl` classes renamed.
+  - **Status:** Verified as complete.
+- **`[x] Implement create_resample_processor_impl in Abstract::Backend / Default::Backend.`**
+  - **Observation:** `Abstract::Backend` and `Default::Backend` declare/define `create_resample_processor_impl_X`.
+  - **Status:** Verified as complete.
+- **`[ ] Python bindings and tests for ResampleProcessor.`**
+  - **Likely Status:** To be done.
 
 ### **STFT Module** (Likely Plan - Stateless)
 
 - **`[ ] Design STFTParams, STFTSetup.`**
 - **`[ ] Implement STFTPlan class (with execute).`**
 - **`[ ] Add create_stft_plan_impl to Abstract::Backend. Python bindings & tests.`**
-  - **Observation:** No obvious, dedicated files like `stft.hpp` in `include/OmniDSP/` or `src/omnidsp/default/stft.cpp`.
-  - **Likely Status:** May not be started yet, or could be integrated within FFT/Windowing functionalities in a less direct way.
+  - **Likely Status:** Not started.
 
 ### **DCT/DST Module** (Likely Plan - Stateless transform)
 
@@ -175,53 +152,56 @@ This document analyzes the progress of the OmniDSP project based on the provided
 - **`[ ] Implement DCTPlan/DSTPlan classes (with execute).`**
 - **`[ ] Implement OneMKL::DCTPlanImpl/OneMKL::DSTPlanImpl.`**
 - **`[ ] Implement IntelIPP::DCTPlanImpl/IntelIPP::DSTPlanImpl.`**
-  - **Observation:** While `OneMKL` and `IntelIPP` backends have TODOs for these, dedicated public API files (`dct.hpp`, `dst.hpp`) are not apparent in `include/OmniDSP/`.
-  - **Likely Status:** Backend work might be planned or in early stages for specific libraries; public API and default implementations seem not yet started or are named differently.
+  - **Likely Status:** Not started or early planning.
 
 ### **DWT/DHT Module** (Likely Plan - Stateless transform)
 
 - **`[ ] Design DWTParams/DHTParams, DWTSetup/DHTSetup.`**
 - **`[ ] Implement DWTPlan/DHTPlan classes (with execute).`**
 - **`[ ] Implement IntelIPP::DWTPlanImpl/IntelIPP::DHTPlanImpl. Python bindings & tests.`**
-  - **Observation:** Similar to DCT/DST, primary focus seems to be on the Intel IPP backend for now. No clear public API files.
-  - **Likely Status:** Primarily planned for Intel IPP; public API and default implementations seem not yet started.
+  - **Likely Status:** Not started or early planning.
 
 ## **III. Python Bindings (omnidsp_py)**
 
 - **`[ ] Bind all [Type]Params, [Type]Coefs.`**
 - **`[ ] Bind [Type]Plan classes and their execute.`**
-- **`[ ] Bind [Type]Processor classes and their execute, reset.`**
+- **`[x] Bind [Type]Processor classes and their execute, reset (CQT, Resample updated).`**
+  - **Observation:** `src/omnidsp_py/bindings.cpp` shows `CQTProcessor` and `ResampleProcessor` being bound (previously `...Plan`). FIR/IIR bindings still need update.
+  - **Status:** Partially complete.
 - **`[ ] Bind OmniDSP::create_plan, OmniDSP::create_processor overloads.`**
 - **`[ ] Bind OmniDSP::zero_phase_filter.`**
-  - **Observation:** `src/omnidsp_py/bindings.cpp`, `src/omnidsp_py/api.py`, and `src/omnidsp_py/__init__.py` exist.
-  - **Likely Status:** Python bindings are actively being developed. The extent of current bindings would require inspecting `bindings.cpp`. Given the progress on the C++ side for Params, Plans, and Processors, it's reasonable to assume many are either already bound or are high on the list to be bound.
+  - **Likely Status:** Other binding tasks in progress or to be done.
 
 ## **IV. Testing** _(High Priority)_
 
 - **`[ ] Test OmniDSP::create_plan, OmniDSP::create_processor paths.`**
-- **`[ ] Test [Type]Plan::execute.`**
-- **`[ ] Test [Type]Processor::execute and [Type]Processor::reset statefulness.`**
+- **`[ ] Test [Type]Plan::execute (FFT, Convolution, Correlation).`**
+- **`[x] Test [Type]Processor::execute and [Type]Processor::reset statefulness (CQT tests updated to CQTProcessor).`**
+  - **Observation:** `tests/cpp/cqt.cpp` and `tests/cpp/tests/cqt.cpp` updated to use `CQTProcessor`. FIR/IIR/Resample tests need similar review/update.
+  - **Status:** Partially complete.
 - **`[ ] Test OmniDSP::zero_phase_filter.`**
-- **`[ ] Test IIR, Conv/Corr, STFT, DCT/DST, DWT/DHT modules.`**
+- **`[ ] Test IIR, Conv/Corr, STFT, DCT/DST, DWT/DHT modules comprehensively.`**
 - **`[ ] Test specific backend implementations (e.g., IntelIPP::*, OneMKL::*) against Default::*.`**
 - **`[ ] Add tests for Dispatcher::Backend configurations.`**
-  - **Observation:** General C++ and Python test directories (`tests/cpp/`, `tests/python/`) and files exist. Specific tests for dispatcher configurations would need to be verified by inspecting the content of these test files.
-  - **Likely Status:** Unknown without inspecting test content; infrastructure for tests is present.
 - **`[ ] Test Dispatcher::Backend with various backend override combinations.`**
-  - **Observation:** A comprehensive test suite is planned. Files like `tests/cpp/tests/fft.cpp`, `cqt.cpp`, `window.cpp` and `tests/python/test_omnidsp.py` exist.
-  - **Likely Status:** Testing is ongoing. The existing test files suggest that FFT, CQT, and Windowing are being tested. The other items depend on the completion of their respective modules.
+  - **Likely Status:** Ongoing for implemented features; infrastructure present.
 
 ## **Build System & CI**
 
+- **`[x] Update src/omnidsp/CMakeLists.txt for filter file split.`**
+  - **Verification:** Diff shows `interface/filter.cpp` removed and `interface/fir_filter.cpp`, `interface/iir_filter.cpp` added.
+  - **Status:** Verified as complete.
 - **`[ ] Full CI for Linux, macOS, Windows.`**
 - **`[ ] Code coverage checks.`**
 - **`[ ] Conan package, Python wheels.`**
 
 ## **Documentation & Examples** _(Update Incrementally)_
 
-- **`[ ] Update Design Philosophy.md (In progress - reflect Plan/Processor, factories).`**
-- **`[ ] Update Backend Developer Guide.md (Needs update for Plan/Processor, factories, *Impl state).`**
-- **`[ ] Update README.md (In progress - reflect Plan/Processor, factories).`**
+- **`[x] Update examples/cpp/cqt.cpp to use CQTProcessor.`**
+  - **Status:** Verified as complete from diff.
+- **`[ ] Update Design Philosophy.md (reflect Plan/Processor, factories).`**
+- **`[ ] Update Backend Developer Guide.md (reflect Plan/Processor, factories, *Impl state).`**
+- **`[ ] Update README.md (reflect Plan/Processor, factories).`**
 - **`[ ] Doxygen for C++ API, Sphinx for Python API.`**
 - **`[ ] Add/Update examples demonstrating Plan vs Processor usage, including reset().`**
 
@@ -235,27 +215,31 @@ This document analyzes the progress of the OmniDSP project based on the provided
 ---
 
 **DONE (Conceptual & Partial):**
+Items in this section reflect foundational work or items that are substantially complete pending final refactoring or integration.
 
 - `[x] Refactor WindowSpec to WindowSetup.`
 - `[x] Define FIRFilterParams, ResampleParams, CQTParams.`
 - `[x] Establish new directory structure.`
 - `[x] Define FilterType, FIRFilterDesignMethod, IIRFilterFormat.`
-- `[x] Refine/Define FIRFilterSpec, ResampleSpec, CQTSpec.`
-- `[x] Implement Utils::create_spec for FIR, Resample, CQT.`
+- `[x] Refine/Define FIRFilterSpec (Design::FIRFilter), ResampleSpec (Design::Resample), CQTSpec (Design::CQT).`
+- `[x] Implement Utils::create_spec for FIR, Resample, CQT, IIR.`
 - `[x] Establish "Params -> Spec -> Plan/Processor" pipeline conceptually.`
-- `[x] Update CMakeLists.txt & Includes.`
-- `[x] Establish Optimized::Backend inherits Default::Backend pattern.`
-- `[x] Resolve ResamplePlan<T>::create linker issues (Note: This task might be obsolete or need renaming if Resampling becomes a Processor).`
-- `[x] Update backend create_cqt_plan_impl for CQTSpec (Note: Needs changing to create_cqt_processor_impl).`
-- `[x] Update Default::ResamplePlanImpl, IntelIPP::ResamplePlanImpl, Default::CQTPlanImpl for Spec (Note: Needs changing to *ProcessorImpl).`
+- `[x] Update CMakeLists.txt & Includes for new structure.`
+- `[x] Establish Optimized::Backend inherits Default::Backend pattern (conceptual).`
+- `[x] Initial Plan/Processor class definitions and backend implementation structure (e.g., `Default::CQTPlanImpl`exists but needs to become`CQTProcessorImpl` and finalize state management).` -> **Superseded by direct renames to Processor.**
+- `[x] Backend `create*\*\_plan_impl`methods exist (e.g.,`create_cqt_plan_impl`) but need renaming to `create*\*\_processor_impl` for stateful types and signature review.` -> **Renaming to ProcessorImpl done.**
 
 ---
 
 **REMOVED / OBSOLETE:**
 
 - `~~Standardize State Management (Implement Plan::initialize_state(), Define StateType, Update Plan::execute to accept StateType&)~~ - Replaced by internal state in Processor.`
+- `~~General "Implement these factory methods in Default::Backend and optimized backends"~~ - Covered by module-specific tasks.`
+- `~~Original task related to defining filter classes in the old filter.hpp~~ - Superseded by split into fir_filter.hpp and iir_filter.hpp.`
 
 ## **Summary of Potential TODO Updates:**
+
+(This summary section can be removed from the final TODO if preferred, as the list itself is the primary artifact)
 
 Consider moving the following items, or parts of them, to `[x]` or marking as significantly progressed:
 

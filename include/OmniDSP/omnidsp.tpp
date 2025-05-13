@@ -357,13 +357,13 @@ template <typename T>
   if (!pimpl_) return std::unexpected(Status::NotInitialized);
   OmniExpected<std::unique_ptr<Abstract::FIRFilterProcessorImpl<T>>> /* TODO: Abstract::FIRFilterProcessorImpl */ pimpl_expected;
   if constexpr (std::is_same_v<T, F32>) {
-      pimpl_expected = pimpl_->create_fir_filter_plan_impl_f32(coeffs); // TODO: create_fir_filter_processor_impl_f32
+      pimpl_expected = pimpl_->create_fir_filter_processor_impl_f32(coeffs); // TODO: create_fir_filter_processor_impl_f32
   } else if constexpr (std::is_same_v<T, F64>) {
-      pimpl_expected = pimpl_->create_fir_filter_plan_impl_f64(coeffs); // TODO: create_fir_filter_processor_impl_f64
+      pimpl_expected = pimpl_->create_fir_filter_processor_impl_f64(coeffs); // TODO: create_fir_filter_processor_impl_f64
   } else if constexpr (std::is_same_v<T, C32>) {
-      pimpl_expected = pimpl_->create_fir_filter_plan_impl_c32(coeffs); // TODO: create_fir_filter_processor_impl_c32
+      pimpl_expected = pimpl_->create_fir_filter_processor_impl_c32(coeffs); // TODO: create_fir_filter_processor_impl_c32
   } else if constexpr (std::is_same_v<T, C64>) {
-      pimpl_expected = pimpl_->create_fir_filter_plan_impl_c64(coeffs); // TODO: create_fir_filter_processor_impl_c64
+      pimpl_expected = pimpl_->create_fir_filter_processor_impl_c64(coeffs); // TODO: create_fir_filter_processor_impl_c64
   } else {
       return std::unexpected(Status::UnsupportedFeature);
   }
@@ -393,9 +393,9 @@ template <typename T_Real>
   if (!pimpl_) return std::unexpected(Status::NotInitialized);
   OmniExpected<std::unique_ptr<Abstract::IIRFilterProcessorImpl<T_Real>>> /* TODO: Abstract::IIRFilterProcessorImpl */ pimpl_expected;
   if constexpr (std::is_same_v<T_Real, F32>) {
-      pimpl_expected = pimpl_->create_iir_filter_plan_impl_f32(sos_coeffs); // TODO: create_iir_filter_processor_impl_f32
+      pimpl_expected = pimpl_->create_iir_filter_processor_impl_f32(sos_coeffs); // TODO: create_iir_filter_processor_impl_f32
   } else if constexpr (std::is_same_v<T_Real, F64>) {
-      pimpl_expected = pimpl_->create_iir_filter_plan_impl_f64(sos_coeffs); // TODO: create_iir_filter_processor_impl_f64
+      pimpl_expected = pimpl_->create_iir_filter_processor_impl_f64(sos_coeffs); // TODO: create_iir_filter_processor_impl_f64
   } else {
       return std::unexpected(Status::UnsupportedFeature);
   }
@@ -424,9 +424,9 @@ template <typename T_Real>
   if (!pimpl_) return std::unexpected(Status::NotInitialized);
   OmniExpected<std::unique_ptr<Abstract::ResampleProcessorImpl<T_Real>>> /* TODO: Abstract::ResampleProcessorImpl */ pimpl_expected;
   if constexpr (std::is_same_v<T_Real, F32>) {
-      pimpl_expected = pimpl_->create_resample_plan_impl_f32(spec); // TODO: create_resample_processor_impl_f32
+      pimpl_expected = pimpl_->create_resample_processor_impl_f32(spec); // TODO: create_resample_processor_impl_f32
   } else if constexpr (std::is_same_v<T_Real, F64>) {
-      pimpl_expected = pimpl_->create_resample_plan_impl_f64(spec); // TODO: create_resample_processor_impl_f64
+      pimpl_expected = pimpl_->create_resample_processor_impl_f64(spec); // TODO: create_resample_processor_impl_f64
   } else {
       return std::unexpected(Status::UnsupportedFeature);
   }
@@ -456,9 +456,9 @@ template <typename T_Real>
   if (!pimpl_) return std::unexpected(Status::NotInitialized);
   OmniExpected<std::unique_ptr<Abstract::CQTProcessorImpl<T_Real>>> /* TODO: Abstract::CQTProcessorImpl */ pimpl_expected;
   if constexpr (std::is_same_v<T_Real, F32>) {
-      pimpl_expected = pimpl_->create_cqt_plan_impl_f32(spec); // TODO: create_cqt_processor_impl_f32
+      pimpl_expected = pimpl_->create_cqt_processor_impl_f32(spec); // TODO: create_cqt_processor_impl_f32
   } else if constexpr (std::is_same_v<T_Real, F64>) {
-      pimpl_expected = pimpl_->create_cqt_plan_impl_f64(spec); // TODO: create_cqt_processor_impl_f64
+      pimpl_expected = pimpl_->create_cqt_processor_impl_f64(spec); // TODO: create_cqt_processor_impl_f64
   } else {
       return std::unexpected(Status::UnsupportedFeature);
   }

@@ -284,7 +284,8 @@ namespace OmniDSP::IntelIPP {
 
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::ResampleProcessorImpl<F32>>>
-  Backend::create_resample_plan_impl_f32(const Design::Resample& spec) const
+  Backend::create_resample_processor_impl_f32(
+      const Design::Resample& spec) const
   {
     try {
       // Pass 'this' if the IPP ResampleProcessorImpl needs to access other
@@ -294,7 +295,8 @@ namespace OmniDSP::IntelIPP {
     }
     catch (const OmniException& e) {
       spdlog::get("OmniDSP")->error(
-          "IntelIPP::create_resample_plan_impl_f32 failed: {} (Status: {})",
+          "IntelIPP::create_resample_processor_impl_f32 failed: {} (Status: "
+          "{})",
           e.what(),
           static_cast<int>(e.get_status()));
       return OmniExpected<
@@ -303,7 +305,7 @@ namespace OmniDSP::IntelIPP {
     }
     catch (const std::bad_alloc& e) {
       spdlog::get("OmniDSP")->error(
-          "IntelIPP::create_resample_plan_impl_f32 allocation failed: {}",
+          "IntelIPP::create_resample_processor_impl_f32 allocation failed: {}",
           e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::ResampleProcessorImpl<F32>>>(
@@ -311,7 +313,8 @@ namespace OmniDSP::IntelIPP {
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error(
-          "IntelIPP::create_resample_plan_impl_f32 exception: {}", e.what());
+          "IntelIPP::create_resample_processor_impl_f32 exception: {}",
+          e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::ResampleProcessorImpl<F32>>>(
           std::unexpect, Status::BackendError);
@@ -320,14 +323,16 @@ namespace OmniDSP::IntelIPP {
 
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::ResampleProcessorImpl<F64>>>
-  Backend::create_resample_plan_impl_f64(const Design::Resample& spec) const
+  Backend::create_resample_processor_impl_f64(
+      const Design::Resample& spec) const
   {
     try {
       return std::make_unique<IntelIPP::ResampleProcessorImpl<F64>>(this, spec);
     }
     catch (const OmniException& e) {
       spdlog::get("OmniDSP")->error(
-          "IntelIPP::create_resample_plan_impl_f64 failed: {} (Status: {})",
+          "IntelIPP::create_resample_processor_impl_f64 failed: {} (Status: "
+          "{})",
           e.what(),
           static_cast<int>(e.get_status()));
       return OmniExpected<
@@ -336,7 +341,7 @@ namespace OmniDSP::IntelIPP {
     }
     catch (const std::bad_alloc& e) {
       spdlog::get("OmniDSP")->error(
-          "IntelIPP::create_resample_plan_impl_f64 allocation failed: {}",
+          "IntelIPP::create_resample_processor_impl_f64 allocation failed: {}",
           e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::ResampleProcessorImpl<F64>>>(
@@ -344,7 +349,8 @@ namespace OmniDSP::IntelIPP {
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error(
-          "IntelIPP::create_resample_plan_impl_f64 exception: {}", e.what());
+          "IntelIPP::create_resample_processor_impl_f64 exception: {}",
+          e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::ResampleProcessorImpl<F64>>>(
           std::unexpect, Status::BackendError);
@@ -353,7 +359,8 @@ namespace OmniDSP::IntelIPP {
 
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::FIRFilterProcessorImpl<F32>>>
-  Backend::create_fir_filter_plan_impl_f32(const F32Vec& coefficients) const
+  Backend::create_fir_filter_processor_impl_f32(
+      const F32Vec& coefficients) const
   {
     try {
       return std::make_unique<IntelIPP::FIRFilterProcessorImpl<F32>>(
@@ -361,7 +368,8 @@ namespace OmniDSP::IntelIPP {
     }
     catch (const OmniException& e) {
       spdlog::get("OmniDSP")->error(
-          "IntelIPP::create_fir_filter_plan_impl_f32 failed: {} (Status: {})",
+          "IntelIPP::create_fir_filter_processor_impl_f32 failed: {} (Status: "
+          "{})",
           e.what(),
           static_cast<int>(e.get_status()));
       return OmniExpected<
@@ -370,7 +378,8 @@ namespace OmniDSP::IntelIPP {
     }
     catch (const std::bad_alloc& e) {
       spdlog::get("OmniDSP")->error(
-          "IntelIPP::create_fir_filter_plan_impl_f32 allocation failed: {}",
+          "IntelIPP::create_fir_filter_processor_impl_f32 allocation failed: "
+          "{}",
           e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::FIRFilterProcessorImpl<F32>>>(
@@ -378,7 +387,8 @@ namespace OmniDSP::IntelIPP {
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error(
-          "IntelIPP::create_fir_filter_plan_impl_f32 exception: {}", e.what());
+          "IntelIPP::create_fir_filter_processor_impl_f32 exception: {}",
+          e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::FIRFilterProcessorImpl<F32>>>(
           std::unexpect, Status::BackendError);
@@ -387,7 +397,8 @@ namespace OmniDSP::IntelIPP {
 
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::FIRFilterProcessorImpl<F64>>>
-  Backend::create_fir_filter_plan_impl_f64(const F64Vec& coefficients) const
+  Backend::create_fir_filter_processor_impl_f64(
+      const F64Vec& coefficients) const
   {
     try {
       return std::make_unique<IntelIPP::FIRFilterProcessorImpl<F64>>(
@@ -395,7 +406,8 @@ namespace OmniDSP::IntelIPP {
     }
     catch (const OmniException& e) {
       spdlog::get("OmniDSP")->error(
-          "IntelIPP::create_fir_filter_plan_impl_f64 failed: {} (Status: {})",
+          "IntelIPP::create_fir_filter_processor_impl_f64 failed: {} (Status: "
+          "{})",
           e.what(),
           static_cast<int>(e.get_status()));
       return OmniExpected<
@@ -404,7 +416,8 @@ namespace OmniDSP::IntelIPP {
     }
     catch (const std::bad_alloc& e) {
       spdlog::get("OmniDSP")->error(
-          "IntelIPP::create_fir_filter_plan_impl_f64 allocation failed: {}",
+          "IntelIPP::create_fir_filter_processor_impl_f64 allocation failed: "
+          "{}",
           e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::FIRFilterProcessorImpl<F64>>>(
@@ -412,7 +425,8 @@ namespace OmniDSP::IntelIPP {
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error(
-          "IntelIPP::create_fir_filter_plan_impl_f64 exception: {}", e.what());
+          "IntelIPP::create_fir_filter_processor_impl_f64 exception: {}",
+          e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::FIRFilterProcessorImpl<F64>>>(
           std::unexpect, Status::BackendError);
@@ -421,7 +435,8 @@ namespace OmniDSP::IntelIPP {
 
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::FIRFilterProcessorImpl<C32>>>
-  Backend::create_fir_filter_plan_impl_c32(const C32Vec& coefficients) const
+  Backend::create_fir_filter_processor_impl_c32(
+      const C32Vec& coefficients) const
   {
     try {
       return std::make_unique<IntelIPP::FIRFilterProcessorImpl<C32>>(
@@ -429,7 +444,8 @@ namespace OmniDSP::IntelIPP {
     }
     catch (const OmniException& e) {
       spdlog::get("OmniDSP")->error(
-          "IntelIPP::create_fir_filter_plan_impl_c32 failed: {} (Status: {})",
+          "IntelIPP::create_fir_filter_processor_impl_c32 failed: {} (Status: "
+          "{})",
           e.what(),
           static_cast<int>(e.get_status()));
       return OmniExpected<
@@ -438,7 +454,8 @@ namespace OmniDSP::IntelIPP {
     }
     catch (const std::bad_alloc& e) {
       spdlog::get("OmniDSP")->error(
-          "IntelIPP::create_fir_filter_plan_impl_c32 allocation failed: {}",
+          "IntelIPP::create_fir_filter_processor_impl_c32 allocation failed: "
+          "{}",
           e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::FIRFilterProcessorImpl<C32>>>(
@@ -446,7 +463,8 @@ namespace OmniDSP::IntelIPP {
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error(
-          "IntelIPP::create_fir_filter_plan_impl_c32 exception: {}", e.what());
+          "IntelIPP::create_fir_filter_processor_impl_c32 exception: {}",
+          e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::FIRFilterProcessorImpl<C32>>>(
           std::unexpect, Status::BackendError);
@@ -455,7 +473,8 @@ namespace OmniDSP::IntelIPP {
 
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::FIRFilterProcessorImpl<C64>>>
-  Backend::create_fir_filter_plan_impl_c64(const C64Vec& coefficients) const
+  Backend::create_fir_filter_processor_impl_c64(
+      const C64Vec& coefficients) const
   {
     try {
       return std::make_unique<IntelIPP::FIRFilterProcessorImpl<C64>>(
@@ -463,7 +482,8 @@ namespace OmniDSP::IntelIPP {
     }
     catch (const OmniException& e) {
       spdlog::get("OmniDSP")->error(
-          "IntelIPP::create_fir_filter_plan_impl_c64 failed: {} (Status: {})",
+          "IntelIPP::create_fir_filter_processor_impl_c64 failed: {} (Status: "
+          "{})",
           e.what(),
           static_cast<int>(e.get_status()));
       return OmniExpected<
@@ -472,7 +492,8 @@ namespace OmniDSP::IntelIPP {
     }
     catch (const std::bad_alloc& e) {
       spdlog::get("OmniDSP")->error(
-          "IntelIPP::create_fir_filter_plan_impl_c64 allocation failed: {}",
+          "IntelIPP::create_fir_filter_processor_impl_c64 allocation failed: "
+          "{}",
           e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::FIRFilterProcessorImpl<C64>>>(
@@ -480,7 +501,8 @@ namespace OmniDSP::IntelIPP {
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error(
-          "IntelIPP::create_fir_filter_plan_impl_c64 exception: {}", e.what());
+          "IntelIPP::create_fir_filter_processor_impl_c64 exception: {}",
+          e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::FIRFilterProcessorImpl<C64>>>(
           std::unexpect, Status::BackendError);
@@ -489,7 +511,7 @@ namespace OmniDSP::IntelIPP {
 
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::IIRFilterProcessorImpl<F32>>>
-  Backend::create_iir_filter_plan_impl_f32(
+  Backend::create_iir_filter_processor_impl_f32(
       const std::vector<IIRFilterCoef>& sos_coefficients) const
   {
     try {
@@ -498,7 +520,8 @@ namespace OmniDSP::IntelIPP {
     }
     catch (const OmniException& e) {
       spdlog::get("OmniDSP")->error(
-          "IntelIPP::create_iir_filter_plan_impl_f32 failed: {} (Status: {})",
+          "IntelIPP::create_iir_filter_processor_impl_f32 failed: {} (Status: "
+          "{})",
           e.what(),
           static_cast<int>(e.get_status()));
       return OmniExpected<
@@ -507,7 +530,8 @@ namespace OmniDSP::IntelIPP {
     }
     catch (const std::bad_alloc& e) {
       spdlog::get("OmniDSP")->error(
-          "IntelIPP::create_iir_filter_plan_impl_f32 allocation failed: {}",
+          "IntelIPP::create_iir_filter_processor_impl_f32 allocation failed: "
+          "{}",
           e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::IIRFilterProcessorImpl<F32>>>(
@@ -515,7 +539,8 @@ namespace OmniDSP::IntelIPP {
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error(
-          "IntelIPP::create_iir_filter_plan_impl_f32 exception: {}", e.what());
+          "IntelIPP::create_iir_filter_processor_impl_f32 exception: {}",
+          e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::IIRFilterProcessorImpl<F32>>>(
           std::unexpect, Status::BackendError);
@@ -524,7 +549,7 @@ namespace OmniDSP::IntelIPP {
 
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::IIRFilterProcessorImpl<F64>>>
-  Backend::create_iir_filter_plan_impl_f64(
+  Backend::create_iir_filter_processor_impl_f64(
       const std::vector<IIRFilterCoef>& sos_coefficients) const
   {
     try {
@@ -533,7 +558,8 @@ namespace OmniDSP::IntelIPP {
     }
     catch (const OmniException& e) {
       spdlog::get("OmniDSP")->error(
-          "IntelIPP::create_iir_filter_plan_impl_f64 failed: {} (Status: {})",
+          "IntelIPP::create_iir_filter_processor_impl_f64 failed: {} (Status: "
+          "{})",
           e.what(),
           static_cast<int>(e.get_status()));
       return OmniExpected<
@@ -542,7 +568,8 @@ namespace OmniDSP::IntelIPP {
     }
     catch (const std::bad_alloc& e) {
       spdlog::get("OmniDSP")->error(
-          "IntelIPP::create_iir_filter_plan_impl_f64 allocation failed: {}",
+          "IntelIPP::create_iir_filter_processor_impl_f64 allocation failed: "
+          "{}",
           e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::IIRFilterProcessorImpl<F64>>>(
@@ -550,15 +577,16 @@ namespace OmniDSP::IntelIPP {
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error(
-          "IntelIPP::create_iir_filter_plan_impl_f64 exception: {}", e.what());
+          "IntelIPP::create_iir_filter_processor_impl_f64 exception: {}",
+          e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::IIRFilterProcessorImpl<F64>>>(
           std::unexpect, Status::BackendError);
     }
   }
 
-  // Convolution/Correlation/CQT plan impl factories and Filter design methods
-  // are inherited from Default::Backend.
+  // Convolution/Correlation plan impl and CQT processor impl factories and
+  // Filter design methods are inherited from Default::Backend.
 
 }  // namespace OmniDSP::IntelIPP
 

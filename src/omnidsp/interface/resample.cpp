@@ -43,10 +43,10 @@ namespace OmniDSP {
     OmniExpected<std::unique_ptr<::OmniDSP::Abstract::ResampleProcessorImpl<T>>>
         pimpl_expected;
     if constexpr (std::is_same_v<T, F32>) {
-      pimpl_expected = backend.create_resample_plan_impl_f32(design);
+      pimpl_expected = backend.create_resample_processor_impl_f32(design);
     }
     else if constexpr (std::is_same_v<T, F64>) {
-      pimpl_expected = backend.create_resample_plan_impl_f64(design);
+      pimpl_expected = backend.create_resample_processor_impl_f64(design);
     }
     else {
       return std::unexpected(Status::UnsupportedFeature);

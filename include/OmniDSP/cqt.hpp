@@ -70,10 +70,10 @@ namespace OmniDSP {
           = std::unexpected<OmniDSP::Status>(OmniDSP::Status::NotImplemented);
 
       if constexpr (std::is_same_v<T, F32>) {
-        pimpl_expected = backend.create_cqt_plan_impl_f32(design);
+        pimpl_expected = backend.create_cqt_processor_impl_f32(design);
       }
       else if constexpr (std::is_same_v<T, F64>) {
-        pimpl_expected = backend.create_cqt_plan_impl_f64(design);
+        pimpl_expected = backend.create_cqt_processor_impl_f64(design);
       }
       else {
         // This static_assert will fire at compile time if T is not F32 or F64,

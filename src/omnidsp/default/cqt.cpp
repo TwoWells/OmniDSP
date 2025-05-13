@@ -72,7 +72,7 @@ namespace OmniDSP::Default {
           octave_design_item.fft_length,
           octave_design_item.bin_frequencies.size());
 
-      std::unique_ptr<ResampleProcessor<T>> resampler_plan = nullptr;
+      std::unique_ptr<ResampleProcessor<T>> resampler_processor = nullptr;
       if (std::abs(
               octave_design_item.octave_sample_rate
               - spec_.original_sample_rate)
@@ -106,7 +106,7 @@ namespace OmniDSP::Default {
               "Failed to create internal ResampleProcessor for CQT.",
               resampler_expected.error());
         }
-        resampler_plan = std::move(resampler_expected.value());
+        resampler_processor = std::move(resampler_expected.value());
       }
 
       OmniExpected<std::unique_ptr<Abstract::RFFTPlanImpl<T>>>
@@ -257,7 +257,7 @@ namespace OmniDSP::Default {
 
       processed_octaves_.emplace_back(
           octave_design_item.octave_sample_rate,
-          std::move(resampler_plan),
+          std::move(resampler_processor),
           std::move(rfft_plan),
           std::move(octave_sparse_kernels_fft),
           octave_design_item.fft_length,
