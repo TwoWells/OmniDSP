@@ -4,10 +4,11 @@
  * forwarding calls to backend implementations.
  */
 
-#include <OmniDSP/convolution.hpp>  // Corresponding header
+#include "OmniDSP/convolution.hpp"  // Corresponding header
 
 // Include the backend interface definition which declares the Impl classes
-#include <memory>  // For std::unique_ptr
+#include <expected>  // For std::unexpected
+#include <memory>    // For std::unique_ptr
 #include <numeric>  // For std::max, std::min (potentially used in get_output_length)
 #include <span>
 #include <stdexcept>  // For std::runtime_error
@@ -24,6 +25,64 @@ namespace OmniDSP {
   //--------------------------------------------------------------------------
   // ConvolutionPlan Method Definitions
   //--------------------------------------------------------------------------
+
+  // Static create_from_impl Definition
+  template <typename T>
+  std::unique_ptr<ConvolutionPlan<T>> ConvolutionPlan<T>::create_from_impl(
+      std::unique_ptr<Abstract::ConvolutionPlanImpl<T>> pimpl)
+  {
+    if (!pimpl) {
+      return nullptr;
+    }
+    // Calls the private constructor of ConvolutionPlan<T>
+    // Using `new` directly as make_unique cannot access private constructor.
+    // The std::unique_ptr will manage the memory.
+    return std::unique_ptr<ConvolutionPlan<T>>(
+        new ConvolutionPlan<T>(std::move(pimpl)));
+  }
+
+  // Static create Definition
+  template <typename T>
+  [[nodiscard]] OmniExpected<std::unique_ptr<ConvolutionPlan<T>>>
+  ConvolutionPlan<T>::create(
+      const Abstract::Backend& backend,
+      const std::vector<T>& kernel,
+      ConvolutionType type,
+      ConvolutionMethod method)
+  {
+    OmniExpected<std::unique_ptr<Abstract::ConvolutionPlanImpl<T>>>
+        pimpl_expected;
+    if constexpr (std::is_same_v<T, F32>) {
+      pimpl_expected
+          = backend.create_convolution_plan_impl_f32(kernel, type, method);
+    }
+    else if constexpr (std::is_same_v<T, F64>) {
+      pimpl_expected
+          = backend.create_convolution_plan_impl_f64(kernel, type, method);
+    }
+    else if constexpr (std::is_same_v<T, C32>) {
+      pimpl_expected
+          = backend.create_convolution_plan_impl_c32(kernel, type, method);
+    }
+    else if constexpr (std::is_same_v<T, C64>) {
+      pimpl_expected
+          = backend.create_convolution_plan_impl_c64(kernel, type, method);
+    }
+    else {
+      return std::unexpected(Status::UnsupportedFeature);
+    }
+
+    if (!pimpl_expected) {
+      return std::unexpected(pimpl_expected.error());
+    }
+
+    auto plan = ConvolutionPlan<T>::create_from_impl(
+        std::move(pimpl_expected.value()));
+    if (!plan) {
+      return std::unexpected(Status::Failure);  // Or AllocationError
+    }
+    return plan;
+  }
 
   template <typename T>
   ConvolutionPlan<T>::ConvolutionPlan(
@@ -55,9 +114,6 @@ namespace OmniDSP {
     if (!pimpl_) {
       return Status::InvalidOperation;
     }
-    // Add size checks for robustness?
-    // size_t expected_len = get_output_length(input.size());
-    // if (output.size() < expected_len) return Status::SizeMismatch;
     return pimpl_->execute(input, output);
   }
 
@@ -80,7 +136,6 @@ namespace OmniDSP {
     return pimpl_->get_type();
   }
 
-  // *** ADDED Definition ***
   template <typename T>
   ConvolutionMethod ConvolutionPlan<T>::get_method_hint() const
   {
@@ -88,7 +143,6 @@ namespace OmniDSP {
       throw std::runtime_error(
           "Invalid ConvolutionPlan instance in get_method_hint.");
     }
-    // Assumes ConvolutionPlanImpl has a get_method() method
     return pimpl_->get_method();
   }
 
@@ -102,7 +156,6 @@ namespace OmniDSP {
     return pimpl_->get_output_length(input_length);
   }
 
-  // *** ADDED Definition ***
   template <typename T>
   std::span<const T> ConvolutionPlan<T>::get_kernel() const
   {
@@ -110,13 +163,67 @@ namespace OmniDSP {
       throw std::runtime_error(
           "Invalid ConvolutionPlan instance in get_kernel.");
     }
-    // Assumes ConvolutionPlanImpl has a get_kernel() method
     return pimpl_->get_kernel();
   }
 
   //--------------------------------------------------------------------------
   // CorrelationPlan Method Definitions
   //--------------------------------------------------------------------------
+
+  // Static create_from_impl Definition
+  template <typename T>
+  std::unique_ptr<CorrelationPlan<T>> CorrelationPlan<T>::create_from_impl(
+      std::unique_ptr<Abstract::CorrelationPlanImpl<T>> pimpl)
+  {
+    if (!pimpl) {
+      return nullptr;
+    }
+    return std::unique_ptr<CorrelationPlan<T>>(
+        new CorrelationPlan<T>(std::move(pimpl)));
+  }
+
+  // Static create Definition
+  template <typename T>
+  [[nodiscard]] OmniExpected<std::unique_ptr<CorrelationPlan<T>>>
+  CorrelationPlan<T>::create(
+      const Abstract::Backend& backend,
+      const std::vector<T>& kernel,
+      ConvolutionType type,
+      ConvolutionMethod method)
+  {
+    OmniExpected<std::unique_ptr<Abstract::CorrelationPlanImpl<T>>>
+        pimpl_expected;
+    if constexpr (std::is_same_v<T, F32>) {
+      pimpl_expected
+          = backend.create_correlation_plan_impl_f32(kernel, type, method);
+    }
+    else if constexpr (std::is_same_v<T, F64>) {
+      pimpl_expected
+          = backend.create_correlation_plan_impl_f64(kernel, type, method);
+    }
+    else if constexpr (std::is_same_v<T, C32>) {
+      pimpl_expected
+          = backend.create_correlation_plan_impl_c32(kernel, type, method);
+    }
+    else if constexpr (std::is_same_v<T, C64>) {
+      pimpl_expected
+          = backend.create_correlation_plan_impl_c64(kernel, type, method);
+    }
+    else {
+      return std::unexpected(Status::UnsupportedFeature);
+    }
+
+    if (!pimpl_expected) {
+      return std::unexpected(pimpl_expected.error());
+    }
+
+    auto plan = CorrelationPlan<T>::create_from_impl(
+        std::move(pimpl_expected.value()));
+    if (!plan) {
+      return std::unexpected(Status::Failure);  // Or AllocationError
+    }
+    return plan;
+  }
 
   template <typename T>
   CorrelationPlan<T>::CorrelationPlan(
@@ -148,9 +255,6 @@ namespace OmniDSP {
     if (!pimpl_) {
       return Status::InvalidOperation;
     }
-    // Add size checks?
-    // size_t expected_len = get_output_length(input.size());
-    // if (output.size() < expected_len) return Status::SizeMismatch;
     return pimpl_->execute(input, output);
   }
 
@@ -173,7 +277,6 @@ namespace OmniDSP {
     return pimpl_->get_type();
   }
 
-  // *** ADDED Definition ***
   template <typename T>
   ConvolutionMethod CorrelationPlan<T>::get_method_hint() const
   {
@@ -181,7 +284,6 @@ namespace OmniDSP {
       throw std::runtime_error(
           "Invalid CorrelationPlan instance in get_method_hint.");
     }
-    // Assumes CorrelationPlanImpl has a get_method() method
     return pimpl_->get_method();
   }
 
@@ -195,7 +297,6 @@ namespace OmniDSP {
     return pimpl_->get_output_length(input_length);
   }
 
-  // *** ADDED Definition ***
   template <typename T>
   std::span<const T> CorrelationPlan<T>::get_template() const
   {
@@ -203,7 +304,6 @@ namespace OmniDSP {
       throw std::runtime_error(
           "Invalid CorrelationPlan instance in get_template.");
     }
-    // Assumes CorrelationPlanImpl has a get_template() method
     return pimpl_->get_template();
   }
 
@@ -211,16 +311,93 @@ namespace OmniDSP {
   // Explicit Template Instantiations
   //--------------------------------------------------------------------------
 
-  // ConvolutionPlan Instantiations
-  template class ConvolutionPlan<F32>;
-  template class ConvolutionPlan<F64>;
-  template class ConvolutionPlan<C32>;
-  template class ConvolutionPlan<C64>;
+  template class OMNIDSP_EXPORT ConvolutionPlan<F32>;
+  template class OMNIDSP_EXPORT ConvolutionPlan<F64>;
+  template class OMNIDSP_EXPORT ConvolutionPlan<C32>;
+  template class OMNIDSP_EXPORT ConvolutionPlan<C64>;
 
-  // CorrelationPlan Instantiations
-  template class CorrelationPlan<F32>;
-  template class CorrelationPlan<F64>;
-  template class CorrelationPlan<C32>;
-  template class CorrelationPlan<C64>;
+  template class OMNIDSP_EXPORT CorrelationPlan<F32>;
+  template class OMNIDSP_EXPORT CorrelationPlan<F64>;
+  template class OMNIDSP_EXPORT CorrelationPlan<C32>;
+  template class OMNIDSP_EXPORT CorrelationPlan<C64>;
+
+  // Explicitly instantiate static members for export
+  // For ConvolutionPlan
+  template OMNIDSP_EXPORT std::unique_ptr<ConvolutionPlan<F32>>
+  ConvolutionPlan<F32>::create_from_impl(
+      std::unique_ptr<Abstract::ConvolutionPlanImpl<F32>> pimpl);
+  template OMNIDSP_EXPORT std::unique_ptr<ConvolutionPlan<F64>>
+  ConvolutionPlan<F64>::create_from_impl(
+      std::unique_ptr<Abstract::ConvolutionPlanImpl<F64>> pimpl);
+  template OMNIDSP_EXPORT std::unique_ptr<ConvolutionPlan<C32>>
+  ConvolutionPlan<C32>::create_from_impl(
+      std::unique_ptr<Abstract::ConvolutionPlanImpl<C32>> pimpl);
+  template OMNIDSP_EXPORT std::unique_ptr<ConvolutionPlan<C64>>
+  ConvolutionPlan<C64>::create_from_impl(
+      std::unique_ptr<Abstract::ConvolutionPlanImpl<C64>> pimpl);
+
+  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<ConvolutionPlan<F32>>>
+  ConvolutionPlan<F32>::create(
+      const Abstract::Backend&,
+      const std::vector<F32>&,
+      ConvolutionType,
+      ConvolutionMethod);
+  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<ConvolutionPlan<F64>>>
+  ConvolutionPlan<F64>::create(
+      const Abstract::Backend&,
+      const std::vector<F64>&,
+      ConvolutionType,
+      ConvolutionMethod);
+  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<ConvolutionPlan<C32>>>
+  ConvolutionPlan<C32>::create(
+      const Abstract::Backend&,
+      const std::vector<C32>&,
+      ConvolutionType,
+      ConvolutionMethod);
+  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<ConvolutionPlan<C64>>>
+  ConvolutionPlan<C64>::create(
+      const Abstract::Backend&,
+      const std::vector<C64>&,
+      ConvolutionType,
+      ConvolutionMethod);
+
+  // For CorrelationPlan
+  template OMNIDSP_EXPORT std::unique_ptr<CorrelationPlan<F32>>
+  CorrelationPlan<F32>::create_from_impl(
+      std::unique_ptr<Abstract::CorrelationPlanImpl<F32>> pimpl);
+  template OMNIDSP_EXPORT std::unique_ptr<CorrelationPlan<F64>>
+  CorrelationPlan<F64>::create_from_impl(
+      std::unique_ptr<Abstract::CorrelationPlanImpl<F64>> pimpl);
+  template OMNIDSP_EXPORT std::unique_ptr<CorrelationPlan<C32>>
+  CorrelationPlan<C32>::create_from_impl(
+      std::unique_ptr<Abstract::CorrelationPlanImpl<C32>> pimpl);
+  template OMNIDSP_EXPORT std::unique_ptr<CorrelationPlan<C64>>
+  CorrelationPlan<C64>::create_from_impl(
+      std::unique_ptr<Abstract::CorrelationPlanImpl<C64>> pimpl);
+
+  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<CorrelationPlan<F32>>>
+  CorrelationPlan<F32>::create(
+      const Abstract::Backend&,
+      const std::vector<F32>&,
+      ConvolutionType,
+      ConvolutionMethod);
+  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<CorrelationPlan<F64>>>
+  CorrelationPlan<F64>::create(
+      const Abstract::Backend&,
+      const std::vector<F64>&,
+      ConvolutionType,
+      ConvolutionMethod);
+  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<CorrelationPlan<C32>>>
+  CorrelationPlan<C32>::create(
+      const Abstract::Backend&,
+      const std::vector<C32>&,
+      ConvolutionType,
+      ConvolutionMethod);
+  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<CorrelationPlan<C64>>>
+  CorrelationPlan<C64>::create(
+      const Abstract::Backend&,
+      const std::vector<C64>&,
+      ConvolutionType,
+      ConvolutionMethod);
 
 }  // namespace OmniDSP

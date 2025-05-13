@@ -54,10 +54,14 @@ set(OMNIDSP_CORE_HEADERS
     "${CMAKE_SOURCE_DIR}/include/OmniDSP/utils.hpp"
     "${CMAKE_SOURCE_DIR}/include/OmniDSP/window.hpp"
     # include/OmniDSP/params
-    "${CMAKE_SOURCE_DIR}/include/OmniDSP/params/fir_filter.hpp"
-    "${CMAKE_SOURCE_DIR}/include/OmniDSP/params/resample.hpp"
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/params/convolution.hpp"
     "${CMAKE_SOURCE_DIR}/include/OmniDSP/params/cqt.hpp"
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/params/fft.hpp"
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/params/fir_filter.hpp"
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/params/iir_filter.hpp"
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/params/resample.hpp"
     # include/OmniDSP/types
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/types/convolution.hpp"
     "${CMAKE_SOURCE_DIR}/include/OmniDSP/types/filter.hpp"
 )
 set(OMNIDSP_CORE_SOURCES

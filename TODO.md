@@ -21,7 +21,7 @@
 ## **High Priority / Blocking Tasks**
 
 - **Implement `Dispatcher::Backend` & Advanced Configuration:**
-  - \[ \] Define `OperationCategory` enum.
+  - \[x\] Define `OperationCategory` enum.
   - \[ \] Implement `Dispatcher::Backend` class.
   - \[ \] Implement `OmniDSP::create` overloads supporting overrides.
   - \[ \] Add tests for `Dispatcher::Backend` configurations.
@@ -36,7 +36,7 @@
   - \[ \] Implement `Default::*PlanImpl` classes (stateless).
   - \[ \] Implement `Default::*ProcessorImpl` classes (stateful, internal state, `reset` logic).
 - **Complete `Params` -> `Setup`/`Spec` Internal Flow:**
-  - \[ \] Finalize `[Type]Params` fluent interfaces.
+  - \[x\] Finalize `[Type]Params` fluent interfaces.
   - \[ \] Implement internal `Params::to_setup()` / `Params::to_spec()` methods.
   - \[ \] Ensure validation logic is called correctly during conversion.
   - \[ \] Refine/Confirm role of `Utils::create_spec` (likely called by `Params::to_spec`).
@@ -51,8 +51,8 @@
   - \[ \] Implement in `Default::Backend`.
   - \[ \] Python bindings and tests.
 - **Define Core Enums:**
-  - \[ \] Define `PaddingMode` enum.
-  - \[ \] Move `ConvolutionType`, `ConvolutionMethod` to `types/convolution.hpp`.
+  - \[x\] Define `PaddingMode` enum.
+  - \[x\] Move `ConvolutionType`, `ConvolutionMethod` to `types/convolution.hpp`.
 
 ## **Core Library Features**
 

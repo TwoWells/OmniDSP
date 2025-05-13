@@ -10,6 +10,13 @@
 #include <type_traits>  // Required for type traits helpers
 #include <vector>
 
+// OMNIDSP_EXPORT macro is typically defined in omnidsp_export.h,
+// which should be included by projects using OmniDSP.
+// For internal OmniDSP headers, ensure omnidsp_export.h is accessible.
+// If omnidsp_export.h is not included here, OMNIDSP_EXPORT might be undefined.
+// It's often better to include "OmniDSP/omnidsp_export.hpp" if that's where it
+// is. #include "OmniDSP/omnidsp_export.hpp" // Assuming this path
+
 namespace OmniDSP {
 
   // --- Core Status Enum ---
@@ -79,46 +86,18 @@ namespace OmniDSP {
     }
   }
 
-  // --- Convolution/Correlation Enums (Moved from convolution.hpp) ---
-  /** @brief Specifies the type (output size/boundary handling) for
-   * convolution/correlation. */
-  enum class ConvolutionType { Full, Same, Valid };
-
-  /** @brief Specifies the underlying algorithm to use for
-   * convolution/correlation. */
-  enum class ConvolutionMethod { Direct, FFT, Auto };
-
-  /** @brief Gets the string name corresponding to a ConvolutionType. */
-  inline std::string_view get_convolution_type_name(
-      ConvolutionType type) noexcept
-  {
-    switch (type) {
-      case ConvolutionType::Full:
-        return "Full";
-      case ConvolutionType::Same:
-        return "Same";
-      case ConvolutionType::Valid:
-        return "Valid";
-      default:
-        return "Unknown ConvolutionType";
-    }
-  }
-
-  /** @brief Gets the string name corresponding to a ConvolutionMethod. */
-  inline std::string_view get_convolution_method_name(
-      ConvolutionMethod method) noexcept
-  {
-    switch (method) {
-      case ConvolutionMethod::Direct:
-        return "Direct";
-      case ConvolutionMethod::FFT:
-        return "FFT";
-      case ConvolutionMethod::Auto:
-        return "Auto";
-      default:
-        return "Unknown ConvolutionMethod";
-    }
-  }
+  // --- OperationType Enum ---
+  enum class OperationType {
+    FFT,
+    RFFT,
+    Convolution,
+    Correlation,
+    FIRFilter,
+    IIRFilter,
+    Resample,
+    CQT,
+    Windowing
+  };
 
   // --- Type Aliases ---
   using F32 = float;

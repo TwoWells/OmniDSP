@@ -15,6 +15,7 @@
 
 // Core types are fundamental and are included directly.
 #include <OmniDSP/core_types.hpp>  // For Status, OmniExpected, F32, C32, BackendType etc.
+#include <OmniDSP/types/convolution.hpp>  // << NEW INCLUDE HERE for ConvolutionType, ConvolutionMethod
 
 // Forward declarations for Spec and Plan types used in the interface.
 // The full definitions will be included in the .cpp files of concrete backends
@@ -45,9 +46,8 @@ namespace OmniDSP {
   // From cqt.hpp
   struct CQTSpec;  // Forward declaration
 
-  // From convolution.hpp
-  enum class ConvolutionType;    // Forward declaration
-  enum class ConvolutionMethod;  // Forward declaration
+  // ConvolutionType and ConvolutionMethod are now included from
+  // types/convolution.hpp
 
   // Public Plan classes (forward declared as they appear in return types of
   // OmniDSP facade, but Abstract::Backend primarily deals with Impl classes for
@@ -126,11 +126,10 @@ namespace OmniDSP::Abstract {
         std::span<const T> input, std::span<T> output) const
         = 0;
     virtual size_t get_kernel_length() const = 0;
-    virtual ConvolutionType get_type() const = 0;  // Uses forward-declared enum
+    virtual ConvolutionType get_type() const = 0;
     virtual size_t get_output_length(size_t input_length) const = 0;
     [[nodiscard]] virtual std::span<const T> get_kernel() const = 0;
-    [[nodiscard]] virtual ConvolutionMethod get_method() const
-        = 0;  // Uses forward-declared enum
+    [[nodiscard]] virtual ConvolutionMethod get_method() const = 0;
   };
 
   template <typename T>
