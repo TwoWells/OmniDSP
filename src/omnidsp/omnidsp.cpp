@@ -433,48 +433,48 @@ namespace OmniDSP {
   template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<ConvolutionPlan<C64>>>
   OmniDSP::create_plan(const ConvolutionParams&, const std::vector<C64>&) const;
 
-  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<FIRFilterPlan<F32>>>
+  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<FIRFilterProcessor<F32>>>
   OmniDSP::create_processor(const FIRFilterParams&) const;
-  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<FIRFilterPlan<F64>>>
+  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<FIRFilterProcessor<F64>>>
   OmniDSP::create_processor(const FIRFilterParams&) const;
-  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<FIRFilterPlan<C32>>>
+  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<FIRFilterProcessor<C32>>>
   OmniDSP::create_processor(const FIRFilterParams&) const;
-  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<FIRFilterPlan<C64>>>
+  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<FIRFilterProcessor<C64>>>
   OmniDSP::create_processor(const FIRFilterParams&) const;
-  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<FIRFilterPlan<F32>>>
+  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<FIRFilterProcessor<F32>>>
   OmniDSP::create_processor(const FIRCoefs<F32>&) const;
-  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<FIRFilterPlan<F64>>>
+  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<FIRFilterProcessor<F64>>>
   OmniDSP::create_processor(const FIRCoefs<F64>&) const;
-  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<FIRFilterPlan<C32>>>
+  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<FIRFilterProcessor<C32>>>
   OmniDSP::create_processor(const FIRCoefs<C32>&) const;
-  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<FIRFilterPlan<C64>>>
+  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<FIRFilterProcessor<C64>>>
   OmniDSP::create_processor(const FIRCoefs<C64>&) const;
 
-  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<IIRFilterPlan<F32>>>
+  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<IIRFilterProcessor<F32>>>
   OmniDSP::create_processor(const IIRFilterParams&) const;
-  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<IIRFilterPlan<F64>>>
+  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<IIRFilterProcessor<F64>>>
   OmniDSP::create_processor(const IIRFilterParams&) const;
-  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<IIRFilterPlan<F32>>>
+  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<IIRFilterProcessor<F32>>>
   OmniDSP::create_processor(const std::vector<IIRFilterCoef>&) const;
-  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<IIRFilterPlan<F64>>>
+  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<IIRFilterProcessor<F64>>>
   OmniDSP::create_processor(const std::vector<IIRFilterCoef>&) const;
 
-  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<ResamplePlan<F32>>>
+  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<ResampleProcessor<F32>>>
   OmniDSP::create_processor(const ResampleParams&) const;
-  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<ResamplePlan<F64>>>
+  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<ResampleProcessor<F64>>>
   OmniDSP::create_processor(const ResampleParams&) const;
-  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<ResamplePlan<F32>>>
+  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<ResampleProcessor<F32>>>
   OmniDSP::create_processor(const Design::Resample&) const;
-  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<ResamplePlan<F64>>>
+  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<ResampleProcessor<F64>>>
   OmniDSP::create_processor(const Design::Resample&) const;
 
-  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<CQTPlan<F32>>>
+  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<CQTProcessor<F32>>>
   OmniDSP::create_processor(const CQTParams&) const;
-  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<CQTPlan<F64>>>
+  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<CQTProcessor<F64>>>
   OmniDSP::create_processor(const CQTParams&) const;
-  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<CQTPlan<F32>>>
+  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<CQTProcessor<F32>>>
   OmniDSP::create_processor(const Design::CQT&) const;
-  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<CQTPlan<F64>>>
+  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<CQTProcessor<F64>>>
   OmniDSP::create_processor(const Design::CQT&) const;
 
   // Filter Design Methods

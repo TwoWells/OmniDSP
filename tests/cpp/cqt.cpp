@@ -1,6 +1,6 @@
 /**
  * @file tests/cpp/cqt.cpp
- * @brief Unit tests for the OmniDSP Recursive CQTPlan class
+ * @brief Unit tests for the OmniDSP Recursive CQTProcessor class
  * with precomputed sparse kernels. Includes comparison with Librosa reference.
  * Uses TestDataUtils for loading reference data.
  */
@@ -52,7 +52,7 @@ class PrecomputedRecursiveCQTTest : public ::testing::Test {
       = 1.0;  // seconds - matches generate_references.py
 
   // Default window generator helper (returns coefficients) - L1 Normalized
-  // This is passed to the CQTPlan constructor in tests.
+  // This is passed to the CQTProcessor constructor in tests.
   template <typename T>
   static std::vector<T> hannWindowCoeffsGenerator(size_t length)
   {
@@ -63,8 +63,8 @@ class PrecomputedRecursiveCQTTest : public ::testing::Test {
       window_coeffs[n] = static_cast<T>(
           0.5 - 0.5 * std::cos(2.0 * std::numbers::pi * n / denom));
     }
-    // CQTPlan internally normalizes the kernel, so no need to normalize here
-    // for the generator function passed to the constructor.
+    // CQTProcessor internally normalizes the kernel, so no need to normalize
+    // here for the generator function passed to the constructor.
     return window_coeffs;
   }
 
@@ -150,49 +150,50 @@ class PrecomputedRecursiveCQTTest : public ::testing::Test {
     return std::numeric_limits<T>::epsilon() * N * 1000;
   }
 
-  // --- Accessors for Private CQTPlan Members (Requires Friend Declaration in
-  // cqt.h) ---
+  // --- Accessors for Private CQTProcessor Members (Requires Friend Declaration
+  // in cqt.h) ---
   template <typename T>
   static const std::vector<size_t> &getOctaveFFTLens(
-      const OmniDSP::CQTPlan<T> &plan)
+      const OmniDSP::CQTProcessor<T> &plan)
   {
     return plan.octave_fft_lens_;
   }
   template <typename T>
   static const std::vector<size_t> &getOctaveSpectrumLens(
-      const OmniDSP::CQTPlan<T> &plan)
+      const OmniDSP::CQTProcessor<T> &plan)
   {
     return plan.octave_spectrum_lens_;
   }
   template <typename T>
   static const std::vector<std::unique_ptr<OmniDSP::FFTPlan<T>>> &
-  getOctaveSignalFFTPlans(const OmniDSP::CQTPlan<T> &plan)
+  getOctaveSignalFFTPlans(const OmniDSP::CQTProcessor<T> &plan)
   {
     return plan.octave_signal_fft_plans_;
   }
   template <typename T>
   static const std::vector<std::unique_ptr<OmniDSP::FFTPlan<T>>> &
-  getOctaveKernelFFTPlans(const OmniDSP::CQTPlan<T> &plan)
+  getOctaveKernelFFTPlans(const OmniDSP::CQTProcessor<T> &plan)
   {
     return plan.octave_kernel_fft_plans_;
   }
   template <typename T>
-  static const std::vector<typename OmniDSP::CQTPlan<T>::SparseKernelOctave> &
-  getSparseKernels(const OmniDSP::CQTPlan<T> &plan)
+  static const std::vector<
+      typename OmniDSP::CQTProcessor<T>::SparseKernelOctave> &
+  getSparseKernels(const OmniDSP::CQTProcessor<T> &plan)
   {
     return plan.precomputed_sparse_kernels_;
   }
   // Helper to call the private method calculateFirCoefficients
   template <typename T>
   static std::vector<T> callCalculateFirCoefficients(
-      const OmniDSP::CQTPlan<T> &plan, double current_sr, int N)
+      const OmniDSP::CQTProcessor<T> &plan, double current_sr, int N)
   {
     return plan.calculateFirCoefficients(current_sr, N);
   }
   // Helper to call the private method filterAndDownsampleBy2
   template <typename T>
   static std::vector<T> callFilterAndDownsampleBy2(
-      const OmniDSP::CQTPlan<T> &plan,
+      const OmniDSP::CQTProcessor<T> &plan,
       const std::vector<T> &signal,
       double current_sr)
   {
@@ -206,9 +207,9 @@ class PrecomputedRecursiveCQTTest : public ::testing::Test {
 TEST_F(PrecomputedRecursiveCQTTest, ConstructorPrecomputation)
 {
   using T = double;
-  std::unique_ptr<OmniDSP::CQTPlan<T>> plan_ptr;
+  std::unique_ptr<OmniDSP::CQTProcessor<T>> plan_ptr;
   ASSERT_NO_THROW(
-      plan_ptr = std::make_unique<OmniDSP::CQTPlan<T>>(
+      plan_ptr = std::make_unique<OmniDSP::CQTProcessor<T>>(
           sample_rate,
           hop_length,
           lowest_freq,
@@ -219,7 +220,7 @@ TEST_F(PrecomputedRecursiveCQTTest, ConstructorPrecomputation)
           DEFAULT_FIR_FILTER_ORDER_TEST))
       << "Constructor threw unexpected exception.";
   ASSERT_NE(plan_ptr, nullptr);
-  OmniDSP::CQTPlan<T> &plan = *plan_ptr;
+  OmniDSP::CQTProcessor<T> &plan = *plan_ptr;
   ASSERT_EQ(plan.getSampleRate(), sample_rate);
   ASSERT_EQ(plan.getHopLength(), hop_length);
   ASSERT_EQ(plan.getLowestFrequency(), lowest_freq);
@@ -262,7 +263,7 @@ TEST_F(PrecomputedRecursiveCQTTest, ConstructorPrecomputation)
 TEST_F(PrecomputedRecursiveCQTTest, CalculateFirCoefficients)
 {
   using T = double;
-  OmniDSP::CQTPlan<T> plan(
+  OmniDSP::CQTProcessor<T> plan(
       sample_rate,
       hop_length,
       lowest_freq,
@@ -316,7 +317,7 @@ TEST_F(PrecomputedRecursiveCQTTest, FilterAndDownsample)
                                           * static_cast<double>(i) / sr);
     }
     // Use dummy CQT parameters, only FIR order and SR matter for this test
-    OmniDSP::CQTPlan<T> plan(
+    OmniDSP::CQTProcessor<T> plan(
         sr,
         128,
         400,
@@ -366,7 +367,7 @@ TEST_F(PrecomputedRecursiveCQTTest, FilterAndDownsample)
                                           2.0 * std::numbers::pi * freq_high
                                           * static_cast<double>(i) / sr);
     }
-    OmniDSP::CQTPlan<T> plan(
+    OmniDSP::CQTProcessor<T> plan(
         sr,
         128,
         400,
@@ -393,7 +394,7 @@ TEST_F(PrecomputedRecursiveCQTTest, FullRecursiveCQT_Execute)
     using Complex = std::complex<T>;
     std::vector<T> test_signal = generateSineWave<T>(
         cqt_signal_freq, cqt_signal_duration, sample_rate);
-    OmniDSP::CQTPlan<T> plan(
+    OmniDSP::CQTProcessor<T> plan(
         sample_rate,
         hop_length,
         lowest_freq,
@@ -435,7 +436,7 @@ TEST_F(PrecomputedRecursiveCQTTest, FullRecursiveCQT_Execute)
     using Complex = std::complex<T>;
     std::vector<T> test_signal = generateSineWave<T>(
         cqt_signal_freq, cqt_signal_duration, sample_rate);
-    OmniDSP::CQTPlan<T> plan(
+    OmniDSP::CQTProcessor<T> plan(
         sample_rate,
         hop_length,
         lowest_freq,
@@ -456,7 +457,7 @@ TEST_F(PrecomputedRecursiveCQTTest, ParameterValidation)
 {
   using T = double;
   auto dummy_gen = hannWindowCoeffsGenerator<T>;
-  ASSERT_NO_THROW(OmniDSP::CQTPlan<T>(
+  ASSERT_NO_THROW(OmniDSP::CQTProcessor<T>(
       sample_rate,
       hop_length,
       lowest_freq,
@@ -466,7 +467,7 @@ TEST_F(PrecomputedRecursiveCQTTest, ParameterValidation)
       sparsity_threshold_double,
       DEFAULT_FIR_FILTER_ORDER_TEST));
   ASSERT_THROW(
-      OmniDSP::CQTPlan<T>(
+      OmniDSP::CQTProcessor<T>(
           0.0,
           hop_length,
           lowest_freq,
@@ -477,7 +478,7 @@ TEST_F(PrecomputedRecursiveCQTTest, ParameterValidation)
           DEFAULT_FIR_FILTER_ORDER_TEST),
       std::invalid_argument);
   ASSERT_THROW(
-      OmniDSP::CQTPlan<T>(
+      OmniDSP::CQTProcessor<T>(
           sample_rate,
           0,
           lowest_freq,
@@ -488,7 +489,7 @@ TEST_F(PrecomputedRecursiveCQTTest, ParameterValidation)
           DEFAULT_FIR_FILTER_ORDER_TEST),
       std::invalid_argument);
   ASSERT_THROW(
-      OmniDSP::CQTPlan<T>(
+      OmniDSP::CQTProcessor<T>(
           sample_rate,
           hop_length,
           0.0,
@@ -499,7 +500,7 @@ TEST_F(PrecomputedRecursiveCQTTest, ParameterValidation)
           DEFAULT_FIR_FILTER_ORDER_TEST),
       std::invalid_argument);
   ASSERT_THROW(
-      OmniDSP::CQTPlan<T>(
+      OmniDSP::CQTProcessor<T>(
           sample_rate,
           hop_length,
           lowest_freq,
@@ -510,7 +511,7 @@ TEST_F(PrecomputedRecursiveCQTTest, ParameterValidation)
           DEFAULT_FIR_FILTER_ORDER_TEST),
       std::invalid_argument);
   ASSERT_THROW(
-      OmniDSP::CQTPlan<T>(
+      OmniDSP::CQTProcessor<T>(
           sample_rate,
           hop_length,
           lowest_freq,
@@ -521,7 +522,7 @@ TEST_F(PrecomputedRecursiveCQTTest, ParameterValidation)
           DEFAULT_FIR_FILTER_ORDER_TEST),
       std::invalid_argument);  // > Nyquist check
   ASSERT_THROW(
-      OmniDSP::CQTPlan<T>(
+      OmniDSP::CQTProcessor<T>(
           sample_rate,
           hop_length,
           lowest_freq,
@@ -532,7 +533,7 @@ TEST_F(PrecomputedRecursiveCQTTest, ParameterValidation)
           DEFAULT_FIR_FILTER_ORDER_TEST),
       std::invalid_argument);
   ASSERT_THROW(
-      OmniDSP::CQTPlan<T>(
+      OmniDSP::CQTProcessor<T>(
           sample_rate,
           hop_length,
           lowest_freq,
@@ -543,7 +544,7 @@ TEST_F(PrecomputedRecursiveCQTTest, ParameterValidation)
           DEFAULT_FIR_FILTER_ORDER_TEST),
       std::invalid_argument);
   ASSERT_THROW(
-      OmniDSP::CQTPlan<T>(
+      OmniDSP::CQTProcessor<T>(
           sample_rate,
           511,
           lowest_freq,
@@ -554,7 +555,7 @@ TEST_F(PrecomputedRecursiveCQTTest, ParameterValidation)
           DEFAULT_FIR_FILTER_ORDER_TEST),
       std::invalid_argument);  // Invalid hop
   ASSERT_THROW(
-      OmniDSP::CQTPlan<T>(
+      OmniDSP::CQTProcessor<T>(
           sample_rate,
           hop_length,
           lowest_freq,
@@ -565,7 +566,7 @@ TEST_F(PrecomputedRecursiveCQTTest, ParameterValidation)
           DEFAULT_FIR_FILTER_ORDER_TEST),
       std::invalid_argument);  // Negative sparsity
   ASSERT_THROW(
-      OmniDSP::CQTPlan<T>(
+      OmniDSP::CQTProcessor<T>(
           sample_rate,
           hop_length,
           lowest_freq,
@@ -576,7 +577,7 @@ TEST_F(PrecomputedRecursiveCQTTest, ParameterValidation)
           0),
       std::invalid_argument);  // Zero FIR order
   ASSERT_THROW(
-      OmniDSP::CQTPlan<T>(
+      OmniDSP::CQTProcessor<T>(
           sample_rate,
           hop_length,
           lowest_freq,

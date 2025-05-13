@@ -12,7 +12,7 @@
 #include <utility>  // For std::move
 
 #include "OmniDSP/core_types.hpp"         // For OmniExpected, Status
-#include "OmniDSP/filter.hpp"             // For Design::FIRFilter
+#include "OmniDSP/design/fir_filter.hpp"  // For Design::FIRFilter
 #include "OmniDSP/params/fir_filter.hpp"  // For FIRFilterParams
 #include "OmniDSP/params/resample.hpp"
 #include "OmniDSP/resample.hpp"      // For Design::Resample

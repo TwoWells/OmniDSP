@@ -1,6 +1,6 @@
 /**
  * @file cqt.hpp (Default)
- * @brief Declares the Default backend CQTPlanImpl class.
+ * @brief Declares the Default backend CQTProcessorImpl class.
  */
 
 #ifndef OMNIDSP_DEFAULT_CQT_HPP
@@ -28,27 +28,27 @@ namespace OmniDSP::Default {
    * @tparam T The REAL data type (F32 or F64).
    */
   template <typename T>
-  class CQTPlanImpl final : public Abstract::CQTPlanImpl<T> {
+  class CQTProcessorImpl final : public Abstract::CQTProcessorImpl<T> {
     using Complex = Utils::GetComplexType<T>;
 
    public:
     /**
-     * @brief Constructs a CQTPlanImpl using a fully resolved Design::CQT.
+     * @brief Constructs a CQTProcessorImpl using a fully resolved Design::CQT.
      * @param owner_backend Pointer to the backend instance creating this plan
      * (for creating FFT/Resample sub-plans).
      * @param spec The fully resolved Constant-Q Transform specification.
      * @throws OmniException if internal plan creation or setup fails.
      */
-    CQTPlanImpl(
+    CQTProcessorImpl(
         const Abstract::Backend* owner_backend, const Design::CQT& spec);
 
-    ~CQTPlanImpl() override;
+    ~CQTProcessorImpl() override;
 
     // Disable copy/move
-    CQTPlanImpl(const CQTPlanImpl&) = delete;
-    CQTPlanImpl& operator=(const CQTPlanImpl&) = delete;
-    CQTPlanImpl(CQTPlanImpl&&) = delete;
-    CQTPlanImpl& operator=(CQTPlanImpl&&) = delete;
+    CQTProcessorImpl(const CQTProcessorImpl&) = delete;
+    CQTProcessorImpl& operator=(const CQTProcessorImpl&) = delete;
+    CQTProcessorImpl(CQTProcessorImpl&&) = delete;
+    CQTProcessorImpl& operator=(CQTProcessorImpl&&) = delete;
 
     // Interface methods
     [[nodiscard]] Status execute(
@@ -64,7 +64,7 @@ namespace OmniDSP::Default {
     // Internal structure to hold processed data for each octave
     struct ProcessedCQTOctave {
       double octave_sample_rate;
-      std::unique_ptr<ResamplePlan<T>>
+      std::unique_ptr<ResampleProcessor<T>>
           resampler;  // Plan to resample to this octave's rate (nullable if
                       // original SR)
       std::unique_ptr<RFFTPlan<T>> rfft_plan;  // FFT plan for this octave
@@ -80,7 +80,7 @@ namespace OmniDSP::Default {
       // Constructor for ProcessedCQTOctave
       ProcessedCQTOctave(
           double osr,
-          std::unique_ptr<ResamplePlan<T>> rs_plan,
+          std::unique_ptr<ResampleProcessor<T>> rs_plan,
           std::unique_ptr<RFFTPlan<T>> rf_plan,
           std::vector<std::vector<Complex>> sk_fft,
           size_t fl,
@@ -105,8 +105,8 @@ namespace OmniDSP::Default {
   };
 
   // Explicit template instantiations
-  extern template class CQTPlanImpl<F32>;
-  extern template class CQTPlanImpl<F64>;
+  extern template class CQTProcessorImpl<F32>;
+  extern template class CQTProcessorImpl<F64>;
 
 }  // namespace OmniDSP::Default
 

@@ -1,12 +1,14 @@
 /**
  * @file fir_filter.cpp (Default)
- * @brief Implements Default backend FIRFilterPlanImpl and FIR design helper.
+ * @brief Implements Default backend FIRFilterProcessorImpl and FIR design
+ * helper.
  */
 
 #include "fir_filter.hpp"  // Corresponding header
 
 #include <OmniDSP/core_types.hpp>    // Core types, Status, OmniExpected
-#include <OmniDSP/filter.hpp>        // Public Design::FIRFilter
+#include <OmniDSP/fir_filter.hpp>    // Public Design::FIRFilter
+#include <OmniDSP/iir_filter.hpp>    // Public Design::FIRFilter
 #include <OmniDSP/types/filter.hpp>  // For FilterType enum
 #include <OmniDSP/window.hpp>        // For OmniDSP::generate_window
 #include <algorithm>  // For std::copy, std::fill, std::min, std::max
@@ -167,9 +169,10 @@ namespace OmniDSP::Default {
     return final_coeffs;
   }
 
-  // --- FIRFilterPlanImpl ---
+  // --- FIRFilterProcessorImpl ---
   template <typename T>
-  FIRFilterPlanImpl<T>::FIRFilterPlanImpl(const std::vector<T>& coefficients)
+  FIRFilterProcessorImpl<T>::FIRFilterProcessorImpl(
+      const std::vector<T>& coefficients)
       : coefficients_(coefficients),
         state_(coefficients.empty() ? 0 : coefficients.size() - 1, T{0})
   {
@@ -177,17 +180,18 @@ namespace OmniDSP::Default {
       auto logger = spdlog::get("OmniDSP");
       if (!logger) logger = spdlog::default_logger();
       logger->error(
-          "Default::FIRFilterPlanImpl: Coefficients cannot be empty.");
+          "Default::FIRFilterProcessorImpl: Coefficients cannot be empty.");
       throw std::invalid_argument(
-          "FIR filter coefficients cannot be empty for FIRFilterPlanImpl.");
+          "FIR filter coefficients cannot be empty for "
+          "FIRFilterProcessorImpl.");
     }
   }
 
   template <typename T>
-  FIRFilterPlanImpl<T>::~FIRFilterPlanImpl() = default;
+  FIRFilterProcessorImpl<T>::~FIRFilterProcessorImpl() = default;
 
   template <typename T>
-  Status FIRFilterPlanImpl<T>::execute(
+  Status FIRFilterProcessorImpl<T>::execute(
       std::span<const T> input, std::span<T> output)
   {
     if (coefficients_.empty()) {
@@ -234,44 +238,44 @@ namespace OmniDSP::Default {
   }
 
   template <typename T>
-  Status FIRFilterPlanImpl<T>::reset()
+  Status FIRFilterProcessorImpl<T>::reset()
   {
     std::fill(state_.begin(), state_.end(), T{0});
     return Status::Success;
   }
 
   template <typename T>
-  size_t FIRFilterPlanImpl<T>::get_order() const
+  size_t FIRFilterProcessorImpl<T>::get_order() const
   {
     return coefficients_.empty() ? 0 : coefficients_.size() - 1;
   }
 
   template <typename T>
-  size_t FIRFilterPlanImpl<T>::get_num_taps() const
+  size_t FIRFilterProcessorImpl<T>::get_num_taps() const
   {
     return coefficients_.size();
   }
 
   template <typename T>
-  std::span<const T> FIRFilterPlanImpl<T>::get_coefficients() const
+  std::span<const T> FIRFilterProcessorImpl<T>::get_coefficients() const
   {
     return std::span<const T>(coefficients_);
   }
 
-  // Explicit template instantiations for FIRFilterPlanImpl
-  template class FIRFilterPlanImpl<F32>;
-  template class FIRFilterPlanImpl<F64>;
-  template class FIRFilterPlanImpl<C32>;
-  template class FIRFilterPlanImpl<C64>;
+  // Explicit template instantiations for FIRFilterProcessorImpl
+  template class FIRFilterProcessorImpl<F32>;
+  template class FIRFilterProcessorImpl<F64>;
+  template class FIRFilterProcessorImpl<C32>;
+  template class FIRFilterProcessorImpl<C64>;
 
   // Explicit template instantiations for get_coefficients
-  template std::span<const F32> FIRFilterPlanImpl<F32>::get_coefficients()
+  template std::span<const F32> FIRFilterProcessorImpl<F32>::get_coefficients()
       const;
-  template std::span<const F64> FIRFilterPlanImpl<F64>::get_coefficients()
+  template std::span<const F64> FIRFilterProcessorImpl<F64>::get_coefficients()
       const;
-  template std::span<const C32> FIRFilterPlanImpl<C32>::get_coefficients()
+  template std::span<const C32> FIRFilterProcessorImpl<C32>::get_coefficients()
       const;
-  template std::span<const C64> FIRFilterPlanImpl<C64>::get_coefficients()
+  template std::span<const C64> FIRFilterProcessorImpl<C64>::get_coefficients()
       const;
 
   // Explicit template instantiations for generate_fir_filter_coeffs

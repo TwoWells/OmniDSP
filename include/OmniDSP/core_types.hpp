@@ -10,12 +10,7 @@
 #include <type_traits>  // Required for type traits helpers
 #include <vector>
 
-// OMNIDSP_EXPORT macro is typically defined in omnidsp_export.h,
-// which should be included by projects using OmniDSP.
-// For internal OmniDSP headers, ensure omnidsp_export.h is accessible.
-// If omnidsp_export.h is not included here, OMNIDSP_EXPORT might be undefined.
-// It's often better to include "OmniDSP/omnidsp_export.hpp" if that's where it
-// is. #include "OmniDSP/omnidsp_export.hpp" // Assuming this path
+#include "OmniDSP/omnidsp_export.hpp"
 
 namespace OmniDSP {
 

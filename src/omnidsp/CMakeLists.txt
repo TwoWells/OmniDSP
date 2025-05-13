@@ -71,11 +71,12 @@ set(OMNIDSP_CORE_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/params/resample.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/params/cqt.cpp"
     # Interface implementations (Pimpl wrappers)
-    "${CMAKE_CURRENT_SOURCE_DIR}/interface/fft.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/interface/cqt.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/interface/convolution.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/interface/cqt.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/interface/fft.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/interface/fir_filter.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/interface/iir_filter.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/interface/resample.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/interface/filter.cpp"
     # Utils implementations
     "${CMAKE_CURRENT_SOURCE_DIR}/utils/cqt_design.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/utils/filter_design.cpp"

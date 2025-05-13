@@ -6,8 +6,9 @@
 #ifndef OMNIDSP_UTILS_FILTER_DESIGN_HPP
 #define OMNIDSP_UTILS_FILTER_DESIGN_HPP
 
+#include <OmniDSP/coefs/fir_filter.hpp>  // For Design::FIRFilter, FIRCoefs (Design::FIRFilter now uses WindowSetup)
 #include <OmniDSP/core_types.hpp>  // For Status, OmniExpected, F32, F64
-#include <OmniDSP/filter.hpp>  // For Design::FIRFilter, FIRCoefs (Design::FIRFilter now uses WindowSetup)
+#include <OmniDSP/design/fir_filter.hpp>  // For Design::FIRFilter, FIRCoefs (Design::FIRFilter now uses WindowSetup)
 #include <OmniDSP/window.hpp>  // For WindowSetup
 #include <cstddef>             // For size_t
 #include <vector>

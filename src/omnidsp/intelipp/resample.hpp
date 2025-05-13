@@ -1,6 +1,7 @@
 /**
  * @file resample.hpp (IntelIPP)
- * @brief Declares the Intel IPP backend ResamplePlanImpl class using IPP FIRMR.
+ * @brief Declares the Intel IPP backend ResampleProcessorImpl class using IPP
+ * FIRMR.
  */
 
 #ifndef OMNIDSP_INTELIPP_RESAMPLE_HPP
@@ -29,22 +30,23 @@ namespace OmniDSP::IntelIPP {
    * @tparam T Real data type (F32 or F64).
    */
   template <typename T>
-  class ResamplePlanImpl final : public Abstract::ResamplePlanImpl<T> {
+  class ResampleProcessorImpl final
+      : public Abstract::ResampleProcessorImpl<T> {
     static_assert(
         !::OmniDSP::Utils::IsComplex_v<T>,
-        "IntelIPP::ResamplePlanImpl requires a real type.");
+        "IntelIPP::ResampleProcessorImpl requires a real type.");
 
    public:
-    explicit ResamplePlanImpl(
+    explicit ResampleProcessorImpl(
         const Abstract::Backend* owner, const Design::Resample& spec);
 
-    ~ResamplePlanImpl() override;
+    ~ResampleProcessorImpl() override;
 
     // --- Deleted Copy/Move ---
-    ResamplePlanImpl(const ResamplePlanImpl&) = delete;
-    ResamplePlanImpl& operator=(const ResamplePlanImpl&) = delete;
-    ResamplePlanImpl(ResamplePlanImpl&&) = delete;
-    ResamplePlanImpl& operator=(ResamplePlanImpl&&) = delete;
+    ResampleProcessorImpl(const ResampleProcessorImpl&) = delete;
+    ResampleProcessorImpl& operator=(const ResampleProcessorImpl&) = delete;
+    ResampleProcessorImpl(ResampleProcessorImpl&&) = delete;
+    ResampleProcessorImpl& operator=(ResampleProcessorImpl&&) = delete;
 
     // --- Interface Methods ---
     [[nodiscard]] Status execute(

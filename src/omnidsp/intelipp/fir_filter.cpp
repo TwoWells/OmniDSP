@@ -31,7 +31,8 @@ namespace OmniDSP::IntelIPP {
   //--------------------------------------------------------------------------
 
   template <typename T>
-  FIRFilterPlanImpl<T>::FIRFilterPlanImpl(const std::vector<T>& coefficients)
+  FIRFilterProcessorImpl<T>::FIRFilterProcessorImpl(
+      const std::vector<T>& coefficients)
       : coefficients_(coefficients),  // Store original coefficients
         num_taps_(coefficients.size()),
         order_(coefficients.empty() ? 0 : coefficients.size() - 1),
@@ -122,14 +123,14 @@ namespace OmniDSP::IntelIPP {
   }
 
   template <typename T>
-  FIRFilterPlanImpl<T>::~FIRFilterPlanImpl()
+  FIRFilterProcessorImpl<T>::~FIRFilterProcessorImpl()
   {
     ippsFree(p_spec_);    // Free the raw memory
     ippsFree(p_buffer_);  // Free the raw memory
   }
 
   template <typename T>
-  Status FIRFilterPlanImpl<T>::execute(
+  Status FIRFilterProcessorImpl<T>::execute(
       std::span<const T> input, std::span<T> output)
   {
     if (!p_ipp_spec_) return Status::NotInitialized;
@@ -160,7 +161,7 @@ namespace OmniDSP::IntelIPP {
   }
 
   template <typename T>
-  Status FIRFilterPlanImpl<T>::reset()
+  Status FIRFilterProcessorImpl<T>::reset()
   {
     if (!p_ipp_spec_) return Status::NotInitialized;
 
@@ -187,21 +188,21 @@ namespace OmniDSP::IntelIPP {
   }
 
   template <typename T>
-  size_t FIRFilterPlanImpl<T>::get_order() const /* noexcept */
+  size_t FIRFilterProcessorImpl<T>::get_order() const /* noexcept */
   {
     return order_;
   }
 
   template <typename T>
-  size_t FIRFilterPlanImpl<T>::get_num_taps() const /* noexcept */
+  size_t FIRFilterProcessorImpl<T>::get_num_taps() const /* noexcept */
   {
     return num_taps_;
   }
 
   // --- Explicit Template Instantiations for FIR ---
-  template class FIRFilterPlanImpl<F32>;
-  template class FIRFilterPlanImpl<F64>;
-  template class FIRFilterPlanImpl<C32>;
-  template class FIRFilterPlanImpl<C64>;
+  template class FIRFilterProcessorImpl<F32>;
+  template class FIRFilterProcessorImpl<F64>;
+  template class FIRFilterProcessorImpl<C32>;
+  template class FIRFilterProcessorImpl<C64>;
 
 }  // namespace OmniDSP::IntelIPP

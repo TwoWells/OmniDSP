@@ -145,14 +145,16 @@ namespace OmniDSP::Default {
     [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::RFFTPlanImpl<F64>>>
     create_rfft_plan_impl_f64(size_t length) const;
 
-    [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTPlanImpl<F32>>>
+    [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTProcessorImpl<F32>>>
     create_cqt_plan_impl_f32(const Design::CQT& spec) const;
-    [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTPlanImpl<F64>>>
+    [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTProcessorImpl<F64>>>
     create_cqt_plan_impl_f64(const Design::CQT& spec) const;
 
-    [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::ResamplePlanImpl<F32>>>
+    [[nodiscard]] OmniExpected<
+        std::unique_ptr<Abstract::ResampleProcessorImpl<F32>>>
     create_resample_plan_impl_f32(const Design::Resample& spec) const;
-    [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::ResamplePlanImpl<F64>>>
+    [[nodiscard]] OmniExpected<
+        std::unique_ptr<Abstract::ResampleProcessorImpl<F64>>>
     create_resample_plan_impl_f64(const Design::Resample& spec) const;
 
     [[nodiscard]] OmniExpected<
@@ -206,24 +208,24 @@ namespace OmniDSP::Default {
         ConvolutionMethod method) const;
 
     [[nodiscard]] OmniExpected<
-        std::unique_ptr<Abstract::FIRFilterPlanImpl<F32>>>
+        std::unique_ptr<Abstract::FIRFilterProcessorImpl<F32>>>
     create_fir_filter_plan_impl_f32(const F32Vec& coefficients) const;
     [[nodiscard]] OmniExpected<
-        std::unique_ptr<Abstract::FIRFilterPlanImpl<F64>>>
+        std::unique_ptr<Abstract::FIRFilterProcessorImpl<F64>>>
     create_fir_filter_plan_impl_f64(const F64Vec& coefficients) const;
     [[nodiscard]] OmniExpected<
-        std::unique_ptr<Abstract::FIRFilterPlanImpl<C32>>>
+        std::unique_ptr<Abstract::FIRFilterProcessorImpl<C32>>>
     create_fir_filter_plan_impl_c32(const C32Vec& coefficients) const;
     [[nodiscard]] OmniExpected<
-        std::unique_ptr<Abstract::FIRFilterPlanImpl<C64>>>
+        std::unique_ptr<Abstract::FIRFilterProcessorImpl<C64>>>
     create_fir_filter_plan_impl_c64(const C64Vec& coefficients) const;
 
     [[nodiscard]] OmniExpected<
-        std::unique_ptr<Abstract::IIRFilterPlanImpl<F32>>>
+        std::unique_ptr<Abstract::IIRFilterProcessorImpl<F32>>>
     create_iir_filter_plan_impl_f32(
         const std::vector<IIRFilterCoef>& sos_coefficients) const;
     [[nodiscard]] OmniExpected<
-        std::unique_ptr<Abstract::IIRFilterPlanImpl<F64>>>
+        std::unique_ptr<Abstract::IIRFilterProcessorImpl<F64>>>
     create_iir_filter_plan_impl_f64(
         const std::vector<IIRFilterCoef>& sos_coefficients) const;
 

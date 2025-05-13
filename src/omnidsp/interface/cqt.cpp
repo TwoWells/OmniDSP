@@ -1,12 +1,12 @@
 /**
  * @file cqt.cpp
- * @brief Implements the CQTPlan class methods, forwarding calls to the
+ * @brief Implements the CQTProcessor class methods, forwarding calls to the
  * backend implementation (Pimpl pattern).
  */
 
 #include <OmniDSP/cqt.hpp>  // Corresponding header (defines CQTPlan and Complex alias)
 
-// Include the backend interface definition which declares CQTPlanImpl
+// Include the backend interface definition which declares CQTProcessorImpl
 #include <memory>  // For std::unique_ptr
 #include <span>
 #include <stdexcept>  // For std::runtime_error
@@ -21,22 +21,23 @@
 namespace OmniDSP {
 
   //--------------------------------------------------------------------------
-  // CQTPlan Method Definitions
+  // CQTProcessor Method Definitions
   //--------------------------------------------------------------------------
 
   /**
    * @brief Private constructor used by OmniDSP factory methods.
    * Takes ownership of the backend-specific implementation object.
-   * @param pimpl A unique_ptr to the backend-specific CQTPlanImpl.
+   * @param pimpl A unique_ptr to the backend-specific CQTProcessorImpl.
    * @throws std::runtime_error if pimpl is null.
    */
   template <typename T>  // T is REAL type
-  CQTPlan<T>::CQTPlan(std::unique_ptr<Abstract::CQTPlanImpl<T>> pimpl)
+  CQTProcessor<T>::CQTProcessor(
+      std::unique_ptr<Abstract::CQTProcessorImpl<T>> pimpl)
       : pimpl_(std::move(pimpl))
   {
     if (!pimpl_) {
       throw std::runtime_error(
-          "CQTPlan cannot be created with a null implementation pointer.");
+          "CQTProcessor cannot be created with a null implementation pointer.");
     }
   }
 
@@ -44,19 +45,20 @@ namespace OmniDSP {
    * @brief Destructor.
    */
   template <typename T>
-  CQTPlan<T>::~CQTPlan() = default;
+  CQTProcessor<T>::~CQTProcessor() = default;
 
   /**
    * @brief Move constructor.
    */
   template <typename T>
-  CQTPlan<T>::CQTPlan(CQTPlan&& other) noexcept = default;
+  CQTProcessor<T>::CQTProcessor(CQTProcessor&& other) noexcept = default;
 
   /**
    * @brief Move assignment operator.
    */
   template <typename T>
-  CQTPlan<T>& CQTPlan<T>::operator=(CQTPlan&& other) noexcept = default;
+  CQTProcessor<T>& CQTProcessor<T>::operator=(CQTProcessor&& other) noexcept
+      = default;
 
   /**
    * @brief Executes the Constant-Q Transform by calling the backend
@@ -67,7 +69,7 @@ namespace OmniDSP {
    * @return Status::Success on success, or an error code on failure.
    */
   template <typename T>  // T is REAL type
-  [[nodiscard]] Status CQTPlan<T>::execute(
+  [[nodiscard]] Status CQTProcessor<T>::execute(
       std::span<const T> input, std::span<Complex> output) const
   {  // Use T and Complex alias
     if (!pimpl_) {
@@ -92,10 +94,11 @@ namespace OmniDSP {
    * implementation.
    */
   template <typename T>
-  size_t CQTPlan<T>::get_num_bins() const
+  size_t CQTProcessor<T>::get_num_bins() const
   {
     if (!pimpl_) {
-      throw std::runtime_error("Invalid CQTPlan instance in get_num_bins.");
+      throw std::runtime_error(
+          "Invalid CQTProcessor instance in get_num_bins.");
     }
     return pimpl_->get_num_bins();
   }
@@ -105,11 +108,11 @@ namespace OmniDSP {
    * implementation.
    */
   template <typename T>
-  size_t CQTPlan<T>::get_num_output_frames(size_t input_length) const
+  size_t CQTProcessor<T>::get_num_output_frames(size_t input_length) const
   {
     if (!pimpl_) {
       throw std::runtime_error(
-          "Invalid CQTPlan instance in get_num_output_frames.");
+          "Invalid CQTProcessor instance in get_num_output_frames.");
     }
     return pimpl_->get_num_output_frames(input_length);
   }
@@ -118,23 +121,24 @@ namespace OmniDSP {
    * @brief Gets the hop length by calling the backend implementation.
    */
   template <typename T>
-  size_t CQTPlan<T>::get_hop_length() const
+  size_t CQTProcessor<T>::get_hop_length() const
   {
     if (!pimpl_) {
-      throw std::runtime_error("Invalid CQTPlan instance in get_hop_length.");
+      throw std::runtime_error(
+          "Invalid CQTProcessor instance in get_hop_length.");
     }
     return pimpl_->get_hop_length();
   }
 
   //--------------------------------------------------------------------------
-  // Explicit Template Instantiations for CQTPlan class
+  // Explicit Template Instantiations for CQTProcessor class
   //--------------------------------------------------------------------------
-  // This ensures that the code for CQTPlan<F32> and CQTPlan<F64> is generated
-  // in this translation unit. The OMNIDSP_EXPORT macro will handle visibility
-  // if this is part of a shared library.
+  // This ensures that the code for CQTProcessor<F32> and CQTProcessor<F64> is
+  // generated in this translation unit. The OMNIDSP_EXPORT macro will handle
+  // visibility if this is part of a shared library.
 
-  template class OMNIDSP_EXPORT CQTPlan<F32>;  // float
-  template class OMNIDSP_EXPORT CQTPlan<F64>;  // double
+  template class OMNIDSP_EXPORT CQTProcessor<F32>;  // float
+  template class OMNIDSP_EXPORT CQTProcessor<F64>;  // double
 
   // The static create_from_impl method is defined inline in the header,
   // so it does not need separate explicit instantiation here.

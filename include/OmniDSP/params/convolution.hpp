@@ -11,7 +11,7 @@
 #include <stdexcept>  // For std::invalid_argument
 #include <string>     // For std::string in validation messages
 
-#include "OmniDSP/omnidsp_export.hpp"     // For OMNIDSP_EXPORT
+#include "OmniDSP/core_types.hpp"         // For OMNIDSP_EXPORT
 #include "OmniDSP/types/convolution.hpp"  // For ConvolutionType, ConvolutionMethod
 
 // spdlog include is deferred to .cpp

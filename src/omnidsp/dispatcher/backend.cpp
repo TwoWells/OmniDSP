@@ -11,9 +11,12 @@
 
 // Include headers for all Design/Coef types used in method signatures if not
 // transitively included
-#include "OmniDSP/cqt.hpp"
-#include "OmniDSP/filter.hpp"
-#include "OmniDSP/resample.hpp"
+#include "OmniDSP/coefs/fir_filter.hpp"
+#include "OmniDSP/coefs/iir_filter.hpp"
+#include "OmniDSP/design/cqt.hpp"
+#include "OmniDSP/design/fir_filter.hpp"
+#include "OmniDSP/design/iir_filter.hpp"
+#include "OmniDSP/design/resample.hpp"
 
 namespace OmniDSP::Dispatcher {
 
@@ -366,13 +369,13 @@ namespace OmniDSP::Dispatcher {
   }
 
   // CQT (Currently PlanImpl in Abstract::Backend)
-  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTPlanImpl<F32>>>
+  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTProcessorImpl<F32>>>
   Backend::create_cqt_plan_impl_f32(const Design::CQT& spec) const
   {
     return select_backend(OperationCategory::CQT)
         ->create_cqt_plan_impl_f32(spec);
   }
-  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTPlanImpl<F64>>>
+  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTProcessorImpl<F64>>>
   Backend::create_cqt_plan_impl_f64(const Design::CQT& spec) const
   {
     return select_backend(OperationCategory::CQT)
@@ -380,13 +383,15 @@ namespace OmniDSP::Dispatcher {
   }
 
   // Resample (Currently PlanImpl in Abstract::Backend)
-  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::ResamplePlanImpl<F32>>>
+  [[nodiscard]] OmniExpected<
+      std::unique_ptr<Abstract::ResampleProcessorImpl<F32>>>
   Backend::create_resample_plan_impl_f32(const Design::Resample& spec) const
   {
     return select_backend(OperationCategory::Resample)
         ->create_resample_plan_impl_f32(spec);
   }
-  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::ResamplePlanImpl<F64>>>
+  [[nodiscard]] OmniExpected<
+      std::unique_ptr<Abstract::ResampleProcessorImpl<F64>>>
   Backend::create_resample_plan_impl_f64(const Design::Resample& spec) const
   {
     return select_backend(OperationCategory::Resample)
@@ -478,25 +483,29 @@ namespace OmniDSP::Dispatcher {
   }
 
   // FIR Filter (Currently PlanImpl in Abstract::Backend)
-  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::FIRFilterPlanImpl<F32>>>
+  [[nodiscard]] OmniExpected<
+      std::unique_ptr<Abstract::FIRFilterProcessorImpl<F32>>>
   Backend::create_fir_filter_plan_impl_f32(const F32Vec& coefficients) const
   {
     return select_backend(OperationCategory::FIRFilter)
         ->create_fir_filter_plan_impl_f32(coefficients);
   }
-  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::FIRFilterPlanImpl<F64>>>
+  [[nodiscard]] OmniExpected<
+      std::unique_ptr<Abstract::FIRFilterProcessorImpl<F64>>>
   Backend::create_fir_filter_plan_impl_f64(const F64Vec& coefficients) const
   {
     return select_backend(OperationCategory::FIRFilter)
         ->create_fir_filter_plan_impl_f64(coefficients);
   }
-  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::FIRFilterPlanImpl<C32>>>
+  [[nodiscard]] OmniExpected<
+      std::unique_ptr<Abstract::FIRFilterProcessorImpl<C32>>>
   Backend::create_fir_filter_plan_impl_c32(const C32Vec& coefficients) const
   {
     return select_backend(OperationCategory::FIRFilter)
         ->create_fir_filter_plan_impl_c32(coefficients);
   }
-  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::FIRFilterPlanImpl<C64>>>
+  [[nodiscard]] OmniExpected<
+      std::unique_ptr<Abstract::FIRFilterProcessorImpl<C64>>>
   Backend::create_fir_filter_plan_impl_c64(const C64Vec& coefficients) const
   {
     return select_backend(OperationCategory::FIRFilter)
@@ -504,14 +513,16 @@ namespace OmniDSP::Dispatcher {
   }
 
   // IIR Filter (Currently PlanImpl in Abstract::Backend)
-  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::IIRFilterPlanImpl<F32>>>
+  [[nodiscard]] OmniExpected<
+      std::unique_ptr<Abstract::IIRFilterProcessorImpl<F32>>>
   Backend::create_iir_filter_plan_impl_f32(
       const std::vector<IIRFilterCoef>& sos_coefficients) const
   {
     return select_backend(OperationCategory::IIRFilter)
         ->create_iir_filter_plan_impl_f32(sos_coefficients);
   }
-  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::IIRFilterPlanImpl<F64>>>
+  [[nodiscard]] OmniExpected<
+      std::unique_ptr<Abstract::IIRFilterProcessorImpl<F64>>>
   Backend::create_iir_filter_plan_impl_f64(
       const std::vector<IIRFilterCoef>& sos_coefficients) const
   {

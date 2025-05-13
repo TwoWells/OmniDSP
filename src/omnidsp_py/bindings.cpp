@@ -381,11 +381,12 @@ PYBIND11_MODULE(_omnidsp_cpp, m)
           "Execute inverse complex-to-real FFT (unscaled).")
       .def("get_length", &RFFTPlan<double>::get_length);
 
-  // CQTPlan
-  py::class_<CQTPlan<float>, std::unique_ptr<CQTPlan<float>>>(m, "CQTPlanFloat")
+  // CQTProcessor
+  py::class_<CQTProcessor<float>, std::unique_ptr<CQTProcessor<float>>>(
+      m, "CQTPlanFloat")
       .def(
           "execute",
-          [](const CQTPlan<float>& self,
+          [](const CQTProcessor<float>& self,
              py::array_t<float_r, py::array::c_style | py::array::forcecast>
                  input,
              py::array_t<float_c, py::array::c_style | py::array::forcecast>
@@ -395,23 +396,23 @@ PYBIND11_MODULE(_omnidsp_cpp, m)
                 self.execute(
                     numpy_to_span_const<float_r>(input),
                     numpy_to_span_writable<float_c>(output)),
-                "CQTPlan.execute");
+                "CQTProcessor.execute");
           },
           py::arg("input"),
           py::arg("output"),
           "Execute Constant-Q Transform.")
-      .def("get_num_bins", &CQTPlan<float>::get_num_bins)
+      .def("get_num_bins", &CQTProcessor<float>::get_num_bins)
       .def(
           "get_num_output_frames",
-          &CQTPlan<float>::get_num_output_frames,
+          &CQTProcessor<float>::get_num_output_frames,
           py::arg("input_length"))
-      .def("get_hop_length", &CQTPlan<float>::get_hop_length);
+      .def("get_hop_length", &CQTProcessor<float>::get_hop_length);
 
-  py::class_<CQTPlan<double>, std::unique_ptr<CQTPlan<double>>>(
+  py::class_<CQTProcessor<double>, std::unique_ptr<CQTProcessor<double>>>(
       m, "CQTPlanDouble")
       .def(
           "execute",
-          [](const CQTPlan<double>& self,
+          [](const CQTProcessor<double>& self,
              py::array_t<double_r, py::array::c_style | py::array::forcecast>
                  input,
              py::array_t<double_c, py::array::c_style | py::array::forcecast>
@@ -421,17 +422,17 @@ PYBIND11_MODULE(_omnidsp_cpp, m)
                 self.execute(
                     numpy_to_span_const<double_r>(input),
                     numpy_to_span_writable<double_c>(output)),
-                "CQTPlan.execute");
+                "CQTProcessor.execute");
           },
           py::arg("input"),
           py::arg("output"),
           "Execute Constant-Q Transform.")
-      .def("get_num_bins", &CQTPlan<double>::get_num_bins)
+      .def("get_num_bins", &CQTProcessor<double>::get_num_bins)
       .def(
           "get_num_output_frames",
-          &CQTPlan<double>::get_num_output_frames,
+          &CQTProcessor<double>::get_num_output_frames,
           py::arg("input_length"))
-      .def("get_hop_length", &CQTPlan<double>::get_hop_length);
+      .def("get_hop_length", &CQTProcessor<double>::get_hop_length);
 
   // ConvolutionPlan
   py::class_<ConvolutionPlan<float>, std::unique_ptr<ConvolutionPlan<float>>>(
@@ -489,12 +490,13 @@ PYBIND11_MODULE(_omnidsp_cpp, m)
           py::arg("input_length"));
   // Add double, complex float, complex double specializations...
 
-  // ResamplePlan
-  py::class_<ResamplePlan<float>, std::unique_ptr<ResamplePlan<float>>>(
-      m, "ResamplePlanFloat")
+  // ResampleProcessor
+  py::class_<
+      ResampleProcessor<float>,
+      std::unique_ptr<ResampleProcessor<float>>>(m, "ResamplePlanFloat")
       .def(
           "execute",
-          [](const ResamplePlan<float>& self,
+          [](const ResampleProcessor<float>& self,
              py::array_t<float, py::array::c_style | py::array::forcecast>
                  input,
              py::array_t<float, py::array::c_style | py::array::forcecast>
@@ -504,16 +506,16 @@ PYBIND11_MODULE(_omnidsp_cpp, m)
                 self.execute(
                     numpy_to_span_const<float>(input),
                     numpy_to_span_writable<float>(output)),
-                "ResamplePlan.execute");
+                "ResampleProcessor.execute");
           },
           py::arg("input"),
           py::arg("output"),
           "Execute pre-planned resampling.")
-      .def("get_input_rate", &ResamplePlan<float>::get_input_rate)
-      .def("get_output_rate", &ResamplePlan<float>::get_output_rate)
+      .def("get_input_rate", &ResampleProcessor<float>::get_input_rate)
+      .def("get_output_rate", &ResampleProcessor<float>::get_output_rate)
       .def(
           "get_output_length",
-          &ResamplePlan<float>::get_output_length,
+          &ResampleProcessor<float>::get_output_length,
           py::arg("input_length"));
   // Add double specialization...
 

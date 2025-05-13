@@ -1,6 +1,6 @@
 /**
  * @file cqt.cpp (Default)
- * @brief Implements the Default backend CQTPlanImpl class.
+ * @brief Implements the Default backend CQTProcessorImpl class.
  */
 
 #include "cqt.hpp"  // Corresponding header
@@ -27,10 +27,10 @@
 namespace OmniDSP::Default {
 
   //--------------------------------------------------------------------------
-  // CQTPlanImpl Method Implementations
+  // CQTProcessorImpl Method Implementations
   //--------------------------------------------------------------------------
   template <typename T>
-  CQTPlanImpl<T>::CQTPlanImpl(  // TODO: Rename to CQTProcessorImpl
+  CQTProcessorImpl<T>::CQTProcessorImpl(  // TODO: Rename to CQTProcessorImpl
       const Abstract::Backend* owner_backend,
       const Design::CQT& design_spec)
       : owner_backend_(owner_backend), spec_(design_spec)
@@ -41,14 +41,15 @@ namespace OmniDSP::Default {
     }
 
     if (!owner_backend_) {
-      logger->error("Default::CQTPlanImpl: owner_backend is null.");
+      logger->error("Default::CQTProcessorImpl: owner_backend is null.");
       throw OmniException(
-          "CQTPlanImpl requires a non-null owner_backend.",
+          "CQTProcessorImpl requires a non-null owner_backend.",
           Status::InvalidArgument);
     }
 
     logger->debug(
-        "Creating Default::CQTPlanImpl: SR={}, MinF={}, MaxF={}, Bins/Oct={}, "
+        "Creating Default::CQTProcessorImpl: SR={}, MinF={}, MaxF={}, "
+        "Bins/Oct={}, "
         "Hop={}, NumOctavesInDesign={}",
         spec_.original_sample_rate,
         spec_.min_freq,
@@ -71,7 +72,7 @@ namespace OmniDSP::Default {
           octave_design_item.fft_length,
           octave_design_item.bin_frequencies.size());
 
-      std::unique_ptr<ResamplePlan<T>> resampler_plan = nullptr;
+      std::unique_ptr<ResampleProcessor<T>> resampler_plan = nullptr;
       if (std::abs(
               octave_design_item.octave_sample_rate
               - spec_.original_sample_rate)
@@ -95,14 +96,14 @@ namespace OmniDSP::Default {
               internal_resample_design_e.error());
         }
 
-        auto resampler_expected = ResamplePlan<T>::create(
+        auto resampler_expected = ResampleProcessor<T>::create(
             *owner_backend_, internal_resample_design_e.value());
         if (!resampler_expected) {
           logger->error(
-              "Failed to create ResamplePlan for CQT octave. Error: {}",
+              "Failed to create ResampleProcessor for CQT octave. Error: {}",
               static_cast<int>(resampler_expected.error()));
           throw OmniException(
-              "Failed to create internal ResamplePlan for CQT.",
+              "Failed to create internal ResampleProcessor for CQT.",
               resampler_expected.error());
         }
         resampler_plan = std::move(resampler_expected.value());
@@ -184,7 +185,8 @@ namespace OmniDSP::Default {
             = generate_window<T>(kernel_win_setup, window_values);
         if (!gen_win_status) {
           logger->error(
-              "CQTPlanImpl: Failed to generate CQT analysis window for f={} "
+              "CQTProcessorImpl: Failed to generate CQT analysis window for "
+              "f={} "
               "Hz, N_k={}. Status: {}",
               bin_freq,
               N_k,
@@ -270,17 +272,17 @@ namespace OmniDSP::Default {
     }
 
     logger->info(
-        "Default::CQTPlanImpl created successfully using Design::CQT. "
+        "Default::CQTProcessorImpl created successfully using Design::CQT. "
         "HopLength={}, TotalBins={}",
         spec_.hop_length,
         spec_.all_bin_frequencies.size());
   }
 
   template <typename T>
-  CQTPlanImpl<T>::~CQTPlanImpl() = default;
+  CQTProcessorImpl<T>::~CQTProcessorImpl() = default;
 
   template <typename T>
-  Status CQTPlanImpl<T>::execute(
+  Status CQTProcessorImpl<T>::execute(
       std::span<const T> input, std::span<Complex> output) const
   {
     auto logger = spdlog::get("OmniDSP");
@@ -290,23 +292,25 @@ namespace OmniDSP::Default {
 
     if (processed_octaves_.empty()) {
       logger->warn(
-          "Default::CQTPlanImpl::execute: Plan not initialized (no processed "
+          "Default::CQTProcessorImpl::execute: Plan not initialized (no "
+          "processed "
           "octaves).");
       return Status::NotInitialized;
     }
     logger->warn(
-        "Default::CQTPlanImpl::execute is not fully implemented beyond setup.");
+        "Default::CQTProcessorImpl::execute is not fully implemented beyond "
+        "setup.");
     return Status::NotImplemented;
   }
 
   template <typename T>
-  size_t CQTPlanImpl<T>::get_num_bins() const
+  size_t CQTProcessorImpl<T>::get_num_bins() const
   {
     return spec_.get_total_num_bins();
   }
 
   template <typename T>
-  size_t CQTPlanImpl<T>::get_num_output_frames(size_t input_length) const
+  size_t CQTProcessorImpl<T>::get_num_output_frames(size_t input_length) const
   {
     if (spec_.hop_length == 0) return 0;
     if (input_length == 0) return 0;
@@ -340,12 +344,12 @@ namespace OmniDSP::Default {
   }
 
   template <typename T>
-  size_t CQTPlanImpl<T>::get_hop_length() const
+  size_t CQTProcessorImpl<T>::get_hop_length() const
   {
     return spec_.hop_length;
   }
 
-  template class CQTPlanImpl<float>;
-  template class CQTPlanImpl<double>;
+  template class CQTProcessorImpl<float>;
+  template class CQTProcessorImpl<double>;
 
 }  // namespace OmniDSP::Default

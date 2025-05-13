@@ -193,18 +193,19 @@ namespace OmniDSP::IntelIPP {
   // IntelIPP FIR Filter Plan Implementation
   //--------------------------------------------------------------------------
   template <typename T>
-  class FIRFilterPlanImpl final : public Abstract::FIRFilterPlanImpl<T> {
+  class FIRFilterProcessorImpl final
+      : public Abstract::FIRFilterProcessorImpl<T> {
     // *** Use type helpers from Utils namespace ***
     using IPP_Spec_Type = Details::GetIPPFIRSpec<T>;
 
    public:
-    explicit FIRFilterPlanImpl(const std::vector<T>& coefficients);
-    ~FIRFilterPlanImpl() override;
+    explicit FIRFilterProcessorImpl(const std::vector<T>& coefficients);
+    ~FIRFilterProcessorImpl() override;
 
-    FIRFilterPlanImpl(const FIRFilterPlanImpl&) = delete;
-    FIRFilterPlanImpl& operator=(const FIRFilterPlanImpl&) = delete;
-    FIRFilterPlanImpl(FIRFilterPlanImpl&&) = delete;
-    FIRFilterPlanImpl& operator=(FIRFilterPlanImpl&&) = delete;
+    FIRFilterProcessorImpl(const FIRFilterProcessorImpl&) = delete;
+    FIRFilterProcessorImpl& operator=(const FIRFilterProcessorImpl&) = delete;
+    FIRFilterProcessorImpl(FIRFilterProcessorImpl&&) = delete;
+    FIRFilterProcessorImpl& operator=(FIRFilterProcessorImpl&&) = delete;
 
     [[nodiscard]] Status execute(
         std::span<const T> input, std::span<T> output) override;

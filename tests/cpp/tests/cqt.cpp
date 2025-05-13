@@ -1,6 +1,6 @@
 /**
  * @file tests/cpp/tests/cqt.cpp
- * @brief Unit tests for the OmniDSP CQTPlan class and related functions.
+ * @brief Unit tests for the OmniDSP CQTProcessor class and related functions.
  * Uses TestDataLoader for loading reference data and tests the public API.
  */
 
@@ -111,9 +111,9 @@ std::vector<T> hannWindowGenerator(size_t length)
     window_coeffs[n] = val;
     sum += val;
   }
-  // Normalize (optional, depends if CQTPlan expects normalized input)
-  // CQTPlan usually normalizes internally, so we return unnormalized coeffs
-  // here. if (sum > std::numeric_limits<T>::epsilon()) {
+  // Normalize (optional, depends if CQTProcessor expects normalized input)
+  // CQTProcessor usually normalizes internally, so we return unnormalized
+  // coeffs here. if (sum > std::numeric_limits<T>::epsilon()) {
   //     for (size_t n = 0; n < length; ++n) {
   //         window_coeffs[n] /= sum;
   //     }
@@ -163,16 +163,16 @@ class CQT_Test : public ::testing::Test {
   }
 };
 
-// --- CQTPlan Tests ---
+// --- CQTProcessor Tests ---
 
-// Test CQTPlan constructor parameter validation
+// Test CQTProcessor constructor parameter validation
 TEST_F(CQT_Test, ConstructorParameterValidation)
 {
   using T = double;
   auto window_gen = hannWindowGenerator<T>;  // Use helper
 
   // Valid case
-  ASSERT_NO_THROW(OmniDSP::CQTPlan<T>(
+  ASSERT_NO_THROW(OmniDSP::CQTProcessor<T>(
       sample_rate,
       hop_length,
       fmin,
@@ -184,7 +184,7 @@ TEST_F(CQT_Test, ConstructorParameterValidation)
 
   // Invalid parameters
   ASSERT_THROW(
-      OmniDSP::CQTPlan<T>(
+      OmniDSP::CQTProcessor<T>(
           0.0,
           hop_length,
           fmin,
@@ -195,7 +195,7 @@ TEST_F(CQT_Test, ConstructorParameterValidation)
           DEFAULT_FIR_FILTER_ORDER_TEST),
       std::invalid_argument);  // Invalid SR
   ASSERT_THROW(
-      OmniDSP::CQTPlan<T>(
+      OmniDSP::CQTProcessor<T>(
           sample_rate,
           0,
           fmin,
@@ -206,7 +206,7 @@ TEST_F(CQT_Test, ConstructorParameterValidation)
           DEFAULT_FIR_FILTER_ORDER_TEST),
       std::invalid_argument);  // Invalid hop
   ASSERT_THROW(
-      OmniDSP::CQTPlan<T>(
+      OmniDSP::CQTProcessor<T>(
           sample_rate,
           hop_length,
           0.0,
@@ -217,7 +217,7 @@ TEST_F(CQT_Test, ConstructorParameterValidation)
           DEFAULT_FIR_FILTER_ORDER_TEST),
       std::invalid_argument);  // Invalid fmin
   ASSERT_THROW(
-      OmniDSP::CQTPlan<T>(
+      OmniDSP::CQTProcessor<T>(
           sample_rate,
           hop_length,
           fmin,
@@ -228,7 +228,7 @@ TEST_F(CQT_Test, ConstructorParameterValidation)
           DEFAULT_FIR_FILTER_ORDER_TEST),
       std::invalid_argument);  // fmax <= fmin
   ASSERT_THROW(
-      OmniDSP::CQTPlan<T>(
+      OmniDSP::CQTProcessor<T>(
           sample_rate,
           hop_length,
           fmin,
@@ -239,7 +239,7 @@ TEST_F(CQT_Test, ConstructorParameterValidation)
           DEFAULT_FIR_FILTER_ORDER_TEST),
       std::invalid_argument);  // fmax >= Nyquist
   ASSERT_THROW(
-      OmniDSP::CQTPlan<T>(
+      OmniDSP::CQTProcessor<T>(
           sample_rate,
           hop_length,
           fmin,
@@ -250,7 +250,7 @@ TEST_F(CQT_Test, ConstructorParameterValidation)
           DEFAULT_FIR_FILTER_ORDER_TEST),
       std::invalid_argument);  // Invalid BPO
   ASSERT_THROW(
-      OmniDSP::CQTPlan<T>(
+      OmniDSP::CQTProcessor<T>(
           sample_rate,
           hop_length,
           fmin,
@@ -261,7 +261,7 @@ TEST_F(CQT_Test, ConstructorParameterValidation)
           DEFAULT_FIR_FILTER_ORDER_TEST),
       std::invalid_argument);  // Null window gen
   ASSERT_THROW(
-      OmniDSP::CQTPlan<T>(
+      OmniDSP::CQTProcessor<T>(
           sample_rate,
           511,
           fmin,
@@ -272,7 +272,7 @@ TEST_F(CQT_Test, ConstructorParameterValidation)
           DEFAULT_FIR_FILTER_ORDER_TEST),
       std::invalid_argument);  // Invalid hop length for typical recursive CQT
   ASSERT_THROW(
-      OmniDSP::CQTPlan<T>(
+      OmniDSP::CQTProcessor<T>(
           sample_rate,
           hop_length,
           fmin,
@@ -283,7 +283,7 @@ TEST_F(CQT_Test, ConstructorParameterValidation)
           DEFAULT_FIR_FILTER_ORDER_TEST),
       std::invalid_argument);  // Invalid sparsity
   ASSERT_THROW(
-      OmniDSP::CQTPlan<T>(
+      OmniDSP::CQTProcessor<T>(
           sample_rate,
           hop_length,
           fmin,
@@ -294,7 +294,7 @@ TEST_F(CQT_Test, ConstructorParameterValidation)
           0),
       std::invalid_argument);  // Invalid FIR order (zero)
   ASSERT_THROW(
-      OmniDSP::CQTPlan<T>(
+      OmniDSP::CQTProcessor<T>(
           sample_rate,
           hop_length,
           fmin,
@@ -306,7 +306,7 @@ TEST_F(CQT_Test, ConstructorParameterValidation)
       std::invalid_argument);  // Invalid FIR order (even)
 }
 
-// Test CQTPlan::execute method against reference data
+// Test CQTProcessor::execute method against reference data
 TEST_F(CQT_Test, ExecuteCQT_Double)
 {
   using T = double;
@@ -328,9 +328,9 @@ TEST_F(CQT_Test, ExecuteCQT_Double)
   ASSERT_FALSE(expected_cqt_d.empty()) << "Expected data matrix is empty";
 
   // Create CQT plan
-  std::unique_ptr<OmniDSP::CQTPlan<T>> plan_ptr;
+  std::unique_ptr<OmniDSP::CQTProcessor<T>> plan_ptr;
   ASSERT_NO_THROW(
-      plan_ptr = std::make_unique<OmniDSP::CQTPlan<T>>(
+      plan_ptr = std::make_unique<OmniDSP::CQTProcessor<T>>(
           sample_rate,
           hop_length,
           fmin,
@@ -339,16 +339,16 @@ TEST_F(CQT_Test, ExecuteCQT_Double)
           hannWindowGenerator<T>,
           sparsity_threshold_double,
           DEFAULT_FIR_FILTER_ORDER_TEST))
-      << "CQTPlan constructor threw unexpectedly.";
+      << "CQTProcessor constructor threw unexpectedly.";
   ASSERT_NE(plan_ptr, nullptr);
-  OmniDSP::CQTPlan<T> &plan = *plan_ptr;
+  OmniDSP::CQTProcessor<T> &plan = *plan_ptr;
 
   // Prepare output matrix
   ComplexMatD output_cqt_d;
 
   // Execute CQT
   ASSERT_NO_THROW(plan.execute(input_d, output_cqt_d))
-      << "CQTPlan::execute threw unexpectedly.";
+      << "CQTProcessor::execute threw unexpectedly.";
 
   // Compare results
   ExpectComplexMatrixNear(
@@ -376,9 +376,9 @@ TEST_F(CQT_Test, ExecuteCQT_Float)
   ASSERT_FALSE(expected_cqt_f.empty()) << "Expected data matrix is empty";
 
   // Create CQT plan
-  std::unique_ptr<OmniDSP::CQTPlan<T>> plan_ptr;
+  std::unique_ptr<OmniDSP::CQTProcessor<T>> plan_ptr;
   ASSERT_NO_THROW(
-      plan_ptr = std::make_unique<OmniDSP::CQTPlan<T>>(
+      plan_ptr = std::make_unique<OmniDSP::CQTProcessor<T>>(
           sample_rate,
           hop_length,
           fmin,
@@ -387,16 +387,16 @@ TEST_F(CQT_Test, ExecuteCQT_Float)
           hannWindowGenerator<T>,
           sparsity_threshold_float,
           DEFAULT_FIR_FILTER_ORDER_TEST))
-      << "CQTPlan constructor threw unexpectedly.";
+      << "CQTProcessor constructor threw unexpectedly.";
   ASSERT_NE(plan_ptr, nullptr);
-  OmniDSP::CQTPlan<T> &plan = *plan_ptr;
+  OmniDSP::CQTProcessor<T> &plan = *plan_ptr;
 
   // Prepare output matrix
   ComplexMatF output_cqt_f;
 
   // Execute CQT
   ASSERT_NO_THROW(plan.execute(input_f, output_cqt_f))
-      << "CQTPlan::execute threw unexpectedly.";
+      << "CQTProcessor::execute threw unexpectedly.";
 
   // Compare results
   ExpectComplexMatrixNear(

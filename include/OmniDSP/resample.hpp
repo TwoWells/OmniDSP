@@ -22,23 +22,23 @@
 #include "OmniDSP/design/resample.hpp"  // Defines Design::Resample, which includes design/fir_filter.hpp
 
 // interface/backend.hpp defines ::OmniDSP::Abstract::Backend and
-// ::OmniDSP::Abstract::ResamplePlanImpl
+// ::OmniDSP::Abstract::ResampleProcessorImpl
 #include "interface/backend.hpp"
 
 namespace OmniDSP {
 
   template <typename T>
-  class OMNIDSP_EXPORT ResamplePlan {  // Or ResampleProcessor
+  class OMNIDSP_EXPORT ResampleProcessor {  // Or ResampleProcessor
     static_assert(
         !Utils::IsComplex_v<T>,
-        "ResamplePlan/Processor requires a real type (F32 or F64).");
+        "ResampleProcessor/Processor requires a real type (F32 or F64).");
 
    public:
-    ~ResamplePlan();
-    ResamplePlan(ResamplePlan&& other) noexcept;
-    ResamplePlan& operator=(ResamplePlan&& other) noexcept;
-    ResamplePlan(const ResamplePlan&) = delete;
-    ResamplePlan& operator=(const ResamplePlan&) = delete;
+    ~ResampleProcessor();
+    ResampleProcessor(ResampleProcessor&& other) noexcept;
+    ResampleProcessor& operator=(ResampleProcessor&& other) noexcept;
+    ResampleProcessor(const ResampleProcessor&) = delete;
+    ResampleProcessor& operator=(const ResampleProcessor&) = delete;
 
     [[nodiscard]] Status execute(std::span<const T> input, std::span<T> output);
     Status reset();
@@ -46,25 +46,26 @@ namespace OmniDSP {
     double get_output_rate() const;
     size_t get_output_length(size_t input_length) const;
 
-    [[nodiscard]] static OmniExpected<std::unique_ptr<ResamplePlan<T>>> create(
+    [[nodiscard]] static OmniExpected<std::unique_ptr<ResampleProcessor<T>>>
+    create(
         const ::OmniDSP::Abstract::Backend& backend,
         const Design::Resample& design);
 
-    static std::unique_ptr<ResamplePlan<T>> create_from_impl(
-        std::unique_ptr<::OmniDSP::Abstract::ResamplePlanImpl<T>> pimpl)
+    static std::unique_ptr<ResampleProcessor<T>> create_from_impl(
+        std::unique_ptr<::OmniDSP::Abstract::ResampleProcessorImpl<T>> pimpl)
     {
       if (!pimpl) {
         return nullptr;
       }
       // Call the private constructor
-      return std::unique_ptr<ResamplePlan<T>>(
-          new ResamplePlan<T>(std::move(pimpl)));
+      return std::unique_ptr<ResampleProcessor<T>>(
+          new ResampleProcessor<T>(std::move(pimpl)));
     }
 
    private:
     // Define the private constructor inline in the header
-    explicit ResamplePlan(
-        std::unique_ptr<::OmniDSP::Abstract::ResamplePlanImpl<T>> pimpl)
+    explicit ResampleProcessor(
+        std::unique_ptr<::OmniDSP::Abstract::ResampleProcessorImpl<T>> pimpl)
         : pimpl_(std::move(pimpl))
     {
       if (!pimpl_) {
@@ -72,11 +73,11 @@ namespace OmniDSP {
         // If this constructor is only called by create_from_impl,
         // the check in create_from_impl might be sufficient.
         throw std::runtime_error(
-            "ResamplePlan/Processor constructed with null implementation "
+            "ResampleProcessor/Processor constructed with null implementation "
             "pointer.");
       }
     }
-    std::unique_ptr<::OmniDSP::Abstract::ResamplePlanImpl<T>> pimpl_;
+    std::unique_ptr<::OmniDSP::Abstract::ResampleProcessorImpl<T>> pimpl_;
   };
 
 }  // namespace OmniDSP

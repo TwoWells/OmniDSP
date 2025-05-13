@@ -300,10 +300,47 @@ template <typename T>
   return plan;
 }
 
+template <typename T>
+OmniExpected<std::unique_ptr<CorrelationPlan<T>>> OmniDSP::create_plan(
+    const CorrelationParams& params,
+    const std::vector<T>& kernel_coeffs) const {
+  if (!pimpl_) {
+    return std::unexpected(Status::InvalidState); // Or some other appropriate error
+  }
+
+  // NOTE: This implementation assumes that the pimpl_->create_correlation_plan_impl
+  // will be updated or is capable of using the information from params (especially max_input_length_)
+  // and kernel_coeffs to correctly size internal FFTs if needed.
+  // The current Abstract::Backend::create_correlation_plan_impl signature might need
+  // to change to accept CorrelationParams or max_input_length.
+  // This is tracked in a separate TODO:
+  // "[ ] Add/Update create_correlation_plan_impl in Abstract::Backend to accept CorrelationParams (or max_input_length) and kernel."
+
+  OmniExpected<std::unique_ptr<Abstract::CorrelationPlanImpl<T>>> plan_impl_expected(std::unexpected(Status::NotImplemented));
+
+  if constexpr (std::is_same_v<T, F32>) {
+    plan_impl_expected = pimpl_->create_correlation_plan_impl_f32(kernel_coeffs, params.type_, params.method_hint_);
+  } else if constexpr (std::is_same_v<T, F64>) {
+    plan_impl_expected = pimpl_->create_correlation_plan_impl_f64(kernel_coeffs, params.type_, params.method_hint_);
+  } else if constexpr (std::is_same_v<T, C32>) {
+    plan_impl_expected = pimpl_->create_correlation_plan_impl_c32(kernel_coeffs, params.type_, params.method_hint_);
+  } else if constexpr (std::is_same_v<T, C64>) {
+    plan_impl_expected = pimpl_->create_correlation_plan_impl_c64(kernel_coeffs, params.type_, params.method_hint_);
+  } else {
+    static_assert(always_false<T>::value, "Unsupported type for CorrelationPlan");
+    return std::unexpected(Status::UnsupportedType);
+  }
+
+  if (!plan_impl_expected) {
+    return std::unexpected(plan_impl_expected.error());
+  }
+  // Assuming CorrelationPlan<T>::create_from_impl exists similar to ConvolutionPlan
+  return CorrelationPlan<T>::create_from_impl(std::move(plan_impl_expected.value()));
+}
 
 // FIRFilterProcessor (stateful) from FIRFilterParams
 template <typename T>
-[[nodiscard]] inline OmniExpected<std::unique_ptr<FIRFilterPlan<T>>> /* TODO: FIRFilterProcessor */ OmniDSP::create_processor(
+[[nodiscard]] inline OmniExpected<std::unique_ptr<FIRFilterProcessor<T>>> /* TODO: FIRFilterProcessor */ OmniDSP::create_processor(
     const FIRFilterParams& params) const {
   if (!pimpl_) return std::unexpected(Status::NotInitialized);
   auto coeffs_expected = design_fir_filter<T>(params);
@@ -315,10 +352,10 @@ template <typename T>
 
 // FIRFilterProcessor (stateful) from FIRCoefs
 template <typename T>
-[[nodiscard]] inline OmniExpected<std::unique_ptr<FIRFilterPlan<T>>> /* TODO: FIRFilterProcessor */ OmniDSP::create_processor(
+[[nodiscard]] inline OmniExpected<std::unique_ptr<FIRFilterProcessor<T>>> /* TODO: FIRFilterProcessor */ OmniDSP::create_processor(
     const FIRCoefs<T>& coeffs) const {
   if (!pimpl_) return std::unexpected(Status::NotInitialized);
-  OmniExpected<std::unique_ptr<Abstract::FIRFilterPlanImpl<T>>> /* TODO: Abstract::FIRFilterProcessorImpl */ pimpl_expected;
+  OmniExpected<std::unique_ptr<Abstract::FIRFilterProcessorImpl<T>>> /* TODO: Abstract::FIRFilterProcessorImpl */ pimpl_expected;
   if constexpr (std::is_same_v<T, F32>) {
       pimpl_expected = pimpl_->create_fir_filter_plan_impl_f32(coeffs); // TODO: create_fir_filter_processor_impl_f32
   } else if constexpr (std::is_same_v<T, F64>) {
@@ -331,7 +368,7 @@ template <typename T>
       return std::unexpected(Status::UnsupportedFeature);
   }
   if (!pimpl_expected) return std::unexpected(pimpl_expected.error());
-  auto processor = FIRFilterPlan<T>::create_from_impl(std::move(pimpl_expected.value())); // TODO: FIRFilterProcessor<T>
+  auto processor = FIRFilterProcessor<T>::create_from_impl(std::move(pimpl_expected.value())); // TODO: FIRFilterProcessor<T>
   if (!processor) return std::unexpected(Status::Failure);
   return processor;
 }
@@ -339,7 +376,7 @@ template <typename T>
 
 // IIRFilterProcessor (stateful) from IIRFilterParams
 template <typename T_Real>
-[[nodiscard]] inline OmniExpected<std::unique_ptr<IIRFilterPlan<T_Real>>> /* TODO: IIRFilterProcessor */ OmniDSP::create_processor(
+[[nodiscard]] inline OmniExpected<std::unique_ptr<IIRFilterProcessor<T_Real>>> /* TODO: IIRFilterProcessor */ OmniDSP::create_processor(
     const IIRFilterParams& params) const {
   if (!pimpl_) return std::unexpected(Status::NotInitialized);
   auto sos_coeffs_expected = design_iir_filter<T_Real>(params);
@@ -351,10 +388,10 @@ template <typename T_Real>
 
 // IIRFilterProcessor (stateful) from SOS coefficients
 template <typename T_Real>
-[[nodiscard]] inline OmniExpected<std::unique_ptr<IIRFilterPlan<T_Real>>> /* TODO: IIRFilterProcessor */ OmniDSP::create_processor(
+[[nodiscard]] inline OmniExpected<std::unique_ptr<IIRFilterProcessor<T_Real>>> /* TODO: IIRFilterProcessor */ OmniDSP::create_processor(
     const std::vector<IIRFilterCoef>& sos_coeffs) const {
   if (!pimpl_) return std::unexpected(Status::NotInitialized);
-  OmniExpected<std::unique_ptr<Abstract::IIRFilterPlanImpl<T_Real>>> /* TODO: Abstract::IIRFilterProcessorImpl */ pimpl_expected;
+  OmniExpected<std::unique_ptr<Abstract::IIRFilterProcessorImpl<T_Real>>> /* TODO: Abstract::IIRFilterProcessorImpl */ pimpl_expected;
   if constexpr (std::is_same_v<T_Real, F32>) {
       pimpl_expected = pimpl_->create_iir_filter_plan_impl_f32(sos_coeffs); // TODO: create_iir_filter_processor_impl_f32
   } else if constexpr (std::is_same_v<T_Real, F64>) {
@@ -363,14 +400,14 @@ template <typename T_Real>
       return std::unexpected(Status::UnsupportedFeature);
   }
   if (!pimpl_expected) return std::unexpected(pimpl_expected.error());
-  auto processor = IIRFilterPlan<T_Real>::create_from_impl(std::move(pimpl_expected.value())); // TODO: IIRFilterProcessor<T_Real>
+  auto processor = IIRFilterProcessor<T_Real>::create_from_impl(std::move(pimpl_expected.value())); // TODO: IIRFilterProcessor<T_Real>
   if (!processor) return std::unexpected(Status::Failure);
   return processor;
 }
 
 // ResampleProcessor (stateful) from ResampleParams
 template <typename T_Real>
-[[nodiscard]] inline OmniExpected<std::unique_ptr<ResamplePlan<T_Real>>> /* TODO: ResampleProcessor */ OmniDSP::create_processor(
+[[nodiscard]] inline OmniExpected<std::unique_ptr<ResampleProcessor<T_Real>>> /* TODO: ResampleProcessor */ OmniDSP::create_processor(
     const ResampleParams& params) const {
   if (!pimpl_) return std::unexpected(Status::NotInitialized);
   auto spec_expected = Utils::create_spec(params);
@@ -382,10 +419,10 @@ template <typename T_Real>
 
 // ResampleProcessor (stateful) from Design::Resample
 template <typename T_Real>
-[[nodiscard]] inline OmniExpected<std::unique_ptr<ResamplePlan<T_Real>>> /* TODO: ResampleProcessor */ OmniDSP::create_processor(
+[[nodiscard]] inline OmniExpected<std::unique_ptr<ResampleProcessor<T_Real>>> /* TODO: ResampleProcessor */ OmniDSP::create_processor(
     const Design::Resample& spec) const {
   if (!pimpl_) return std::unexpected(Status::NotInitialized);
-  OmniExpected<std::unique_ptr<Abstract::ResamplePlanImpl<T_Real>>> /* TODO: Abstract::ResampleProcessorImpl */ pimpl_expected;
+  OmniExpected<std::unique_ptr<Abstract::ResampleProcessorImpl<T_Real>>> /* TODO: Abstract::ResampleProcessorImpl */ pimpl_expected;
   if constexpr (std::is_same_v<T_Real, F32>) {
       pimpl_expected = pimpl_->create_resample_plan_impl_f32(spec); // TODO: create_resample_processor_impl_f32
   } else if constexpr (std::is_same_v<T_Real, F64>) {
@@ -394,7 +431,7 @@ template <typename T_Real>
       return std::unexpected(Status::UnsupportedFeature);
   }
   if (!pimpl_expected) return std::unexpected(pimpl_expected.error());
-  auto processor = ResamplePlan<T_Real>::create_from_impl(std::move(pimpl_expected.value())); // TODO: ResampleProcessor<T_Real>
+  auto processor = ResampleProcessor<T_Real>::create_from_impl(std::move(pimpl_expected.value())); // TODO: ResampleProcessor<T_Real>
   if (!processor) return std::unexpected(Status::Failure);
   return processor;
 }
@@ -402,7 +439,7 @@ template <typename T_Real>
 
 // CQTProcessor (stateful) from CQTParams
 template <typename T_Real>
-[[nodiscard]] inline OmniExpected<std::unique_ptr<CQTPlan<T_Real>>> /* TODO: CQTProcessor */ OmniDSP::create_processor(
+[[nodiscard]] inline OmniExpected<std::unique_ptr<CQTProcessor<T_Real>>> /* TODO: CQTProcessor */ OmniDSP::create_processor(
     const CQTParams& params) const {
   if (!pimpl_) return std::unexpected(Status::NotInitialized);
   auto spec_expected = Utils::create_spec(params);
@@ -414,10 +451,10 @@ template <typename T_Real>
 
 // CQTProcessor (stateful) from Design::CQT
 template <typename T_Real>
-[[nodiscard]] inline OmniExpected<std::unique_ptr<CQTPlan<T_Real>>> /* TODO: CQTProcessor */ OmniDSP::create_processor(
+[[nodiscard]] inline OmniExpected<std::unique_ptr<CQTProcessor<T_Real>>> /* TODO: CQTProcessor */ OmniDSP::create_processor(
     const Design::CQT& spec) const {
   if (!pimpl_) return std::unexpected(Status::NotInitialized);
-  OmniExpected<std::unique_ptr<Abstract::CQTPlanImpl<T_Real>>> /* TODO: Abstract::CQTProcessorImpl */ pimpl_expected;
+  OmniExpected<std::unique_ptr<Abstract::CQTProcessorImpl<T_Real>>> /* TODO: Abstract::CQTProcessorImpl */ pimpl_expected;
   if constexpr (std::is_same_v<T_Real, F32>) {
       pimpl_expected = pimpl_->create_cqt_plan_impl_f32(spec); // TODO: create_cqt_processor_impl_f32
   } else if constexpr (std::is_same_v<T_Real, F64>) {
@@ -426,7 +463,7 @@ template <typename T_Real>
       return std::unexpected(Status::UnsupportedFeature);
   }
   if (!pimpl_expected) return std::unexpected(pimpl_expected.error());
-  auto processor = CQTPlan<T_Real>::create_from_impl(std::move(pimpl_expected.value())); // TODO: CQTProcessor<T_Real>
+  auto processor = CQTProcessor<T_Real>::create_from_impl(std::move(pimpl_expected.value())); // TODO: CQTProcessor<T_Real>
   if (!processor) return std::unexpected(Status::Failure);
   return processor;
 }

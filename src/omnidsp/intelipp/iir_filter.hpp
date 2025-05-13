@@ -8,8 +8,8 @@
 
 #include <ipp.h>  // Main IPP header including ipps.h
 
+#include <OmniDSP/coefs/iir_filter.hpp>  // For IIRFilterCoef definition
 #include <OmniDSP/core_types.hpp>  // For F32, C32, F64, C64, Status, OmniException, Utils::* etc.
-#include <OmniDSP/filter.hpp>  // For IIRFilterCoef definition
 #include <complex>
 #include <memory>       // For std::unique_ptr
 #include <span>         // For std::span in method signatures
@@ -17,8 +17,8 @@
 #include <type_traits>  // For std::is_same_v
 #include <vector>
 
-#include "../interface/backend.hpp"  // Defines abstract::IIRFilterPlanImpl
 #include "details.hpp"  // For IPP type helpers (utils::GetIPPType etc.) and macros
+#include "interface/backend.hpp"  // Defines abstract::IIRFilterPlanImpl
 
 namespace OmniDSP::IntelIPP {
 
@@ -142,7 +142,8 @@ namespace OmniDSP::IntelIPP {
   // IntelIPP IIR Filter Plan Implementation (Biquad SOS)
   //--------------------------------------------------------------------------
   template <typename T>  // T is F32 or F64 (IPP IIR typically real only)
-  class IIRFilterPlanImpl final : public Abstract::IIRFilterPlanImpl<T> {
+  class IIRFilterProcessorImpl final
+      : public Abstract::IIRFilterProcessorImpl<T> {
     static_assert(
         std::is_same_v<T, F32> || std::is_same_v<T, F64>,
         "IIRFilterPlanImpl currently supports only F32 or F64.");
@@ -150,14 +151,14 @@ namespace OmniDSP::IntelIPP {
     using IPP_State_Type = Details::GetIPPIIRState<T>;
 
    public:
-    explicit IIRFilterPlanImpl(
+    explicit IIRFilterProcessorImpl(
         const std::vector<IIRFilterCoef>& sos_coefficients);
-    ~IIRFilterPlanImpl() override;
+    ~IIRFilterProcessorImpl() override;
 
-    IIRFilterPlanImpl(const IIRFilterPlanImpl&) = delete;
-    IIRFilterPlanImpl& operator=(const IIRFilterPlanImpl&) = delete;
-    IIRFilterPlanImpl(IIRFilterPlanImpl&&) = delete;
-    IIRFilterPlanImpl& operator=(IIRFilterPlanImpl&&) = delete;
+    IIRFilterProcessorImpl(const IIRFilterProcessorImpl&) = delete;
+    IIRFilterProcessorImpl& operator=(const IIRFilterProcessorImpl&) = delete;
+    IIRFilterProcessorImpl(IIRFilterProcessorImpl&&) = delete;
+    IIRFilterProcessorImpl& operator=(IIRFilterProcessorImpl&&) = delete;
 
     [[nodiscard]] Status execute(
         std::span<const T> input, std::span<T> output) override;

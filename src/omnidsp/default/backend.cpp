@@ -20,8 +20,9 @@
 #include <OmniDSP/core_types.hpp>   // For F32, F64, Status, OmniExpected etc.
 #include <OmniDSP/cqt.hpp>          // For CQTPlan
 #include <OmniDSP/fft.hpp>          // For FFTPlan, RFFTPlan
-#include <OmniDSP/filter.hpp>  // For FIRFilterPlan, IIRFilterPlan, FIRCoefs, IIRFilterCoef, Design::FIRFilter, Design::IIRFilter
-#include <OmniDSP/resample.hpp>  // For ResamplePlan, Design::Resample
+#include <OmniDSP/fir_filter.hpp>  // For FIRFilterPlan, IIRFilterPlan, FIRCoefs, IIRFilterCoef, Design::FIRFilter, Design::IIRFilter
+#include <OmniDSP/iir_filter.hpp>  // For FIRFilterPlan, IIRFilterPlan, FIRCoefs, IIRFilterCoef, Design::FIRFilter, Design::IIRFilter
+#include <OmniDSP/resample.hpp>    // For ResamplePlan, Design::Resample
 #include <OmniDSP/window.hpp>  // For WindowSetup, WindowParams, and the free OmniDSP::generate_window
 
 // Standard library headers
@@ -999,87 +1000,91 @@ namespace OmniDSP::Default {
     }
   }
 
-  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTPlanImpl<F32>>>
+  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTProcessorImpl<F32>>>
   Backend::create_cqt_plan_impl_f32(
       const Design::CQT& spec) const  // Updated signature
   {
     try {
-      // Call the CQTPlanImpl constructor with 'this' (owner_backend) and the
-      // 'spec'
-      return std::make_unique<CQTPlanImpl<F32>>(this, spec);
+      // Call the CQTProcessorImpl constructor with 'this' (owner_backend) and
+      // the 'spec'
+      return std::make_unique<CQTProcessorImpl<F32>>(this, spec);
     }
     catch (const OmniException& e) {  // Catch OmniException specifically if
-                                      // thrown by CQTPlanImpl
+                                      // thrown by CQTProcessorImpl
       spdlog::get("OmniDSP")->error(
-          "Error creating Default::CQTPlanImpl<F32> from Design::CQT: {} "
+          "Error creating Default::CQTProcessorImpl<F32> from Design::CQT: {} "
           "(Status: "
           "{})",
           e.what(),
           static_cast<int>(e.get_status()));
-      return OmniExpected<std::unique_ptr<Abstract::CQTPlanImpl<F32>>>(
+      return OmniExpected<std::unique_ptr<Abstract::CQTProcessorImpl<F32>>>(
           std::unexpect, e.get_status());
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error(
-          "Error creating Default::CQTPlanImpl<F32> from Design::CQT: {}",
+          "Error creating Default::CQTProcessorImpl<F32> from Design::CQT: {}",
           e.what());
-      return OmniExpected<std::unique_ptr<Abstract::CQTPlanImpl<F32>>>(
+      return OmniExpected<std::unique_ptr<Abstract::CQTProcessorImpl<F32>>>(
           std::unexpect,
           Status::Failure);  // Or a more specific error if identifiable
     }
   }
 
-  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTPlanImpl<F64>>>
+  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTProcessorImpl<F64>>>
   Backend::create_cqt_plan_impl_f64(
       const Design::CQT& spec) const  // Updated signature
   {
     try {
-      // Call the CQTPlanImpl constructor with 'this' (owner_backend) and the
-      // 'spec'
-      return std::make_unique<Default::CQTPlanImpl<F64>>(this, spec);
+      // Call the CQTProcessorImpl constructor with 'this' (owner_backend) and
+      // the 'spec'
+      return std::make_unique<Default::CQTProcessorImpl<F64>>(this, spec);
     }
     catch (const OmniException& e) {
       spdlog::get("OmniDSP")->error(
-          "Error creating Default::CQTPlanImpl<F64> from Design::CQT: {} "
+          "Error creating Default::CQTProcessorImpl<F64> from Design::CQT: {} "
           "(Status: "
           "{})",
           e.what(),
           static_cast<int>(e.get_status()));
-      return OmniExpected<std::unique_ptr<Abstract::CQTPlanImpl<F64>>>(
+      return OmniExpected<std::unique_ptr<Abstract::CQTProcessorImpl<F64>>>(
           std::unexpect, e.get_status());
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error(
-          "Error creating Default::CQTPlanImpl<F64> from Design::CQT: {}",
+          "Error creating Default::CQTProcessorImpl<F64> from Design::CQT: {}",
           e.what());
-      return OmniExpected<std::unique_ptr<Abstract::CQTPlanImpl<F64>>>(
+      return OmniExpected<std::unique_ptr<Abstract::CQTProcessorImpl<F64>>>(
           std::unexpect, Status::Failure);  // Or a more specific error
     }
   }
 
-  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::ResamplePlanImpl<F32>>>
+  [[nodiscard]] OmniExpected<
+      std::unique_ptr<Abstract::ResampleProcessorImpl<F32>>>
   Backend::create_resample_plan_impl_f32(const Design::Resample& spec) const
   {
     try {
-      return std::make_unique<ResamplePlanImpl<F32>>(this, spec);
+      return std::make_unique<ResampleProcessorImpl<F32>>(this, spec);
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error(
-          "Error creating Default::ResamplePlanImpl<F32>: {}", e.what());
-      return OmniExpected<std::unique_ptr<Abstract::ResamplePlanImpl<F32>>>(
+          "Error creating Default::ResampleProcessorImpl<F32>: {}", e.what());
+      return OmniExpected<
+          std::unique_ptr<Abstract::ResampleProcessorImpl<F32>>>(
           std::unexpect, Status::Failure);
     }
   }
-  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::ResamplePlanImpl<F64>>>
+  [[nodiscard]] OmniExpected<
+      std::unique_ptr<Abstract::ResampleProcessorImpl<F64>>>
   Backend::create_resample_plan_impl_f64(const Design::Resample& spec) const
   {
     try {
-      return std::make_unique<ResamplePlanImpl<F64>>(this, spec);
+      return std::make_unique<ResampleProcessorImpl<F64>>(this, spec);
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error(
-          "Error creating Default::ResamplePlanImpl<F64>: {}", e.what());
-      return OmniExpected<std::unique_ptr<Abstract::ResamplePlanImpl<F64>>>(
+          "Error creating Default::ResampleProcessorImpl<F64>: {}", e.what());
+      return OmniExpected<
+          std::unique_ptr<Abstract::ResampleProcessorImpl<F64>>>(
           std::unexpect, Status::Failure);
     }
   }
@@ -1412,78 +1417,90 @@ namespace OmniDSP::Default {
     }
   }
 
-  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::FIRFilterPlanImpl<F32>>>
+  [[nodiscard]] OmniExpected<
+      std::unique_ptr<Abstract::FIRFilterProcessorImpl<F32>>>
   Backend::create_fir_filter_plan_impl_f32(const F32Vec& coefficients) const
   {
     try {
-      return std::make_unique<FIRFilterPlanImpl<F32>>(coefficients);
+      return std::make_unique<FIRFilterProcessorImpl<F32>>(coefficients);
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error("Default::FIRPlanImpl<F32>: {}", e.what());
-      return OmniExpected<std::unique_ptr<Abstract::FIRFilterPlanImpl<F32>>>(
+      return OmniExpected<
+          std::unique_ptr<Abstract::FIRFilterProcessorImpl<F32>>>(
           std::unexpect, Status::Failure);
     }
   }
-  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::FIRFilterPlanImpl<F64>>>
+  [[nodiscard]] OmniExpected<
+      std::unique_ptr<Abstract::FIRFilterProcessorImpl<F64>>>
   Backend::create_fir_filter_plan_impl_f64(const F64Vec& coefficients) const
   {
     try {
-      return std::make_unique<FIRFilterPlanImpl<F64>>(coefficients);
+      return std::make_unique<FIRFilterProcessorImpl<F64>>(coefficients);
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error("Default::FIRPlanImpl<F64>: {}", e.what());
-      return OmniExpected<std::unique_ptr<Abstract::FIRFilterPlanImpl<F64>>>(
+      return OmniExpected<
+          std::unique_ptr<Abstract::FIRFilterProcessorImpl<F64>>>(
           std::unexpect, Status::Failure);
     }
   }
-  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::FIRFilterPlanImpl<C32>>>
+  [[nodiscard]] OmniExpected<
+      std::unique_ptr<Abstract::FIRFilterProcessorImpl<C32>>>
   Backend::create_fir_filter_plan_impl_c32(const C32Vec& coefficients) const
   {
     try {
-      return std::make_unique<FIRFilterPlanImpl<C32>>(coefficients);
+      return std::make_unique<FIRFilterProcessorImpl<C32>>(coefficients);
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error("Default::FIRPlanImpl<C32>: {}", e.what());
-      return OmniExpected<std::unique_ptr<Abstract::FIRFilterPlanImpl<C32>>>(
+      return OmniExpected<
+          std::unique_ptr<Abstract::FIRFilterProcessorImpl<C32>>>(
           std::unexpect, Status::Failure);
     }
   }
-  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::FIRFilterPlanImpl<C64>>>
+  [[nodiscard]] OmniExpected<
+      std::unique_ptr<Abstract::FIRFilterProcessorImpl<C64>>>
   Backend::create_fir_filter_plan_impl_c64(const C64Vec& coefficients) const
   {
     try {
-      return std::make_unique<FIRFilterPlanImpl<C64>>(coefficients);
+      return std::make_unique<FIRFilterProcessorImpl<C64>>(coefficients);
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error("Default::FIRPlanImpl<C64>: {}", e.what());
-      return OmniExpected<std::unique_ptr<Abstract::FIRFilterPlanImpl<C64>>>(
+      return OmniExpected<
+          std::unique_ptr<Abstract::FIRFilterProcessorImpl<C64>>>(
           std::unexpect, Status::Failure);
     }
   }
 
-  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::IIRFilterPlanImpl<F32>>>
+  [[nodiscard]] OmniExpected<
+      std::unique_ptr<Abstract::IIRFilterProcessorImpl<F32>>>
   Backend::create_iir_filter_plan_impl_f32(
       const std::vector<IIRFilterCoef>& sos_coefficients) const
   {
     try {
-      return std::make_unique<IIRFilterPlanImpl<F32>>(sos_coefficients);
+      return std::make_unique<IIRFilterProcessorImpl<F32>>(sos_coefficients);
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error("Default::IIRPlanImpl<F32>: {}", e.what());
-      return OmniExpected<std::unique_ptr<Abstract::IIRFilterPlanImpl<F32>>>(
+      return OmniExpected<
+          std::unique_ptr<Abstract::IIRFilterProcessorImpl<F32>>>(
           std::unexpect, Status::Failure);
     }
   }
-  [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::IIRFilterPlanImpl<F64>>>
+  [[nodiscard]] OmniExpected<
+      std::unique_ptr<Abstract::IIRFilterProcessorImpl<F64>>>
   Backend::create_iir_filter_plan_impl_f64(
       const std::vector<IIRFilterCoef>& sos_coefficients) const
   {
     try {
-      return std::make_unique<IIRFilterPlanImpl<F64>>(sos_coefficients);
+      return std::make_unique<IIRFilterProcessorImpl<F64>>(sos_coefficients);
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error("Default::IIRPlanImpl<F64>: {}", e.what());
-      return OmniExpected<std::unique_ptr<Abstract::IIRFilterPlanImpl<F64>>>(
+      return OmniExpected<
+          std::unique_ptr<Abstract::IIRFilterProcessorImpl<F64>>>(
           std::unexpect, Status::Failure);
     }
   }

@@ -11,9 +11,10 @@
 #include <string>     // For error messages
 #include <vector>
 
-#include "OmniDSP/core_types.hpp"  // For OmniExpected, Status
-#include "OmniDSP/filter.hpp"      // For Design::FIRFilter, FilterType
+#include "OmniDSP/core_types.hpp"         // For OmniExpected, Status
+#include "OmniDSP/design/fir_filter.hpp"  // For Design::FIRFilter, FilterType
 #include "OmniDSP/params/fir_filter.hpp"
+#include "OmniDSP/types/filter.hpp"  // For Design::FIRFilter, FilterType
 #include "OmniDSP/utils.hpp"   // For the declaration of Utils::create_spec
 #include "OmniDSP/window.hpp"  // For WindowSetup, WindowType, WindowParams
 

@@ -41,7 +41,7 @@ int main()
   const double fmin = 27.5;   // Minimum frequency (Hz) - A0 note
   const double fmax
       = 20000.0;  // Maximum frequency (Hz) - Approximate (Note: fmax isn't
-                  // directly used in this CQTPlan constructor)
+                  // directly used in this CQTProcessor constructor)
   const int bins_per_octave
       = 12;  // Number of bins per octave (e.g., 12 for semitones)
   const double duration = 1.0;             // Duration of the signal in seconds
@@ -57,11 +57,11 @@ int main()
   try {
     std::cout << "Creating CQT Plan..." << std::endl;
 
-    // Construct the CQTPlan object
+    // Construct the CQTProcessor object
     // Using definitions from fft.h (immersive fft_h_updated) and core_types.h:
     // - Precision is likely an enum class (OmniDSP::Precision::Double)
     // - FFTNorm is an enum class with member 'Ortho' (OmniDSP::FFTNorm::Ortho)
-    OmniDSP::CQTPlan<Real> cqtPlan(
+    OmniDSP::CQTProcessor<Real> cqtPlan(
         sr,                          // Sample rate (double)
         fmin,                        // Minimum frequency (double)
         n_bins,                      // Total number of CQT bins (int)
@@ -76,7 +76,7 @@ int main()
     // --- Execute CQT ---
     std::cout << "Executing CQT..." << std::endl;
     // The execute method likely takes the input signal and returns the CQT
-    // result. The exact return type depends on the CQTPlan implementation
+    // result. The exact return type depends on the CQTProcessor implementation
     // (e.g., std::vector<std::vector<Complex>>). This is a placeholder for the
     // actual execution call. Example: Get the expected output size first size_t
     // num_frames = cqtPlan.get_num_frames(inputSignal.size());

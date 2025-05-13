@@ -1,14 +1,14 @@
 /**
  * @file fir_filter.hpp (Default)
- * @brief Declares the concrete FIRFilterPlanImpl class and FIR design helpers
- * for the Default backend.
+ * @brief Declares the concrete FIRFilterProcessorImpl class and FIR design
+ * helpers for the Default backend.
  */
 
 #ifndef OMNIDSP_DEFAULT_FIR_FILTER_HPP
 #define OMNIDSP_DEFAULT_FIR_FILTER_HPP
 
 #include <OmniDSP/core_types.hpp>  // Status, F32, F64, C32, C64, OmniExpected, FIRCoefs
-#include <OmniDSP/filter.hpp>  // For Design::FIRFilter (public spec)
+#include <OmniDSP/fir_filter.hpp>  // For Design::FIRFilter (public spec)
 #include <complex>
 #include <cstddef>  // For size_t
 #include <span>     // For std::span
@@ -24,26 +24,27 @@ namespace OmniDSP::Default {
    * @tparam T The data type (F32, F64, C32, C64).
    */
   template <typename T>
-  class FIRFilterPlanImpl final : public Abstract::FIRFilterPlanImpl<T> {
+  class FIRFilterProcessorImpl final
+      : public Abstract::FIRFilterProcessorImpl<T> {
    public:
     /**
-     * @brief Constructs a FIRFilterPlanImpl.
+     * @brief Constructs a FIRFilterProcessorImpl.
      * @param coefficients The FIR filter coefficients (taps). Copied
      * internally.
      * @throws std::invalid_argument if coefficients vector is empty.
      */
-    explicit FIRFilterPlanImpl(const std::vector<T>& coefficients);
+    explicit FIRFilterProcessorImpl(const std::vector<T>& coefficients);
 
     /**
      * @brief Destructor.
      */
-    ~FIRFilterPlanImpl() override;
+    ~FIRFilterProcessorImpl() override;
 
     // --- Disable Copy/Move ---
-    FIRFilterPlanImpl(const FIRFilterPlanImpl&) = delete;
-    FIRFilterPlanImpl& operator=(const FIRFilterPlanImpl&) = delete;
-    FIRFilterPlanImpl(FIRFilterPlanImpl&&) = delete;
-    FIRFilterPlanImpl& operator=(FIRFilterPlanImpl&&) = delete;
+    FIRFilterProcessorImpl(const FIRFilterProcessorImpl&) = delete;
+    FIRFilterProcessorImpl& operator=(const FIRFilterProcessorImpl&) = delete;
+    FIRFilterProcessorImpl(FIRFilterProcessorImpl&&) = delete;
+    FIRFilterProcessorImpl& operator=(FIRFilterProcessorImpl&&) = delete;
 
     // --- Interface Methods Implementation ---
     [[nodiscard]] Status execute(
@@ -72,10 +73,10 @@ namespace OmniDSP::Default {
       const Design::FIRFilter& spec);
 
   // Explicit template instantiations (declarations for linking)
-  extern template class FIRFilterPlanImpl<F32>;
-  extern template class FIRFilterPlanImpl<F64>;
-  extern template class FIRFilterPlanImpl<C32>;
-  extern template class FIRFilterPlanImpl<C64>;
+  extern template class FIRFilterProcessorImpl<F32>;
+  extern template class FIRFilterProcessorImpl<F64>;
+  extern template class FIRFilterProcessorImpl<C32>;
+  extern template class FIRFilterProcessorImpl<C64>;
 
   extern template OmniExpected<FIRCoefs<F32>> generate_fir_filter_coeffs<F32>(
       const Design::FIRFilter& spec);

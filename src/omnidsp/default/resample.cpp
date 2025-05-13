@@ -1,14 +1,14 @@
 /**
  * @file resample.cpp (Default)
- * @brief Implements the Default backend ResamplePlanImpl class using standard
- * C++.
+ * @brief Implements the Default backend ResampleProcessorImpl class using
+ * standard C++.
  */
 
 #include "resample.hpp"  // Corresponding header for Default::ResamplePlanImpl
 
 #include <OmniDSP/coefs/fir_filter.hpp>  // For FIRCoefs
 #include <OmniDSP/core_types.hpp>
-#include <OmniDSP/filter.hpp>  // For Design::FIRFilter (part of Design::Resample)
+#include <OmniDSP/design/fir_filter.hpp>  // For Design::FIRFilter (part of Design::Resample)
 #include <OmniDSP/resample.hpp>  // For Design::Resample definition
 #include <algorithm>
 #include <cassert>
@@ -26,12 +26,12 @@
 namespace OmniDSP::Default {
 
   //--------------------------------------------------------------------------
-  // ResamplePlanImpl Method Implementations
+  // ResampleProcessorImpl Method Implementations
   //--------------------------------------------------------------------------
 
   template <typename T>
-  ResamplePlanImpl<T>::ResamplePlanImpl(  // TODO: Rename to
-                                          // ResampleProcessorImpl
+  ResampleProcessorImpl<T>::ResampleProcessorImpl(  // TODO: Rename to
+                                                    // ResampleProcessorImpl
       const Abstract::Backend* owner,
       const Design::Resample& design_spec)
       : owner_backend_(owner),
@@ -48,15 +48,17 @@ namespace OmniDSP::Default {
     }
 
     if (!owner_backend_) {
-      logger->error("Default::ResamplePlanImpl: owner_backend is null.");
+      logger->error("Default::ResampleProcessorImpl: owner_backend is null.");
       throw OmniException(
-          "ResamplePlanImpl requires a valid owner AbstractBackend pointer.",
+          "ResampleProcessorImpl requires a valid owner AbstractBackend "
+          "pointer.",
           Status::InvalidArgument);
     }
 
     if (interpolation_factor_ == 0 || decimation_factor_ == 0) {
       logger->error(
-          "Default::ResamplePlanImpl: L ({}) or M ({}) from design is zero.",
+          "Default::ResampleProcessorImpl: L ({}) or M ({}) from design is "
+          "zero.",
           interpolation_factor_,
           decimation_factor_);
       throw OmniException(
@@ -75,14 +77,16 @@ namespace OmniDSP::Default {
     else {
       state_.clear();
       logger->warn(
-          "Default::ResamplePlanImpl: Prototype filter has zero taps after "
+          "Default::ResampleProcessorImpl: Prototype filter has zero taps "
+          "after "
           "design. This might indicate an issue.");
     }
 
     build_polyphase_filters();
 
     logger->debug(
-        "Default::ResamplePlanImpl created. IR={}, OR={}, Q={}, L={}, M={}, "
+        "Default::ResampleProcessorImpl created. IR={}, OR={}, Q={}, L={}, "
+        "M={}, "
         "ProtoTaps={}, StateLen={}",
         spec_.input_rate,
         spec_.output_rate,
@@ -94,10 +98,10 @@ namespace OmniDSP::Default {
   }
 
   template <typename T>
-  ResamplePlanImpl<T>::~ResamplePlanImpl() = default;
+  ResampleProcessorImpl<T>::~ResampleProcessorImpl() = default;
 
   template <typename T>
-  void ResamplePlanImpl<T>::design_filter()
+  void ResampleProcessorImpl<T>::design_filter()
   {
     auto logger = spdlog::get("OmniDSP");
     if (!logger) {
@@ -106,7 +110,8 @@ namespace OmniDSP::Default {
 
     if (!owner_backend_) {
       logger->critical(
-          "Default::ResamplePlanImpl::design_filter: owner_backend_ is null. "
+          "Default::ResampleProcessorImpl::design_filter: owner_backend_ is "
+          "null. "
           "This should not happen.");
       throw std::logic_error("Cannot design filter without owner backend.");
     }
@@ -122,14 +127,15 @@ namespace OmniDSP::Default {
     }
     else {
       logger->critical(
-          "Default::ResamplePlanImpl::design_filter: Unsupported data type T.");
+          "Default::ResampleProcessorImpl::design_filter: Unsupported data "
+          "type T.");
       throw std::runtime_error(
           "Unsupported type for filter design in resampler.");
     }
 
     if (!coeffs_expected) {
       logger->error(
-          "Default::ResamplePlanImpl::design_filter: Failed to design "
+          "Default::ResampleProcessorImpl::design_filter: Failed to design "
           "resampling prototype filter using owner backend. Status: {}",
           static_cast<int>(coeffs_expected.error()));
       throw OmniException(
@@ -142,7 +148,7 @@ namespace OmniDSP::Default {
 
     if (prototype_coeffs_.empty()) {
       logger->error(
-          "Default::ResamplePlanImpl::design_filter: Resampling prototype "
+          "Default::ResampleProcessorImpl::design_filter: Resampling prototype "
           "filter design resulted in empty coefficients.");
       throw OmniException(
           "Resampling prototype filter design resulted in empty coefficients.",
@@ -162,7 +168,7 @@ namespace OmniDSP::Default {
   }
 
   template <typename T>
-  void ResamplePlanImpl<T>::build_polyphase_filters()
+  void ResampleProcessorImpl<T>::build_polyphase_filters()
   {
     auto logger = spdlog::get("OmniDSP");
     if (!logger) {
@@ -172,7 +178,7 @@ namespace OmniDSP::Default {
     if (prototype_coeffs_.empty() || filter_length_ == 0
         || interpolation_factor_ == 0) {
       logger->warn(
-          "Default::ResamplePlanImpl::build_polyphase_filters: Prototype "
+          "Default::ResampleProcessorImpl::build_polyphase_filters: Prototype "
           "coefficients are empty or factors invalid. L={}, FilterLength={}. "
           "Polyphase bank will be empty/zeroed.",
           interpolation_factor_,
@@ -202,7 +208,7 @@ namespace OmniDSP::Default {
   }
 
   template <typename T>
-  Status ResamplePlanImpl<T>::execute(
+  Status ResampleProcessorImpl<T>::execute(
       std::span<const T> input, std::span<T> output)
   {
     if (interpolation_factor_ == 0 || decimation_factor_ == 0
@@ -213,7 +219,8 @@ namespace OmniDSP::Default {
         logger = spdlog::default_logger();
       }
       logger->warn(
-          "Default::ResamplePlanImpl::execute: Plan not properly initialized "
+          "Default::ResampleProcessorImpl::execute: Plan not properly "
+          "initialized "
           "(L/M zero or no polyphase coeffs). L={}, M={}, "
           "PolyphaseBranches={}, BranchTaps={}",
           interpolation_factor_,
@@ -295,7 +302,7 @@ namespace OmniDSP::Default {
   }
 
   template <typename T>
-  Status ResamplePlanImpl<T>::reset()
+  Status ResampleProcessorImpl<T>::reset()
   {
     std::fill(state_.begin(), state_.end(), T{0});
     current_phase_ = 0;
@@ -303,19 +310,19 @@ namespace OmniDSP::Default {
   }
 
   template <typename T>
-  double ResamplePlanImpl<T>::get_input_rate() const
+  double ResampleProcessorImpl<T>::get_input_rate() const
   {
     return spec_.input_rate;
   }
 
   template <typename T>
-  double ResamplePlanImpl<T>::get_output_rate() const
+  double ResampleProcessorImpl<T>::get_output_rate() const
   {
     return spec_.output_rate;
   }
 
   template <typename T>
-  size_t ResamplePlanImpl<T>::get_output_length(size_t input_len) const
+  size_t ResampleProcessorImpl<T>::get_output_length(size_t input_len) const
   {
     if (spec_.input_rate <= 0.0 || spec_.output_rate <= 0.0
         || interpolation_factor_ == 0 || decimation_factor_ == 0) {
@@ -326,7 +333,7 @@ namespace OmniDSP::Default {
            / decimation_factor_;
   }
 
-  template class ResamplePlanImpl<float>;
-  template class ResamplePlanImpl<double>;
+  template class ResampleProcessorImpl<float>;
+  template class ResampleProcessorImpl<double>;
 
 }  // namespace OmniDSP::Default

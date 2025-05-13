@@ -1,15 +1,17 @@
 /**
  * @file iir_filter.cpp (Default)
- * @brief Implements Default backend IIRFilterPlanImpl and IIR design helper.
+ * @brief Implements Default backend IIRFilterProcessorImpl and IIR design
+ * helper.
  */
 
 #include "iir_filter.hpp"  // Corresponding header
 
-#include <OmniDSP/core_types.hpp>    // Core types, Status, OmniExpected
-#include <OmniDSP/filter.hpp>        // Public Design::IIRFilter, IIRFilterCoef
-#include <OmniDSP/types/filter.hpp>  // For FilterType enum
-#include <algorithm>                 // For std::fill, std::min
-#include <cmath>                     // For std::abs
+#include <OmniDSP/coefs/iir_filter.hpp>  // Public Design::IIRFilter, IIRFilterCoef
+#include <OmniDSP/core_types.hpp>        // Core types, Status, OmniExpected
+#include <OmniDSP/design/iir_filter.hpp>  // Public Design::IIRFilter, IIRFilterCoef
+#include <OmniDSP/types/filter.hpp>       // For FilterType enum
+#include <algorithm>                      // For std::fill, std::min
+#include <cmath>                          // For std::abs
 #include <complex>
 #include <expected>
 #include <iostream>
@@ -44,18 +46,18 @@ namespace OmniDSP::Default {
     return std::unexpected(Status::NotImplemented);
   }
 
-  // --- IIRFilterPlanImpl ---
+  // --- IIRFilterProcessorImpl ---
   template <typename T>
-  IIRFilterPlanImpl<T>::IIRFilterPlanImpl(
+  IIRFilterProcessorImpl<T>::IIRFilterProcessorImpl(
       const std::vector<IIRFilterCoef>& sos_coefficients)
   {
     if (sos_coefficients.empty()) {
       auto logger = spdlog::get("OmniDSP");
       if (!logger) logger = spdlog::default_logger();
       logger->error(
-          "Default::IIRFilterPlanImpl: SOS coefficients cannot be empty.");
+          "Default::IIRFilterProcessorImpl: SOS coefficients cannot be empty.");
       throw std::invalid_argument(
-          "IIR SOS coefficients cannot be empty for IIRFilterPlanImpl.");
+          "IIR SOS coefficients cannot be empty for IIRFilterProcessorImpl.");
     }
     internal_coeffs_.reserve(sos_coefficients.size());
     for (const auto& sos_double : sos_coefficients) {
@@ -80,10 +82,10 @@ namespace OmniDSP::Default {
   }
 
   template <typename T>
-  IIRFilterPlanImpl<T>::~IIRFilterPlanImpl() = default;
+  IIRFilterProcessorImpl<T>::~IIRFilterProcessorImpl() = default;
 
   template <typename T>
-  Status IIRFilterPlanImpl<T>::execute(
+  Status IIRFilterProcessorImpl<T>::execute(
       std::span<const T> input, std::span<T> output)
   {
     if (internal_coeffs_.empty()) {
@@ -134,26 +136,26 @@ namespace OmniDSP::Default {
   }
 
   template <typename T>
-  Status IIRFilterPlanImpl<T>::reset()
+  Status IIRFilterProcessorImpl<T>::reset()
   {
     std::fill(state_.begin(), state_.end(), T{0});
     return Status::Success;
   }
 
   template <typename T>
-  size_t IIRFilterPlanImpl<T>::get_order() const
+  size_t IIRFilterProcessorImpl<T>::get_order() const
   {
     return internal_coeffs_.empty() ? 0 : internal_coeffs_.size() * 2;
   }
 
   template <typename T>
-  size_t IIRFilterPlanImpl<T>::get_num_sections() const
+  size_t IIRFilterProcessorImpl<T>::get_num_sections() const
   {
     return internal_coeffs_.size();
   }
 
-  // Explicit template instantiations for IIRFilterPlanImpl
-  template class IIRFilterPlanImpl<F32>;
-  template class IIRFilterPlanImpl<F64>;
+  // Explicit template instantiations for IIRFilterProcessorImpl
+  template class IIRFilterProcessorImpl<F32>;
+  template class IIRFilterProcessorImpl<F64>;
 
 }  // namespace OmniDSP::Default

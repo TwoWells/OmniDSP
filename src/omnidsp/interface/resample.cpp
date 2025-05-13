@@ -1,7 +1,7 @@
 /**
  * @file resample.cpp
- * @brief Implements the ResamplePlan class methods, forwarding calls to backend
- * implementations (Pimpl pattern).
+ * @brief Implements the ResampleProcessor class methods, forwarding calls to
+ * backend implementations (Pimpl pattern).
  */
 
 #include <OmniDSP/core_types.hpp>
@@ -19,28 +19,28 @@
 namespace OmniDSP {
 
   //--------------------------------------------------------------------------
-  // ResamplePlan Method Definitions
+  // ResampleProcessor Method Definitions
   //--------------------------------------------------------------------------
 
   // Private constructor definition is NOW IN THE HEADER (resample.hpp)
   // template <typename T>
-  // ResamplePlan<T>::ResamplePlan(std::unique_ptr<::OmniDSP::Abstract::ResamplePlanImpl<T>>
+  // ResampleProcessor<T>::ResampleProcessor(std::unique_ptr<::OmniDSP::Abstract::ResampleProcessorImpl<T>>
   // pimpl)
   //     : pimpl_(std::move(pimpl)) {
   //   if (!pimpl_) {
   //     throw std::runtime_error(
-  //         "ResamplePlan constructed with null implementation pointer.");
+  //         "ResampleProcessor constructed with null implementation pointer.");
   //   }
   // }
 
   // Static create method definition
   template <typename T>
-  [[nodiscard]] OmniExpected<std::unique_ptr<ResamplePlan<T>>>
-  ResamplePlan<T>::create(
+  [[nodiscard]] OmniExpected<std::unique_ptr<ResampleProcessor<T>>>
+  ResampleProcessor<T>::create(
       const ::OmniDSP::Abstract::Backend& backend,
       const Design::Resample& design)
   {
-    OmniExpected<std::unique_ptr<::OmniDSP::Abstract::ResamplePlanImpl<T>>>
+    OmniExpected<std::unique_ptr<::OmniDSP::Abstract::ResampleProcessorImpl<T>>>
         pimpl_expected;
     if constexpr (std::is_same_v<T, F32>) {
       pimpl_expected = backend.create_resample_plan_impl_f32(design);
@@ -58,29 +58,31 @@ namespace OmniDSP {
 
     // create_from_impl is static and inline in the header, so it's directly
     // usable
-    auto plan
-        = ResamplePlan<T>::create_from_impl(std::move(pimpl_expected.value()));
+    auto plan = ResampleProcessor<T>::create_from_impl(
+        std::move(pimpl_expected.value()));
     if (!plan) {
-      // This could happen if 'new ResamplePlan<T>(...)' in create_from_impl
-      // fails (e.g. bad_alloc) or if pimpl_expected.value() was somehow null
-      // after a successful expected.
+      // This could happen if 'new ResampleProcessor<T>(...)' in
+      // create_from_impl fails (e.g. bad_alloc) or if pimpl_expected.value()
+      // was somehow null after a successful expected.
       return std::unexpected(Status::Failure);
     }
     return plan;
   }
 
   template <typename T>
-  ResamplePlan<T>::~ResamplePlan() = default;
+  ResampleProcessor<T>::~ResampleProcessor() = default;
 
   template <typename T>
-  ResamplePlan<T>::ResamplePlan(ResamplePlan&& other) noexcept = default;
-
-  template <typename T>
-  ResamplePlan<T>& ResamplePlan<T>::operator=(ResamplePlan&& other) noexcept
+  ResampleProcessor<T>::ResampleProcessor(ResampleProcessor&& other) noexcept
       = default;
 
   template <typename T>
-  [[nodiscard]] Status ResamplePlan<T>::execute(
+  ResampleProcessor<T>& ResampleProcessor<T>::operator=(
+      ResampleProcessor&& other) noexcept
+      = default;
+
+  template <typename T>
+  [[nodiscard]] Status ResampleProcessor<T>::execute(
       std::span<const T> input, std::span<T> output)
   {
     if (!pimpl_) {
@@ -90,7 +92,7 @@ namespace OmniDSP {
   }
 
   template <typename T>
-  Status ResamplePlan<T>::reset()
+  Status ResampleProcessor<T>::reset()
   {
     if (!pimpl_) {
       return Status::InvalidOperation;
@@ -99,31 +101,31 @@ namespace OmniDSP {
   }
 
   template <typename T>
-  double ResamplePlan<T>::get_input_rate() const
+  double ResampleProcessor<T>::get_input_rate() const
   {
     if (!pimpl_) {
       throw std::runtime_error(
-          "Invalid ResamplePlan instance in get_input_rate.");
+          "Invalid ResampleProcessor instance in get_input_rate.");
     }
     return pimpl_->get_input_rate();
   }
 
   template <typename T>
-  double ResamplePlan<T>::get_output_rate() const
+  double ResampleProcessor<T>::get_output_rate() const
   {
     if (!pimpl_) {
       throw std::runtime_error(
-          "Invalid ResamplePlan instance in get_output_rate.");
+          "Invalid ResampleProcessor instance in get_output_rate.");
     }
     return pimpl_->get_output_rate();
   }
 
   template <typename T>
-  size_t ResamplePlan<T>::get_output_length(size_t input_length) const
+  size_t ResampleProcessor<T>::get_output_length(size_t input_length) const
   {
     if (!pimpl_) {
       throw std::runtime_error(
-          "Invalid ResamplePlan instance in get_output_length.");
+          "Invalid ResampleProcessor instance in get_output_length.");
     }
     return pimpl_->get_output_length(input_length);
   }
@@ -131,17 +133,17 @@ namespace OmniDSP {
   //--------------------------------------------------------------------------
   // Explicit Template Instantiations
   //--------------------------------------------------------------------------
-  template class OMNIDSP_EXPORT ResamplePlan<F32>;
-  template class OMNIDSP_EXPORT ResamplePlan<F64>;
+  template class OMNIDSP_EXPORT ResampleProcessor<F32>;
+  template class OMNIDSP_EXPORT ResampleProcessor<F64>;
 
   // Explicitly instantiate the static create method
   // The OMNIDSP_EXPORT here ensures visibility if this is part of a shared
   // library.
-  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<ResamplePlan<F32>>>
-  ResamplePlan<F32>::create(
+  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<ResampleProcessor<F32>>>
+  ResampleProcessor<F32>::create(
       const ::OmniDSP::Abstract::Backend&, const Design::Resample&);
-  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<ResamplePlan<F64>>>
-  ResamplePlan<F64>::create(
+  template OMNIDSP_EXPORT OmniExpected<std::unique_ptr<ResampleProcessor<F64>>>
+  ResampleProcessor<F64>::create(
       const ::OmniDSP::Abstract::Backend&, const Design::Resample&);
 
 }  // namespace OmniDSP

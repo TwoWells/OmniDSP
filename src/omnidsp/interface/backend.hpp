@@ -61,9 +61,9 @@ namespace OmniDSP::Abstract {
   };
 
   template <typename T>  // TODO: Rename to ResampleProcessorImpl
-  class ResamplePlanImpl {
+  class ResampleProcessorImpl {
    public:
-    virtual ~ResamplePlanImpl() = default;
+    virtual ~ResampleProcessorImpl() = default;
     [[nodiscard]] virtual Status execute(
         std::span<const T> input, std::span<T> output)
         = 0;
@@ -102,9 +102,9 @@ namespace OmniDSP::Abstract {
   };
 
   template <typename T>  // TODO: Rename to FIRFilterProcessorImpl
-  class FIRFilterPlanImpl {
+  class FIRFilterProcessorImpl {
    public:
-    virtual ~FIRFilterPlanImpl() = default;
+    virtual ~FIRFilterProcessorImpl() = default;
     [[nodiscard]] virtual Status execute(
         std::span<const T> input, std::span<T> output)
         = 0;
@@ -114,9 +114,9 @@ namespace OmniDSP::Abstract {
   };
 
   template <typename T>  // TODO: Rename to IIRFilterProcessorImpl
-  class IIRFilterPlanImpl {
+  class IIRFilterProcessorImpl {
    public:
-    virtual ~IIRFilterPlanImpl() = default;
+    virtual ~IIRFilterProcessorImpl() = default;
     [[nodiscard]] virtual Status execute(
         std::span<const T> input, std::span<T> output)
         = 0;
@@ -126,10 +126,10 @@ namespace OmniDSP::Abstract {
   };
 
   template <typename T>  // TODO: Rename to CQTProcessorImpl
-  class CQTPlanImpl {
+  class CQTProcessorImpl {
    public:
     using Complex = Utils::GetComplexType<T>;
-    virtual ~CQTPlanImpl() = default;
+    virtual ~CQTProcessorImpl() = default;
     [[nodiscard]] virtual Status execute(
         std::span<const T> input, std::span<Complex> output) const
         = 0;
@@ -249,14 +249,16 @@ namespace OmniDSP::Abstract {
     [[nodiscard]] virtual OmniExpected<std::unique_ptr<RFFTPlanImpl<F64>>>
     create_rfft_plan_impl_f64(size_t length) const = 0;
 
-    [[nodiscard]] virtual OmniExpected<std::unique_ptr<CQTPlanImpl<F32>>>
+    [[nodiscard]] virtual OmniExpected<std::unique_ptr<CQTProcessorImpl<F32>>>
     create_cqt_plan_impl_f32(const Design::CQT& design) const = 0;
-    [[nodiscard]] virtual OmniExpected<std::unique_ptr<CQTPlanImpl<F64>>>
+    [[nodiscard]] virtual OmniExpected<std::unique_ptr<CQTProcessorImpl<F64>>>
     create_cqt_plan_impl_f64(const Design::CQT& design) const = 0;
 
-    [[nodiscard]] virtual OmniExpected<std::unique_ptr<ResamplePlanImpl<F32>>>
+    [[nodiscard]] virtual OmniExpected<
+        std::unique_ptr<ResampleProcessorImpl<F32>>>
     create_resample_plan_impl_f32(const Design::Resample& design) const = 0;
-    [[nodiscard]] virtual OmniExpected<std::unique_ptr<ResamplePlanImpl<F64>>>
+    [[nodiscard]] virtual OmniExpected<
+        std::unique_ptr<ResampleProcessorImpl<F64>>>
     create_resample_plan_impl_f64(const Design::Resample& design) const = 0;
 
     [[nodiscard]] virtual OmniExpected<
@@ -317,20 +319,26 @@ namespace OmniDSP::Abstract {
         ConvolutionMethod method) const
         = 0;
 
-    [[nodiscard]] virtual OmniExpected<std::unique_ptr<FIRFilterPlanImpl<F32>>>
+    [[nodiscard]] virtual OmniExpected<
+        std::unique_ptr<FIRFilterProcessorImpl<F32>>>
     create_fir_filter_plan_impl_f32(const F32Vec& coefficients) const = 0;
-    [[nodiscard]] virtual OmniExpected<std::unique_ptr<FIRFilterPlanImpl<F64>>>
+    [[nodiscard]] virtual OmniExpected<
+        std::unique_ptr<FIRFilterProcessorImpl<F64>>>
     create_fir_filter_plan_impl_f64(const F64Vec& coefficients) const = 0;
-    [[nodiscard]] virtual OmniExpected<std::unique_ptr<FIRFilterPlanImpl<C32>>>
+    [[nodiscard]] virtual OmniExpected<
+        std::unique_ptr<FIRFilterProcessorImpl<C32>>>
     create_fir_filter_plan_impl_c32(const C32Vec& coefficients) const = 0;
-    [[nodiscard]] virtual OmniExpected<std::unique_ptr<FIRFilterPlanImpl<C64>>>
+    [[nodiscard]] virtual OmniExpected<
+        std::unique_ptr<FIRFilterProcessorImpl<C64>>>
     create_fir_filter_plan_impl_c64(const C64Vec& coefficients) const = 0;
 
-    [[nodiscard]] virtual OmniExpected<std::unique_ptr<IIRFilterPlanImpl<F32>>>
+    [[nodiscard]] virtual OmniExpected<
+        std::unique_ptr<IIRFilterProcessorImpl<F32>>>
     create_iir_filter_plan_impl_f32(
         const std::vector<IIRFilterCoef>& sos_coefficients) const
         = 0;
-    [[nodiscard]] virtual OmniExpected<std::unique_ptr<IIRFilterPlanImpl<F64>>>
+    [[nodiscard]] virtual OmniExpected<
+        std::unique_ptr<IIRFilterProcessorImpl<F64>>>
     create_iir_filter_plan_impl_f64(
         const std::vector<IIRFilterCoef>& sos_coefficients) const
         = 0;

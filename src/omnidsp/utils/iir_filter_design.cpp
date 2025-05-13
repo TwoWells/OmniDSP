@@ -8,8 +8,8 @@
 
 #include <stdexcept>
 
-#include "OmniDSP/core_types.hpp"  // For OmniExpected, Status
-#include "OmniDSP/filter.hpp"      // For Design::IIRFilter
+#include "OmniDSP/core_types.hpp"         // For OmniExpected, Status
+#include "OmniDSP/design/iir_filter.hpp"  // For Design::IIRFilter
 #include "OmniDSP/params/iir_filter.hpp"
 #include "OmniDSP/utils.hpp"  // For the public declaration of Utils::create_spec
 

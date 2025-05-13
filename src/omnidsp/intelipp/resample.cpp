@@ -1,7 +1,7 @@
 /**
  * @file resample.cpp (IntelIPP)
- * @brief Implements the Intel IPP backend ResamplePlanImpl class using Intel
- * IPP FIRMR.
+ * @brief Implements the Intel IPP backend ResampleProcessorImpl class using
+ * Intel IPP FIRMR.
  */
 
 #include "resample.hpp"  // Include the corresponding header file
@@ -9,7 +9,7 @@
 #include <ipps.h>  // For IPP functions
 
 #include <OmniDSP/core_types.hpp>  // For Status, OmniException, F32, F64, FIRCoefs
-#include <OmniDSP/filter.hpp>  // For Design::FIRFilter (part of Design::Resample)
+#include <OmniDSP/design/fir_filter.hpp>  // For Design::FIRFilter (part of Design::Resample)
 #include <OmniDSP/resample.hpp>  // For Design::Resample definition
 
 #include "details.hpp"  // Include the intelipp utility header for IPP status checks and type helpers
@@ -34,11 +34,11 @@
 namespace OmniDSP::IntelIPP {
 
   //--------------------------------------------------------------------------
-  // ResamplePlanImpl Method Definitions
+  // ResampleProcessorImpl Method Definitions
   //--------------------------------------------------------------------------
 
   template <typename T>
-  ResamplePlanImpl<T>::ResamplePlanImpl(
+  ResampleProcessorImpl<T>::ResampleProcessorImpl(
       const Abstract::Backend* owner, const Design::Resample& spec)
       : spec_(spec),  // Initialize the spec_ member
         input_rate_(spec.input_rate),
@@ -54,7 +54,7 @@ namespace OmniDSP::IntelIPP {
 
     if (!owner) {
       std::string msg
-          = "IntelIPP::ResamplePlanImpl requires a non-null owner backend "
+          = "IntelIPP::ResampleProcessorImpl requires a non-null owner backend "
             "pointer.";
       logger->error(msg);
       throw OmniException(msg, Status::InvalidArgument);
@@ -67,7 +67,7 @@ namespace OmniDSP::IntelIPP {
     size_t M = spec_.down_factor_M;  // Use spec_ member
 
     if (L == 0 || M == 0) {
-      std::string msg = "IntelIPP::ResamplePlanImpl: Resampling factors L="
+      std::string msg = "IntelIPP::ResampleProcessorImpl: Resampling factors L="
                         + std::to_string(L) + " or M=" + std::to_string(M)
                         + " from spec are zero.";
       logger->error(msg);
@@ -92,7 +92,8 @@ namespace OmniDSP::IntelIPP {
     }
     else {
       std::string msg
-          = "IntelIPP::ResamplePlanImpl: Unsupported data type for prototype "
+          = "IntelIPP::ResampleProcessorImpl: Unsupported data type for "
+            "prototype "
             "filter design.";
       logger->critical(msg);
       throw OmniException(msg, Status::UnsupportedFeature);
@@ -100,7 +101,8 @@ namespace OmniDSP::IntelIPP {
 
     if (!coeffs_expected) {
       std::string msg
-          = "IntelIPP::ResamplePlanImpl: Failed to design internal prototype "
+          = "IntelIPP::ResampleProcessorImpl: Failed to design internal "
+            "prototype "
             "filter using owner backend. Status: "
             + std::string(get_status_string(coeffs_expected.error()));
       logger->error(msg);
@@ -110,7 +112,7 @@ namespace OmniDSP::IntelIPP {
     FIRCoefs<T> pTaps_unscaled = std::move(coeffs_expected.value());
     if (pTaps_unscaled.empty()) {
       std::string msg
-          = "IntelIPP::ResamplePlanImpl: Internal prototype filter design "
+          = "IntelIPP::ResampleProcessorImpl: Internal prototype filter design "
             "resulted in empty coefficients.";
       logger->error(msg);
       throw OmniException(msg, Status::Failure);
@@ -135,7 +137,7 @@ namespace OmniDSP::IntelIPP {
       // This path should be unreachable due to static_assert in header, but
       // defensive programming.
       std::string msg
-          = "IntelIPP::ResamplePlanImpl: Unsupported data type T in "
+          = "IntelIPP::ResampleProcessorImpl: Unsupported data type T in "
             "constructor.";
       logger->critical(msg);  // Should not happen
       throw OmniException(msg, Status::UnsupportedFeature);
@@ -165,7 +167,8 @@ namespace OmniDSP::IntelIPP {
       p_spec_mem_ = nullptr;
       p_buffer_ = nullptr;
       std::string msg
-          = "IntelIPP::ResamplePlanImpl: Failed to allocate memory for IPP "
+          = "IntelIPP::ResampleProcessorImpl: Failed to allocate memory for "
+            "IPP "
             "FIRMR spec or buffer.";
       logger->error(msg);
       throw OmniException(msg, Status::AllocationError);
@@ -208,7 +211,7 @@ namespace OmniDSP::IntelIPP {
     }
 
     logger->debug(
-        "IntelIPP::ResamplePlanImpl created: IR={}, OR={}, Q={}, Taps={}, "
+        "IntelIPP::ResampleProcessorImpl created: IR={}, OR={}, Q={}, Taps={}, "
         "L={}, M={}",
         input_rate_,
         output_rate_,
@@ -219,16 +222,16 @@ namespace OmniDSP::IntelIPP {
   }
 
   template <typename T>
-  ResamplePlanImpl<T>::~ResamplePlanImpl()
+  ResampleProcessorImpl<T>::~ResampleProcessorImpl()
   {
     ippsFree(p_spec_mem_);
     ippsFree(p_buffer_);
     // auto logger = spdlog::get("OmniDSP");
-    // if (logger) logger->trace("IntelIPP::ResamplePlanImpl destructed.");
+    // if (logger) logger->trace("IntelIPP::ResampleProcessorImpl destructed.");
   }
 
   template <typename T>
-  Status ResamplePlanImpl<T>::execute(
+  Status ResampleProcessorImpl<T>::execute(
       std::span<const T> input, std::span<T> output)
   {
     if (!p_ipp_fir_spec_) {
@@ -250,7 +253,8 @@ namespace OmniDSP::IntelIPP {
         logger = spdlog::default_logger();
       }
       logger->warn(
-          "IntelIPP::ResamplePlanImpl::execute: numOutputSamples ({}) is zero "
+          "IntelIPP::ResampleProcessorImpl::execute: numOutputSamples ({}) is "
+          "zero "
           "or negative but input exists ({} samples). Output span might be too "
           "small.",
           numOutputSamples,
@@ -288,7 +292,7 @@ namespace OmniDSP::IntelIPP {
   }
 
   template <typename T>
-  Status ResamplePlanImpl<T>::reset()
+  Status ResampleProcessorImpl<T>::reset()
   {
     if (!p_ipp_fir_spec_) {
       return Status::NotInitialized;
@@ -302,13 +306,15 @@ namespace OmniDSP::IntelIPP {
       IppStatus ipp_status = ippsZero_8u(p_buffer_, buffer_size_);
       if (ipp_status != ippStsNoErr) {
         logger->warn(
-            "IntelIPP::ResamplePlanImpl::reset: Failed to zero work buffer, "
+            "IntelIPP::ResampleProcessorImpl::reset: Failed to zero work "
+            "buffer, "
             "IPP status: {}",
             static_cast<int>(ipp_status));
       }
     }
     logger->debug(
-        "IntelIPP::ResamplePlanImpl::reset() called. Work buffer zeroed (if "
+        "IntelIPP::ResampleProcessorImpl::reset() called. Work buffer zeroed "
+        "(if "
         "exists). "
         "Note: True internal filter state reset for IPP FIRMR typically "
         "requires re-initialization of the spec.");
@@ -316,19 +322,19 @@ namespace OmniDSP::IntelIPP {
   }
 
   template <typename T>
-  double ResamplePlanImpl<T>::get_input_rate() const
+  double ResampleProcessorImpl<T>::get_input_rate() const
   {
     return input_rate_;
   }
 
   template <typename T>
-  double ResamplePlanImpl<T>::get_output_rate() const
+  double ResampleProcessorImpl<T>::get_output_rate() const
   {
     return output_rate_;
   }
 
   template <typename T>
-  size_t ResamplePlanImpl<T>::get_output_length(size_t input_length) const
+  size_t ResampleProcessorImpl<T>::get_output_length(size_t input_length) const
   {
     if (input_rate_ <= 0.0 || output_rate_ <= 0.0 || input_length == 0) {
       return 0;
@@ -342,7 +348,7 @@ namespace OmniDSP::IntelIPP {
     return (input_length * L + M - 1) / M;
   }
 
-  template class ResamplePlanImpl<float>;
-  template class ResamplePlanImpl<double>;
+  template class ResampleProcessorImpl<float>;
+  template class ResampleProcessorImpl<double>;
 
 }  // namespace OmniDSP::IntelIPP

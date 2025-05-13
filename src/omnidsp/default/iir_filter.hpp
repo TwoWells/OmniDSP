@@ -1,14 +1,14 @@
 /**
  * @file iir_filter.hpp (Default)
- * @brief Declares the concrete IIRFilterPlanImpl class and IIR design helpers
- * for the Default backend.
+ * @brief Declares the concrete IIRFilterProcessorImpl class and IIR design
+ * helpers for the Default backend.
  */
 
 #ifndef OMNIDSP_DEFAULT_IIR_FILTER_HPP
 #define OMNIDSP_DEFAULT_IIR_FILTER_HPP
 
 #include <OmniDSP/core_types.hpp>  // Status, F32, F64, OmniExpected
-#include <OmniDSP/filter.hpp>  // For Design::IIRFilter, IIRFilterCoef (public specs)
+#include <OmniDSP/iir_filter.hpp>  // For Design::IIRFilter, IIRFilterCoef (public specs)
 #include <complex>
 #include <cstddef>  // For size_t
 #include <span>     // For std::span
@@ -25,7 +25,8 @@ namespace OmniDSP::Default {
    * @tparam T The data type (typically F32 or F64).
    */
   template <typename T>
-  class IIRFilterPlanImpl final : public Abstract::IIRFilterPlanImpl<T> {
+  class IIRFilterProcessorImpl final
+      : public Abstract::IIRFilterProcessorImpl<T> {
    private:
     // Private struct to hold coefficients of the correct type T
     template <typename Type>
@@ -39,24 +40,24 @@ namespace OmniDSP::Default {
 
    public:
     /**
-     * @brief Constructs an IIRFilterPlanImpl from second-order sections.
+     * @brief Constructs an IIRFilterProcessorImpl from second-order sections.
      * @param sos_coefficients A vector of IIRFilterCoef representing the filter
      * sections.
      * @throws std::invalid_argument if sos_coefficients vector is empty.
      */
-    explicit IIRFilterPlanImpl(
+    explicit IIRFilterProcessorImpl(
         const std::vector<IIRFilterCoef>& sos_coefficients);
 
     /**
      * @brief Destructor.
      */
-    ~IIRFilterPlanImpl() override;
+    ~IIRFilterProcessorImpl() override;
 
     // --- Disable Copy/Move ---
-    IIRFilterPlanImpl(const IIRFilterPlanImpl&) = delete;
-    IIRFilterPlanImpl& operator=(const IIRFilterPlanImpl&) = delete;
-    IIRFilterPlanImpl(IIRFilterPlanImpl&&) = delete;
-    IIRFilterPlanImpl& operator=(IIRFilterPlanImpl&&) = delete;
+    IIRFilterProcessorImpl(const IIRFilterProcessorImpl&) = delete;
+    IIRFilterProcessorImpl& operator=(const IIRFilterProcessorImpl&) = delete;
+    IIRFilterProcessorImpl(IIRFilterProcessorImpl&&) = delete;
+    IIRFilterProcessorImpl& operator=(IIRFilterProcessorImpl&&) = delete;
 
     // --- Interface Methods Implementation ---
     [[nodiscard]] Status execute(
@@ -82,8 +83,8 @@ namespace OmniDSP::Default {
   generate_iir_filter_coeffs(const Design::IIRFilter& spec);
 
   // Explicit template instantiations (declarations for linking)
-  extern template class IIRFilterPlanImpl<F32>;
-  extern template class IIRFilterPlanImpl<F64>;
+  extern template class IIRFilterProcessorImpl<F32>;
+  extern template class IIRFilterProcessorImpl<F64>;
 
   // No instantiation for generate_iir_filter_coeffs as it's not templated on T
 

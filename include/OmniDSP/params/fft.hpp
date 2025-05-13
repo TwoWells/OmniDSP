@@ -11,7 +11,6 @@
 #include <string>     // For std::string in validation messages
 
 #include "OmniDSP/core_types.hpp"  // For logging (spdlog is included in .cpp)
-#include "OmniDSP/omnidsp_export.hpp"  // For OMNIDSP_EXPORT
 
 // spdlog include is deferred to .cpp
 

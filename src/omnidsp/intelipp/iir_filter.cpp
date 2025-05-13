@@ -21,8 +21,8 @@
 #include "details.hpp"
 
 // Include OmniDSP headers
-#include <OmniDSP/core_types.hpp>  // Defines OmniException, Status etc.
-#include <OmniDSP/filter.hpp>      // Defines IIRFilterCoef
+#include <OmniDSP/coefs/iir_filter.hpp>  // Defines IIRFilterCoef
+#include <OmniDSP/core_types.hpp>        // Defines OmniException, Status etc.
 
 namespace OmniDSP::IntelIPP {
 
@@ -31,7 +31,7 @@ namespace OmniDSP::IntelIPP {
   //--------------------------------------------------------------------------
 
   template <typename T>
-  IIRFilterPlanImpl<T>::IIRFilterPlanImpl(
+  IIRFilterProcessorImpl<T>::IIRFilterProcessorImpl(
       const std::vector<IIRFilterCoef>& sos_coefficients)
       : num_sections_(sos_coefficients.size()),
         order_(sos_coefficients.empty() ? 0 : sos_coefficients.size() * 2),
@@ -146,14 +146,14 @@ namespace OmniDSP::IntelIPP {
   }
 
   template <typename T>
-  IIRFilterPlanImpl<T>::~IIRFilterPlanImpl()
+  IIRFilterProcessorImpl<T>::~IIRFilterProcessorImpl()
   {
     // No explicit free needed, state_mem_ vector handles memory
     p_state_ = nullptr;
   }
 
   template <typename T>
-  Status IIRFilterPlanImpl<T>::execute(
+  Status IIRFilterProcessorImpl<T>::execute(
       std::span<const T> input, std::span<T> output)
   {
     if (!p_state_ && state_size_bytes_ > 0)
@@ -182,7 +182,7 @@ namespace OmniDSP::IntelIPP {
   }
 
   template <typename T>
-  Status IIRFilterPlanImpl<T>::reset()
+  Status IIRFilterProcessorImpl<T>::reset()
   {
     if (!p_state_ && state_size_bytes_ > 0) return Status::NotInitialized;
     if (!p_state_)
@@ -209,19 +209,19 @@ namespace OmniDSP::IntelIPP {
   }
 
   template <typename T>
-  size_t IIRFilterPlanImpl<T>::get_order() const /* noexcept */
+  size_t IIRFilterProcessorImpl<T>::get_order() const /* noexcept */
   {
     return order_;
   }
 
   template <typename T>
-  size_t IIRFilterPlanImpl<T>::get_num_sections() const /* noexcept */
+  size_t IIRFilterProcessorImpl<T>::get_num_sections() const /* noexcept */
   {
     return num_sections_;
   }
 
   // --- Explicit Template Instantiations for IIR ---
-  template class IIRFilterPlanImpl<F32>;
-  template class IIRFilterPlanImpl<F64>;
+  template class IIRFilterProcessorImpl<F32>;
+  template class IIRFilterProcessorImpl<F64>;
 
 }  // namespace OmniDSP::IntelIPP

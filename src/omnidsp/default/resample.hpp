@@ -1,18 +1,19 @@
 /**
  * @file resample.hpp (Default)
- * @brief Declares the concrete ResamplePlanImpl class for the Default backend.
+ * @brief Declares the concrete ResampleProcessorImpl class for the Default
+ * backend.
  */
 
 #ifndef OMNIDSP_DEFAULT_RESAMPLE_HPP
 #define OMNIDSP_DEFAULT_RESAMPLE_HPP
 
 #include <OmniDSP/core_types.hpp>  // For Status, F32, F64
-#include <OmniDSP/filter.hpp>  // For Design::FIRFilter (used by design_filter indirectly)
-#include <OmniDSP/resample.hpp>  // For Design::Resample
-#include <OmniDSP/window.hpp>    // For WindowSetup (used by Design::Resample)
-#include <cstddef>               // For size_t
-#include <memory>                // For std::unique_ptr
-#include <span>                  // For std::span
+#include <OmniDSP/design/fir_filter.hpp>  // For Design::FIRFilter (used by design_filter indirectly)
+#include <OmniDSP/design/resample.hpp>  // For Design::Resample
+#include <OmniDSP/window.hpp>  // For WindowSetup (used by Design::Resample)
+#include <cstddef>             // For size_t
+#include <memory>              // For std::unique_ptr
+#include <span>                // For std::span
 #include <vector>
 
 #include "../interface/backend.hpp"  // For Abstract::ResamplePlanImpl base class
@@ -21,8 +22,9 @@
 namespace OmniDSP::Default {
 
   // Forward declare FIR plan if used internally (not directly by this class's
-  // public interface) template <typename T> class FIRFilterPlanImpl; // Not
-  // strictly needed if only design_fir_filter_fXX is called on owner_backend_
+  // public interface) template <typename T> class FIRFilterProcessorImpl; //
+  // Not strictly needed if only design_fir_filter_fXX is called on
+  // owner_backend_
 
   /**
    * @brief Default backend implementation for a Resampling Plan.
@@ -31,10 +33,11 @@ namespace OmniDSP::Default {
    * @tparam T The REAL data type (F32 or F64).
    */
   template <typename T>
-  class ResamplePlanImpl final : public Abstract::ResamplePlanImpl<T> {
+  class ResampleProcessorImpl final
+      : public Abstract::ResampleProcessorImpl<T> {
    public:
     /**
-     * @brief Constructs a ResamplePlanImpl.
+     * @brief Constructs a ResampleProcessorImpl.
      * @param owner_backend Pointer to the backend instance creating this plan
      * (needed for filter design).
      * @param spec The resampling specification (input rate, output rate,
@@ -43,19 +46,19 @@ namespace OmniDSP::Default {
      * owner_backend is null.
      * @throws std::runtime_error if filter design or internal setup fails.
      */
-    ResamplePlanImpl(
+    ResampleProcessorImpl(
         const Abstract::Backend* owner_backend, const Design::Resample& spec);
 
     /**
      * @brief Destructor.
      */
-    ~ResamplePlanImpl() override;
+    ~ResampleProcessorImpl() override;
 
     // --- Disable Copy/Move ---
-    ResamplePlanImpl(const ResamplePlanImpl&) = delete;
-    ResamplePlanImpl& operator=(const ResamplePlanImpl&) = delete;
-    ResamplePlanImpl(ResamplePlanImpl&&) = delete;
-    ResamplePlanImpl& operator=(ResamplePlanImpl&&) = delete;
+    ResampleProcessorImpl(const ResampleProcessorImpl&) = delete;
+    ResampleProcessorImpl& operator=(const ResampleProcessorImpl&) = delete;
+    ResampleProcessorImpl(ResampleProcessorImpl&&) = delete;
+    ResampleProcessorImpl& operator=(ResampleProcessorImpl&&) = delete;
 
     // --- Interface Methods Implementation ---
     [[nodiscard]] Status execute(
@@ -102,8 +105,8 @@ namespace OmniDSP::Default {
 
   // --- Explicit Template Instantiations (Declaration) ---
   // These should match the ones in the .cpp file.
-  extern template class ResamplePlanImpl<F32>;
-  extern template class ResamplePlanImpl<F64>;
+  extern template class ResampleProcessorImpl<F32>;
+  extern template class ResampleProcessorImpl<F64>;
 
 }  // namespace OmniDSP::Default
 
