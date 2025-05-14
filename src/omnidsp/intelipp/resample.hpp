@@ -49,9 +49,9 @@ namespace OmniDSP::IntelIPP {
     ResampleProcessorImpl& operator=(ResampleProcessorImpl&&) = delete;
 
     // --- Interface Methods ---
-    [[nodiscard]] Status execute(
+    [[nodiscard]] OmniStatus execute(
         std::span<const T> input, std::span<T> output) override;
-    [[nodiscard]] Status reset() override;
+    [[nodiscard]] OmniStatus reset() override;
     double get_input_rate() const override;
     double get_output_rate() const override;
     size_t get_output_length(size_t input_length) const override;

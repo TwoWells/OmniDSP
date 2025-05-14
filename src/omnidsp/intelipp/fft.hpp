@@ -312,11 +312,11 @@ namespace OmniDSP::IntelIPP {
     FFTPlanImpl(FFTPlanImpl&&) = delete;
     FFTPlanImpl& operator=(FFTPlanImpl&&) = delete;
 
-    [[nodiscard]] Status fft(  // Use 'fft' to match abstract base
+    [[nodiscard]] OmniStatus fft(  // Use 'fft' to match abstract base
         std::span<const T_Complex> input,
         std::span<T_Complex> output) const override;
 
-    [[nodiscard]] Status ifft(  // Use 'ifft' to match abstract base
+    [[nodiscard]] OmniStatus ifft(  // Use 'ifft' to match abstract base
         std::span<const T_Complex> input,
         std::span<T_Complex> output) const override;
 
@@ -357,11 +357,11 @@ namespace OmniDSP::IntelIPP {
     RFFTPlanImpl(RFFTPlanImpl&&) = delete;
     RFFTPlanImpl& operator=(RFFTPlanImpl&&) = delete;
 
-    [[nodiscard]] Status rfft(  // Use 'rfft' to match abstract base
+    [[nodiscard]] OmniStatus rfft(  // Use 'rfft' to match abstract base
         std::span<const T_Real> input,
         std::span<T_Complex> output) const override;
 
-    [[nodiscard]] Status irfft(  // Use 'irfft' to match abstract base
+    [[nodiscard]] OmniStatus irfft(  // Use 'irfft' to match abstract base
         std::span<const T_Complex> input,
         std::span<T_Real> output) const override;
 

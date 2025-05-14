@@ -27,14 +27,15 @@ namespace OmniDSP::Default {
   //--------------------------------------------------------------------------
 
   template <typename T>
-  [[nodiscard]] Status bartlett_window(std::span<T> output)
+  [[nodiscard]] OmniStatus bartlett_window(std::span<T> output)
   {
     const size_t length = output.size();
-    if (length == 0) return Status::Success;  // Nothing to do for zero length
+    if (length == 0)
+      return OmniStatus::Success;  // Nothing to do for zero length
 
     if (length == 1) {
       output[0] = static_cast<T>(1.0);
-      return Status::Success;
+      return OmniStatus::Success;
     }
 
     const T N_minus_1 = static_cast<T>(length - 1);
@@ -44,7 +45,7 @@ namespace OmniDSP::Default {
       std::cerr
           << "Default BackendType Error: Invalid length in bartlett_window."
           << std::endl;
-      return Status::Failure;
+      return OmniStatus::Failure;
     }
     const T factor = static_cast<T>(2.0) / N_minus_1;
 
@@ -54,18 +55,18 @@ namespace OmniDSP::Default {
       output[n] = static_cast<T>(1.0)
                   - std::abs(factor * static_cast<T>(n) - static_cast<T>(1.0));
     }
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   template <typename T>
-  [[nodiscard]] Status blackman_window(std::span<T> output)
+  [[nodiscard]] OmniStatus blackman_window(std::span<T> output)
   {
     const size_t length = output.size();
-    if (length == 0) return Status::Success;
+    if (length == 0) return OmniStatus::Success;
     if (length == 1) {
       output[0]
           = static_cast<T>(1.0);  // Or 0.0 depending on definition? Usually 1.0
-      return Status::Success;
+      return OmniStatus::Success;
     }
 
     const T a0 = static_cast<T>(0.42);
@@ -83,17 +84,17 @@ namespace OmniDSP::Default {
       output[n]
           = a0 - a1 * std::cos(factor1 * n_T) + a2 * std::cos(factor2 * n_T);
     }
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   template <typename T>
-  [[nodiscard]] Status flattop_window(std::span<T> output)
+  [[nodiscard]] OmniStatus flattop_window(std::span<T> output)
   {
     const size_t length = output.size();
-    if (length == 0) return Status::Success;
+    if (length == 0) return OmniStatus::Success;
     if (length == 1) {
       output[0] = static_cast<T>(1.0);  // Flat top value at center
-      return Status::Success;
+      return OmniStatus::Success;
     }
 
     // Standard coefficients (from Wikipedia/SciPy)
@@ -115,25 +116,25 @@ namespace OmniDSP::Default {
                   - a3 * std::cos(static_cast<T>(3.0) * factor * n_T)
                   + a4 * std::cos(static_cast<T>(4.0) * factor * n_T);
     }
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   template <typename T>
-  [[nodiscard]] Status gaussian_window(T stddev, std::span<T> output)
+  [[nodiscard]] OmniStatus gaussian_window(T stddev, std::span<T> output)
   {
     const size_t length = output.size();
-    if (length == 0) return Status::Success;
+    if (length == 0) return OmniStatus::Success;
 
     if (stddev <= static_cast<T>(0.0)) {
       std::cerr << "Default BackendType Error: Gaussian window standard "
                    "deviation must be positive."
                 << std::endl;
-      return Status::InvalidArgument;
+      return OmniStatus::InvalidArgument;
     }
 
     if (length == 1) {
       output[0] = static_cast<T>(1.0);
-      return Status::Success;
+      return OmniStatus::Success;
     }
 
     const T N_minus_1 = static_cast<T>(length - 1);
@@ -145,7 +146,7 @@ namespace OmniDSP::Default {
       std::cerr
           << "Default BackendType Error: Invalid sigma term in gaussian_window."
           << std::endl;
-      return Status::Failure;  // Should not happen
+      return OmniStatus::Failure;  // Should not happen
     }
     const T factor = static_cast<T>(-0.5) / (sigma_term * sigma_term);
 
@@ -153,17 +154,17 @@ namespace OmniDSP::Default {
       T exponent = static_cast<T>(n) - center;
       output[n] = std::exp(factor * exponent * exponent);
     }
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   template <typename T>
-  [[nodiscard]] Status hamming_window(std::span<T> output)
+  [[nodiscard]] OmniStatus hamming_window(std::span<T> output)
   {
     const size_t length = output.size();
-    if (length == 0) return Status::Success;
+    if (length == 0) return OmniStatus::Success;
     if (length == 1) {
       output[0] = static_cast<T>(1.0);  // Or 0.08? Usually 1.0 at center
-      return Status::Success;
+      return OmniStatus::Success;
     }
 
     const T a0 = static_cast<T>(0.54);
@@ -177,17 +178,17 @@ namespace OmniDSP::Default {
     for (size_t n = 0; n < length; ++n) {
       output[n] = a0 - a1 * std::cos(factor * static_cast<T>(n));
     }
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   template <typename T>
-  [[nodiscard]] Status hann_window(std::span<T> output)
+  [[nodiscard]] OmniStatus hann_window(std::span<T> output)
   {
     const size_t length = output.size();
-    if (length == 0) return Status::Success;
+    if (length == 0) return OmniStatus::Success;
     if (length == 1) {
       output[0] = static_cast<T>(1.0);  // Or 0.0? Usually 1.0 at center
-      return Status::Success;
+      return OmniStatus::Success;
     }
 
     const T N_minus_1 = static_cast<T>(length - 1);
@@ -201,26 +202,26 @@ namespace OmniDSP::Default {
           = static_cast<T>(0.5)
             * (static_cast<T>(1.0) - std::cos(factor * static_cast<T>(n)));
     }
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   template <typename T>
-  [[nodiscard]] Status kaiser_window(T beta, std::span<T> output)
+  [[nodiscard]] OmniStatus kaiser_window(T beta, std::span<T> output)
   {
     const size_t length = output.size();
-    if (length == 0) return Status::Success;
+    if (length == 0) return OmniStatus::Success;
 
     if (beta < static_cast<T>(0.0)) {
       std::cerr
           << "Default BackendType Error: Kaiser window beta parameter must "
              "be non-negative."
           << std::endl;
-      return Status::InvalidArgument;
+      return OmniStatus::InvalidArgument;
     }
 
     if (length == 1) {
       output[0] = static_cast<T>(1.0);
-      return Status::Success;
+      return OmniStatus::Success;
     }
 
     // Use double precision for Bessel function calculation for stability
@@ -235,7 +236,7 @@ namespace OmniDSP::Default {
       std::cerr << "Default BackendType Error: Kaiser window denominator "
                    "I0(beta) is zero for non-zero beta."
                 << std::endl;
-      return Status::Failure;  // Mathematical issue
+      return OmniStatus::Failure;  // Mathematical issue
     }
     const T inv_denom = static_cast<T>(1.0 / bessel_i0_beta);
     const T N_minus_1 = static_cast<T>(length - 1);
@@ -255,25 +256,25 @@ namespace OmniDSP::Default {
                       0.0, static_cast<double>(bessel_arg)))
                   * inv_denom;
     }
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   template <typename T>
-  [[nodiscard]] Status rectangular_window(std::span<T> output)
+  [[nodiscard]] OmniStatus rectangular_window(std::span<T> output)
   {
     // Fill the span with 1.0
     std::fill_n(output.begin(), output.size(), static_cast<T>(1.0));
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   template <typename T>
-  [[nodiscard]] Status triangular_window(std::span<T> output)
+  [[nodiscard]] OmniStatus triangular_window(std::span<T> output)
   {
     const size_t length = output.size();
-    if (length == 0) return Status::Success;
+    if (length == 0) return OmniStatus::Success;
     if (length == 1) {
       output[0] = static_cast<T>(1.0);
-      return Status::Success;
+      return OmniStatus::Success;
     }
 
     const T L = static_cast<T>(length);
@@ -285,7 +286,7 @@ namespace OmniDSP::Default {
       std::cerr << "Default BackendType Error: Invalid normalization factor in "
                    "triangular_window."
                 << std::endl;
-      return Status::Failure;
+      return OmniStatus::Failure;
     }
 
     for (size_t n = 0; n < length; ++n) {
@@ -293,27 +294,27 @@ namespace OmniDSP::Default {
       output[n]
           = static_cast<T>(1.0) - std::abs(static_cast<T>(n) - center) / norm;
     }
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   // --- Explicit Template Instantiations ---
-  template Status bartlett_window<F32>(std::span<F32> output);
-  template Status bartlett_window<F64>(std::span<F64> output);
-  template Status blackman_window<F32>(std::span<F32> output);
-  template Status blackman_window<F64>(std::span<F64> output);
-  template Status flattop_window<F32>(std::span<F32> output);
-  template Status flattop_window<F64>(std::span<F64> output);
-  template Status hamming_window<F32>(std::span<F32> output);
-  template Status hamming_window<F64>(std::span<F64> output);
-  template Status hann_window<F32>(std::span<F32> output);
-  template Status hann_window<F64>(std::span<F64> output);
-  template Status rectangular_window<F32>(std::span<F32> output);
-  template Status rectangular_window<F64>(std::span<F64> output);
-  template Status triangular_window<F32>(std::span<F32> output);
-  template Status triangular_window<F64>(std::span<F64> output);
-  template Status gaussian_window<F32>(F32 stddev, std::span<F32> output);
-  template Status gaussian_window<F64>(F64 stddev, std::span<F64> output);
-  template Status kaiser_window<F32>(F32 beta, std::span<F32> output);
-  template Status kaiser_window<F64>(F64 beta, std::span<F64> output);
+  template OmniStatus bartlett_window<F32>(std::span<F32> output);
+  template OmniStatus bartlett_window<F64>(std::span<F64> output);
+  template OmniStatus blackman_window<F32>(std::span<F32> output);
+  template OmniStatus blackman_window<F64>(std::span<F64> output);
+  template OmniStatus flattop_window<F32>(std::span<F32> output);
+  template OmniStatus flattop_window<F64>(std::span<F64> output);
+  template OmniStatus hamming_window<F32>(std::span<F32> output);
+  template OmniStatus hamming_window<F64>(std::span<F64> output);
+  template OmniStatus hann_window<F32>(std::span<F32> output);
+  template OmniStatus hann_window<F64>(std::span<F64> output);
+  template OmniStatus rectangular_window<F32>(std::span<F32> output);
+  template OmniStatus rectangular_window<F64>(std::span<F64> output);
+  template OmniStatus triangular_window<F32>(std::span<F32> output);
+  template OmniStatus triangular_window<F64>(std::span<F64> output);
+  template OmniStatus gaussian_window<F32>(F32 stddev, std::span<F32> output);
+  template OmniStatus gaussian_window<F64>(F64 stddev, std::span<F64> output);
+  template OmniStatus kaiser_window<F32>(F32 beta, std::span<F32> output);
+  template OmniStatus kaiser_window<F64>(F64 beta, std::span<F64> output);
 
 }  // namespace OmniDSP::Default

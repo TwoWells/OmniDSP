@@ -153,11 +153,11 @@ namespace OmniDSP::Default {
   }
 
   template <typename T_Complex>
-  Status FFTPlanImpl<T_Complex>::fft(
+  OmniStatus FFTPlanImpl<T_Complex>::fft(
       std::span<const T_Complex> input, std::span<T_Complex> output) const
   {
     if (input.size() < n_ || output.size() < n_) {
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
     try {
       // Pass const member data (twiddles) and mutable temp buffer to helper
@@ -166,17 +166,17 @@ namespace OmniDSP::Default {
     }
     catch (const std::exception& e) {
       // Log error e.what()
-      return Status::Failure;  // Or a more specific error
+      return OmniStatus::Failure;  // Or a more specific error
     }
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   template <typename T_Complex>
-  Status FFTPlanImpl<T_Complex>::ifft(
+  OmniStatus FFTPlanImpl<T_Complex>::ifft(
       std::span<const T_Complex> input, std::span<T_Complex> output) const
   {
     if (input.size() < n_ || output.size() < n_) {
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
     try {
       // Use inverse twiddles and apply scaling inside helper
@@ -185,9 +185,9 @@ namespace OmniDSP::Default {
     }
     catch (const std::exception& e) {
       // Log error e.what()
-      return Status::Failure;  // Or a more specific error
+      return OmniStatus::Failure;  // Or a more specific error
     }
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   template <typename T_Complex>
@@ -226,7 +226,7 @@ namespace OmniDSP::Default {
 
   // FIX: Use T_Complex alias for the output span type
   template <typename T_Real>
-  Status RFFTPlanImpl<T_Real>::rfft(
+  OmniStatus RFFTPlanImpl<T_Real>::rfft(
       std::span<const T_Real> input, std::span<T_Complex> output) const
   {
     // using T_Complex = std::complex<T_Real>; // Original incorrect definition
@@ -234,19 +234,19 @@ namespace OmniDSP::Default {
     using T_Complex = Utils::GetComplexType<T_Real>;
     size_t expected_output_size = half_n_ + 1;
     if (input.size() < n_ || output.size() < expected_output_size) {
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
 
     // 1. Perform N/2-point complex FFT on the real input treated as interleaved
     // complex pairs. The underlying cfft_plan_.fft is const, so this call is
     // valid within a const method.
-    Status status = cfft_plan_.fft(
+    OmniStatus status = cfft_plan_.fft(
         // Treat real input span as complex span of half length
         std::span<const T_Complex>(
             reinterpret_cast<const T_Complex*>(input.data()), half_n_),
         // Output to the mutable packed_buffer_
         std::span<T_Complex>(packed_buffer_.get(), half_n_));
-    if (status != Status::Success) {
+    if (status != OmniStatus::Success) {
       return status;  // Propagate error from underlying CFFT
     }
 
@@ -279,12 +279,12 @@ namespace OmniDSP::Default {
       // Combine: Y[k] = 0.5 * (sum + jW * diff)
       Y[k] = scale_half * (sum + jW * diff);
     }
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   // FIX: Use T_Complex alias for the input span type
   template <typename T_Real>
-  Status RFFTPlanImpl<T_Real>::irfft(
+  OmniStatus RFFTPlanImpl<T_Real>::irfft(
       std::span<const T_Complex> input, std::span<T_Real> output) const
   {
     // using T_Complex = std::complex<T_Real>; // Original incorrect definition
@@ -292,7 +292,7 @@ namespace OmniDSP::Default {
     using T_Complex = Utils::GetComplexType<T_Real>;
     size_t expected_input_size = half_n_ + 1;
     if (input.size() < expected_input_size || output.size() < n_) {
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
 
     // 1. Packing Stage: Convert N/2+1 RFFT input (Y = input) to N/2 complex
@@ -334,20 +334,20 @@ namespace OmniDSP::Default {
     // 2. Perform N/2-point inverse complex FFT on the packed spectrum X
     // (packed_buffer_). The underlying cfft_plan_.ifft is const, so this call
     // is valid.
-    Status status = cfft_plan_.ifft(
+    OmniStatus status = cfft_plan_.ifft(
         // Input is the packed buffer
         std::span<const T_Complex>(packed_buffer_.get(), half_n_),
         // Treat the real output span as a complex span for the IFFT output
         std::span<T_Complex>(
             reinterpret_cast<T_Complex*>(output.data()), half_n_));
-    if (status != Status::Success) {
+    if (status != OmniStatus::Success) {
       return status;  // Propagate error from underlying CIFFT
     }
 
     // Scaling is handled correctly: Packing (0.5) * CIFFT (1/(N/2)) = 1/N.
     // The output buffer now contains the final N real samples.
 
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   template <typename T_Real>

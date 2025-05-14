@@ -49,7 +49,7 @@ namespace OmniDSP {
       pimpl_expected = backend.create_resample_processor_impl_f64(design);
     }
     else {
-      return std::unexpected(Status::UnsupportedFeature);
+      return std::unexpected(OmniStatus::UnsupportedFeature);
     }
 
     if (!pimpl_expected) {
@@ -64,7 +64,7 @@ namespace OmniDSP {
       // This could happen if 'new ResampleProcessor<T>(...)' in
       // create_from_impl fails (e.g. bad_alloc) or if pimpl_expected.value()
       // was somehow null after a successful expected.
-      return std::unexpected(Status::Failure);
+      return std::unexpected(OmniStatus::Failure);
     }
     return plan;
   }
@@ -82,20 +82,20 @@ namespace OmniDSP {
       = default;
 
   template <typename T>
-  [[nodiscard]] Status ResampleProcessor<T>::execute(
+  [[nodiscard]] OmniStatus ResampleProcessor<T>::execute(
       std::span<const T> input, std::span<T> output)
   {
     if (!pimpl_) {
-      return Status::InvalidOperation;
+      return OmniStatus::InvalidOperation;
     }
     return pimpl_->execute(input, output);
   }
 
   template <typename T>
-  Status ResampleProcessor<T>::reset()
+  OmniStatus ResampleProcessor<T>::reset()
   {
     if (!pimpl_) {
-      return Status::InvalidOperation;
+      return OmniStatus::InvalidOperation;
     }
     return pimpl_->reset();
   }

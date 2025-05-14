@@ -39,7 +39,7 @@ namespace OmniDSP::IntelIPP {
     catch (const std::invalid_argument& e) {
       // Re-throw or wrap if necessary, maybe as OmniException
       // Wrapping might be better to keep exception types consistent
-      throw OmniException(e.what(), Status::InvalidArgument);
+      throw OmniException(e.what(), OmniStatus::InvalidArgument);
     }
 
     // --- IPP Initialization ---
@@ -78,14 +78,14 @@ namespace OmniDSP::IntelIPP {
     catch (const std::bad_alloc&) {
       throw OmniException(
           "IPP Error: Failed to allocate memory for FFT buffers",
-          Status::AllocationError);
+          OmniStatus::AllocationError);
     }
 
     // Get the raw pointer to the spec memory AFTER allocation/resize
     // Ensure spec_mem_ is not empty before getting data() pointer
     if (spec_mem_.empty()) {
       throw OmniException(
-          "IPP Error: FFT spec size is zero", Status::BackendError);
+          "IPP Error: FFT spec size is zero", OmniStatus::BackendError);
     }
     p_spec_ = reinterpret_cast<IPP_Spec_Type*>(spec_mem_.data());
 
@@ -128,7 +128,7 @@ namespace OmniDSP::IntelIPP {
       p_spec_ = nullptr;
       throw OmniException(
           "IPP Error: FFTInit returned inconsistent spec pointer",
-          Status::BackendError);
+          OmniStatus::BackendError);
     }
     // p_spec_ should now point to the initialized spec within spec_mem_
 
@@ -139,13 +139,13 @@ namespace OmniDSP::IntelIPP {
   // Destructor implementation remains default or empty if vectors handle memory
 
   template <typename T_Complex>
-  Status FFTPlanImpl<T_Complex>::fft(
+  OmniStatus FFTPlanImpl<T_Complex>::fft(
       std::span<const T_Complex> input, std::span<T_Complex> output) const
   {
-    if (p_spec_ == nullptr) return Status::NotInitialized;
+    if (p_spec_ == nullptr) return OmniStatus::NotInitialized;
     if (input.size() != length_ || output.size() != length_)
-      return Status::SizeMismatch;
-    if (length_ == 0) return Status::Success;  // Nothing to do
+      return OmniStatus::SizeMismatch;
+    if (length_ == 0) return OmniStatus::Success;  // Nothing to do
 
     IppStatus ipp_status = internal::ippsFFTFwd_CToC<T_Complex>(
         reinterpret_cast<const IPP_C_Type*>(input.data()),
@@ -157,13 +157,13 @@ namespace OmniDSP::IntelIPP {
   }
 
   template <typename T_Complex>
-  Status FFTPlanImpl<T_Complex>::ifft(
+  OmniStatus FFTPlanImpl<T_Complex>::ifft(
       std::span<const T_Complex> input, std::span<T_Complex> output) const
   {
-    if (p_spec_ == nullptr) return Status::NotInitialized;
+    if (p_spec_ == nullptr) return OmniStatus::NotInitialized;
     if (input.size() != length_ || output.size() != length_)
-      return Status::SizeMismatch;
-    if (length_ == 0) return Status::Success;  // Nothing to do
+      return OmniStatus::SizeMismatch;
+    if (length_ == 0) return OmniStatus::Success;  // Nothing to do
 
     IppStatus ipp_status = internal::ippsFFTInv_CToC<T_Complex>(
         reinterpret_cast<const IPP_C_Type*>(input.data()),
@@ -201,7 +201,8 @@ namespace OmniDSP::IntelIPP {
       order_ = internal::calculate_fft_order(length);
     }
     catch (const std::invalid_argument& e) {
-      throw OmniException(e.what(), Status::InvalidArgument);  // Wrap exception
+      throw OmniException(
+          e.what(), OmniStatus::InvalidArgument);  // Wrap exception
     }
 
     // --- IPP Initialization ---
@@ -234,13 +235,13 @@ namespace OmniDSP::IntelIPP {
     catch (const std::bad_alloc&) {
       throw OmniException(
           "IPP Error: Failed to allocate memory for RFFT buffers",
-          Status::AllocationError);
+          OmniStatus::AllocationError);
     }
 
     // Get raw pointer
     if (spec_mem_.empty()) {
       throw OmniException(
-          "IPP Error: RFFT spec size is zero", Status::BackendError);
+          "IPP Error: RFFT spec size is zero", OmniStatus::BackendError);
     }
     p_spec_ = reinterpret_cast<IPP_Spec_Type*>(spec_mem_.data());
 
@@ -278,7 +279,7 @@ namespace OmniDSP::IntelIPP {
       p_spec_ = nullptr;
       throw OmniException(
           "IPP Error: RFFTInit returned inconsistent spec pointer",
-          Status::BackendError);
+          OmniStatus::BackendError);
     }
     // p_spec_ should now point to the initialized spec within spec_mem_
   }
@@ -286,22 +287,22 @@ namespace OmniDSP::IntelIPP {
   // Destructor implementation remains default or empty
 
   template <typename T_Real>
-  Status RFFTPlanImpl<T_Real>::rfft(
+  OmniStatus RFFTPlanImpl<T_Real>::rfft(
       std::span<const T_Real> input, std::span<T_Complex> output) const
   {
-    if (p_spec_ == nullptr) return Status::NotInitialized;
+    if (p_spec_ == nullptr) return OmniStatus::NotInitialized;
     size_t N = length_;
     size_t output_size_expected = (N / 2) + 1;
-    if (N == 0 && input.empty() && output.empty()) return Status::Success;
+    if (N == 0 && input.empty() && output.empty()) return OmniStatus::Success;
     if (input.size() != N || output.size() != output_size_expected)
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
 
     // IPP RFFT outputs to a packed format (real array). We need a temporary
     // buffer. The size of the packed buffer is N real elements.
     if (temp_packed_buf_.size() != N) {
       // This should not happen if constructor logic is correct, but safety
       // check
-      return Status::Failure;  // Indicate internal state error
+      return OmniStatus::Failure;  // Indicate internal state error
     }
     IPP_R_Type* packed_output_ptr
         = const_cast<IPP_R_Type*>(temp_packed_buf_.data());
@@ -335,24 +336,24 @@ namespace OmniDSP::IntelIPP {
     }
     // If N is odd, the loop up to N/2-1 covers all necessary components.
 
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   template <typename T_Real>
-  Status RFFTPlanImpl<T_Real>::irfft(  // Renamed from irfft to match base
+  OmniStatus RFFTPlanImpl<T_Real>::irfft(  // Renamed from irfft to match base
       std::span<const T_Complex> input,
       std::span<T_Real> output) const
   {
-    if (p_spec_ == nullptr) return Status::NotInitialized;
+    if (p_spec_ == nullptr) return OmniStatus::NotInitialized;
     size_t N = length_;
     size_t input_size_expected = (N / 2) + 1;
-    if (N == 0 && input.empty() && output.empty()) return Status::Success;
+    if (N == 0 && input.empty() && output.empty()) return OmniStatus::Success;
     if (input.size() != input_size_expected || output.size() != N)
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
 
     // --- Convert standard Complex format to IPP Packed format ---
     if (temp_packed_buf_.size() != N) {
-      return Status::Failure;  // Internal state error
+      return OmniStatus::Failure;  // Internal state error
     }
     const T_Complex* complex_input_ptr = input.data();
     IPP_R_Type* packed_input_ptr

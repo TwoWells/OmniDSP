@@ -70,12 +70,13 @@ namespace OmniDSP {
    * @brief Applies the FIR filter to an input signal.
    */
   template <typename T>
-  [[nodiscard]] Status FIRFilterProcessor<T>::execute(  // Or FIRFilterProcessor
+  [[nodiscard]] OmniStatus
+  FIRFilterProcessor<T>::execute(  // Or FIRFilterProcessor
       std::span<const T> input,
       std::span<T> output)
   {  // Potentially non-const if Processor
     if (!pimpl_) {
-      return Status::InvalidOperation;
+      return OmniStatus::InvalidOperation;
     }
     return pimpl_->execute(input, output);
   }
@@ -84,10 +85,10 @@ namespace OmniDSP {
    * @brief Resets the internal state of the filter.
    */
   template <typename T>
-  Status FIRFilterProcessor<T>::reset()
+  OmniStatus FIRFilterProcessor<T>::reset()
   {  // Or FIRFilterProcessor
     if (!pimpl_) {
-      return Status::InvalidOperation;
+      return OmniStatus::InvalidOperation;
     }
     return pimpl_->reset();
   }

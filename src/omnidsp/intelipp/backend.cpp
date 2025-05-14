@@ -75,92 +75,92 @@ namespace OmniDSP::IntelIPP {
 
   // --- Overridden Window Generation ---
   // These call IPP-specific helper functions defined in intelipp/window.hpp/cpp
-  [[nodiscard]] Status Backend::bartlett_window_f32(
+  [[nodiscard]] OmniStatus Backend::bartlett_window_f32(
       size_t length, std::span<F32> output) const
   {
-    if (output.size() < length && length > 0) return Status::SizeMismatch;
+    if (output.size() < length && length > 0) return OmniStatus::SizeMismatch;
     return IntelIPP::generate_bartlett_window_intelipp(output.first(length));
   }
-  [[nodiscard]] Status Backend::bartlett_window_f64(
+  [[nodiscard]] OmniStatus Backend::bartlett_window_f64(
       size_t length, std::span<F64> output) const
   {
-    if (output.size() < length && length > 0) return Status::SizeMismatch;
+    if (output.size() < length && length > 0) return OmniStatus::SizeMismatch;
     return IntelIPP::generate_bartlett_window_intelipp(output.first(length));
   }
-  [[nodiscard]] Status Backend::blackman_window_f32(
+  [[nodiscard]] OmniStatus Backend::blackman_window_f32(
       size_t length, std::span<F32> output) const
   {
-    if (output.size() < length && length > 0) return Status::SizeMismatch;
+    if (output.size() < length && length > 0) return OmniStatus::SizeMismatch;
     return IntelIPP::generate_blackman_window_intelipp(output.first(length));
   }
-  [[nodiscard]] Status Backend::blackman_window_f64(
+  [[nodiscard]] OmniStatus Backend::blackman_window_f64(
       size_t length, std::span<F64> output) const
   {
-    if (output.size() < length && length > 0) return Status::SizeMismatch;
+    if (output.size() < length && length > 0) return OmniStatus::SizeMismatch;
     return IntelIPP::generate_blackman_window_intelipp(output.first(length));
   }
-  [[nodiscard]] Status Backend::hamming_window_f32(
+  [[nodiscard]] OmniStatus Backend::hamming_window_f32(
       size_t length, std::span<F32> output) const
   {
-    if (output.size() < length && length > 0) return Status::SizeMismatch;
+    if (output.size() < length && length > 0) return OmniStatus::SizeMismatch;
     return IntelIPP::generate_hamming_window_intelipp(output.first(length));
   }
-  [[nodiscard]] Status Backend::hamming_window_f64(
+  [[nodiscard]] OmniStatus Backend::hamming_window_f64(
       size_t length, std::span<F64> output) const
   {
-    if (output.size() < length && length > 0) return Status::SizeMismatch;
+    if (output.size() < length && length > 0) return OmniStatus::SizeMismatch;
     return IntelIPP::generate_hamming_window_intelipp(output.first(length));
   }
-  [[nodiscard]] Status Backend::hann_window_f32(
+  [[nodiscard]] OmniStatus Backend::hann_window_f32(
       size_t length, std::span<F32> output) const
   {
-    if (output.size() < length && length > 0) return Status::SizeMismatch;
+    if (output.size() < length && length > 0) return OmniStatus::SizeMismatch;
     return IntelIPP::generate_hann_window_intelipp(output.first(length));
   }
-  [[nodiscard]] Status Backend::hann_window_f64(
+  [[nodiscard]] OmniStatus Backend::hann_window_f64(
       size_t length, std::span<F64> output) const
   {
-    if (output.size() < length && length > 0) return Status::SizeMismatch;
+    if (output.size() < length && length > 0) return OmniStatus::SizeMismatch;
     return IntelIPP::generate_hann_window_intelipp(output.first(length));
   }
-  [[nodiscard]] Status Backend::kaiser_window_f32(
+  [[nodiscard]] OmniStatus Backend::kaiser_window_f32(
       size_t length, double beta, std::span<F32> output) const
   {
-    if (output.size() < length && length > 0) return Status::SizeMismatch;
-    if (beta < 0.0) return Status::InvalidArgument;  // Basic validation
+    if (output.size() < length && length > 0) return OmniStatus::SizeMismatch;
+    if (beta < 0.0) return OmniStatus::InvalidArgument;  // Basic validation
     return IntelIPP::generate_kaiser_window_intelipp(
         beta, output.first(length));
   }
-  [[nodiscard]] Status Backend::kaiser_window_f64(
+  [[nodiscard]] OmniStatus Backend::kaiser_window_f64(
       size_t length, double beta, std::span<F64> output) const
   {
-    if (output.size() < length && length > 0) return Status::SizeMismatch;
-    if (beta < 0.0) return Status::InvalidArgument;
+    if (output.size() < length && length > 0) return OmniStatus::SizeMismatch;
+    if (beta < 0.0) return OmniStatus::InvalidArgument;
     return IntelIPP::generate_kaiser_window_intelipp(
         beta, output.first(length));
   }
-  [[nodiscard]] Status Backend::rectangular_window_f32(
+  [[nodiscard]] OmniStatus Backend::rectangular_window_f32(
       size_t length, std::span<F32> output) const
   {
-    if (output.size() < length && length > 0) return Status::SizeMismatch;
+    if (output.size() < length && length > 0) return OmniStatus::SizeMismatch;
     return IntelIPP::generate_rectangular_window_intelipp(output.first(length));
   }
-  [[nodiscard]] Status Backend::rectangular_window_f64(
+  [[nodiscard]] OmniStatus Backend::rectangular_window_f64(
       size_t length, std::span<F64> output) const
   {
-    if (output.size() < length && length > 0) return Status::SizeMismatch;
+    if (output.size() < length && length > 0) return OmniStatus::SizeMismatch;
     return IntelIPP::generate_rectangular_window_intelipp(output.first(length));
   }
-  [[nodiscard]] Status Backend::triangular_window_f32(
+  [[nodiscard]] OmniStatus Backend::triangular_window_f32(
       size_t length, std::span<F32> output) const
   {
-    if (output.size() < length && length > 0) return Status::SizeMismatch;
+    if (output.size() < length && length > 0) return OmniStatus::SizeMismatch;
     return IntelIPP::generate_triangular_window_intelipp(output.first(length));
   }
-  [[nodiscard]] Status Backend::triangular_window_f64(
+  [[nodiscard]] OmniStatus Backend::triangular_window_f64(
       size_t length, std::span<F64> output) const
   {
-    if (output.size() < length && length > 0) return Status::SizeMismatch;
+    if (output.size() < length && length > 0) return OmniStatus::SizeMismatch;
     return IntelIPP::generate_triangular_window_intelipp(output.first(length));
   }
 
@@ -186,13 +186,13 @@ namespace OmniDSP::IntelIPP {
       spdlog::get("OmniDSP")->error(
           "IntelIPP::create_fft_plan_impl_c32 allocation failed: {}", e.what());
       return OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C32>>>(
-          std::unexpect, Status::AllocationError);
+          std::unexpect, OmniStatus::AllocationError);
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error(
           "IntelIPP::create_fft_plan_impl_c32 exception: {}", e.what());
       return OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C32>>>(
-          std::unexpect, Status::BackendError);
+          std::unexpect, OmniStatus::BackendError);
     }
   }
 
@@ -214,13 +214,13 @@ namespace OmniDSP::IntelIPP {
       spdlog::get("OmniDSP")->error(
           "IntelIPP::create_fft_plan_impl_c64 allocation failed: {}", e.what());
       return OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C64>>>(
-          std::unexpect, Status::AllocationError);
+          std::unexpect, OmniStatus::AllocationError);
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error(
           "IntelIPP::create_fft_plan_impl_c64 exception: {}", e.what());
       return OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C64>>>(
-          std::unexpect, Status::BackendError);
+          std::unexpect, OmniStatus::BackendError);
     }
   }
 
@@ -243,13 +243,13 @@ namespace OmniDSP::IntelIPP {
           "IntelIPP::create_rfft_plan_impl_f32 allocation failed: {}",
           e.what());
       return OmniExpected<std::unique_ptr<Abstract::RFFTPlanImpl<F32>>>(
-          std::unexpect, Status::AllocationError);
+          std::unexpect, OmniStatus::AllocationError);
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error(
           "IntelIPP::create_rfft_plan_impl_f32 exception: {}", e.what());
       return OmniExpected<std::unique_ptr<Abstract::RFFTPlanImpl<F32>>>(
-          std::unexpect, Status::BackendError);
+          std::unexpect, OmniStatus::BackendError);
     }
   }
 
@@ -272,13 +272,13 @@ namespace OmniDSP::IntelIPP {
           "IntelIPP::create_rfft_plan_impl_f64 allocation failed: {}",
           e.what());
       return OmniExpected<std::unique_ptr<Abstract::RFFTPlanImpl<F64>>>(
-          std::unexpect, Status::AllocationError);
+          std::unexpect, OmniStatus::AllocationError);
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error(
           "IntelIPP::create_rfft_plan_impl_f64 exception: {}", e.what());
       return OmniExpected<std::unique_ptr<Abstract::RFFTPlanImpl<F64>>>(
-          std::unexpect, Status::BackendError);
+          std::unexpect, OmniStatus::BackendError);
     }
   }
 
@@ -309,7 +309,7 @@ namespace OmniDSP::IntelIPP {
           e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::ResampleProcessorImpl<F32>>>(
-          std::unexpect, Status::AllocationError);
+          std::unexpect, OmniStatus::AllocationError);
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error(
@@ -317,7 +317,7 @@ namespace OmniDSP::IntelIPP {
           e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::ResampleProcessorImpl<F32>>>(
-          std::unexpect, Status::BackendError);
+          std::unexpect, OmniStatus::BackendError);
     }
   }
 
@@ -345,7 +345,7 @@ namespace OmniDSP::IntelIPP {
           e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::ResampleProcessorImpl<F64>>>(
-          std::unexpect, Status::AllocationError);
+          std::unexpect, OmniStatus::AllocationError);
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error(
@@ -353,7 +353,7 @@ namespace OmniDSP::IntelIPP {
           e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::ResampleProcessorImpl<F64>>>(
-          std::unexpect, Status::BackendError);
+          std::unexpect, OmniStatus::BackendError);
     }
   }
 
@@ -383,7 +383,7 @@ namespace OmniDSP::IntelIPP {
           e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::FIRFilterProcessorImpl<F32>>>(
-          std::unexpect, Status::AllocationError);
+          std::unexpect, OmniStatus::AllocationError);
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error(
@@ -391,7 +391,7 @@ namespace OmniDSP::IntelIPP {
           e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::FIRFilterProcessorImpl<F32>>>(
-          std::unexpect, Status::BackendError);
+          std::unexpect, OmniStatus::BackendError);
     }
   }
 
@@ -421,7 +421,7 @@ namespace OmniDSP::IntelIPP {
           e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::FIRFilterProcessorImpl<F64>>>(
-          std::unexpect, Status::AllocationError);
+          std::unexpect, OmniStatus::AllocationError);
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error(
@@ -429,7 +429,7 @@ namespace OmniDSP::IntelIPP {
           e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::FIRFilterProcessorImpl<F64>>>(
-          std::unexpect, Status::BackendError);
+          std::unexpect, OmniStatus::BackendError);
     }
   }
 
@@ -459,7 +459,7 @@ namespace OmniDSP::IntelIPP {
           e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::FIRFilterProcessorImpl<C32>>>(
-          std::unexpect, Status::AllocationError);
+          std::unexpect, OmniStatus::AllocationError);
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error(
@@ -467,7 +467,7 @@ namespace OmniDSP::IntelIPP {
           e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::FIRFilterProcessorImpl<C32>>>(
-          std::unexpect, Status::BackendError);
+          std::unexpect, OmniStatus::BackendError);
     }
   }
 
@@ -497,7 +497,7 @@ namespace OmniDSP::IntelIPP {
           e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::FIRFilterProcessorImpl<C64>>>(
-          std::unexpect, Status::AllocationError);
+          std::unexpect, OmniStatus::AllocationError);
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error(
@@ -505,7 +505,7 @@ namespace OmniDSP::IntelIPP {
           e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::FIRFilterProcessorImpl<C64>>>(
-          std::unexpect, Status::BackendError);
+          std::unexpect, OmniStatus::BackendError);
     }
   }
 
@@ -535,7 +535,7 @@ namespace OmniDSP::IntelIPP {
           e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::IIRFilterProcessorImpl<F32>>>(
-          std::unexpect, Status::AllocationError);
+          std::unexpect, OmniStatus::AllocationError);
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error(
@@ -543,7 +543,7 @@ namespace OmniDSP::IntelIPP {
           e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::IIRFilterProcessorImpl<F32>>>(
-          std::unexpect, Status::BackendError);
+          std::unexpect, OmniStatus::BackendError);
     }
   }
 
@@ -573,7 +573,7 @@ namespace OmniDSP::IntelIPP {
           e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::IIRFilterProcessorImpl<F64>>>(
-          std::unexpect, Status::AllocationError);
+          std::unexpect, OmniStatus::AllocationError);
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error(
@@ -581,7 +581,7 @@ namespace OmniDSP::IntelIPP {
           e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::IIRFilterProcessorImpl<F64>>>(
-          std::unexpect, Status::BackendError);
+          std::unexpect, OmniStatus::BackendError);
     }
   }
 

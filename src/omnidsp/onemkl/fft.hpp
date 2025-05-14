@@ -51,9 +51,9 @@ namespace OmniDSP::OneMKL {
     FFTPlanImpl& operator=(FFTPlanImpl&&) = delete;
 
     // --- Interface Methods ---
-    [[nodiscard]] Status fft(
+    [[nodiscard]] OmniStatus fft(
         std::span<const T> input, std::span<T> output) const override;
-    [[nodiscard]] Status ifft(
+    [[nodiscard]] OmniStatus ifft(
         std::span<const T> input, std::span<T> output) const override;
     size_t get_length() const override;
 
@@ -103,9 +103,9 @@ namespace OmniDSP::OneMKL {
     RFFTPlanImpl& operator=(RFFTPlanImpl&&) = delete;
 
     // --- Interface Methods ---
-    [[nodiscard]] Status rfft(
+    [[nodiscard]] OmniStatus rfft(
         std::span<const T> input, std::span<Complex> output) const override;
-    [[nodiscard]] Status irfft(
+    [[nodiscard]] OmniStatus irfft(
         std::span<const Complex> input, std::span<T> output) const override;
     size_t get_length() const override;
 

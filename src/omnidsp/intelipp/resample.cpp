@@ -57,7 +57,7 @@ namespace OmniDSP::IntelIPP {
           = "IntelIPP::ResampleProcessorImpl requires a non-null owner backend "
             "pointer.";
       logger->error(msg);
-      throw OmniException(msg, Status::InvalidArgument);
+      throw OmniException(msg, OmniStatus::InvalidArgument);
     }
     // Design::Resample's constructor and Utils::create_spec should have
     // validated its contents, including the embedded prototype_fir_spec.
@@ -71,7 +71,7 @@ namespace OmniDSP::IntelIPP {
                         + std::to_string(L) + " or M=" + std::to_string(M)
                         + " from spec are zero.";
       logger->error(msg);
-      throw OmniException(msg, Status::InvalidArgument);
+      throw OmniException(msg, OmniStatus::InvalidArgument);
     }
 
     int upFactor = static_cast<int>(L);
@@ -96,7 +96,7 @@ namespace OmniDSP::IntelIPP {
             "prototype "
             "filter design.";
       logger->critical(msg);
-      throw OmniException(msg, Status::UnsupportedFeature);
+      throw OmniException(msg, OmniStatus::UnsupportedFeature);
     }
 
     if (!coeffs_expected) {
@@ -115,7 +115,7 @@ namespace OmniDSP::IntelIPP {
           = "IntelIPP::ResampleProcessorImpl: Internal prototype filter design "
             "resulted in empty coefficients.";
       logger->error(msg);
-      throw OmniException(msg, Status::Failure);
+      throw OmniException(msg, OmniStatus::Failure);
     }
 
     // Scale taps by L (interpolation factor) for IPP FIRMR
@@ -140,7 +140,7 @@ namespace OmniDSP::IntelIPP {
           = "IntelIPP::ResampleProcessorImpl: Unsupported data type T in "
             "constructor.";
       logger->critical(msg);  // Should not happen
-      throw OmniException(msg, Status::UnsupportedFeature);
+      throw OmniException(msg, OmniStatus::UnsupportedFeature);
     }
 
     ipp_status = ippsFIRMRGetSize(
@@ -171,7 +171,7 @@ namespace OmniDSP::IntelIPP {
             "IPP "
             "FIRMR spec or buffer.";
       logger->error(msg);
-      throw OmniException(msg, Status::AllocationError);
+      throw OmniException(msg, OmniStatus::AllocationError);
     }
 
     const Details::GetIPPType<T>* pTaps_ipp
@@ -231,11 +231,11 @@ namespace OmniDSP::IntelIPP {
   }
 
   template <typename T>
-  Status ResampleProcessorImpl<T>::execute(
+  OmniStatus ResampleProcessorImpl<T>::execute(
       std::span<const T> input, std::span<T> output)
   {
     if (!p_ipp_fir_spec_) {
-      return Status::NotInitialized;
+      return OmniStatus::NotInitialized;
     }
 
     size_t input_len = input.size();
@@ -243,7 +243,7 @@ namespace OmniDSP::IntelIPP {
       if (!output.empty()) {  // Only fill if output span is not empty
         std::fill(output.begin(), output.end(), T{0});
       }
-      return Status::Success;
+      return OmniStatus::Success;
     }
 
     int numOutputSamples = static_cast<int>(output.size());
@@ -259,7 +259,7 @@ namespace OmniDSP::IntelIPP {
           "small.",
           numOutputSamples,
           input_len);
-      if (numOutputSamples == 0) return Status::Success;
+      if (numOutputSamples == 0) return OmniStatus::Success;
     }
 
     IppStatus ipp_status = ippStsNoErr;
@@ -292,10 +292,10 @@ namespace OmniDSP::IntelIPP {
   }
 
   template <typename T>
-  Status ResampleProcessorImpl<T>::reset()
+  OmniStatus ResampleProcessorImpl<T>::reset()
   {
     if (!p_ipp_fir_spec_) {
-      return Status::NotInitialized;
+      return OmniStatus::NotInitialized;
     }
     auto logger = spdlog::get("OmniDSP");
     if (!logger) {
@@ -318,7 +318,7 @@ namespace OmniDSP::IntelIPP {
         "exists). "
         "Note: True internal filter state reset for IPP FIRMR typically "
         "requires re-initialization of the spec.");
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   template <typename T>

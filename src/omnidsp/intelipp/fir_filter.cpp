@@ -46,7 +46,7 @@ namespace OmniDSP::IntelIPP {
     if (coefficients_.empty()) {
       throw OmniException(
           "IPP FIR: Filter coefficients cannot be empty.",
-          Status::InvalidArgument);
+          OmniStatus::InvalidArgument);
     }
 
     IppStatus status = ippStsErr;
@@ -68,7 +68,7 @@ namespace OmniDSP::IntelIPP {
     int taps_len = static_cast<int>(num_taps_);
     if (taps_len <= 0) {
       throw OmniException(
-          "IPP FIR: Invalid number of taps.", Status::InvalidArgument);
+          "IPP FIR: Invalid number of taps.", OmniStatus::InvalidArgument);
     }
 
     IppAlgType alg_type = ippAlgDirect;  // Use direct algorithm for FIR
@@ -88,7 +88,7 @@ namespace OmniDSP::IntelIPP {
       p_buffer_ = nullptr;
       throw OmniException(
           "IPP FIR: Failed to allocate spec or buffer memory.",
-          Status::AllocationError);
+          OmniStatus::AllocationError);
     }
 
     // Cast the raw spec memory to the correct IPP spec type pointer
@@ -130,12 +130,12 @@ namespace OmniDSP::IntelIPP {
   }
 
   template <typename T>
-  Status FIRFilterProcessorImpl<T>::execute(
+  OmniStatus FIRFilterProcessorImpl<T>::execute(
       std::span<const T> input, std::span<T> output)
   {
-    if (!p_ipp_spec_) return Status::NotInitialized;
-    if (input.size() != output.size()) return Status::SizeMismatch;
-    if (input.empty()) return Status::Success;
+    if (!p_ipp_spec_) return OmniStatus::NotInitialized;
+    if (input.size() != output.size()) return OmniStatus::SizeMismatch;
+    if (input.empty()) return OmniStatus::Success;
 
     IppStatus status = ippStsErr;
     int len = static_cast<int>(input.size());
@@ -157,13 +157,13 @@ namespace OmniDSP::IntelIPP {
         p_buffer_);   // Pass the work buffer
 
     OMNI_CHECK_IPP_STATUS_RETURN(status, "IPP FIR: ippsFIRSR execution failed");
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   template <typename T>
-  Status FIRFilterProcessorImpl<T>::reset()
+  OmniStatus FIRFilterProcessorImpl<T>::reset()
   {
-    if (!p_ipp_spec_) return Status::NotInitialized;
+    if (!p_ipp_spec_) return OmniStatus::NotInitialized;
 
     IppStatus status = ippStsErr;
     int taps_len = static_cast<int>(num_taps_);
@@ -184,7 +184,7 @@ namespace OmniDSP::IntelIPP {
 
     OMNI_CHECK_IPP_STATUS_RETURN(
         status, "IPP FIR: Reset (ippsFIRSRInit) failed");
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   template <typename T>

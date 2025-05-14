@@ -240,9 +240,9 @@ namespace OmniDSP {
    * be valid if constructed.
    * @param output The span to write the window coefficients into. Must have
    * size `setup.length`.
-   * @return OmniExpected<void> indicating success or an error Status.
+   * @return OmniExpected<void> indicating success or an error OmniStatus.
    * - On success: An empty expected value.
-   * - On failure: An unexpected value containing a Status code (e.g.,
+   * - On failure: An unexpected value containing a OmniStatus code (e.g.,
    * SizeMismatch).
    */
   template <typename T>
@@ -267,7 +267,7 @@ namespace OmniDSP {
             "generate_window: Size mismatch. Window length is 0 but output "
             "span size is {}.",
             output.size());
-        return std::unexpected(Status::SizeMismatch);
+        return std::unexpected(OmniStatus::SizeMismatch);
       }
     }
     if (output.size() != static_cast<size_t>(setup.length)) {
@@ -276,7 +276,7 @@ namespace OmniDSP {
           "got {}.",
           setup.length,
           output.size());
-      return std::unexpected(Status::SizeMismatch);
+      return std::unexpected(OmniStatus::SizeMismatch);
     }
 
     // Extract parameters (safe to assume params exist if type requires them,
@@ -404,7 +404,7 @@ namespace OmniDSP {
               "unknown or unvalidated window type: {}",
               static_cast<int>(setup.type));
           return std::unexpected(
-              Status::InvalidArgument);  // Should be caught by constructor
+              OmniStatus::InvalidArgument);  // Should be caught by constructor
       }
       output[static_cast<size_t>(i)] = val;
     }

@@ -27,31 +27,31 @@ namespace OmniDSP::Default {
    * empty.
    */
   template <typename T>  // T = F32 or F64
-  [[nodiscard]] Status bartlett_window(std::span<T> output);
+  [[nodiscard]] OmniStatus bartlett_window(std::span<T> output);
 
   /** @brief Generates a Blackman window. */
   template <typename T>  // T = F32 or F64
-  [[nodiscard]] Status blackman_window(std::span<T> output);
+  [[nodiscard]] OmniStatus blackman_window(std::span<T> output);
 
   /** @brief Generates a Flat top window. */
   template <typename T>  // T = F32 or F64
-  [[nodiscard]] Status flattop_window(std::span<T> output);
+  [[nodiscard]] OmniStatus flattop_window(std::span<T> output);
 
   /** @brief Generates a Hamming window. */
   template <typename T>  // T = F32 or F64
-  [[nodiscard]] Status hamming_window(std::span<T> output);
+  [[nodiscard]] OmniStatus hamming_window(std::span<T> output);
 
   /** @brief Generates a Hann (Hanning) window. */
   template <typename T>  // T = F32 or F64
-  [[nodiscard]] Status hann_window(std::span<T> output);
+  [[nodiscard]] OmniStatus hann_window(std::span<T> output);
 
   /** @brief Generates a Rectangular window (fills with ones). */
   template <typename T>  // T = F32 or F64
-  [[nodiscard]] Status rectangular_window(std::span<T> output);
+  [[nodiscard]] OmniStatus rectangular_window(std::span<T> output);
 
   /** @brief Generates a Triangular window (non-zero endpoints). */
   template <typename T>  // T = F32 or F64
-  [[nodiscard]] Status triangular_window(std::span<T> output);
+  [[nodiscard]] OmniStatus triangular_window(std::span<T> output);
 
   /**
    * @brief Generates a Gaussian window.
@@ -64,7 +64,7 @@ namespace OmniDSP::Default {
    * empty or stddev <= 0.
    */
   template <typename T>  // T = F32 or F64
-  [[nodiscard]] Status gaussian_window(T stddev, std::span<T> output);
+  [[nodiscard]] OmniStatus gaussian_window(T stddev, std::span<T> output);
 
   /**
    * @brief Generates a Kaiser window.
@@ -76,29 +76,31 @@ namespace OmniDSP::Default {
    * empty or beta < 0.
    */
   template <typename T>  // T = F32 or F64
-  [[nodiscard]] Status kaiser_window(T beta, std::span<T> output);
+  [[nodiscard]] OmniStatus kaiser_window(T beta, std::span<T> output);
 
   // --- Explicit Template Instantiations (Declaration) ---
-  extern template Status bartlett_window<F32>(std::span<F32> output);
-  extern template Status bartlett_window<F64>(std::span<F64> output);
-  extern template Status blackman_window<F32>(std::span<F32> output);
-  extern template Status blackman_window<F64>(std::span<F64> output);
-  extern template Status flattop_window<F32>(std::span<F32> output);
-  extern template Status flattop_window<F64>(std::span<F64> output);
-  extern template Status hamming_window<F32>(std::span<F32> output);
-  extern template Status hamming_window<F64>(std::span<F64> output);
-  extern template Status hann_window<F32>(std::span<F32> output);
-  extern template Status hann_window<F64>(std::span<F64> output);
-  extern template Status rectangular_window<F32>(std::span<F32> output);
-  extern template Status rectangular_window<F64>(std::span<F64> output);
-  extern template Status triangular_window<F32>(std::span<F32> output);
-  extern template Status triangular_window<F64>(std::span<F64> output);
-  extern template Status gaussian_window<F32>(
+  extern template OmniStatus bartlett_window<F32>(std::span<F32> output);
+  extern template OmniStatus bartlett_window<F64>(std::span<F64> output);
+  extern template OmniStatus blackman_window<F32>(std::span<F32> output);
+  extern template OmniStatus blackman_window<F64>(std::span<F64> output);
+  extern template OmniStatus flattop_window<F32>(std::span<F32> output);
+  extern template OmniStatus flattop_window<F64>(std::span<F64> output);
+  extern template OmniStatus hamming_window<F32>(std::span<F32> output);
+  extern template OmniStatus hamming_window<F64>(std::span<F64> output);
+  extern template OmniStatus hann_window<F32>(std::span<F32> output);
+  extern template OmniStatus hann_window<F64>(std::span<F64> output);
+  extern template OmniStatus rectangular_window<F32>(std::span<F32> output);
+  extern template OmniStatus rectangular_window<F64>(std::span<F64> output);
+  extern template OmniStatus triangular_window<F32>(std::span<F32> output);
+  extern template OmniStatus triangular_window<F64>(std::span<F64> output);
+  extern template OmniStatus gaussian_window<F32>(
       F32 stddev, std::span<F32> output);
-  extern template Status gaussian_window<F64>(
+  extern template OmniStatus gaussian_window<F64>(
       F64 stddev, std::span<F64> output);
-  extern template Status kaiser_window<F32>(F32 beta, std::span<F32> output);
-  extern template Status kaiser_window<F64>(F64 beta, std::span<F64> output);
+  extern template OmniStatus kaiser_window<F32>(
+      F32 beta, std::span<F32> output);
+  extern template OmniStatus kaiser_window<F64>(
+      F64 beta, std::span<F64> output);
 
 }  // namespace OmniDSP::Default
 

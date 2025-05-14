@@ -70,7 +70,7 @@ namespace OmniDSP {
           params, kernel_coeffs);  // Updated call
     }
     else {
-      return std::unexpected(Status::UnsupportedFeature);
+      return std::unexpected(OmniStatus::UnsupportedFeature);
     }
 
     if (!pimpl_expected) {
@@ -80,7 +80,7 @@ namespace OmniDSP {
     auto plan = ConvolutionPlan<T>::create_from_impl(
         std::move(pimpl_expected.value()));
     if (!plan) {
-      return std::unexpected(Status::Failure);  // Or AllocationError
+      return std::unexpected(OmniStatus::Failure);  // Or AllocationError
     }
     return plan;
   }
@@ -109,11 +109,11 @@ namespace OmniDSP {
       = default;
 
   template <typename T>
-  [[nodiscard]] Status ConvolutionPlan<T>::execute(
+  [[nodiscard]] OmniStatus ConvolutionPlan<T>::execute(
       std::span<const T> input, std::span<T> output) const
   {
     if (!pimpl_) {
-      return Status::InvalidOperation;
+      return OmniStatus::InvalidOperation;
     }
     return pimpl_->execute(input, output);
   }
@@ -210,7 +210,7 @@ namespace OmniDSP {
           params, template_coeffs);  // Updated call
     }
     else {
-      return std::unexpected(Status::UnsupportedFeature);
+      return std::unexpected(OmniStatus::UnsupportedFeature);
     }
 
     if (!pimpl_expected) {
@@ -220,7 +220,7 @@ namespace OmniDSP {
     auto plan = CorrelationPlan<T>::create_from_impl(
         std::move(pimpl_expected.value()));
     if (!plan) {
-      return std::unexpected(Status::Failure);  // Or AllocationError
+      return std::unexpected(OmniStatus::Failure);  // Or AllocationError
     }
     return plan;
   }
@@ -249,11 +249,11 @@ namespace OmniDSP {
       = default;
 
   template <typename T>
-  [[nodiscard]] Status CorrelationPlan<T>::execute(
+  [[nodiscard]] OmniStatus CorrelationPlan<T>::execute(
       std::span<const T> input, std::span<T> output) const
   {
     if (!pimpl_) {
-      return Status::InvalidOperation;
+      return OmniStatus::InvalidOperation;
     }
     return pimpl_->execute(input, output);
   }

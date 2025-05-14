@@ -33,10 +33,10 @@ namespace OmniDSP::IntelIPP::Details {
    * Returns OmniDSP::Status::InvalidOperation for ippStsContextMatchErr.
    * Returns OmniDSP::Status::BackendError for other unmapped IPP errors.
    */
-  Status ipp_status_to_omnidsp_status(IppStatus status)
+  OmniStatus ipp_status_to_omnidsp_status(IppStatus status)
   {
     if (status == ippStsNoErr) {
-      return Status::Success;
+      return OmniStatus::Success;
     }
 
     // Log the IPP error to standard error for easier debugging
@@ -48,15 +48,15 @@ namespace OmniDSP::IntelIPP::Details {
         || status == ippStsStepErr || status == ippStsBadArgErr
         || status == ippStsOutOfRangeErr || status == ippStsFftOrderErr
         || status == ippStsFftFlagErr) {
-      return Status::InvalidArgument;
+      return OmniStatus::InvalidArgument;
     }
     if (status == ippStsMemAllocErr) {
-      return Status::AllocationError;
+      return OmniStatus::AllocationError;
     }
     if (status == ippStsContextMatchErr) {
       // This could indicate a misuse of an IPP state/spec object,
       // or an operation not valid for the current state.
-      return Status::InvalidOperation;
+      return OmniStatus::InvalidOperation;
     }
     // Add more specific mappings here as needed based on IPP documentation
     // and errors encountered during development.
@@ -65,7 +65,7 @@ namespace OmniDSP::IntelIPP::Details {
     // if (status == ippStsDivByZeroErr) return Status::NumericError; // Example
 
     // Default to a generic backend error if no specific mapping is found.
-    return Status::BackendError;
+    return OmniStatus::BackendError;
   }
 
   // ... (definitions of other helpers if moved from header) ...

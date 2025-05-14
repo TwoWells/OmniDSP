@@ -38,12 +38,12 @@ namespace OmniDSP::Default {
       logger->error(
           "Invalid Design::IIRFilter provided to "
           "Default::generate_iir_filter_coeffs.");
-      return std::unexpected(Status::InvalidArgument);
+      return std::unexpected(OmniStatus::InvalidArgument);
     }
     logger->warn(
         "Default IIR filter design not yet implemented. Returning "
         "NotImplemented.");
-    return std::unexpected(Status::NotImplemented);
+    return std::unexpected(OmniStatus::NotImplemented);
   }
 
   // --- IIRFilterProcessorImpl ---
@@ -85,15 +85,15 @@ namespace OmniDSP::Default {
   IIRFilterProcessorImpl<T>::~IIRFilterProcessorImpl() = default;
 
   template <typename T>
-  Status IIRFilterProcessorImpl<T>::execute(
+  OmniStatus IIRFilterProcessorImpl<T>::execute(
       std::span<const T> input, std::span<T> output)
   {
     if (internal_coeffs_.empty()) {
       std::fill(output.begin(), output.end(), T{0});
-      return Status::Success;
+      return OmniStatus::Success;
     }
     if (output.size() < input.size()) {
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
     if (input.empty()) {
       if (!output.empty()) {
@@ -102,7 +102,7 @@ namespace OmniDSP::Default {
             output.begin() + std::min(input.size(), output.size()),
             T{0});
       }
-      return Status::Success;
+      return OmniStatus::Success;
     }
 
     size_t num_sections = internal_coeffs_.size();
@@ -132,14 +132,14 @@ namespace OmniDSP::Default {
     if (output.size() > input.size()) {
       std::fill(output.begin() + input.size(), output.end(), T{0});
     }
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   template <typename T>
-  Status IIRFilterProcessorImpl<T>::reset()
+  OmniStatus IIRFilterProcessorImpl<T>::reset()
   {
     std::fill(state_.begin(), state_.end(), T{0});
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   template <typename T>

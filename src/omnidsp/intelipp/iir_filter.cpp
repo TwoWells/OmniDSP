@@ -43,7 +43,7 @@ namespace OmniDSP::IntelIPP {
     if (num_sections_ == 0) {
       throw OmniException(
           "IPP IIR: SOS coefficients cannot be empty.",
-          Status::InvalidArgument);
+          OmniStatus::InvalidArgument);
     }
 
     IppStatus status = ippStsErr;
@@ -59,7 +59,7 @@ namespace OmniDSP::IntelIPP {
             "IPP IIR requires SOS coefficients with a0=1.0 (normalize first). "
             "Section "
                 + std::to_string(i),
-            Status::InvalidArgument);
+            OmniStatus::InvalidArgument);
       }
       size_t base_idx = i * 6;
       taps_interleaved_[base_idx + 0] = static_cast<T>(sos.b0);
@@ -83,7 +83,8 @@ namespace OmniDSP::IntelIPP {
     }
     catch (const std::bad_alloc& e) {
       throw OmniException(
-          "IPP IIR: Failed to allocate state memory.", Status::AllocationError);
+          "IPP IIR: Failed to allocate state memory.",
+          OmniStatus::AllocationError);
     }
     // Get a typed pointer
     if (state_mem_.empty()
@@ -91,7 +92,7 @@ namespace OmniDSP::IntelIPP {
                > 0) {  // Check if size > 0 but alloc failed/resulted in empty
       throw OmniException(
           "IPP IIR: State size is non-zero but memory allocation failed.",
-          Status::AllocationError);
+          OmniStatus::AllocationError);
     }
     if (state_size_bytes_ == 0 && !state_mem_.empty()) {  // Check consistency
       state_mem_.clear();  // Ensure vector is empty if size is 0
@@ -133,7 +134,7 @@ namespace OmniDSP::IntelIPP {
       state_mem_.clear();
       throw OmniException(
           "IPP IIR: Init status OK but state pointer mismatch.",
-          Status::BackendError);
+          OmniStatus::BackendError);
     }
     // If state_size_bytes_ was 0, p_state_ should be nullptr after init
     if (status == ippStsNoErr && state_size_bytes_ == 0
@@ -141,7 +142,7 @@ namespace OmniDSP::IntelIPP {
       throw OmniException(
           "IPP IIR: State size is zero but state pointer is not null after "
           "init.",
-          Status::BackendError);
+          OmniStatus::BackendError);
     }
   }
 
@@ -153,13 +154,14 @@ namespace OmniDSP::IntelIPP {
   }
 
   template <typename T>
-  Status IIRFilterProcessorImpl<T>::execute(
+  OmniStatus IIRFilterProcessorImpl<T>::execute(
       std::span<const T> input, std::span<T> output)
   {
     if (!p_state_ && state_size_bytes_ > 0)
-      return Status::NotInitialized;  // Check if state should exist but doesn't
-    if (input.size() != output.size()) return Status::SizeMismatch;
-    if (input.empty()) return Status::Success;
+      return OmniStatus::NotInitialized;  // Check if state should exist but
+                                          // doesn't
+    if (input.size() != output.size()) return OmniStatus::SizeMismatch;
+    if (input.empty()) return OmniStatus::Success;
 
     IppStatus status = ippStsErr;
     int len = static_cast<int>(input.size());
@@ -178,15 +180,15 @@ namespace OmniDSP::IntelIPP {
     );
 
     OMNI_CHECK_IPP_STATUS_RETURN(status, "IPP IIR: ippsIIR execution failed");
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   template <typename T>
-  Status IIRFilterProcessorImpl<T>::reset()
+  OmniStatus IIRFilterProcessorImpl<T>::reset()
   {
-    if (!p_state_ && state_size_bytes_ > 0) return Status::NotInitialized;
+    if (!p_state_ && state_size_bytes_ > 0) return OmniStatus::NotInitialized;
     if (!p_state_)
-      return Status::Success;  // Nothing to reset if state doesn't exist
+      return OmniStatus::Success;  // Nothing to reset if state doesn't exist
 
     IppStatus status = ippStsErr;
     int num_biquads = static_cast<int>(num_sections_);
@@ -205,7 +207,7 @@ namespace OmniDSP::IntelIPP {
 
     OMNI_CHECK_IPP_STATUS_RETURN(
         status, "IPP IIR: Reset (ippsIIRSetDlyLine) failed");
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   template <typename T>

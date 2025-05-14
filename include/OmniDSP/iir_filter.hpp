@@ -56,17 +56,17 @@ namespace OmniDSP {
      * @param input A span representing the input signal.
      * @param output A span representing the output buffer. Must be large
      * enough.
-     * @return Status::Success on success, or an error code.
+     * @return OmniStatus::Success on success, or an error code.
      */
-    [[nodiscard]] Status execute(
+    [[nodiscard]] OmniStatus execute(
         std::span<const T> input,
         std::span<T> output);  // State is managed by pimpl_
 
     /**
      * @brief Resets the internal state of the filter.
-     * @return Status::Success on success, or an error code.
+     * @return OmniStatus::Success on success, or an error code.
      */
-    Status reset();
+    OmniStatus reset();
 
     /**
      * @brief Gets the order of the filter.

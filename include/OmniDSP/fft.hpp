@@ -50,9 +50,9 @@ namespace OmniDSP {
     FFTPlan(const FFTPlan&) = delete;
     FFTPlan& operator=(const FFTPlan&) = delete;
 
-    [[nodiscard]] Status fft(
+    [[nodiscard]] OmniStatus fft(
         std::span<const T> input, std::span<T> output) const;
-    [[nodiscard]] Status ifft(
+    [[nodiscard]] OmniStatus ifft(
         std::span<const T> input, std::span<T> output) const;
     size_t get_length() const;
 
@@ -107,9 +107,9 @@ namespace OmniDSP {
     RFFTPlan(const RFFTPlan&) = delete;
     RFFTPlan& operator=(const RFFTPlan&) = delete;
 
-    [[nodiscard]] Status rfft(
+    [[nodiscard]] OmniStatus rfft(
         std::span<const T> input, std::span<Complex> output) const;
-    [[nodiscard]] Status irfft(
+    [[nodiscard]] OmniStatus irfft(
         std::span<const Complex> input, std::span<T> output) const;
     size_t get_length() const;
 

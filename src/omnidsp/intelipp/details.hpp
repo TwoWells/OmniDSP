@@ -22,7 +22,7 @@ namespace OmniDSP::IntelIPP::Details {
    * @param status The IppStatus code returned by an IPP function.
    * @return The corresponding OmniDSP::Status enum value.
    */
-  Status ipp_status_to_omnidsp_status(IppStatus status);
+  OmniStatus ipp_status_to_omnidsp_status(IppStatus status);
 
   // --- Type mapping from OmniDSP types to IPP types ---
   template <typename T>

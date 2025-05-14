@@ -57,9 +57,9 @@ namespace OmniDSP::Accelerate {
     FFTPlanImpl(FFTPlanImpl&&) = delete;
     FFTPlanImpl& operator=(FFTPlanImpl&&) = delete;
 
-    [[nodiscard]] Status fft(
+    [[nodiscard]] OmniStatus fft(
         std::span<const T> input, std::span<T> output) const override;
-    [[nodiscard]] Status ifft(
+    [[nodiscard]] OmniStatus ifft(
         std::span<const T> input, std::span<T> output) const override;
     size_t get_length() const override;
 
@@ -100,9 +100,9 @@ namespace OmniDSP::Accelerate {
     RFFTPlanImpl(RFFTPlanImpl&&) = delete;
     RFFTPlanImpl& operator=(RFFTPlanImpl&&) = delete;
 
-    [[nodiscard]] Status rfft(
+    [[nodiscard]] OmniStatus rfft(
         std::span<const T> input, std::span<Complex> output) const override;
-    [[nodiscard]] Status irfft(
+    [[nodiscard]] OmniStatus irfft(
         std::span<const Complex> input, std::span<T> output) const override;
     size_t get_length() const override;
 

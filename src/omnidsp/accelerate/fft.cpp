@@ -157,14 +157,14 @@ namespace OmniDSP::Accelerate {
 
   // fft Method
   template <typename T>
-  Status FFTPlanImpl<T>::fft(
+  OmniStatus FFTPlanImpl<T>::fft(
       std::span<const T> input, std::span<T> output) const
   {
     if (!fft_setup_forward_)
-      return length_ == 0 ? Status::Success : Status::InvalidOperation;
+      return length_ == 0 ? OmniStatus::Success : OmniStatus::InvalidOperation;
     if (input.size() != length_ || output.size() != length_)
-      return Status::SizeMismatch;
-    if (length_ == 0) return Status::Success;
+      return OmniStatus::SizeMismatch;
+    if (length_ == 0) return OmniStatus::Success;
 
     if constexpr (std::is_same_v<Real, float>) {
       vDSP_DFT_Interleaved_Execute(
@@ -178,19 +178,19 @@ namespace OmniDSP::Accelerate {
           reinterpret_cast<const DSPDoubleComplex*>(input.data()),
           reinterpret_cast<DSPDoubleComplex*>(output.data()));
     }
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   // ifft Method
   template <typename T>
-  Status FFTPlanImpl<T>::ifft(
+  OmniStatus FFTPlanImpl<T>::ifft(
       std::span<const T> input, std::span<T> output) const
   {
     if (!fft_setup_inverse_)
-      return length_ == 0 ? Status::Success : Status::InvalidOperation;
+      return length_ == 0 ? OmniStatus::Success : OmniStatus::InvalidOperation;
     if (input.size() != length_ || output.size() != length_)
-      return Status::SizeMismatch;
-    if (length_ == 0) return Status::Success;
+      return OmniStatus::SizeMismatch;
+    if (length_ == 0) return OmniStatus::Success;
 
     if constexpr (std::is_same_v<Real, float>) {
       vDSP_DFT_Interleaved_Execute(
@@ -204,7 +204,7 @@ namespace OmniDSP::Accelerate {
           reinterpret_cast<const DSPDoubleComplex*>(input.data()),
           reinterpret_cast<DSPDoubleComplex*>(output.data()));
     }
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   // get_length Method
@@ -343,24 +343,24 @@ namespace OmniDSP::Accelerate {
 
   // rfft Method
   template <typename T>  // T is REAL type
-  Status RFFTPlanImpl<T>::rfft(
+  OmniStatus RFFTPlanImpl<T>::rfft(
       std::span<const T> input, std::span<Complex> output) const
   {
     if (!fft_setup_forward_)
-      return length_ == 0 ? Status::Success : Status::InvalidOperation;
+      return length_ == 0 ? OmniStatus::Success : OmniStatus::InvalidOperation;
 
     size_t N = length_;
     size_t N_half_plus_1 = N / 2 + 1;
 
-    if (N == 0 && input.empty() && output.empty()) return Status::Success;
+    if (N == 0 && input.empty() && output.empty()) return OmniStatus::Success;
     if (input.size() != N || output.size() != N_half_plus_1) {
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
     if (N > 0 && temp_packed_buffer_.size() != N) {
       std::cerr << "RFFTPlanImpl::rfft internal error: temp_packed_buffer_ not "
                    "sized correctly."
                 << std::endl;
-      return Status::Failure;
+      return OmniStatus::Failure;
     }
 
     T* p_packed_dst = temp_packed_buffer_.data();
@@ -392,7 +392,7 @@ namespace OmniDSP::Accelerate {
         std::cerr << "RFFTPlanImpl::rfft error: Nyquist index out of bounds "
                      "for output span."
                   << std::endl;
-        return Status::Failure;
+        return OmniStatus::Failure;
       }
     }
     if (N % 2 != 0 && N > 1) {
@@ -413,29 +413,30 @@ namespace OmniDSP::Accelerate {
                   << std::endl;
       }
     }
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   // irfft Method
   template <typename T>  // T is REAL type
-  Status RFFTPlanImpl<T>::irfft(
+  OmniStatus RFFTPlanImpl<T>::irfft(
       std::span<const Complex> input, std::span<T> output_span) const
   {
     if (!fft_setup_inverse_)
-      return length_ == 0 ? Status::Success : Status::InvalidOperation;
+      return length_ == 0 ? OmniStatus::Success : OmniStatus::InvalidOperation;
 
     size_t N = length_;
     size_t N_half_plus_1 = N / 2 + 1;
 
-    if (N == 0 && input.empty() && output_span.empty()) return Status::Success;
+    if (N == 0 && input.empty() && output_span.empty())
+      return OmniStatus::Success;
     if (input.size() != N_half_plus_1 || output_span.size() != N) {
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
     if (N > 0 && temp_packed_buffer_.size() != N) {
       std::cerr << "RFFTPlanImpl::irfft internal error: temp_packed_buffer_ "
                    "not sized correctly."
                 << std::endl;
-      return Status::Failure;
+      return OmniStatus::Failure;
     }
 
     T* p_packed_src = temp_packed_buffer_.data();
@@ -455,7 +456,7 @@ namespace OmniDSP::Accelerate {
         std::cerr << "RFFTPlanImpl::irfft error: Nyquist index out of bounds "
                      "for input span."
                   << std::endl;
-        return Status::Failure;
+        return OmniStatus::Failure;
       }
     }
     if (N % 2 != 0 && N > 1) {
@@ -491,7 +492,7 @@ namespace OmniDSP::Accelerate {
           reinterpret_cast<const DSPDoubleComplex*>(p_packed_src),
           reinterpret_cast<DSPDoubleComplex*>(output_span.data()));
     }
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   // get_length Method

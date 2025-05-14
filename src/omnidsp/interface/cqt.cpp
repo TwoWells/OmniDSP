@@ -69,11 +69,11 @@ namespace OmniDSP {
    * @return Status::Success on success, or an error code on failure.
    */
   template <typename T>  // T is REAL type
-  [[nodiscard]] Status CQTProcessor<T>::execute(
+  [[nodiscard]] OmniStatus CQTProcessor<T>::execute(
       std::span<const T> input, std::span<Complex> output) const
   {  // Use T and Complex alias
     if (!pimpl_) {
-      return Status::InvalidOperation;
+      return OmniStatus::InvalidOperation;
     }
     // Add size checks for robustness (optional, could be in Impl)
     size_t expected_output_size

@@ -59,7 +59,7 @@ namespace OmniDSP::Default {
             spec.sample_rate,
             spec.cutoff1,
             spec.window_setup.length);
-      return std::unexpected(Status::InvalidArgument);
+      return std::unexpected(OmniStatus::InvalidArgument);
     }
 
     size_t num_taps = spec.num_taps();
@@ -67,7 +67,7 @@ namespace OmniDSP::Default {
       if (logger)
         logger->error(
             "FIR filter order must result in at least 1 tap (num_taps was 0).");
-      return std::unexpected(Status::InvalidArgument);
+      return std::unexpected(OmniStatus::InvalidArgument);
     }
 
     // Normalized frequencies
@@ -84,7 +84,7 @@ namespace OmniDSP::Default {
               "bandpass/bandstop filters.",
               spec.cutoff2.value(),
               spec.cutoff1);
-        return std::unexpected(Status::InvalidArgument);
+        return std::unexpected(OmniStatus::InvalidArgument);
       }
     }
 
@@ -139,7 +139,7 @@ namespace OmniDSP::Default {
               logger->error(
                   "Default FIR design (Bandpass): Missing fn2 (cutoff2) in "
                   "spec.");
-            return std::unexpected(Status::InvalidArgument);
+            return std::unexpected(OmniStatus::InvalidArgument);
           }
           double fn2 = fn2_opt.value();
           T sinc_val2;
@@ -160,7 +160,7 @@ namespace OmniDSP::Default {
               logger->error(
                   "Default FIR design (Bandstop): Missing fn2 (cutoff2) in "
                   "spec.");
-            return std::unexpected(Status::InvalidArgument);
+            return std::unexpected(OmniStatus::InvalidArgument);
           }
           double fn2 = fn2_opt.value();
           T sinc_val2;
@@ -187,7 +187,7 @@ namespace OmniDSP::Default {
           if (logger)
             logger->error(
                 "Default FIR design: Unknown filter type specified in spec.");
-          return std::unexpected(Status::InvalidArgument);
+          return std::unexpected(OmniStatus::InvalidArgument);
       }
     }
 
@@ -273,15 +273,15 @@ namespace OmniDSP::Default {
   FIRFilterProcessorImpl<T>::~FIRFilterProcessorImpl() = default;
 
   template <typename T>
-  Status FIRFilterProcessorImpl<T>::execute(
+  OmniStatus FIRFilterProcessorImpl<T>::execute(
       std::span<const T> input, std::span<T> output)
   {
     if (coefficients_.empty()) {  // Should have been caught by constructor
       std::fill(output.begin(), output.end(), T{0});
-      return Status::Success;  // Or an error status
+      return OmniStatus::Success;  // Or an error status
     }
     if (output.size() < input.size()) {
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
     if (input.empty()) {
       // If input is empty, output should also be empty up to input.size().
@@ -291,7 +291,7 @@ namespace OmniDSP::Default {
           output.begin(),
           output.begin() + std::min(input.size(), output.size()),
           T{0});
-      return Status::Success;
+      return OmniStatus::Success;
     }
 
     size_t num_taps = coefficients_.size();
@@ -331,14 +331,14 @@ namespace OmniDSP::Default {
     if (output.size() > input.size()) {
       std::fill(output.begin() + input.size(), output.end(), T{0});
     }
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   template <typename T>
-  Status FIRFilterProcessorImpl<T>::reset()
+  OmniStatus FIRFilterProcessorImpl<T>::reset()
   {
     std::fill(state_.begin(), state_.end(), T{0});
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   template <typename T>

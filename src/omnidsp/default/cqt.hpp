@@ -51,9 +51,9 @@ namespace OmniDSP::Default {
     CQTProcessorImpl& operator=(CQTProcessorImpl&&) = delete;
 
     // Interface methods
-    [[nodiscard]] Status execute(
+    [[nodiscard]] OmniStatus execute(
         std::span<const T> input, std::span<Complex> output) const override;
-    [[nodiscard]] Status reset() override;  // Added reset method
+    [[nodiscard]] OmniStatus reset() override;  // Added reset method
     size_t get_num_bins() const override;
     size_t get_num_output_frames(size_t input_length) const override;
     size_t get_hop_length() const override;

@@ -14,8 +14,8 @@
 
 namespace OmniDSP {
 
-  // --- Core Status Enum ---
-  enum class Status {
+  // --- Core OmniStatus Enum ---
+  enum class OmniStatus {
     Success = 0,
     Failure = 1,
     InvalidArgument = 2,
@@ -30,35 +30,35 @@ namespace OmniDSP {
     NotImplemented = 11,
   };
 
-  inline std::string_view get_status_string(Status status) noexcept
+  inline std::string_view get_status_string(OmniStatus status) noexcept
   {
     switch (status) {
-      case Status::Success:
+      case OmniStatus::Success:
         return "Success";
-      case Status::Failure:
+      case OmniStatus::Failure:
         return "Failure";
-      case Status::InvalidArgument:
+      case OmniStatus::InvalidArgument:
         return "InvalidArgument";
-      case Status::SizeMismatch:
+      case OmniStatus::SizeMismatch:
         return "SizeMismatch";
-      case Status::AllocationError:
+      case OmniStatus::AllocationError:
         return "AllocationError";
-      case Status::BackendError:
+      case OmniStatus::BackendError:
         return "BackendError";
-      case Status::NotInitialized:
+      case OmniStatus::NotInitialized:
         return "NotInitialized";
-      case Status::InvalidOperation:
+      case OmniStatus::InvalidOperation:
         return "InvalidOperation";
-      case Status::NotImplemented:
+      case OmniStatus::NotImplemented:
         return "NotImplemented";
-      case Status::UnsupportedFeature:
+      case OmniStatus::UnsupportedFeature:
         return "UnsupportedFeature";
-      case Status::OutOfBounds:
+      case OmniStatus::OutOfBounds:
         return "OutOfBounds";
-      case Status::Timeout:
+      case OmniStatus::Timeout:
         return "Timeout";
       default:
-        return "Unknown Status";
+        return "Unknown OmniStatus";
     }
   }
 
@@ -145,22 +145,23 @@ namespace OmniDSP {
 
   // --- OmniExpected Alias ---
   template <typename T>
-  using OmniExpected = std::expected<T, Status>;
+  using OmniExpected = std::expected<T, OmniStatus>;
 
   // --- OmniException Definition ---
   class OmniException : public std::runtime_error {
    private:
-    Status error_status_;
+    OmniStatus error_status_;
 
    public:
     explicit OmniException(
-        const std::string& message, Status status = Status::Failure)
+        const std::string& message, OmniStatus status = OmniStatus::Failure)
         : std::runtime_error(message), error_status_(status)
     {}
-    explicit OmniException(const char* message, Status status = Status::Failure)
+    explicit OmniException(
+        const char* message, OmniStatus status = OmniStatus::Failure)
         : std::runtime_error(message), error_status_(status)
     {}
-    Status get_status() const noexcept { return error_status_; }
+    OmniStatus get_status() const noexcept { return error_status_; }
   };
 
   // --- Utility Type Traits ---

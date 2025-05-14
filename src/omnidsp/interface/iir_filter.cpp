@@ -67,12 +67,13 @@ namespace OmniDSP {
    * @brief Applies the IIR filter (cascade of SOS) to an input signal.
    */
   template <typename T>
-  [[nodiscard]] Status IIRFilterProcessor<T>::execute(  // Or IIRFilterProcessor
+  [[nodiscard]] OmniStatus
+  IIRFilterProcessor<T>::execute(  // Or IIRFilterProcessor
       std::span<const T> input,
       std::span<T> output)
   {  // Potentially non-const if Processor
     if (!pimpl_) {
-      return Status::InvalidOperation;
+      return OmniStatus::InvalidOperation;
     }
     return pimpl_->execute(input, output);
   }
@@ -81,10 +82,10 @@ namespace OmniDSP {
    * @brief Resets the internal state of the filter (delay elements).
    */
   template <typename T>
-  Status IIRFilterProcessor<T>::reset()
+  OmniStatus IIRFilterProcessor<T>::reset()
   {  // Or IIRFilterProcessor
     if (!pimpl_) {
-      return Status::InvalidOperation;
+      return OmniStatus::InvalidOperation;
     }
     return pimpl_->reset();
   }

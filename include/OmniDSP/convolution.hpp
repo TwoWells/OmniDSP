@@ -47,7 +47,7 @@ namespace OmniDSP {
     ConvolutionPlan(const ConvolutionPlan&) = delete;
     ConvolutionPlan& operator=(const ConvolutionPlan&) = delete;
 
-    [[nodiscard]] Status execute(
+    [[nodiscard]] OmniStatus execute(
         std::span<const T> input, std::span<T> output) const;
     size_t get_kernel_length() const;
     ConvolutionType get_type() const;
@@ -61,7 +61,7 @@ namespace OmniDSP {
      * @param params The parameters for the convolution operation.
      * @param kernel_coeffs The convolution kernel coefficients.
      * @return An OmniExpected containing a unique_ptr to the ConvolutionPlan or
-     * an error Status.
+     * an error OmniStatus.
      */
     [[nodiscard]] static OmniExpected<std::unique_ptr<ConvolutionPlan<T>>>
     create(
@@ -92,7 +92,7 @@ namespace OmniDSP {
     CorrelationPlan(const CorrelationPlan&) = delete;
     CorrelationPlan& operator=(const CorrelationPlan&) = delete;
 
-    [[nodiscard]] Status execute(
+    [[nodiscard]] OmniStatus execute(
         std::span<const T> input, std::span<T> output) const;
     size_t get_template_length() const;
     ConvolutionType get_type() const;
@@ -106,7 +106,7 @@ namespace OmniDSP {
      * @param params The parameters for the correlation operation.
      * @param template_coeffs The correlation template coefficients.
      * @return An OmniExpected containing a unique_ptr to the CorrelationPlan or
-     * an error Status.
+     * an error OmniStatus.
      */
     [[nodiscard]] static OmniExpected<std::unique_ptr<CorrelationPlan<T>>>
     create(

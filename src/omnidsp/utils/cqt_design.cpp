@@ -33,7 +33,7 @@ namespace OmniDSP::Utils {
     // Q = 1 / (2^(1/B) - 1), where B is bins_per_octave
     if (params.bins_per_octave_
         <= 0) {  // Should be caught by Params::CQT constructor
-      return std::unexpected(Status::InvalidArgument);
+      return std::unexpected(OmniStatus::InvalidArgument);
     }
     double q_factor
         = 1.0
@@ -44,8 +44,9 @@ namespace OmniDSP::Utils {
           "Calculated Q factor ({}) is not positive. Bins per octave: {}",
           q_factor,
           params.bins_per_octave_);
-      return std::unexpected(Status::Failure);  // Mathematical impossibility
-                                                // with valid bins_per_octave
+      return std::unexpected(
+          OmniStatus::Failure);  // Mathematical impossibility
+                                 // with valid bins_per_octave
     }
 
     // 2. Determine all CQT bin frequencies
@@ -86,7 +87,7 @@ namespace OmniDSP::Utils {
           params.min_freq_,
           params.max_freq_,
           params.sample_rate_);
-      return std::unexpected(Status::InvalidArgument);
+      return std::unexpected(OmniStatus::InvalidArgument);
     }
     std::sort(all_bin_frequencies.begin(), all_bin_frequencies.end());
     all_bin_frequencies.erase(
@@ -188,7 +189,7 @@ namespace OmniDSP::Utils {
         logger->error(
             "No valid processing octaves could be formed for CQT, though bins "
             "were generated.");
-        return std::unexpected(Status::Failure);
+        return std::unexpected(OmniStatus::Failure);
       }
     }
 
@@ -216,13 +217,13 @@ namespace OmniDSP::Utils {
           "Design::CQT: "
           "{}",
           e.what());
-      return std::unexpected(Status::InvalidArgument);
+      return std::unexpected(OmniStatus::InvalidArgument);
     }
     catch (const std::logic_error& e) {  // Catch logic_errors from Design::CQT
                                          // constructor (more general)
       logger->error(
           "Logic error during Design::CQT construction: {}", e.what());
-      return std::unexpected(Status::Failure);
+      return std::unexpected(OmniStatus::Failure);
     }
   }
 

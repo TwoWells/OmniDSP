@@ -49,8 +49,9 @@ namespace OmniDSP::Default {
      * @return Status code (Success or SizeMismatch).
      */
     // FIX: Added const qualifier to match base class
-    Status fft(std::span<const T_Complex> input, std::span<T_Complex> output)
-        const override;
+    OmniStatus fft(
+        std::span<const T_Complex> input,
+        std::span<T_Complex> output) const override;
 
     /**
      * @brief Executes the inverse FFT (output is complex, scaled by 1/N).
@@ -59,8 +60,9 @@ namespace OmniDSP::Default {
      * @return Status code (Success or SizeMismatch).
      */
     // FIX: Added const qualifier to match base class
-    Status ifft(std::span<const T_Complex> input, std::span<T_Complex> output)
-        const override;
+    OmniStatus ifft(
+        std::span<const T_Complex> input,
+        std::span<T_Complex> output) const override;
 
     /**
      * @brief Gets the FFT length N.
@@ -113,7 +115,7 @@ namespace OmniDSP::Default {
      * @return Status code (Success or SizeMismatch).
      */
     // FIX: Added const qualifier to match base class
-    Status rfft(std::span<const T_Real> input, std::span<T_Complex> output)
+    OmniStatus rfft(std::span<const T_Real> input, std::span<T_Complex> output)
         const override;
 
     /**
@@ -123,7 +125,7 @@ namespace OmniDSP::Default {
      * @return Status code (Success or SizeMismatch).
      */
     // FIX: Added const qualifier to match base class
-    Status irfft(std::span<const T_Complex> input, std::span<T_Real> output)
+    OmniStatus irfft(std::span<const T_Complex> input, std::span<T_Real> output)
         const override;
 
     /**

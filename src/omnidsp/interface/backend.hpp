@@ -40,10 +40,10 @@ namespace OmniDSP::Abstract {
   class FFTPlanImpl {
    public:
     virtual ~FFTPlanImpl() = default;
-    [[nodiscard]] virtual Status fft(
+    [[nodiscard]] virtual OmniStatus fft(
         std::span<const T> input, std::span<T> output) const
         = 0;
-    [[nodiscard]] virtual Status ifft(
+    [[nodiscard]] virtual OmniStatus ifft(
         std::span<const T> input, std::span<T> output) const
         = 0;
     virtual size_t get_length() const = 0;
@@ -54,10 +54,10 @@ namespace OmniDSP::Abstract {
    public:
     using Complex = Utils::GetComplexType<T>;
     virtual ~RFFTPlanImpl() = default;
-    [[nodiscard]] virtual Status rfft(
+    [[nodiscard]] virtual OmniStatus rfft(
         std::span<const T> input, std::span<Complex> output) const
         = 0;
-    [[nodiscard]] virtual Status irfft(
+    [[nodiscard]] virtual OmniStatus irfft(
         std::span<const Complex> input, std::span<T> output) const
         = 0;
     virtual size_t get_length() const = 0;
@@ -67,10 +67,10 @@ namespace OmniDSP::Abstract {
   class ResampleProcessorImpl {
    public:
     virtual ~ResampleProcessorImpl() = default;
-    [[nodiscard]] virtual Status execute(
+    [[nodiscard]] virtual OmniStatus execute(
         std::span<const T> input, std::span<T> output)
         = 0;
-    [[nodiscard]] virtual Status reset() = 0;
+    [[nodiscard]] virtual OmniStatus reset() = 0;
     virtual double get_input_rate() const = 0;
     virtual double get_output_rate() const = 0;
     virtual size_t get_output_length(size_t input_length) const = 0;
@@ -80,7 +80,7 @@ namespace OmniDSP::Abstract {
   class ConvolutionPlanImpl {
    public:
     virtual ~ConvolutionPlanImpl() = default;
-    [[nodiscard]] virtual Status execute(
+    [[nodiscard]] virtual OmniStatus execute(
         std::span<const T> input, std::span<T> output) const
         = 0;
     virtual size_t get_kernel_length() const = 0;
@@ -94,7 +94,7 @@ namespace OmniDSP::Abstract {
   class CorrelationPlanImpl {
    public:
     virtual ~CorrelationPlanImpl() = default;
-    [[nodiscard]] virtual Status execute(
+    [[nodiscard]] virtual OmniStatus execute(
         std::span<const T> input, std::span<T> output) const
         = 0;
     virtual size_t get_template_length() const = 0;
@@ -108,10 +108,10 @@ namespace OmniDSP::Abstract {
   class FIRFilterProcessorImpl {
    public:
     virtual ~FIRFilterProcessorImpl() = default;
-    [[nodiscard]] virtual Status execute(
+    [[nodiscard]] virtual OmniStatus execute(
         std::span<const T> input, std::span<T> output)
         = 0;
-    [[nodiscard]] virtual Status reset() = 0;
+    [[nodiscard]] virtual OmniStatus reset() = 0;
     virtual size_t get_order() const = 0;
     virtual size_t get_num_taps() const = 0;
   };
@@ -120,10 +120,10 @@ namespace OmniDSP::Abstract {
   class IIRFilterProcessorImpl {
    public:
     virtual ~IIRFilterProcessorImpl() = default;
-    [[nodiscard]] virtual Status execute(
+    [[nodiscard]] virtual OmniStatus execute(
         std::span<const T> input, std::span<T> output)
         = 0;
-    [[nodiscard]] virtual Status reset() = 0;
+    [[nodiscard]] virtual OmniStatus reset() = 0;
     virtual size_t get_order() const = 0;
     virtual size_t get_num_sections() const = 0;
   };
@@ -133,11 +133,11 @@ namespace OmniDSP::Abstract {
    public:
     using Complex = Utils::GetComplexType<T>;
     virtual ~CQTProcessorImpl() = default;
-    [[nodiscard]] virtual Status execute(
+    [[nodiscard]] virtual OmniStatus execute(
         std::span<const T> input, std::span<Complex> output)
         const  // Typically CQT execute is stateful if overlapping frames
         = 0;
-    [[nodiscard]] virtual Status reset() = 0;  // Added reset method
+    [[nodiscard]] virtual OmniStatus reset() = 0;  // Added reset method
     virtual size_t get_num_bins() const = 0;
     virtual size_t get_num_output_frames(size_t input_length) const = 0;
     virtual size_t get_hop_length() const = 0;
@@ -191,56 +191,58 @@ namespace OmniDSP::Abstract {
         = 0;
 
     // Window Generation Methods
-    [[nodiscard]] virtual Status bartlett_window_f32(
+    [[nodiscard]] virtual OmniStatus bartlett_window_f32(
         size_t, std::span<F32>) const
         = 0;
-    [[nodiscard]] virtual Status bartlett_window_f64(
+    [[nodiscard]] virtual OmniStatus bartlett_window_f64(
         size_t, std::span<F64>) const
         = 0;
-    [[nodiscard]] virtual Status blackman_window_f32(
+    [[nodiscard]] virtual OmniStatus blackman_window_f32(
         size_t, std::span<F32>) const
         = 0;
-    [[nodiscard]] virtual Status blackman_window_f64(
+    [[nodiscard]] virtual OmniStatus blackman_window_f64(
         size_t, std::span<F64>) const
         = 0;
-    [[nodiscard]] virtual Status flattop_window_f32(
+    [[nodiscard]] virtual OmniStatus flattop_window_f32(
         size_t, std::span<F32>) const
         = 0;
-    [[nodiscard]] virtual Status flattop_window_f64(
+    [[nodiscard]] virtual OmniStatus flattop_window_f64(
         size_t, std::span<F64>) const
         = 0;
-    [[nodiscard]] virtual Status gaussian_window_f32(
+    [[nodiscard]] virtual OmniStatus gaussian_window_f32(
         size_t, double, std::span<F32>) const
         = 0;
-    [[nodiscard]] virtual Status gaussian_window_f64(
+    [[nodiscard]] virtual OmniStatus gaussian_window_f64(
         size_t, double, std::span<F64>) const
         = 0;
-    [[nodiscard]] virtual Status hamming_window_f32(
+    [[nodiscard]] virtual OmniStatus hamming_window_f32(
         size_t, std::span<F32>) const
         = 0;
-    [[nodiscard]] virtual Status hamming_window_f64(
+    [[nodiscard]] virtual OmniStatus hamming_window_f64(
         size_t, std::span<F64>) const
         = 0;
-    [[nodiscard]] virtual Status hann_window_f32(size_t, std::span<F32>) const
+    [[nodiscard]] virtual OmniStatus hann_window_f32(
+        size_t, std::span<F32>) const
         = 0;
-    [[nodiscard]] virtual Status hann_window_f64(size_t, std::span<F64>) const
+    [[nodiscard]] virtual OmniStatus hann_window_f64(
+        size_t, std::span<F64>) const
         = 0;
-    [[nodiscard]] virtual Status kaiser_window_f32(
+    [[nodiscard]] virtual OmniStatus kaiser_window_f32(
         size_t, double, std::span<F32>) const
         = 0;
-    [[nodiscard]] virtual Status kaiser_window_f64(
+    [[nodiscard]] virtual OmniStatus kaiser_window_f64(
         size_t, double, std::span<F64>) const
         = 0;
-    [[nodiscard]] virtual Status rectangular_window_f32(
+    [[nodiscard]] virtual OmniStatus rectangular_window_f32(
         size_t, std::span<F32>) const
         = 0;
-    [[nodiscard]] virtual Status rectangular_window_f64(
+    [[nodiscard]] virtual OmniStatus rectangular_window_f64(
         size_t, std::span<F64>) const
         = 0;
-    [[nodiscard]] virtual Status triangular_window_f32(
+    [[nodiscard]] virtual OmniStatus triangular_window_f32(
         size_t, std::span<F32>) const
         = 0;
-    [[nodiscard]] virtual Status triangular_window_f64(
+    [[nodiscard]] virtual OmniStatus triangular_window_f64(
         size_t, std::span<F64>) const
         = 0;
 

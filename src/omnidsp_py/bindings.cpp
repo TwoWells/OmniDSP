@@ -38,14 +38,14 @@ using double_c = ComplexT<double>;
 // Allows Python code to catch specific library errors
 class OmniDSPPyError : public std::runtime_error {
  public:
-  OmniDSPPyError(Status s, const std::string& message)
+  OmniDSPPyError(OmniStatus s, const std::string& message)
       : std::runtime_error(message), status_(s)
   {}
 
-  Status get_status() const { return status_; }
+  OmniStatus get_status() const { return status_; }
 
  private:
-  Status status_;
+  OmniStatus status_;
 };
 
 // Helper to check OmniExpected<T> and throw OmniDSPPyError on failure
@@ -57,7 +57,7 @@ T check_expected(
     return std::move(result.value());
   }
   else {
-    Status s = result.error();
+    OmniStatus s = result.error();
     std::string error_msg
         = func_name + " failed with status: " + get_status_string(s);
     throw OmniDSPPyError(s, error_msg);
@@ -70,18 +70,18 @@ void check_expected_void(
     const std::string& func_name = "OmniDSP function")
 {
   if (!result.has_value()) {
-    Status s = result.error();
+    OmniStatus s = result.error();
     std::string error_msg
         = func_name + " failed with status: " + get_status_string(s);
     throw OmniDSPPyError(s, error_msg);
   }
 }
 
-// Helper to check Status return values (for Plan execute methods)
+// Helper to check OmniStatus return values (for Plan execute methods)
 void check_status(
-    Status status, const std::string& func_name = "OmniDSP Plan execute")
+    OmniStatus status, const std::string& func_name = "OmniDSP Plan execute")
 {
-  if (status != Status::Success) {
+  if (status != OmniStatus::Success) {
     std::string error_msg
         = func_name + " failed with status: " + get_status_string(status);
     throw OmniDSPPyError(status, error_msg);
@@ -151,7 +151,7 @@ PYBIND11_MODULE(_omnidsp_cpp, m)
         catch (const OmniDSPPyError& e) {
           // Set the Python error object with the message from the C++ exception
           // Include the status code if desired
-          std::string msg = std::string(e.what()) + " (Status Code: "
+          std::string msg = std::string(e.what()) + " (OmniStatus Code: "
                             + std::to_string(static_cast<int>(e.get_status()))
                             + ")";
           PyErr_SetString(omni_dsp_py_error.ptr(), msg.c_str());
@@ -166,16 +166,16 @@ PYBIND11_MODULE(_omnidsp_cpp, m)
       .value("OneMKL", BackendType::OneMKL)
       .export_values();
 
-  py::enum_<Status>(m, "Status")
-      .value("Success", Status::Success)
-      .value("Failure", Status::Failure)
-      .value("InvalidArgument", Status::InvalidArgument)
-      .value("InvalidOperation", Status::InvalidOperation)
-      .value("AllocationError", Status::AllocationError)
-      .value("BackendError", Status::BackendError)
-      .value("UnsupportedFeature", Status::UnsupportedFeature)
-      .value("SizeMismatch", Status::SizeMismatch)
-      .value("OutOfBounds", Status::OutOfBounds)
+  py::enum_<OmniStatus>(m, "OmniStatus")
+      .value("Success", OmniStatus::Success)
+      .value("Failure", OmniStatus::Failure)
+      .value("InvalidArgument", OmniStatus::InvalidArgument)
+      .value("InvalidOperation", OmniStatus::InvalidOperation)
+      .value("AllocationError", OmniStatus::AllocationError)
+      .value("BackendError", OmniStatus::BackendError)
+      .value("UnsupportedFeature", OmniStatus::UnsupportedFeature)
+      .value("SizeMismatch", OmniStatus::SizeMismatch)
+      .value("OutOfBounds", OmniStatus::OutOfBounds)
       .export_values();
 
   py::enum_<DataType>(m, "DataType")

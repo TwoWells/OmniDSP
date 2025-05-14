@@ -160,9 +160,9 @@ namespace OmniDSP::IntelIPP {
     IIRFilterProcessorImpl(IIRFilterProcessorImpl&&) = delete;
     IIRFilterProcessorImpl& operator=(IIRFilterProcessorImpl&&) = delete;
 
-    [[nodiscard]] Status execute(
+    [[nodiscard]] OmniStatus execute(
         std::span<const T> input, std::span<T> output) override;
-    [[nodiscard]] Status reset() override;
+    [[nodiscard]] OmniStatus reset() override;
 
     size_t get_order() const override;
     size_t get_num_sections() const override;

@@ -43,7 +43,7 @@ namespace OmniDSP::Utils {
    * window_setup.length; filter order (and thus window length for design) is
    * determined internally by this utility.
    * @return An OmniExpected containing the designed FIR coefficients
-   * (FIRCoefs<T>) on success, or a Status code on failure.
+   * (FIRCoefs<T>) on success, or a OmniStatus code on failure.
    */
   template <typename T>
   [[nodiscard]] OmniExpected<Coefs::FIRFilter<T>>

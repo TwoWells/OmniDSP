@@ -47,9 +47,9 @@ namespace OmniDSP::Default {
     FIRFilterProcessorImpl& operator=(FIRFilterProcessorImpl&&) = delete;
 
     // --- Interface Methods Implementation ---
-    [[nodiscard]] Status execute(
+    [[nodiscard]] OmniStatus execute(
         std::span<const T> input, std::span<T> output) override;
-    [[nodiscard]] Status reset() override;
+    [[nodiscard]] OmniStatus reset() override;
     size_t get_order() const override;
     size_t get_num_taps() const override;
     std::span<const T> get_coefficients()

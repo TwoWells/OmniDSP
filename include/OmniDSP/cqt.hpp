@@ -44,7 +44,7 @@ namespace OmniDSP {
     CQTProcessor(const CQTProcessor&) = delete;
     CQTProcessor& operator=(const CQTProcessor&) = delete;
 
-    [[nodiscard]] Status execute(
+    [[nodiscard]] OmniStatus execute(
         std::span<const T> input, std::span<Complex> output) const;
     size_t get_num_bins() const;
     size_t get_num_output_frames(size_t input_length) const;
@@ -63,11 +63,11 @@ namespace OmniDSP {
         const ::OmniDSP::Abstract::Backend& backend, const Design::CQT& design)
     {
       // Initialize pimpl_expected with an unexpected value.
-      // The type of pimpl_expected is OmniExpected<..., Status>, so ErrorType
-      // is Status.
+      // The type of pimpl_expected is OmniExpected<..., OmniStatus>, so
+      // ErrorType is OmniStatus.
       OmniExpected<std::unique_ptr<Abstract::CQTProcessorImpl<T>>>
-          pimpl_expected
-          = std::unexpected<OmniDSP::Status>(OmniDSP::Status::NotImplemented);
+          pimpl_expected = std::unexpected<OmniDSP::OmniStatus>(
+              OmniDSP::OmniStatus::NotImplemented);
 
       if constexpr (std::is_same_v<T, F32>) {
         pimpl_expected = backend.create_cqt_processor_impl_f32(design);
@@ -82,13 +82,13 @@ namespace OmniDSP {
             std::is_same_v<T, F32> || std::is_same_v<T, F64>,
             "Unsupported type for CQTProcessor::create");
         // Return an unexpected value with the correct error type.
-        return std::unexpected<OmniDSP::Status>(
-            OmniDSP::Status::UnsupportedType);
+        return std::unexpected<OmniDSP::OmniStatus>(
+            OmniDSP::OmniStatus::UnsupportedType);
       }
 
       if (!pimpl_expected) {
-        // pimpl_expected.error() returns Status&, which is compatible.
-        return std::unexpected<OmniDSP::Status>(pimpl_expected.error());
+        // pimpl_expected.error() returns OmniStatus&, which is compatible.
+        return std::unexpected<OmniDSP::OmniStatus>(pimpl_expected.error());
       }
       // pimpl_expected.value() returns unique_ptr&, std::move is correct.
       return create_from_impl(std::move(pimpl_expected.value()));

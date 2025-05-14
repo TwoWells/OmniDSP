@@ -75,7 +75,7 @@ namespace OmniDSP::Accelerate {
       catch (const OmniException& e) {
         logger->warn(
             "Accelerate::create_fft_plan_impl_c32 (length {}) failed: {} "
-            "(Status: {}). Falling back to Default::Backend impl.",
+            "(OmniStatus: {}). Falling back to Default::Backend impl.",
             length,
             e.what(),
             static_cast<int>(e.get_status()));
@@ -131,7 +131,7 @@ namespace OmniDSP::Accelerate {
       catch (const OmniException& e) {
         logger->warn(
             "Accelerate::create_fft_plan_impl_c64 (length {}) failed: {} "
-            "(Status: {}). Falling back to Default::Backend impl.",
+            "(OmniStatus: {}). Falling back to Default::Backend impl.",
             length,
             e.what(),
             static_cast<int>(e.get_status()));
@@ -187,7 +187,7 @@ namespace OmniDSP::Accelerate {
       catch (const OmniException& e) {
         logger->warn(
             "Accelerate::create_rfft_plan_impl_f32 (length {}) failed: {} "
-            "(Status: {}). Falling back to Default::Backend impl.",
+            "(OmniStatus: {}). Falling back to Default::Backend impl.",
             length,
             e.what(),
             static_cast<int>(e.get_status()));
@@ -241,7 +241,7 @@ namespace OmniDSP::Accelerate {
       catch (const OmniException& e) {
         logger->warn(
             "Accelerate::create_rfft_plan_impl_f64 (length {}) failed: {} "
-            "(Status: {}). Falling back to Default::Backend impl.",
+            "(OmniStatus: {}). Falling back to Default::Backend impl.",
             length,
             e.what(),
             static_cast<int>(e.get_status()));

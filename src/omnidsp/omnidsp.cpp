@@ -216,7 +216,7 @@ namespace OmniDSP {
             "Failed to create primary backend of type: {}. Check build "
             "configuration and backend availability.",
             get_backend_name(primary_backend_type));
-        return std::unexpected(Status::BackendError);
+        return std::unexpected(OmniStatus::BackendError);
       }
     }
     catch (const std::exception& e) {
@@ -224,13 +224,13 @@ namespace OmniDSP {
           "Exception during primary backend creation (type {}): {}",
           get_backend_name(primary_backend_type),
           e.what());
-      return std::unexpected(Status::BackendError);
+      return std::unexpected(OmniStatus::BackendError);
     }
     catch (...) {
       logger->error(
           "Unknown exception during primary backend creation (type {}).",
           get_backend_name(primary_backend_type));
-      return std::unexpected(Status::Failure);
+      return std::unexpected(OmniStatus::Failure);
     }
 
     if (category_overrides.empty()) {
@@ -280,7 +280,7 @@ namespace OmniDSP {
       logger->error(
           "One or more specified backend overrides could not be created. "
           "OmniDSP instance creation failed.");
-      return std::unexpected(Status::BackendError);
+      return std::unexpected(OmniStatus::BackendError);
     }
 
     try {
@@ -294,12 +294,12 @@ namespace OmniDSP {
     catch (const std::exception& e) {
       logger->error(
           "Exception during Dispatcher::Backend construction: {}", e.what());
-      return std::unexpected(Status::BackendError);
+      return std::unexpected(OmniStatus::BackendError);
     }
     catch (...) {
       logger->error(
           "Unknown exception during Dispatcher::Backend construction.");
-      return std::unexpected(Status::Failure);
+      return std::unexpected(OmniStatus::Failure);
     }
   }
 

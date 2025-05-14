@@ -87,9 +87,9 @@ namespace OmniDSP::Utils {
     // Assuming calculate_resampling_factors is in OmniDSP::Utils namespace
     // and declared in "src/omnidsp/utils/resample.hpp" (which might need
     // adjustment if it's a public util)
-    Status factor_status = calculate_resampling_factors(
+    OmniStatus factor_status = calculate_resampling_factors(
         params.input_rate_, params.output_rate_, L, M);
-    if (factor_status != Status::Success) {
+    if (factor_status != OmniStatus::Success) {
       logger->error(
           "Failed to calculate resampling factors L/M for IR={}, OR={}. "
           "Status: {}",
@@ -104,7 +104,7 @@ namespace OmniDSP::Utils {
           "invalid.",
           L,
           M);
-      return std::unexpected(Status::Failure);
+      return std::unexpected(OmniStatus::Failure);
     }
 
     logger->debug(
@@ -169,7 +169,7 @@ namespace OmniDSP::Utils {
     catch (const std::exception& e) {
       logger->error(
           "Exception during Design::Resample construction: {}", e.what());
-      return std::unexpected(Status::Failure);
+      return std::unexpected(OmniStatus::Failure);
     }
   }
 

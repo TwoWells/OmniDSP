@@ -43,7 +43,7 @@ namespace OmniDSP::Default {
       logger->error("Default::CQTProcessorImpl: owner_backend is null.");
       throw OmniException(
           "CQTProcessorImpl requires a non-null owner_backend.",
-          Status::InvalidArgument);
+          OmniStatus::InvalidArgument);
     }
 
     logger->debug(
@@ -133,7 +133,8 @@ namespace OmniDSP::Default {
             "Failed to wrap RFFTPlanImpl for CQT octave. FFTLen={}",
             octave_design_item.fft_length);
         throw OmniException(
-            "Failed to wrap internal RFFTPlanImpl for CQT.", Status::Failure);
+            "Failed to wrap internal RFFTPlanImpl for CQT.",
+            OmniStatus::Failure);
       }
 
       if (octave_design_item.fft_length / 2 + 1 > max_fft_len_for_frame_buf) {
@@ -169,7 +170,8 @@ namespace OmniDSP::Default {
               octave_design_item.fft_length,
               bin_freq);
           throw OmniException(
-              "CQT Kernel length exceeds FFT length.", Status::InvalidArgument);
+              "CQT Kernel length exceeds FFT length.",
+              OmniStatus::InvalidArgument);
         }
 
         WindowSetup kernel_win_setup
@@ -236,12 +238,12 @@ namespace OmniDSP::Default {
               octave_design_item.fft_length);
           throw OmniException(
               "Failed to wrap internal CFFTPlanImpl for CQT kernel.",
-              Status::Failure);
+              OmniStatus::Failure);
         }
 
-        Status kernel_fft_status = kernel_cfft_plan->fft(
+        OmniStatus kernel_fft_status = kernel_cfft_plan->fft(
             complex_kernel_time_domain, kernel_fft_result);
-        if (kernel_fft_status != Status::Success) {
+        if (kernel_fft_status != OmniStatus::Success) {
           logger->error(
               "FFT of CQT kernel failed for freq {}. Status: {}",
               bin_freq,
@@ -285,7 +287,7 @@ namespace OmniDSP::Default {
   CQTProcessorImpl<T>::~CQTProcessorImpl() = default;
 
   template <typename T>
-  Status CQTProcessorImpl<T>::execute(
+  OmniStatus CQTProcessorImpl<T>::execute(
       std::span<const T> input, std::span<Complex> output) const
   {
     auto logger = spdlog::get("OmniDSP");
@@ -299,7 +301,7 @@ namespace OmniDSP::Default {
           "processed "
           "octaves). Output will be zeroed.");
       std::fill(output.begin(), output.end(), Complex{T{0}, T{0}});
-      return Status::NotInitialized;
+      return OmniStatus::NotInitialized;
     }
 
     // TODO: Implement the actual CQT processing logic using overlap-add or
@@ -327,11 +329,11 @@ namespace OmniDSP::Default {
         "Default::CQTProcessorImpl::execute is not fully implemented beyond "
         "setup. Output will be zeroed.");
     std::fill(output.begin(), output.end(), Complex{T{0}, T{0}});
-    return Status::NotImplemented;  // Placeholder
+    return OmniStatus::NotImplemented;  // Placeholder
   }
 
   template <typename T>
-  Status CQTProcessorImpl<T>::reset()
+  OmniStatus CQTProcessorImpl<T>::reset()
   {
     auto logger = spdlog::get("OmniDSP");
     if (!logger) {
@@ -341,8 +343,8 @@ namespace OmniDSP::Default {
 
     for (auto& octave_data : processed_octaves_) {
       if (octave_data.resampler) {
-        Status resampler_status = octave_data.resampler->reset();
-        if (resampler_status != Status::Success) {
+        OmniStatus resampler_status = octave_data.resampler->reset();
+        if (resampler_status != OmniStatus::Success) {
           logger->error(
               "Failed to reset resampler for octave with SR {}. Status: {}",
               octave_data.octave_sample_rate,
@@ -358,7 +360,7 @@ namespace OmniDSP::Default {
     // std::fill(frame_fft_buffer_.begin(), frame_fft_buffer_.end(),
     // Complex{T{0},T{0}}); // Optional
 
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   template <typename T>

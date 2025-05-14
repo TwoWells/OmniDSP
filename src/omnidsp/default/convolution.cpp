@@ -129,7 +129,7 @@ namespace OmniDSP::Default {
     using FFTPlanPtr = std::unique_ptr<Abstract::FFTPlanImpl<T_Complex_Local>>;
     using RFFTPlanPtr = std::unique_ptr<Abstract::RFFTPlanImpl<T_Real_Local>>;
 
-    Status fft_status = Status::Failure;
+    OmniStatus fft_status = OmniStatus::Failure;
     size_t kernel_fft_size = 0;
 
     // Determine fft_length_ from the provided plan
@@ -253,7 +253,7 @@ namespace OmniDSP::Default {
         }
       }
 
-      if (fft_status != Status::Success) {
+      if (fft_status != OmniStatus::Success) {
         throw std::runtime_error(
             "Failed FFT of convolution kernel. Status: "
             + std::to_string(static_cast<int>(fft_status)));
@@ -290,18 +290,18 @@ namespace OmniDSP::Default {
   }
 
   template <typename T>
-  Status ConvolutionPlanImpl<T>::execute(
+  OmniStatus ConvolutionPlanImpl<T>::execute(
       std::span<const T> input, std::span<T> output) const
   {
     const size_t signal_len = input.size();
     const size_t output_len_expected = get_output_length(signal_len);
 
     if (output.size() < output_len_expected) {
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
 
     if (signal_len > max_input_length_ && max_input_length_ > 0) {
-      return Status::InvalidArgument;
+      return OmniStatus::InvalidArgument;
     }
 
     using T_Complex_Local = Utils::GetComplexType<T>;
@@ -315,7 +315,7 @@ namespace OmniDSP::Default {
       if (output.size() > output_len_expected) {
         std::fill(output.begin() + output_len_expected, output.end(), T{});
       }
-      return Status::Success;
+      return OmniStatus::Success;
     }
     if (kernel_length_ == 0) {  // If kernel is empty, output is all zeros (or
                                 // depends on definition for 'full'/'same')
@@ -323,7 +323,7 @@ namespace OmniDSP::Default {
       if (output.size() > output_len_expected) {
         std::fill(output.begin() + output_len_expected, output.end(), T{});
       }
-      return Status::Success;
+      return OmniStatus::Success;
     }
 
     size_t required_fft_len_for_current_input = signal_len + kernel_length_ - 1;
@@ -333,7 +333,7 @@ namespace OmniDSP::Default {
     }
 
     if (fft_length_ < required_fft_len_for_current_input) {
-      return Status::InvalidArgument;
+      return OmniStatus::InvalidArgument;
     }
 
     if (fft_length_ == 0) {
@@ -342,12 +342,13 @@ namespace OmniDSP::Default {
       // or direct (not implemented here). If method_hint_ was FFT, constructor
       // should have errored or setup fft_length_.
       if (method_hint_ == ConvolutionMethod::FFT)
-        return Status::InvalidOperation;  // FFT plan not available
+        return OmniStatus::InvalidOperation;  // FFT plan not available
       // Fallback to direct or error for Auto if direct not implemented
-      return Status::NotImplemented;  // Direct convolution not implemented here
+      return OmniStatus::NotImplemented;  // Direct convolution not implemented
+                                          // here
     }
     if (!input_padded_ || !input_fft_ || !product_fft_ || !result_ifft_) {
-      return Status::NotInitialized;  // Buffers not allocated
+      return OmniStatus::NotInitialized;  // Buffers not allocated
     }
 
     std::memcpy(input_padded_.get(), input.data(), signal_len * sizeof(T));
@@ -364,20 +365,20 @@ namespace OmniDSP::Default {
         product_fft_.get(), input_fft_size);  // Same size
     std::span<T> result_ifft_span(result_ifft_.get(), fft_length_);
 
-    Status status = Status::Failure;
+    OmniStatus status = OmniStatus::Failure;
 
     if constexpr (Utils::IsComplex_v<T>) {
       const auto* plan_ptr_variant
           = std::get_if<FFTPlanPtr>(&fft_plan_impl_variant_);
       if (!plan_ptr_variant || !(*plan_ptr_variant))
-        return Status::NotInitialized;  // FFT plan not available
+        return OmniStatus::NotInitialized;  // FFT plan not available
       const auto& plan_impl_ptr = *plan_ptr_variant;
 
       std::span<const T_Complex_Local> input_padded_complex_span(
           reinterpret_cast<const T_Complex_Local*>(input_padded_.get()),
           fft_length_);
       status = plan_impl_ptr->fft(input_padded_complex_span, input_fft_span);
-      if (status != Status::Success) return status;
+      if (status != OmniStatus::Success) return status;
 
       convolution_detail::complex_multiply<
           T_Complex_Local>(  // Explicit template argument
@@ -390,19 +391,19 @@ namespace OmniDSP::Default {
       std::span<T_Complex_Local> result_complex_span(
           reinterpret_cast<T_Complex_Local*>(result_ifft_.get()), fft_length_);
       status = plan_impl_ptr->ifft(product_fft_span, result_complex_span);
-      if (status != Status::Success) return status;
+      if (status != OmniStatus::Success) return status;
     }
     else {  // T is Real
       const auto* plan_ptr_variant
           = std::get_if<RFFTPlanPtr>(&fft_plan_impl_variant_);
       if (!plan_ptr_variant || !(*plan_ptr_variant))
-        return Status::NotInitialized;
+        return OmniStatus::NotInitialized;
       const auto& plan_impl_ptr = *plan_ptr_variant;
 
       std::span<const T_Real_Local> input_padded_real_span(
           input_padded_.get(), fft_length_);
       status = plan_impl_ptr->rfft(input_padded_real_span, input_fft_span);
-      if (status != Status::Success) return status;
+      if (status != OmniStatus::Success) return status;
 
       convolution_detail::complex_multiply<
           T_Complex_Local>(  // Explicit template argument
@@ -413,7 +414,7 @@ namespace OmniDSP::Default {
           product_fft_span);
 
       status = plan_impl_ptr->irfft(product_fft_span, result_ifft_span);
-      if (status != Status::Success) return status;
+      if (status != OmniStatus::Success) return status;
     }
 
     size_t full_start_idx = 0;
@@ -430,7 +431,7 @@ namespace OmniDSP::Default {
         full_start_idx = (kernel_length_ > 0) ? (kernel_length_ - 1) : 0;
         break;
       default:
-        return Status::InvalidArgument;
+        return OmniStatus::InvalidArgument;
     }
 
     size_t linear_conv_len = (signal_len > 0 && kernel_length_ > 0)
@@ -470,7 +471,7 @@ namespace OmniDSP::Default {
       std::fill(output.begin() + output_len_expected, output.end(), T{});
     }
 
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   template <typename T>
@@ -560,7 +561,7 @@ namespace OmniDSP::Default {
     using FFTPlanPtr = std::unique_ptr<Abstract::FFTPlanImpl<T_Complex_Local>>;
     using RFFTPlanPtr = std::unique_ptr<Abstract::RFFTPlanImpl<T_Real_Local>>;
 
-    Status fft_status = Status::Failure;
+    OmniStatus fft_status = OmniStatus::Failure;
     size_t template_fft_size = 0;
 
     if constexpr (Utils::IsComplex_v<T>) {
@@ -670,7 +671,7 @@ namespace OmniDSP::Default {
         }
       }
 
-      if (fft_status != Status::Success) {
+      if (fft_status != OmniStatus::Success) {
         throw std::runtime_error(
             "Failed FFT of correlation template. Status: "
             + std::to_string(static_cast<int>(fft_status)));
@@ -709,17 +710,17 @@ namespace OmniDSP::Default {
   }
 
   template <typename T>
-  Status CorrelationPlanImpl<T>::execute(
+  OmniStatus CorrelationPlanImpl<T>::execute(
       std::span<const T> input, std::span<T> output) const
   {
     const size_t signal_len = input.size();
     const size_t output_len_expected = get_output_length(signal_len);
 
     if (output.size() < output_len_expected) {
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
     if (signal_len > max_input_length_ && max_input_length_ > 0) {
-      return Status::InvalidArgument;
+      return OmniStatus::InvalidArgument;
     }
 
     using T_Complex_Local = Utils::GetComplexType<T>;
@@ -733,14 +734,14 @@ namespace OmniDSP::Default {
       if (output.size() > output_len_expected) {
         std::fill(output.begin() + output_len_expected, output.end(), T{});
       }
-      return Status::Success;
+      return OmniStatus::Success;
     }
     if (template_length_ == 0) {
       std::fill(output.begin(), output.begin() + output_len_expected, T{});
       if (output.size() > output_len_expected) {
         std::fill(output.begin() + output_len_expected, output.end(), T{});
       }
-      return Status::Success;
+      return OmniStatus::Success;
     }
 
     size_t required_fft_len_for_current_input
@@ -752,15 +753,15 @@ namespace OmniDSP::Default {
     }
 
     if (fft_length_ < required_fft_len_for_current_input) {
-      return Status::InvalidArgument;
+      return OmniStatus::InvalidArgument;
     }
     if (fft_length_ == 0) {
       if (method_hint_ == ConvolutionMethod::FFT)
-        return Status::InvalidOperation;
-      return Status::NotImplemented;
+        return OmniStatus::InvalidOperation;
+      return OmniStatus::NotImplemented;
     }
     if (!input_padded_ || !input_fft_ || !product_fft_ || !result_ifft_) {
-      return Status::NotInitialized;
+      return OmniStatus::NotInitialized;
     }
 
     std::memcpy(input_padded_.get(), input.data(), signal_len * sizeof(T));
@@ -776,20 +777,20 @@ namespace OmniDSP::Default {
         product_fft_.get(), input_fft_size);
     std::span<T> result_ifft_span(result_ifft_.get(), fft_length_);
 
-    Status status = Status::Failure;
+    OmniStatus status = OmniStatus::Failure;
 
     if constexpr (Utils::IsComplex_v<T>) {
       const auto* plan_ptr_variant
           = std::get_if<FFTPlanPtr>(&fft_plan_impl_variant_);
       if (!plan_ptr_variant || !(*plan_ptr_variant))
-        return Status::NotInitialized;
+        return OmniStatus::NotInitialized;
       const auto& plan_impl_ptr = *plan_ptr_variant;
 
       std::span<const T_Complex_Local> input_padded_complex_span(
           reinterpret_cast<const T_Complex_Local*>(input_padded_.get()),
           fft_length_);
       status = plan_impl_ptr->fft(input_padded_complex_span, input_fft_span);
-      if (status != Status::Success) return status;
+      if (status != OmniStatus::Success) return status;
 
       convolution_detail::complex_multiply<
           T_Complex_Local>(  // Explicit template argument
@@ -802,19 +803,19 @@ namespace OmniDSP::Default {
       std::span<T_Complex_Local> result_complex_span(
           reinterpret_cast<T_Complex_Local*>(result_ifft_.get()), fft_length_);
       status = plan_impl_ptr->ifft(product_fft_span, result_complex_span);
-      if (status != Status::Success) return status;
+      if (status != OmniStatus::Success) return status;
     }
     else {  // T is Real
       const auto* plan_ptr_variant
           = std::get_if<RFFTPlanPtr>(&fft_plan_impl_variant_);
       if (!plan_ptr_variant || !(*plan_ptr_variant))
-        return Status::NotInitialized;
+        return OmniStatus::NotInitialized;
       const auto& plan_impl_ptr = *plan_ptr_variant;
 
       std::span<const T_Real_Local> input_padded_real_span(
           input_padded_.get(), fft_length_);
       status = plan_impl_ptr->rfft(input_padded_real_span, input_fft_span);
-      if (status != Status::Success) return status;
+      if (status != OmniStatus::Success) return status;
 
       convolution_detail::complex_multiply<
           T_Complex_Local>(  // Explicit template argument
@@ -825,7 +826,7 @@ namespace OmniDSP::Default {
           product_fft_span);
 
       status = plan_impl_ptr->irfft(product_fft_span, result_ifft_span);
-      if (status != Status::Success) return status;
+      if (status != OmniStatus::Success) return status;
     }
 
     size_t full_start_idx = 0;
@@ -844,7 +845,7 @@ namespace OmniDSP::Default {
         if (signal_len < template_length_) full_start_idx = 0;
         break;
       default:
-        return Status::InvalidArgument;
+        return OmniStatus::InvalidArgument;
     }
 
     size_t linear_corr_len
@@ -885,7 +886,7 @@ namespace OmniDSP::Default {
       std::fill(output.begin() + output_len_expected, output.end(), T{});
     }
 
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   template <typename T>

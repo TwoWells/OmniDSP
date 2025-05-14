@@ -17,31 +17,37 @@ namespace OmniDSP::IntelIPP {
   // They are called by the corresponding virtual methods in Backend.
 
   // Renamed functions from _onemkl to _intelipp
-  [[nodiscard]] Status generate_bartlett_window_intelipp(std::span<F32> output);
-  [[nodiscard]] Status generate_bartlett_window_intelipp(std::span<F64> output);
-
-  [[nodiscard]] Status generate_blackman_window_intelipp(std::span<F32> output);
-  [[nodiscard]] Status generate_blackman_window_intelipp(std::span<F64> output);
-
-  [[nodiscard]] Status generate_hamming_window_intelipp(std::span<F32> output);
-  [[nodiscard]] Status generate_hamming_window_intelipp(std::span<F64> output);
-
-  [[nodiscard]] Status generate_hann_window_intelipp(std::span<F32> output);
-  [[nodiscard]] Status generate_hann_window_intelipp(std::span<F64> output);
-
-  [[nodiscard]] Status generate_kaiser_window_intelipp(
-      double beta, std::span<F32> output);
-  [[nodiscard]] Status generate_kaiser_window_intelipp(
-      double beta, std::span<F64> output);
-
-  [[nodiscard]] Status generate_rectangular_window_intelipp(
+  [[nodiscard]] OmniStatus generate_bartlett_window_intelipp(
       std::span<F32> output);
-  [[nodiscard]] Status generate_rectangular_window_intelipp(
+  [[nodiscard]] OmniStatus generate_bartlett_window_intelipp(
       std::span<F64> output);
 
-  [[nodiscard]] Status generate_triangular_window_intelipp(
+  [[nodiscard]] OmniStatus generate_blackman_window_intelipp(
       std::span<F32> output);
-  [[nodiscard]] Status generate_triangular_window_intelipp(
+  [[nodiscard]] OmniStatus generate_blackman_window_intelipp(
+      std::span<F64> output);
+
+  [[nodiscard]] OmniStatus generate_hamming_window_intelipp(
+      std::span<F32> output);
+  [[nodiscard]] OmniStatus generate_hamming_window_intelipp(
+      std::span<F64> output);
+
+  [[nodiscard]] OmniStatus generate_hann_window_intelipp(std::span<F32> output);
+  [[nodiscard]] OmniStatus generate_hann_window_intelipp(std::span<F64> output);
+
+  [[nodiscard]] OmniStatus generate_kaiser_window_intelipp(
+      double beta, std::span<F32> output);
+  [[nodiscard]] OmniStatus generate_kaiser_window_intelipp(
+      double beta, std::span<F64> output);
+
+  [[nodiscard]] OmniStatus generate_rectangular_window_intelipp(
+      std::span<F32> output);
+  [[nodiscard]] OmniStatus generate_rectangular_window_intelipp(
+      std::span<F64> output);
+
+  [[nodiscard]] OmniStatus generate_triangular_window_intelipp(
+      std::span<F32> output);
+  [[nodiscard]] OmniStatus generate_triangular_window_intelipp(
       std::span<F64> output);
 
 }  // namespace OmniDSP::IntelIPP

@@ -207,9 +207,9 @@ namespace OmniDSP::IntelIPP {
     FIRFilterProcessorImpl(FIRFilterProcessorImpl&&) = delete;
     FIRFilterProcessorImpl& operator=(FIRFilterProcessorImpl&&) = delete;
 
-    [[nodiscard]] Status execute(
+    [[nodiscard]] OmniStatus execute(
         std::span<const T> input, std::span<T> output) override;
-    [[nodiscard]] Status reset() override;
+    [[nodiscard]] OmniStatus reset() override;
 
     size_t get_order() const override;
     size_t get_num_taps() const override;

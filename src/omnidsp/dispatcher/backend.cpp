@@ -220,126 +220,126 @@ namespace OmniDSP::Dispatcher {
   }
 
   // --- Specific Window Generation Methods ---
-  [[nodiscard]] Status Backend::bartlett_window_f32(
+  [[nodiscard]] OmniStatus Backend::bartlett_window_f32(
       size_t length, std::span<F32> output) const
   {
     return select_backend(OperationCategory::Windowing)
         ->bartlett_window_f32(length, output);
   }
 
-  [[nodiscard]] Status Backend::bartlett_window_f64(
+  [[nodiscard]] OmniStatus Backend::bartlett_window_f64(
       size_t length, std::span<F64> output) const
   {
     return select_backend(OperationCategory::Windowing)
         ->bartlett_window_f64(length, output);
   }
 
-  [[nodiscard]] Status Backend::blackman_window_f32(
+  [[nodiscard]] OmniStatus Backend::blackman_window_f32(
       size_t length, std::span<F32> output) const
   {
     return select_backend(OperationCategory::Windowing)
         ->blackman_window_f32(length, output);
   }
 
-  [[nodiscard]] Status Backend::blackman_window_f64(
+  [[nodiscard]] OmniStatus Backend::blackman_window_f64(
       size_t length, std::span<F64> output) const
   {
     return select_backend(OperationCategory::Windowing)
         ->blackman_window_f64(length, output);
   }
 
-  [[nodiscard]] Status Backend::flattop_window_f32(
+  [[nodiscard]] OmniStatus Backend::flattop_window_f32(
       size_t length, std::span<F32> output) const
   {
     return select_backend(OperationCategory::Windowing)
         ->flattop_window_f32(length, output);
   }
 
-  [[nodiscard]] Status Backend::flattop_window_f64(
+  [[nodiscard]] OmniStatus Backend::flattop_window_f64(
       size_t length, std::span<F64> output) const
   {
     return select_backend(OperationCategory::Windowing)
         ->flattop_window_f64(length, output);
   }
 
-  [[nodiscard]] Status Backend::gaussian_window_f32(
+  [[nodiscard]] OmniStatus Backend::gaussian_window_f32(
       size_t length, double stddev, std::span<F32> output) const
   {
     return select_backend(OperationCategory::Windowing)
         ->gaussian_window_f32(length, stddev, output);
   }
 
-  [[nodiscard]] Status Backend::gaussian_window_f64(
+  [[nodiscard]] OmniStatus Backend::gaussian_window_f64(
       size_t length, double stddev, std::span<F64> output) const
   {
     return select_backend(OperationCategory::Windowing)
         ->gaussian_window_f64(length, stddev, output);
   }
 
-  [[nodiscard]] Status Backend::hamming_window_f32(
+  [[nodiscard]] OmniStatus Backend::hamming_window_f32(
       size_t length, std::span<F32> output) const
   {
     return select_backend(OperationCategory::Windowing)
         ->hamming_window_f32(length, output);
   }
 
-  [[nodiscard]] Status Backend::hamming_window_f64(
+  [[nodiscard]] OmniStatus Backend::hamming_window_f64(
       size_t length, std::span<F64> output) const
   {
     return select_backend(OperationCategory::Windowing)
         ->hamming_window_f64(length, output);
   }
 
-  [[nodiscard]] Status Backend::hann_window_f32(
+  [[nodiscard]] OmniStatus Backend::hann_window_f32(
       size_t length, std::span<F32> output) const
   {
     return select_backend(OperationCategory::Windowing)
         ->hann_window_f32(length, output);
   }
 
-  [[nodiscard]] Status Backend::hann_window_f64(
+  [[nodiscard]] OmniStatus Backend::hann_window_f64(
       size_t length, std::span<F64> output) const
   {
     return select_backend(OperationCategory::Windowing)
         ->hann_window_f64(length, output);
   }
 
-  [[nodiscard]] Status Backend::kaiser_window_f32(
+  [[nodiscard]] OmniStatus Backend::kaiser_window_f32(
       size_t length, double beta, std::span<F32> output) const
   {
     return select_backend(OperationCategory::Windowing)
         ->kaiser_window_f32(length, beta, output);
   }
 
-  [[nodiscard]] Status Backend::kaiser_window_f64(
+  [[nodiscard]] OmniStatus Backend::kaiser_window_f64(
       size_t length, double beta, std::span<F64> output) const
   {
     return select_backend(OperationCategory::Windowing)
         ->kaiser_window_f64(length, beta, output);
   }
 
-  [[nodiscard]] Status Backend::rectangular_window_f32(
+  [[nodiscard]] OmniStatus Backend::rectangular_window_f32(
       size_t length, std::span<F32> output) const
   {
     return select_backend(OperationCategory::Windowing)
         ->rectangular_window_f32(length, output);
   }
 
-  [[nodiscard]] Status Backend::rectangular_window_f64(
+  [[nodiscard]] OmniStatus Backend::rectangular_window_f64(
       size_t length, std::span<F64> output) const
   {
     return select_backend(OperationCategory::Windowing)
         ->rectangular_window_f64(length, output);
   }
 
-  [[nodiscard]] Status Backend::triangular_window_f32(
+  [[nodiscard]] OmniStatus Backend::triangular_window_f32(
       size_t length, std::span<F32> output) const
   {
     return select_backend(OperationCategory::Windowing)
         ->triangular_window_f32(length, output);
   }
 
-  [[nodiscard]] Status Backend::triangular_window_f64(
+  [[nodiscard]] OmniStatus Backend::triangular_window_f64(
       size_t length, std::span<F64> output) const
   {
     return select_backend(OperationCategory::Windowing)

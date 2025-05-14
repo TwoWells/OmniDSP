@@ -33,13 +33,14 @@ namespace OmniDSP::IntelIPP {
 
   // --- Bartlett ---
   // Renamed function
-  [[nodiscard]] Status generate_bartlett_window_intelipp(std::span<F32> output)
+  [[nodiscard]] OmniStatus generate_bartlett_window_intelipp(
+      std::span<F32> output)
   {
     const size_t length = output.size();
-    if (length == 0) return Status::Success;
+    if (length == 0) return OmniStatus::Success;
     if (length == 1) {
       output[0] = 1.0f;
-      return Status::Success;
+      return OmniStatus::Success;
     }
     // IPP Bartlett needs dummy input
     std::vector<F32> temp_input(length, 1.0f);
@@ -49,13 +50,14 @@ namespace OmniDSP::IntelIPP {
     return Details::ipp_status_to_omnidsp_status(status);
   }
   // Renamed function
-  [[nodiscard]] Status generate_bartlett_window_intelipp(std::span<F64> output)
+  [[nodiscard]] OmniStatus generate_bartlett_window_intelipp(
+      std::span<F64> output)
   {
     const size_t length = output.size();
-    if (length == 0) return Status::Success;
+    if (length == 0) return OmniStatus::Success;
     if (length == 1) {
       output[0] = 1.0;
-      return Status::Success;
+      return OmniStatus::Success;
     }
     // IPP Bartlett needs dummy input
     std::vector<F64> temp_input(length, 1.0);
@@ -67,13 +69,14 @@ namespace OmniDSP::IntelIPP {
 
   // --- Blackman ---
   // Renamed function
-  [[nodiscard]] Status generate_blackman_window_intelipp(std::span<F32> output)
+  [[nodiscard]] OmniStatus generate_blackman_window_intelipp(
+      std::span<F32> output)
   {
     const size_t length = output.size();
-    if (length == 0) return Status::Success;
+    if (length == 0) return OmniStatus::Success;
     if (length == 1) {
       output[0] = 1.0f;
-      return Status::Success;
+      return OmniStatus::Success;
     }
     // IPP Blackman needs dummy input
     std::vector<F32> temp_input(length, 1.0f);
@@ -84,13 +87,14 @@ namespace OmniDSP::IntelIPP {
     return Details::ipp_status_to_omnidsp_status(status);
   }
   // Renamed function
-  [[nodiscard]] Status generate_blackman_window_intelipp(std::span<F64> output)
+  [[nodiscard]] OmniStatus generate_blackman_window_intelipp(
+      std::span<F64> output)
   {
     const size_t length = output.size();
-    if (length == 0) return Status::Success;
+    if (length == 0) return OmniStatus::Success;
     if (length == 1) {
       output[0] = 1.0;
-      return Status::Success;
+      return OmniStatus::Success;
     }
     // IPP Blackman needs dummy input
     std::vector<F64> temp_input(length, 1.0);
@@ -103,13 +107,14 @@ namespace OmniDSP::IntelIPP {
 
   // --- Hamming ---
   // Renamed function
-  [[nodiscard]] Status generate_hamming_window_intelipp(std::span<F32> output)
+  [[nodiscard]] OmniStatus generate_hamming_window_intelipp(
+      std::span<F32> output)
   {
     const size_t length = output.size();
-    if (length == 0) return Status::Success;
+    if (length == 0) return OmniStatus::Success;
     if (length == 1) {
       output[0] = 1.0f;
-      return Status::Success;
+      return OmniStatus::Success;
     }
     // IPP Hamming needs dummy input
     std::vector<F32> temp_input(length, 1.0f);
@@ -119,13 +124,14 @@ namespace OmniDSP::IntelIPP {
     return Details::ipp_status_to_omnidsp_status(status);
   }
   // Renamed function
-  [[nodiscard]] Status generate_hamming_window_intelipp(std::span<F64> output)
+  [[nodiscard]] OmniStatus generate_hamming_window_intelipp(
+      std::span<F64> output)
   {
     const size_t length = output.size();
-    if (length == 0) return Status::Success;
+    if (length == 0) return OmniStatus::Success;
     if (length == 1) {
       output[0] = 1.0;
-      return Status::Success;
+      return OmniStatus::Success;
     }
     // IPP Hamming needs dummy input
     std::vector<F64> temp_input(length, 1.0);
@@ -137,13 +143,13 @@ namespace OmniDSP::IntelIPP {
 
   // --- Hann ---
   // Renamed function
-  [[nodiscard]] Status generate_hann_window_intelipp(std::span<F32> output)
+  [[nodiscard]] OmniStatus generate_hann_window_intelipp(std::span<F32> output)
   {
     const size_t length = output.size();
-    if (length == 0) return Status::Success;
+    if (length == 0) return OmniStatus::Success;
     if (length == 1) {
       output[0] = 1.0f;
-      return Status::Success;
+      return OmniStatus::Success;
     }
     // IPP Hann needs dummy input
     std::vector<F32> temp_input(length, 1.0f);
@@ -153,13 +159,13 @@ namespace OmniDSP::IntelIPP {
     return Details::ipp_status_to_omnidsp_status(status);
   }
   // Renamed function
-  [[nodiscard]] Status generate_hann_window_intelipp(std::span<F64> output)
+  [[nodiscard]] OmniStatus generate_hann_window_intelipp(std::span<F64> output)
   {
     const size_t length = output.size();
-    if (length == 0) return Status::Success;
+    if (length == 0) return OmniStatus::Success;
     if (length == 1) {
       output[0] = 1.0;
-      return Status::Success;
+      return OmniStatus::Success;
     }
     // IPP Hann needs dummy input
     std::vector<F64> temp_input(length, 1.0);
@@ -171,16 +177,16 @@ namespace OmniDSP::IntelIPP {
 
   // --- Kaiser ---
   // Renamed function
-  [[nodiscard]] Status generate_kaiser_window_intelipp(
+  [[nodiscard]] OmniStatus generate_kaiser_window_intelipp(
       double beta, std::span<F32> output)
   {
     const size_t length = output.size();
-    if (length == 0) return Status::Success;
+    if (length == 0) return OmniStatus::Success;
     // IPP uses alpha = beta / pi
-    if (beta < 0.0) return Status::InvalidArgument;
+    if (beta < 0.0) return OmniStatus::InvalidArgument;
     if (length == 1) {
       output[0] = 1.0f;
-      return Status::Success;
+      return OmniStatus::Success;
     }
 
     Ipp32f alpha = static_cast<Ipp32f>(beta / std::numbers::pi_v<double>);
@@ -192,16 +198,16 @@ namespace OmniDSP::IntelIPP {
     return Details::ipp_status_to_omnidsp_status(status);
   }
   // Renamed function
-  [[nodiscard]] Status generate_kaiser_window_intelipp(
+  [[nodiscard]] OmniStatus generate_kaiser_window_intelipp(
       double beta, std::span<F64> output)
   {
     const size_t length = output.size();
-    if (length == 0) return Status::Success;
+    if (length == 0) return OmniStatus::Success;
     // IPP uses alpha = beta / pi
-    if (beta < 0.0) return Status::InvalidArgument;
+    if (beta < 0.0) return OmniStatus::InvalidArgument;
     if (length == 1) {
       output[0] = 1.0;
-      return Status::Success;
+      return OmniStatus::Success;
     }
 
     Ipp64f alpha = static_cast<Ipp64f>(beta / std::numbers::pi_v<double>);
@@ -215,11 +221,11 @@ namespace OmniDSP::IntelIPP {
 
   // --- Rectangular ---
   // Renamed function
-  [[nodiscard]] Status generate_rectangular_window_intelipp(
+  [[nodiscard]] OmniStatus generate_rectangular_window_intelipp(
       std::span<F32> output)
   {
     const size_t length = output.size();
-    if (length == 0) return Status::Success;
+    if (length == 0) return OmniStatus::Success;
     // Use ippsSet to fill with 1.0
     IppStatus status
         = ippsSet_32f(1.0f, output.data(), static_cast<int>(length));
@@ -227,11 +233,11 @@ namespace OmniDSP::IntelIPP {
     return Details::ipp_status_to_omnidsp_status(status);
   }
   // Renamed function
-  [[nodiscard]] Status generate_rectangular_window_intelipp(
+  [[nodiscard]] OmniStatus generate_rectangular_window_intelipp(
       std::span<F64> output)
   {
     const size_t length = output.size();
-    if (length == 0) return Status::Success;
+    if (length == 0) return OmniStatus::Success;
     // Use ippsSet to fill with 1.0
     IppStatus status
         = ippsSet_64f(1.0, output.data(), static_cast<int>(length));
@@ -241,14 +247,14 @@ namespace OmniDSP::IntelIPP {
 
   // --- Triangular ---
   // Renamed function
-  [[nodiscard]] Status generate_triangular_window_intelipp(
+  [[nodiscard]] OmniStatus generate_triangular_window_intelipp(
       std::span<F32> output)
   {
     // IPP Bartlett is equivalent to Triangular
     return generate_bartlett_window_intelipp(output);
   }
   // Renamed function
-  [[nodiscard]] Status generate_triangular_window_intelipp(
+  [[nodiscard]] OmniStatus generate_triangular_window_intelipp(
       std::span<F64> output)
   {
     // IPP Bartlett is equivalent to Triangular

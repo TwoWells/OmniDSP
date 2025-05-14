@@ -61,10 +61,10 @@ namespace OmniDSP::Default {
     ResampleProcessorImpl& operator=(ResampleProcessorImpl&&) = delete;
 
     // --- Interface Methods Implementation ---
-    [[nodiscard]] Status execute(
+    [[nodiscard]] OmniStatus execute(
         std::span<const T> input, std::span<T> output) override;
 
-    [[nodiscard]] Status reset() override;
+    [[nodiscard]] OmniStatus reset() override;
 
     double get_input_rate() const override;
     double get_output_rate() const override;

@@ -100,41 +100,41 @@ namespace OmniDSP::Dispatcher {
 
     // --- Specific Window Generation Methods ---
     // Signatures remain the same as in Abstract::Backend
-    [[nodiscard]] Status bartlett_window_f32(
+    [[nodiscard]] OmniStatus bartlett_window_f32(
         size_t length, std::span<F32> output) const override;
-    [[nodiscard]] Status bartlett_window_f64(
+    [[nodiscard]] OmniStatus bartlett_window_f64(
         size_t length, std::span<F64> output) const override;
-    [[nodiscard]] Status blackman_window_f32(
+    [[nodiscard]] OmniStatus blackman_window_f32(
         size_t length, std::span<F32> output) const override;
-    [[nodiscard]] Status blackman_window_f64(
+    [[nodiscard]] OmniStatus blackman_window_f64(
         size_t length, std::span<F64> output) const override;
-    [[nodiscard]] Status flattop_window_f32(
+    [[nodiscard]] OmniStatus flattop_window_f32(
         size_t length, std::span<F32> output) const override;
-    [[nodiscard]] Status flattop_window_f64(
+    [[nodiscard]] OmniStatus flattop_window_f64(
         size_t length, std::span<F64> output) const override;
-    [[nodiscard]] Status gaussian_window_f32(
+    [[nodiscard]] OmniStatus gaussian_window_f32(
         size_t length, double stddev, std::span<F32> output) const override;
-    [[nodiscard]] Status gaussian_window_f64(
+    [[nodiscard]] OmniStatus gaussian_window_f64(
         size_t length, double stddev, std::span<F64> output) const override;
-    [[nodiscard]] Status hamming_window_f32(
+    [[nodiscard]] OmniStatus hamming_window_f32(
         size_t length, std::span<F32> output) const override;
-    [[nodiscard]] Status hamming_window_f64(
+    [[nodiscard]] OmniStatus hamming_window_f64(
         size_t length, std::span<F64> output) const override;
-    [[nodiscard]] Status hann_window_f32(
+    [[nodiscard]] OmniStatus hann_window_f32(
         size_t length, std::span<F32> output) const override;
-    [[nodiscard]] Status hann_window_f64(
+    [[nodiscard]] OmniStatus hann_window_f64(
         size_t length, std::span<F64> output) const override;
-    [[nodiscard]] Status kaiser_window_f32(
+    [[nodiscard]] OmniStatus kaiser_window_f32(
         size_t length, double beta, std::span<F32> output) const override;
-    [[nodiscard]] Status kaiser_window_f64(
+    [[nodiscard]] OmniStatus kaiser_window_f64(
         size_t length, double beta, std::span<F64> output) const override;
-    [[nodiscard]] Status rectangular_window_f32(
+    [[nodiscard]] OmniStatus rectangular_window_f32(
         size_t length, std::span<F32> output) const override;
-    [[nodiscard]] Status rectangular_window_f64(
+    [[nodiscard]] OmniStatus rectangular_window_f64(
         size_t length, std::span<F64> output) const override;
-    [[nodiscard]] Status triangular_window_f32(
+    [[nodiscard]] OmniStatus triangular_window_f32(
         size_t length, std::span<F32> output) const override;
-    [[nodiscard]] Status triangular_window_f64(
+    [[nodiscard]] OmniStatus triangular_window_f64(
         size_t length, std::span<F64> output) const override;
 
     // --- Plan Impl / Processor Impl Factory Methods ---

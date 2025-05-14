@@ -40,8 +40,9 @@ namespace OmniDSP {
     ResampleProcessor(const ResampleProcessor&) = delete;
     ResampleProcessor& operator=(const ResampleProcessor&) = delete;
 
-    [[nodiscard]] Status execute(std::span<const T> input, std::span<T> output);
-    Status reset();
+    [[nodiscard]] OmniStatus execute(
+        std::span<const T> input, std::span<T> output);
+    OmniStatus reset();
     double get_input_rate() const;
     double get_output_rate() const;
     size_t get_output_length(size_t input_length) const;

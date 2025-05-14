@@ -104,7 +104,7 @@ namespace OmniDSP::Utils {
       // Estimate order based on characteristics
       if (params.sample_rate_
           <= 0.0) {  // Should have been caught by Params constructor
-        return std::unexpected(Status::InvalidArgument);
+        return std::unexpected(OmniStatus::InvalidArgument);
       }
       final_order = estimate_fir_order_from_specs(
           params.sample_rate_,
@@ -119,7 +119,7 @@ namespace OmniDSP::Utils {
       logger->error(
           "Params::FIRFilter has insufficient information to determine filter "
           "order.");
-      return std::unexpected(Status::InvalidArgument);
+      return std::unexpected(OmniStatus::InvalidArgument);
     }
 
     if (final_order > 10000
@@ -160,7 +160,7 @@ namespace OmniDSP::Utils {
           static_cast<int>(final_window_setup.type),
           final_window_setup.length,
           final_window_setup.params.has_value());
-      return std::unexpected(Status::InvalidArgument);
+      return std::unexpected(OmniStatus::InvalidArgument);
     }
 
     // Construct the Design::FIRFilter
@@ -177,7 +177,7 @@ namespace OmniDSP::Utils {
         logger->error(
             "Internal consistency validation failed for created "
             "Design::FIRFilter.");
-        return std::unexpected(Status::Failure);  // Internal error
+        return std::unexpected(OmniStatus::Failure);  // Internal error
       }
       return spec;
     }
@@ -186,7 +186,7 @@ namespace OmniDSP::Utils {
                      // constructor (e.g. asserts if enabled)
       logger->error(
           "Exception during Design::FIRFilter construction: {}", e.what());
-      return std::unexpected(Status::Failure);
+      return std::unexpected(OmniStatus::Failure);
     }
   }
 

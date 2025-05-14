@@ -93,7 +93,7 @@ namespace OmniDSP::OneMKL {
           length,
           e.what());
       return OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C32>>>(
-          std::unexpect, Status::AllocationError);
+          std::unexpect, OmniStatus::AllocationError);
     }
     catch (const std::exception& e) {
       logger->error(
@@ -101,14 +101,14 @@ namespace OmniDSP::OneMKL {
           length,
           e.what());
       return OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C32>>>(
-          std::unexpect, Status::BackendError);
+          std::unexpect, OmniStatus::BackendError);
     }
     catch (...) {
       logger->error(
           "oneMKL::create_fft_plan_impl_c32 (length {}) unknown error.",
           length);
       return OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C32>>>(
-          std::unexpect, Status::Failure);
+          std::unexpect, OmniStatus::Failure);
     }
   }
 
@@ -138,7 +138,7 @@ namespace OmniDSP::OneMKL {
           length,
           e.what());
       return OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C64>>>(
-          std::unexpect, Status::AllocationError);
+          std::unexpect, OmniStatus::AllocationError);
     }
     catch (const std::exception& e) {
       logger->error(
@@ -146,14 +146,14 @@ namespace OmniDSP::OneMKL {
           length,
           e.what());
       return OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C64>>>(
-          std::unexpect, Status::BackendError);
+          std::unexpect, OmniStatus::BackendError);
     }
     catch (...) {
       logger->error(
           "oneMKL::create_fft_plan_impl_c64 (length {}) unknown error.",
           length);
       return OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C64>>>(
-          std::unexpect, Status::Failure);
+          std::unexpect, OmniStatus::Failure);
     }
   }
 
@@ -183,7 +183,7 @@ namespace OmniDSP::OneMKL {
           length,
           e.what());
       return OmniExpected<std::unique_ptr<Abstract::RFFTPlanImpl<F32>>>(
-          std::unexpect, Status::AllocationError);
+          std::unexpect, OmniStatus::AllocationError);
     }
     catch (const std::exception& e) {
       logger->error(
@@ -191,14 +191,14 @@ namespace OmniDSP::OneMKL {
           length,
           e.what());
       return OmniExpected<std::unique_ptr<Abstract::RFFTPlanImpl<F32>>>(
-          std::unexpect, Status::BackendError);
+          std::unexpect, OmniStatus::BackendError);
     }
     catch (...) {
       logger->error(
           "oneMKL::create_rfft_plan_impl_f32 (length {}) unknown error.",
           length);
       return OmniExpected<std::unique_ptr<Abstract::RFFTPlanImpl<F32>>>(
-          std::unexpect, Status::Failure);
+          std::unexpect, OmniStatus::Failure);
     }
   }
 
@@ -228,7 +228,7 @@ namespace OmniDSP::OneMKL {
           length,
           e.what());
       return OmniExpected<std::unique_ptr<Abstract::RFFTPlanImpl<F64>>>(
-          std::unexpect, Status::AllocationError);
+          std::unexpect, OmniStatus::AllocationError);
     }
     catch (const std::exception& e) {
       logger->error(
@@ -236,14 +236,14 @@ namespace OmniDSP::OneMKL {
           length,
           e.what());
       return OmniExpected<std::unique_ptr<Abstract::RFFTPlanImpl<F64>>>(
-          std::unexpect, Status::BackendError);
+          std::unexpect, OmniStatus::BackendError);
     }
     catch (...) {
       logger->error(
           "oneMKL::create_rfft_plan_impl_f64 (length {}) unknown error.",
           length);
       return OmniExpected<std::unique_ptr<Abstract::RFFTPlanImpl<F64>>>(
-          std::unexpect, Status::Failure);
+          std::unexpect, OmniStatus::Failure);
     }
   }
 

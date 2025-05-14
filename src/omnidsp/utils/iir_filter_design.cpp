@@ -43,7 +43,7 @@ namespace OmniDSP::Utils {
         logger->error(
             "Internal consistency validation failed for created "
             "Design::IIRFilter from Params::IIRFilter.");
-        return std::unexpected(Status::Failure);
+        return std::unexpected(OmniStatus::Failure);
       }
 
       logger->debug(
@@ -60,14 +60,14 @@ namespace OmniDSP::Utils {
           "Invalid argument during Design::IIRFilter construction from "
           "Params::IIRFilter: {}",
           e.what());
-      return std::unexpected(Status::InvalidArgument);
+      return std::unexpected(OmniStatus::InvalidArgument);
     }
     catch (const std::exception& e) {
       logger->error(
           "Exception during Design::IIRFilter construction from "
           "Params::IIRFilter: {}",
           e.what());
-      return std::unexpected(Status::Failure);
+      return std::unexpected(OmniStatus::Failure);
     }
   }
 

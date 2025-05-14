@@ -52,30 +52,30 @@ namespace OmniDSP {
 
   // fft Method - Uses template parameter T
   template <typename T>  // T is Complex type (C32, C64)
-  [[nodiscard]] Status FFTPlan<T>::fft(
+  [[nodiscard]] OmniStatus FFTPlan<T>::fft(
       std::span<const T> input, std::span<T> output) const
   {
     if (!pimpl_) {
-      return Status::InvalidOperation;
+      return OmniStatus::InvalidOperation;
     }
     // Add size checks against get_length() for robustness
     if (input.size() != get_length() || output.size() != get_length()) {
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
     return pimpl_->fft(input, output);
   }
 
   // ifft Method - Uses template parameter T
   template <typename T>  // T is Complex type (C32, C64)
-  [[nodiscard]] Status FFTPlan<T>::ifft(
+  [[nodiscard]] OmniStatus FFTPlan<T>::ifft(
       std::span<const T> input, std::span<T> output) const
   {
     if (!pimpl_) {
-      return Status::InvalidOperation;
+      return OmniStatus::InvalidOperation;
     }
     // Add size checks against get_length() for robustness
     if (input.size() != get_length() || output.size() != get_length()) {
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
     // Note: Scaling (1/N) is typically handled by the user or backend
     // implementation
@@ -124,38 +124,38 @@ namespace OmniDSP {
 
   // rfft Method - Uses T (Real) and ComplexT<T>
   template <typename T>  // T is REAL type (F32, F64)
-  [[nodiscard]] Status RFFTPlan<T>::rfft(
+  [[nodiscard]] OmniStatus RFFTPlan<T>::rfft(
       std::span<const T> input,
       std::span<Complex> output) const  // Use Complex alias
   {
     if (!pimpl_) {
-      return Status::InvalidOperation;
+      return OmniStatus::InvalidOperation;
     }
     // Add size checks against get_length() for robustness
     size_t N = get_length();
     if (N == 0 && (input.empty() && output.empty()))
-      return Status::Success;  // Allow empty case
+      return OmniStatus::Success;  // Allow empty case
     if (N == 0 || input.size() != N || output.size() != (N / 2 + 1)) {
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
     return pimpl_->rfft(input, output);
   }
 
   // irfft Method - Uses ComplexT<T> and T (Real)
   template <typename T>  // T is REAL type (F32, F64)
-  [[nodiscard]] Status RFFTPlan<T>::irfft(
+  [[nodiscard]] OmniStatus RFFTPlan<T>::irfft(
       std::span<const Complex> input,
       std::span<T> output) const  // Use Complex alias
   {
     if (!pimpl_) {
-      return Status::InvalidOperation;
+      return OmniStatus::InvalidOperation;
     }
     // Add size checks against get_length() for robustness
     size_t N = get_length();
     if (N == 0 && (input.empty() && output.empty()))
-      return Status::Success;  // Allow empty case
+      return OmniStatus::Success;  // Allow empty case
     if (N == 0 || output.size() != N || input.size() != (N / 2 + 1)) {
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
     // Note: Scaling (1/N) is typically handled by the user or backend
     // implementation

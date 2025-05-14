@@ -64,35 +64,35 @@ namespace OmniDSP::IntelIPP {
     // Window Generation (Override functions implemented efficiently in IPP)
     // These override the specific virtual window functions from
     // Abstract::Backend (which Default::Backend also overrides).
-    [[nodiscard]] Status bartlett_window_f32(
+    [[nodiscard]] OmniStatus bartlett_window_f32(
         size_t length, std::span<F32> output) const override;
-    [[nodiscard]] Status bartlett_window_f64(
+    [[nodiscard]] OmniStatus bartlett_window_f64(
         size_t length, std::span<F64> output) const override;
-    [[nodiscard]] Status blackman_window_f32(
+    [[nodiscard]] OmniStatus blackman_window_f32(
         size_t length, std::span<F32> output) const override;
-    [[nodiscard]] Status blackman_window_f64(
+    [[nodiscard]] OmniStatus blackman_window_f64(
         size_t length, std::span<F64> output) const override;
     // Flattop and Gaussian are inherited from Default::Backend as per original
     // file.
-    [[nodiscard]] Status hamming_window_f32(
+    [[nodiscard]] OmniStatus hamming_window_f32(
         size_t length, std::span<F32> output) const override;
-    [[nodiscard]] Status hamming_window_f64(
+    [[nodiscard]] OmniStatus hamming_window_f64(
         size_t length, std::span<F64> output) const override;
-    [[nodiscard]] Status hann_window_f32(
+    [[nodiscard]] OmniStatus hann_window_f32(
         size_t length, std::span<F32> output) const override;
-    [[nodiscard]] Status hann_window_f64(
+    [[nodiscard]] OmniStatus hann_window_f64(
         size_t length, std::span<F64> output) const override;
-    [[nodiscard]] Status kaiser_window_f32(
+    [[nodiscard]] OmniStatus kaiser_window_f32(
         size_t length, double beta, std::span<F32> output) const override;
-    [[nodiscard]] Status kaiser_window_f64(
+    [[nodiscard]] OmniStatus kaiser_window_f64(
         size_t length, double beta, std::span<F64> output) const override;
-    [[nodiscard]] Status rectangular_window_f32(
+    [[nodiscard]] OmniStatus rectangular_window_f32(
         size_t length, std::span<F32> output) const override;
-    [[nodiscard]] Status rectangular_window_f64(
+    [[nodiscard]] OmniStatus rectangular_window_f64(
         size_t length, std::span<F64> output) const override;
-    [[nodiscard]] Status triangular_window_f32(
+    [[nodiscard]] OmniStatus triangular_window_f32(
         size_t length, std::span<F32> output) const override;
-    [[nodiscard]] Status triangular_window_f64(
+    [[nodiscard]] OmniStatus triangular_window_f64(
         size_t length, std::span<F64> output) const override;
 
     // --- Plan Impl Factories (Overrides) ---

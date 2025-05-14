@@ -101,7 +101,7 @@ namespace OmniDSP::Default {
       ConvolutionMethod method) const
   {
     if (kernel.empty())
-      return OmniExpected<F32Vec>(std::unexpect, Status::InvalidArgument);
+      return OmniExpected<F32Vec>(std::unexpect, OmniStatus::InvalidArgument);
     Params::Convolution params(
         input.size(),
         kernel.size(),
@@ -117,8 +117,8 @@ namespace OmniDSP::Default {
     auto plan_impl = std::move(pimpl_expected.value());
     size_t output_len = plan_impl->get_output_length(input.size());
     F32Vec output(output_len);
-    Status status = plan_impl->execute(input, output);
-    if (status != Status::Success) {
+    OmniStatus status = plan_impl->execute(input, output);
+    if (status != OmniStatus::Success) {
       return OmniExpected<F32Vec>(std::unexpect, status);
     }
     return output;
@@ -131,7 +131,7 @@ namespace OmniDSP::Default {
       ConvolutionMethod method) const
   {
     if (kernel.empty())
-      return OmniExpected<F64Vec>(std::unexpect, Status::InvalidArgument);
+      return OmniExpected<F64Vec>(std::unexpect, OmniStatus::InvalidArgument);
     Params::Convolution params(input.size(), kernel.size(), type, method);
     auto pimpl_expected
         = this->create_convolution_plan_impl_f64(params, kernel);
@@ -141,8 +141,8 @@ namespace OmniDSP::Default {
     auto plan_impl = std::move(pimpl_expected.value());
     size_t output_len = plan_impl->get_output_length(input.size());
     F64Vec output(output_len);
-    Status status = plan_impl->execute(input, output);
-    if (status != Status::Success) {
+    OmniStatus status = plan_impl->execute(input, output);
+    if (status != OmniStatus::Success) {
       return OmniExpected<F64Vec>(std::unexpect, status);
     }
     return output;
@@ -155,7 +155,7 @@ namespace OmniDSP::Default {
       ConvolutionMethod method) const
   {
     if (kernel.empty())
-      return OmniExpected<C32Vec>(std::unexpect, Status::InvalidArgument);
+      return OmniExpected<C32Vec>(std::unexpect, OmniStatus::InvalidArgument);
     Params::Convolution params(input.size(), kernel.size(), type, method);
     auto pimpl_expected
         = this->create_convolution_plan_impl_c32(params, kernel);
@@ -165,8 +165,8 @@ namespace OmniDSP::Default {
     auto plan_impl = std::move(pimpl_expected.value());
     size_t output_len = plan_impl->get_output_length(input.size());
     C32Vec output(output_len);
-    Status status = plan_impl->execute(input, output);
-    if (status != Status::Success) {
+    OmniStatus status = plan_impl->execute(input, output);
+    if (status != OmniStatus::Success) {
       return OmniExpected<C32Vec>(std::unexpect, status);
     }
     return output;
@@ -179,7 +179,7 @@ namespace OmniDSP::Default {
       ConvolutionMethod method) const
   {
     if (kernel.empty())
-      return OmniExpected<C64Vec>(std::unexpect, Status::InvalidArgument);
+      return OmniExpected<C64Vec>(std::unexpect, OmniStatus::InvalidArgument);
     Params::Convolution params(input.size(), kernel.size(), type, method);
     auto pimpl_expected
         = this->create_convolution_plan_impl_c64(params, kernel);
@@ -189,8 +189,8 @@ namespace OmniDSP::Default {
     auto plan_impl = std::move(pimpl_expected.value());
     size_t output_len = plan_impl->get_output_length(input.size());
     C64Vec output(output_len);
-    Status status = plan_impl->execute(input, output);
-    if (status != Status::Success) {
+    OmniStatus status = plan_impl->execute(input, output);
+    if (status != OmniStatus::Success) {
       return OmniExpected<C64Vec>(std::unexpect, status);
     }
     return output;
@@ -203,7 +203,7 @@ namespace OmniDSP::Default {
       ConvolutionMethod method) const
   {
     if (template_coeffs.empty())
-      return OmniExpected<F32Vec>(std::unexpect, Status::InvalidArgument);
+      return OmniExpected<F32Vec>(std::unexpect, OmniStatus::InvalidArgument);
     Params::Correlation params(
         input.size(), template_coeffs.size(), type, method);
     auto pimpl_expected
@@ -214,8 +214,8 @@ namespace OmniDSP::Default {
     auto plan_impl = std::move(pimpl_expected.value());
     size_t output_len = plan_impl->get_output_length(input.size());
     F32Vec output(output_len);
-    Status status = plan_impl->execute(input, output);
-    if (status != Status::Success) {
+    OmniStatus status = plan_impl->execute(input, output);
+    if (status != OmniStatus::Success) {
       return OmniExpected<F32Vec>(std::unexpect, status);
     }
     return output;
@@ -228,7 +228,7 @@ namespace OmniDSP::Default {
       ConvolutionMethod method) const
   {
     if (template_coeffs.empty())
-      return OmniExpected<F64Vec>(std::unexpect, Status::InvalidArgument);
+      return OmniExpected<F64Vec>(std::unexpect, OmniStatus::InvalidArgument);
     Params::Correlation params(
         input.size(), template_coeffs.size(), type, method);
     auto pimpl_expected
@@ -239,8 +239,8 @@ namespace OmniDSP::Default {
     auto plan_impl = std::move(pimpl_expected.value());
     size_t output_len = plan_impl->get_output_length(input.size());
     F64Vec output(output_len);
-    Status status = plan_impl->execute(input, output);
-    if (status != Status::Success) {
+    OmniStatus status = plan_impl->execute(input, output);
+    if (status != OmniStatus::Success) {
       return OmniExpected<F64Vec>(std::unexpect, status);
     }
     return output;
@@ -253,7 +253,7 @@ namespace OmniDSP::Default {
       ConvolutionMethod method) const
   {
     if (template_coeffs.empty())
-      return OmniExpected<C32Vec>(std::unexpect, Status::InvalidArgument);
+      return OmniExpected<C32Vec>(std::unexpect, OmniStatus::InvalidArgument);
     Params::Correlation params(
         input.size(), template_coeffs.size(), type, method);
     auto pimpl_expected
@@ -264,8 +264,8 @@ namespace OmniDSP::Default {
     auto plan_impl = std::move(pimpl_expected.value());
     size_t output_len = plan_impl->get_output_length(input.size());
     C32Vec output(output_len);
-    Status status = plan_impl->execute(input, output);
-    if (status != Status::Success) {
+    OmniStatus status = plan_impl->execute(input, output);
+    if (status != OmniStatus::Success) {
       return OmniExpected<C32Vec>(std::unexpect, status);
     }
     return output;
@@ -278,7 +278,7 @@ namespace OmniDSP::Default {
       ConvolutionMethod method) const
   {
     if (template_coeffs.empty())
-      return OmniExpected<C64Vec>(std::unexpect, Status::InvalidArgument);
+      return OmniExpected<C64Vec>(std::unexpect, OmniStatus::InvalidArgument);
     Params::Correlation params(
         input.size(), template_coeffs.size(), type, method);
     auto pimpl_expected
@@ -289,8 +289,8 @@ namespace OmniDSP::Default {
     auto plan_impl = std::move(pimpl_expected.value());
     size_t output_len = plan_impl->get_output_length(input.size());
     C64Vec output(output_len);
-    Status status = plan_impl->execute(input, output);
-    if (status != Status::Success) {
+    OmniStatus status = plan_impl->execute(input, output);
+    if (status != OmniStatus::Success) {
       return OmniExpected<C64Vec>(std::unexpect, status);
     }
     return output;
@@ -307,12 +307,12 @@ namespace OmniDSP::Default {
     if (!plan) {
       spdlog::get("OmniDSP")->error(
           "Default::fft_c32: Failed to create public FFTPlan from impl.");
-      return OmniExpected<C32Vec>(std::unexpect, Status::Failure);
+      return OmniExpected<C32Vec>(std::unexpect, OmniStatus::Failure);
     }
 
     C32Vec output(input.size());
-    Status status = plan->fft(input, output);
-    if (status != Status::Success) {
+    OmniStatus status = plan->fft(input, output);
+    if (status != OmniStatus::Success) {
       return OmniExpected<C32Vec>(std::unexpect, status);
     }
     return output;
@@ -329,12 +329,12 @@ namespace OmniDSP::Default {
     if (!plan) {
       spdlog::get("OmniDSP")->error(
           "Default::fft_c64: Failed to create public FFTPlan from impl.");
-      return OmniExpected<C64Vec>(std::unexpect, Status::Failure);
+      return OmniExpected<C64Vec>(std::unexpect, OmniStatus::Failure);
     }
 
     C64Vec output(input.size());
-    Status status = plan->fft(input, output);
-    if (status != Status::Success) {
+    OmniStatus status = plan->fft(input, output);
+    if (status != OmniStatus::Success) {
       return OmniExpected<C64Vec>(std::unexpect, status);
     }
     return output;
@@ -352,12 +352,12 @@ namespace OmniDSP::Default {
     if (!plan) {
       spdlog::get("OmniDSP")->error(
           "Default::ifft_c32: Failed to create public FFTPlan from impl.");
-      return OmniExpected<C32Vec>(std::unexpect, Status::Failure);
+      return OmniExpected<C32Vec>(std::unexpect, OmniStatus::Failure);
     }
 
     C32Vec output(input.size());
-    Status status = plan->ifft(input, output);
-    if (status != Status::Success) {
+    OmniStatus status = plan->ifft(input, output);
+    if (status != OmniStatus::Success) {
       return OmniExpected<C32Vec>(std::unexpect, status);
     }
     return output;
@@ -375,12 +375,12 @@ namespace OmniDSP::Default {
     if (!plan) {
       spdlog::get("OmniDSP")->error(
           "Default::ifft_c64: Failed to create public FFTPlan from impl.");
-      return OmniExpected<C64Vec>(std::unexpect, Status::Failure);
+      return OmniExpected<C64Vec>(std::unexpect, OmniStatus::Failure);
     }
 
     C64Vec output(input.size());
-    Status status = plan->ifft(input, output);
-    if (status != Status::Success) {
+    OmniStatus status = plan->ifft(input, output);
+    if (status != OmniStatus::Success) {
       return OmniExpected<C64Vec>(std::unexpect, status);
     }
     return output;
@@ -398,13 +398,13 @@ namespace OmniDSP::Default {
     if (!plan) {
       spdlog::get("OmniDSP")->error(
           "Default::rfft_f32: Failed to create public RFFTPlan from impl.");
-      return OmniExpected<C32Vec>(std::unexpect, Status::Failure);
+      return OmniExpected<C32Vec>(std::unexpect, OmniStatus::Failure);
     }
 
     size_t output_len = (input.empty()) ? 0 : (input.size() / 2) + 1;
     C32Vec output(output_len);
-    Status status = plan->rfft(input, output);
-    if (status != Status::Success) {
+    OmniStatus status = plan->rfft(input, output);
+    if (status != OmniStatus::Success) {
       return OmniExpected<C32Vec>(std::unexpect, status);
     }
     return output;
@@ -422,13 +422,13 @@ namespace OmniDSP::Default {
     if (!plan) {
       spdlog::get("OmniDSP")->error(
           "Default::rfft_f64: Failed to create public RFFTPlan from impl.");
-      return OmniExpected<C64Vec>(std::unexpect, Status::Failure);
+      return OmniExpected<C64Vec>(std::unexpect, OmniStatus::Failure);
     }
 
     size_t output_len = (input.empty()) ? 0 : (input.size() / 2) + 1;
     C64Vec output(output_len);
-    Status status = plan->rfft(input, output);
-    if (status != Status::Success) {
+    OmniStatus status = plan->rfft(input, output);
+    if (status != OmniStatus::Success) {
       return OmniExpected<C64Vec>(std::unexpect, status);
     }
     return output;
@@ -438,9 +438,9 @@ namespace OmniDSP::Default {
       const C32Vec& input, size_t output_length) const
   {
     if (output_length == 0) {
-      return input.empty()
-                 ? F32Vec{}
-                 : OmniExpected<F32Vec>(std::unexpect, Status::InvalidArgument);
+      return input.empty() ? F32Vec{}
+                           : OmniExpected<F32Vec>(
+                                 std::unexpect, OmniStatus::InvalidArgument);
     }
     size_t expected_input_len = (output_length / 2) + 1;
     if (input.size() != expected_input_len) {
@@ -450,7 +450,7 @@ namespace OmniDSP::Default {
           input.size(),
           expected_input_len,
           output_length);
-      return OmniExpected<F32Vec>(std::unexpect, Status::SizeMismatch);
+      return OmniExpected<F32Vec>(std::unexpect, OmniStatus::SizeMismatch);
     }
 
     auto pimpl_expected = this->create_rfft_plan_impl_f32(output_length);
@@ -462,12 +462,12 @@ namespace OmniDSP::Default {
     if (!plan) {
       spdlog::get("OmniDSP")->error(
           "Default::irfft_c32: Failed to create public RFFTPlan from impl.");
-      return OmniExpected<F32Vec>(std::unexpect, Status::Failure);
+      return OmniExpected<F32Vec>(std::unexpect, OmniStatus::Failure);
     }
 
     F32Vec output(output_length);
-    Status status = plan->irfft(input, output);
-    if (status != Status::Success) {
+    OmniStatus status = plan->irfft(input, output);
+    if (status != OmniStatus::Success) {
       return OmniExpected<F32Vec>(std::unexpect, status);
     }
     return output;
@@ -477,9 +477,9 @@ namespace OmniDSP::Default {
       const C64Vec& input, size_t output_length) const
   {
     if (output_length == 0) {
-      return input.empty()
-                 ? F64Vec{}
-                 : OmniExpected<F64Vec>(std::unexpect, Status::InvalidArgument);
+      return input.empty() ? F64Vec{}
+                           : OmniExpected<F64Vec>(
+                                 std::unexpect, OmniStatus::InvalidArgument);
     }
     size_t expected_input_len = (output_length / 2) + 1;
     if (input.size() != expected_input_len) {
@@ -489,7 +489,7 @@ namespace OmniDSP::Default {
           input.size(),
           expected_input_len,
           output_length);
-      return OmniExpected<F64Vec>(std::unexpect, Status::SizeMismatch);
+      return OmniExpected<F64Vec>(std::unexpect, OmniStatus::SizeMismatch);
     }
 
     auto pimpl_expected = this->create_rfft_plan_impl_f64(output_length);
@@ -501,12 +501,12 @@ namespace OmniDSP::Default {
     if (!plan) {
       spdlog::get("OmniDSP")->error(
           "Default::irfft_c64: Failed to create public RFFTPlan from impl.");
-      return OmniExpected<F64Vec>(std::unexpect, Status::Failure);
+      return OmniExpected<F64Vec>(std::unexpect, OmniStatus::Failure);
     }
 
     F64Vec output(output_length);
-    Status status = plan->irfft(input, output);
-    if (status != Status::Success) {
+    OmniStatus status = plan->irfft(input, output);
+    if (status != OmniStatus::Success) {
       return OmniExpected<F64Vec>(std::unexpect, status);
     }
     return output;
@@ -515,7 +515,7 @@ namespace OmniDSP::Default {
   // Abstract::Backend) ---
   // ... (Existing implementations for bartlett_window_f32, etc. - keeping them
   // concise here)
-  Status Backend::bartlett_window_f32(
+  OmniStatus Backend::bartlett_window_f32(
       size_t length, std::span<F32> output) const
   {
     if (output.size() < length && length > 0) {
@@ -524,21 +524,21 @@ namespace OmniDSP::Default {
           "got {}.",
           length,
           output.size());
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
     try {
       WindowSetup setup(WindowType::Bartlett, static_cast<int>(length));
       auto result = generate_window<F32>(setup, output.first(length));
-      return result ? Status::Success : result.error();
+      return result ? OmniStatus::Success : result.error();
     }
     catch (const std::invalid_argument& e) {
       spdlog::get("OmniDSP")->error(
           "Default::bartlett_window_f32: Error creating WindowSetup: {}",
           e.what());
-      return Status::InvalidArgument;
+      return OmniStatus::InvalidArgument;
     }
   }
-  Status Backend::bartlett_window_f64(
+  OmniStatus Backend::bartlett_window_f64(
       size_t length, std::span<F64> output) const
   {
     if (output.size() < length && length > 0) {
@@ -547,21 +547,21 @@ namespace OmniDSP::Default {
           "got {}.",
           length,
           output.size());
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
     try {
       WindowSetup setup(WindowType::Bartlett, static_cast<int>(length));
       auto result = generate_window<F64>(setup, output.first(length));
-      return result ? Status::Success : result.error();
+      return result ? OmniStatus::Success : result.error();
     }
     catch (const std::invalid_argument& e) {
       spdlog::get("OmniDSP")->error(
           "Default::bartlett_window_f64: Error creating WindowSetup: {}",
           e.what());
-      return Status::InvalidArgument;
+      return OmniStatus::InvalidArgument;
     }
   }
-  Status Backend::blackman_window_f32(
+  OmniStatus Backend::blackman_window_f32(
       size_t length, std::span<F32> output) const
   {
     if (output.size() < length && length > 0) {
@@ -570,20 +570,20 @@ namespace OmniDSP::Default {
           "got {}.",
           length,
           output.size());
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
     try {
       WindowSetup setup(WindowType::Blackman, static_cast<int>(length));
       auto result = generate_window<F32>(setup, output.first(length));
-      return result ? Status::Success : result.error();
+      return result ? OmniStatus::Success : result.error();
     }
     catch (const std::invalid_argument& e) {
       spdlog::get("OmniDSP")->error(
           "Default::blackman_window_f32: {}", e.what());
-      return Status::InvalidArgument;
+      return OmniStatus::InvalidArgument;
     }
   }
-  Status Backend::blackman_window_f64(
+  OmniStatus Backend::blackman_window_f64(
       size_t length, std::span<F64> output) const
   {
     if (output.size() < length && length > 0) {
@@ -592,20 +592,21 @@ namespace OmniDSP::Default {
           "got {}.",
           length,
           output.size());
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
     try {
       WindowSetup setup(WindowType::Blackman, static_cast<int>(length));
       auto result = generate_window<F64>(setup, output.first(length));
-      return result ? Status::Success : result.error();
+      return result ? OmniStatus::Success : result.error();
     }
     catch (const std::invalid_argument& e) {
       spdlog::get("OmniDSP")->error(
           "Default::blackman_window_f64: {}", e.what());
-      return Status::InvalidArgument;
+      return OmniStatus::InvalidArgument;
     }
   }
-  Status Backend::flattop_window_f32(size_t length, std::span<F32> output) const
+  OmniStatus Backend::flattop_window_f32(
+      size_t length, std::span<F32> output) const
   {
     if (output.size() < length && length > 0) {
       spdlog::get("OmniDSP")->warn(
@@ -613,20 +614,21 @@ namespace OmniDSP::Default {
           "got {}.",
           length,
           output.size());
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
     try {
       WindowSetup setup(WindowType::Flattop, static_cast<int>(length));
       auto result = generate_window<F32>(setup, output.first(length));
-      return result ? Status::Success : result.error();
+      return result ? OmniStatus::Success : result.error();
     }
     catch (const std::invalid_argument& e) {
       spdlog::get("OmniDSP")->error(
           "Default::flattop_window_f32: {}", e.what());
-      return Status::InvalidArgument;
+      return OmniStatus::InvalidArgument;
     }
   }
-  Status Backend::flattop_window_f64(size_t length, std::span<F64> output) const
+  OmniStatus Backend::flattop_window_f64(
+      size_t length, std::span<F64> output) const
   {
     if (output.size() < length && length > 0) {
       spdlog::get("OmniDSP")->warn(
@@ -634,20 +636,20 @@ namespace OmniDSP::Default {
           "got {}.",
           length,
           output.size());
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
     try {
       WindowSetup setup(WindowType::Flattop, static_cast<int>(length));
       auto result = generate_window<F64>(setup, output.first(length));
-      return result ? Status::Success : result.error();
+      return result ? OmniStatus::Success : result.error();
     }
     catch (const std::invalid_argument& e) {
       spdlog::get("OmniDSP")->error(
           "Default::flattop_window_f64: {}", e.what());
-      return Status::InvalidArgument;
+      return OmniStatus::InvalidArgument;
     }
   }
-  Status Backend::gaussian_window_f32(
+  OmniStatus Backend::gaussian_window_f32(
       size_t length, double stddev, std::span<F32> output) const
   {
     if (output.size() < length && length > 0) {
@@ -656,7 +658,7 @@ namespace OmniDSP::Default {
           "got {}.",
           length,
           output.size());
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
     try {
       WindowSetup setup(
@@ -664,15 +666,15 @@ namespace OmniDSP::Default {
           static_cast<int>(length),
           WindowParams{{"sigma", stddev}});
       auto result = generate_window<F32>(setup, output.first(length));
-      return result ? Status::Success : result.error();
+      return result ? OmniStatus::Success : result.error();
     }
     catch (const std::invalid_argument& e) {
       spdlog::get("OmniDSP")->error(
           "Default::gaussian_window_f32: {}", e.what());
-      return Status::InvalidArgument;
+      return OmniStatus::InvalidArgument;
     }
   }
-  Status Backend::gaussian_window_f64(
+  OmniStatus Backend::gaussian_window_f64(
       size_t length, double stddev, std::span<F64> output) const
   {
     if (output.size() < length && length > 0) {
@@ -681,7 +683,7 @@ namespace OmniDSP::Default {
           "got {}.",
           length,
           output.size());
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
     try {
       WindowSetup setup(
@@ -689,15 +691,16 @@ namespace OmniDSP::Default {
           static_cast<int>(length),
           WindowParams{{"sigma", stddev}});
       auto result = generate_window<F64>(setup, output.first(length));
-      return result ? Status::Success : result.error();
+      return result ? OmniStatus::Success : result.error();
     }
     catch (const std::invalid_argument& e) {
       spdlog::get("OmniDSP")->error(
           "Default::gaussian_window_f64: {}", e.what());
-      return Status::InvalidArgument;
+      return OmniStatus::InvalidArgument;
     }
   }
-  Status Backend::hamming_window_f32(size_t length, std::span<F32> output) const
+  OmniStatus Backend::hamming_window_f32(
+      size_t length, std::span<F32> output) const
   {
     if (output.size() < length && length > 0) {
       spdlog::get("OmniDSP")->warn(
@@ -705,20 +708,21 @@ namespace OmniDSP::Default {
           "got {}.",
           length,
           output.size());
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
     try {
       WindowSetup setup(WindowType::Hamming, static_cast<int>(length));
       auto result = generate_window<F32>(setup, output.first(length));
-      return result ? Status::Success : result.error();
+      return result ? OmniStatus::Success : result.error();
     }
     catch (const std::invalid_argument& e) {
       spdlog::get("OmniDSP")->error(
           "Default::hamming_window_f32: {}", e.what());
-      return Status::InvalidArgument;
+      return OmniStatus::InvalidArgument;
     }
   }
-  Status Backend::hamming_window_f64(size_t length, std::span<F64> output) const
+  OmniStatus Backend::hamming_window_f64(
+      size_t length, std::span<F64> output) const
   {
     if (output.size() < length && length > 0) {
       spdlog::get("OmniDSP")->warn(
@@ -726,20 +730,21 @@ namespace OmniDSP::Default {
           "got {}.",
           length,
           output.size());
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
     try {
       WindowSetup setup(WindowType::Hamming, static_cast<int>(length));
       auto result = generate_window<F64>(setup, output.first(length));
-      return result ? Status::Success : result.error();
+      return result ? OmniStatus::Success : result.error();
     }
     catch (const std::invalid_argument& e) {
       spdlog::get("OmniDSP")->error(
           "Default::hamming_window_f64: {}", e.what());
-      return Status::InvalidArgument;
+      return OmniStatus::InvalidArgument;
     }
   }
-  Status Backend::hann_window_f32(size_t length, std::span<F32> output) const
+  OmniStatus Backend::hann_window_f32(
+      size_t length, std::span<F32> output) const
   {
     if (output.size() < length && length > 0) {
       spdlog::get("OmniDSP")->warn(
@@ -747,19 +752,20 @@ namespace OmniDSP::Default {
           "{}.",
           length,
           output.size());
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
     try {
       WindowSetup setup(WindowType::Hann, static_cast<int>(length));
       auto result = generate_window<F32>(setup, output.first(length));
-      return result ? Status::Success : result.error();
+      return result ? OmniStatus::Success : result.error();
     }
     catch (const std::invalid_argument& e) {
       spdlog::get("OmniDSP")->error("Default::hann_window_f32: {}", e.what());
-      return Status::InvalidArgument;
+      return OmniStatus::InvalidArgument;
     }
   }
-  Status Backend::hann_window_f64(size_t length, std::span<F64> output) const
+  OmniStatus Backend::hann_window_f64(
+      size_t length, std::span<F64> output) const
   {
     if (output.size() < length && length > 0) {
       spdlog::get("OmniDSP")->warn(
@@ -767,19 +773,19 @@ namespace OmniDSP::Default {
           "{}.",
           length,
           output.size());
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
     try {
       WindowSetup setup(WindowType::Hann, static_cast<int>(length));
       auto result = generate_window<F64>(setup, output.first(length));
-      return result ? Status::Success : result.error();
+      return result ? OmniStatus::Success : result.error();
     }
     catch (const std::invalid_argument& e) {
       spdlog::get("OmniDSP")->error("Default::hann_window_f64: {}", e.what());
-      return Status::InvalidArgument;
+      return OmniStatus::InvalidArgument;
     }
   }
-  Status Backend::kaiser_window_f32(
+  OmniStatus Backend::kaiser_window_f32(
       size_t length, double beta_param, std::span<F32> output) const
   {
     if (output.size() < length && length > 0) {
@@ -788,7 +794,7 @@ namespace OmniDSP::Default {
           "{}.",
           length,
           output.size());
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
     try {
       WindowSetup setup(
@@ -796,14 +802,14 @@ namespace OmniDSP::Default {
           static_cast<int>(length),
           WindowParams{{"beta", beta_param}});
       auto result = generate_window<F32>(setup, output.first(length));
-      return result ? Status::Success : result.error();
+      return result ? OmniStatus::Success : result.error();
     }
     catch (const std::invalid_argument& e) {
       spdlog::get("OmniDSP")->error("Default::kaiser_window_f32: {}", e.what());
-      return Status::InvalidArgument;
+      return OmniStatus::InvalidArgument;
     }
   }
-  Status Backend::kaiser_window_f64(
+  OmniStatus Backend::kaiser_window_f64(
       size_t length, double beta_param, std::span<F64> output) const
   {
     if (output.size() < length && length > 0) {
@@ -812,7 +818,7 @@ namespace OmniDSP::Default {
           "{}.",
           length,
           output.size());
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
     try {
       WindowSetup setup(
@@ -820,14 +826,14 @@ namespace OmniDSP::Default {
           static_cast<int>(length),
           WindowParams{{"beta", beta_param}});
       auto result = generate_window<F64>(setup, output.first(length));
-      return result ? Status::Success : result.error();
+      return result ? OmniStatus::Success : result.error();
     }
     catch (const std::invalid_argument& e) {
       spdlog::get("OmniDSP")->error("Default::kaiser_window_f64: {}", e.what());
-      return Status::InvalidArgument;
+      return OmniStatus::InvalidArgument;
     }
   }
-  Status Backend::rectangular_window_f32(
+  OmniStatus Backend::rectangular_window_f32(
       size_t length, std::span<F32> output) const
   {
     if (output.size() < length && length > 0) {
@@ -836,20 +842,20 @@ namespace OmniDSP::Default {
           "{}, got {}.",
           length,
           output.size());
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
     try {
       WindowSetup setup(WindowType::Rectangular, static_cast<int>(length));
       auto result = generate_window<F32>(setup, output.first(length));
-      return result ? Status::Success : result.error();
+      return result ? OmniStatus::Success : result.error();
     }
     catch (const std::invalid_argument& e) {
       spdlog::get("OmniDSP")->error(
           "Default::rectangular_window_f32: {}", e.what());
-      return Status::InvalidArgument;
+      return OmniStatus::InvalidArgument;
     }
   }
-  Status Backend::rectangular_window_f64(
+  OmniStatus Backend::rectangular_window_f64(
       size_t length, std::span<F64> output) const
   {
     if (output.size() < length && length > 0) {
@@ -858,20 +864,20 @@ namespace OmniDSP::Default {
           "{}, got {}.",
           length,
           output.size());
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
     try {
       WindowSetup setup(WindowType::Rectangular, static_cast<int>(length));
       auto result = generate_window<F64>(setup, output.first(length));
-      return result ? Status::Success : result.error();
+      return result ? OmniStatus::Success : result.error();
     }
     catch (const std::invalid_argument& e) {
       spdlog::get("OmniDSP")->error(
           "Default::rectangular_window_f64: {}", e.what());
-      return Status::InvalidArgument;
+      return OmniStatus::InvalidArgument;
     }
   }
-  Status Backend::triangular_window_f32(
+  OmniStatus Backend::triangular_window_f32(
       size_t length, std::span<F32> output) const
   {
     if (output.size() < length && length > 0) {
@@ -880,20 +886,20 @@ namespace OmniDSP::Default {
           "got {}.",
           length,
           output.size());
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
     try {
       WindowSetup setup(WindowType::Triangular, static_cast<int>(length));
       auto result = generate_window<F32>(setup, output.first(length));
-      return result ? Status::Success : result.error();
+      return result ? OmniStatus::Success : result.error();
     }
     catch (const std::invalid_argument& e) {
       spdlog::get("OmniDSP")->error(
           "Default::triangular_window_f32: {}", e.what());
-      return Status::InvalidArgument;
+      return OmniStatus::InvalidArgument;
     }
   }
-  Status Backend::triangular_window_f64(
+  OmniStatus Backend::triangular_window_f64(
       size_t length, std::span<F64> output) const
   {
     if (output.size() < length && length > 0) {
@@ -902,17 +908,17 @@ namespace OmniDSP::Default {
           "got {}.",
           length,
           output.size());
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
     }
     try {
       WindowSetup setup(WindowType::Triangular, static_cast<int>(length));
       auto result = generate_window<F64>(setup, output.first(length));
-      return result ? Status::Success : result.error();
+      return result ? OmniStatus::Success : result.error();
     }
     catch (const std::invalid_argument& e) {
       spdlog::get("OmniDSP")->error(
           "Default::triangular_window_f64: {}", e.what());
-      return Status::InvalidArgument;
+      return OmniStatus::InvalidArgument;
     }
   }
 
@@ -929,7 +935,7 @@ namespace OmniDSP::Default {
       spdlog::get("OmniDSP")->error(
           "Error creating Default::FFTPlanImpl<C32>: {}", e.what());
       return OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C32>>>(
-          std::unexpect, Status::Failure);
+          std::unexpect, OmniStatus::Failure);
     }
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C64>>>
@@ -942,7 +948,7 @@ namespace OmniDSP::Default {
       spdlog::get("OmniDSP")->error(
           "Error creating Default::FFTPlanImpl<C64>: {}", e.what());
       return OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C64>>>(
-          std::unexpect, Status::Failure);
+          std::unexpect, OmniStatus::Failure);
     }
   }
 
@@ -956,7 +962,7 @@ namespace OmniDSP::Default {
       spdlog::get("OmniDSP")->error(
           "Error creating Default::RFFTPlanImpl<F32>: {}", e.what());
       return OmniExpected<std::unique_ptr<Abstract::RFFTPlanImpl<F32>>>(
-          std::unexpect, Status::Failure);
+          std::unexpect, OmniStatus::Failure);
     }
   }
   [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::RFFTPlanImpl<F64>>>
@@ -969,7 +975,7 @@ namespace OmniDSP::Default {
       spdlog::get("OmniDSP")->error(
           "Error creating Default::RFFTPlanImpl<F64>: {}", e.what());
       return OmniExpected<std::unique_ptr<Abstract::RFFTPlanImpl<F64>>>(
-          std::unexpect, Status::Failure);
+          std::unexpect, OmniStatus::Failure);
     }
   }
 
@@ -994,7 +1000,7 @@ namespace OmniDSP::Default {
           "Error creating Default::CQTProcessorImpl<F32> from Design::CQT: {}",
           e.what());
       return OmniExpected<std::unique_ptr<Abstract::CQTProcessorImpl<F32>>>(
-          std::unexpect, Status::Failure);
+          std::unexpect, OmniStatus::Failure);
     }
   }
 
@@ -1019,7 +1025,7 @@ namespace OmniDSP::Default {
           "Error creating Default::CQTProcessorImpl<F64> from Design::CQT: {}",
           e.what());
       return OmniExpected<std::unique_ptr<Abstract::CQTProcessorImpl<F64>>>(
-          std::unexpect, Status::Failure);
+          std::unexpect, OmniStatus::Failure);
     }
   }
 
@@ -1036,7 +1042,7 @@ namespace OmniDSP::Default {
           "Error creating Default::ResampleProcessorImpl<F32>: {}", e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::ResampleProcessorImpl<F32>>>(
-          std::unexpect, Status::Failure);
+          std::unexpect, OmniStatus::Failure);
     }
   }
   [[nodiscard]] OmniExpected<
@@ -1052,7 +1058,7 @@ namespace OmniDSP::Default {
           "Error creating Default::ResampleProcessorImpl<F64>: {}", e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::ResampleProcessorImpl<F64>>>(
-          std::unexpect, Status::Failure);
+          std::unexpect, OmniStatus::Failure);
     }
   }
 
@@ -1084,7 +1090,7 @@ namespace OmniDSP::Default {
                 "FFT length calculation overflowed for F32 convolution.");
             return OmniExpected<
                 std::unique_ptr<Abstract::ConvolutionPlanImpl<F32>>>(
-                std::unexpect, Status::InvalidArgument);
+                std::unexpect, OmniStatus::InvalidArgument);
           }
           if (fft_len < 2) fft_len = 2;  // RFFT often needs min length 2
           auto rfft_plan_expected = this->create_rfft_plan_impl_f32(fft_len);
@@ -1121,7 +1127,7 @@ namespace OmniDSP::Default {
       spdlog::get("OmniDSP")->error(
           "Error creating Default::ConvolutionPlanImpl<F32>: {}", e.what());
       return OmniExpected<std::unique_ptr<Abstract::ConvolutionPlanImpl<F32>>>(
-          std::unexpect, Status::Failure);
+          std::unexpect, OmniStatus::Failure);
     }
   }
 
@@ -1152,7 +1158,7 @@ namespace OmniDSP::Default {
                 "FFT length calculation overflowed for F64 convolution.");
             return OmniExpected<
                 std::unique_ptr<Abstract::ConvolutionPlanImpl<F64>>>(
-                std::unexpect, Status::InvalidArgument);
+                std::unexpect, OmniStatus::InvalidArgument);
           }
           if (fft_len < 2) fft_len = 2;
           auto rfft_plan_expected = this->create_rfft_plan_impl_f64(fft_len);
@@ -1184,7 +1190,7 @@ namespace OmniDSP::Default {
       spdlog::get("OmniDSP")->error(
           "Error creating Default::ConvolutionPlanImpl<F64>: {}", e.what());
       return OmniExpected<std::unique_ptr<Abstract::ConvolutionPlanImpl<F64>>>(
-          std::unexpect, Status::Failure);
+          std::unexpect, OmniStatus::Failure);
     }
   }
 
@@ -1215,7 +1221,7 @@ namespace OmniDSP::Default {
                 "FFT length calculation overflowed for C32 convolution.");
             return OmniExpected<
                 std::unique_ptr<Abstract::ConvolutionPlanImpl<C32>>>(
-                std::unexpect, Status::InvalidArgument);
+                std::unexpect, OmniStatus::InvalidArgument);
           }
           auto cfft_plan_expected = this->create_fft_plan_impl_c32(fft_len);
           if (!cfft_plan_expected) {
@@ -1245,7 +1251,7 @@ namespace OmniDSP::Default {
       spdlog::get("OmniDSP")->error(
           "Error creating Default::ConvolutionPlanImpl<C32>: {}", e.what());
       return OmniExpected<std::unique_ptr<Abstract::ConvolutionPlanImpl<C32>>>(
-          std::unexpect, Status::Failure);
+          std::unexpect, OmniStatus::Failure);
     }
   }
 
@@ -1276,7 +1282,7 @@ namespace OmniDSP::Default {
                 "FFT length calculation overflowed for C64 convolution.");
             return OmniExpected<
                 std::unique_ptr<Abstract::ConvolutionPlanImpl<C64>>>(
-                std::unexpect, Status::InvalidArgument);
+                std::unexpect, OmniStatus::InvalidArgument);
           }
           auto cfft_plan_expected = this->create_fft_plan_impl_c64(fft_len);
           if (!cfft_plan_expected) {
@@ -1305,7 +1311,7 @@ namespace OmniDSP::Default {
       spdlog::get("OmniDSP")->error(
           "Error creating Default::ConvolutionPlanImpl<C64>: {}", e.what());
       return OmniExpected<std::unique_ptr<Abstract::ConvolutionPlanImpl<C64>>>(
-          std::unexpect, Status::Failure);
+          std::unexpect, OmniStatus::Failure);
     }
   }
 
@@ -1337,7 +1343,7 @@ namespace OmniDSP::Default {
                 "FFT length calculation overflowed for F32 correlation.");
             return OmniExpected<
                 std::unique_ptr<Abstract::CorrelationPlanImpl<F32>>>(
-                std::unexpect, Status::InvalidArgument);
+                std::unexpect, OmniStatus::InvalidArgument);
           }
           if (fft_len < 2) fft_len = 2;
           auto rfft_plan_expected = this->create_rfft_plan_impl_f32(fft_len);
@@ -1369,7 +1375,7 @@ namespace OmniDSP::Default {
       spdlog::get("OmniDSP")->error(
           "Error creating Default::CorrelationPlanImpl<F32>: {}", e.what());
       return OmniExpected<std::unique_ptr<Abstract::CorrelationPlanImpl<F32>>>(
-          std::unexpect, Status::Failure);
+          std::unexpect, OmniStatus::Failure);
     }
   }
 
@@ -1400,7 +1406,7 @@ namespace OmniDSP::Default {
                 "FFT length calculation overflowed for F64 correlation.");
             return OmniExpected<
                 std::unique_ptr<Abstract::CorrelationPlanImpl<F64>>>(
-                std::unexpect, Status::InvalidArgument);
+                std::unexpect, OmniStatus::InvalidArgument);
           }
           if (fft_len < 2) fft_len = 2;
           auto rfft_plan_expected = this->create_rfft_plan_impl_f64(fft_len);
@@ -1432,7 +1438,7 @@ namespace OmniDSP::Default {
       spdlog::get("OmniDSP")->error(
           "Error creating Default::CorrelationPlanImpl<F64>: {}", e.what());
       return OmniExpected<std::unique_ptr<Abstract::CorrelationPlanImpl<F64>>>(
-          std::unexpect, Status::Failure);
+          std::unexpect, OmniStatus::Failure);
     }
   }
 
@@ -1463,7 +1469,7 @@ namespace OmniDSP::Default {
                 "FFT length calculation overflowed for C32 correlation.");
             return OmniExpected<
                 std::unique_ptr<Abstract::CorrelationPlanImpl<C32>>>(
-                std::unexpect, Status::InvalidArgument);
+                std::unexpect, OmniStatus::InvalidArgument);
           }
           auto cfft_plan_expected = this->create_fft_plan_impl_c32(fft_len);
           if (!cfft_plan_expected) {
@@ -1492,7 +1498,7 @@ namespace OmniDSP::Default {
       spdlog::get("OmniDSP")->error(
           "Error creating Default::CorrelationPlanImpl<C32>: {}", e.what());
       return OmniExpected<std::unique_ptr<Abstract::CorrelationPlanImpl<C32>>>(
-          std::unexpect, Status::Failure);
+          std::unexpect, OmniStatus::Failure);
     }
   }
 
@@ -1523,7 +1529,7 @@ namespace OmniDSP::Default {
                 "FFT length calculation overflowed for C64 correlation.");
             return OmniExpected<
                 std::unique_ptr<Abstract::CorrelationPlanImpl<C64>>>(
-                std::unexpect, Status::InvalidArgument);
+                std::unexpect, OmniStatus::InvalidArgument);
           }
           auto cfft_plan_expected = this->create_fft_plan_impl_c64(fft_len);
           if (!cfft_plan_expected) {
@@ -1552,7 +1558,7 @@ namespace OmniDSP::Default {
       spdlog::get("OmniDSP")->error(
           "Error creating Default::CorrelationPlanImpl<C64>: {}", e.what());
       return OmniExpected<std::unique_ptr<Abstract::CorrelationPlanImpl<C64>>>(
-          std::unexpect, Status::Failure);
+          std::unexpect, OmniStatus::Failure);
     }
   }
 
@@ -1568,7 +1574,7 @@ namespace OmniDSP::Default {
       spdlog::get("OmniDSP")->error("Default::FIRPlanImpl<F32>: {}", e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::FIRFilterProcessorImpl<F32>>>(
-          std::unexpect, Status::Failure);
+          std::unexpect, OmniStatus::Failure);
     }
   }
   [[nodiscard]] OmniExpected<
@@ -1583,7 +1589,7 @@ namespace OmniDSP::Default {
       spdlog::get("OmniDSP")->error("Default::FIRPlanImpl<F64>: {}", e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::FIRFilterProcessorImpl<F64>>>(
-          std::unexpect, Status::Failure);
+          std::unexpect, OmniStatus::Failure);
     }
   }
   [[nodiscard]] OmniExpected<
@@ -1598,7 +1604,7 @@ namespace OmniDSP::Default {
       spdlog::get("OmniDSP")->error("Default::FIRPlanImpl<C32>: {}", e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::FIRFilterProcessorImpl<C32>>>(
-          std::unexpect, Status::Failure);
+          std::unexpect, OmniStatus::Failure);
     }
   }
   [[nodiscard]] OmniExpected<
@@ -1613,7 +1619,7 @@ namespace OmniDSP::Default {
       spdlog::get("OmniDSP")->error("Default::FIRPlanImpl<C64>: {}", e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::FIRFilterProcessorImpl<C64>>>(
-          std::unexpect, Status::Failure);
+          std::unexpect, OmniStatus::Failure);
     }
   }
 
@@ -1629,7 +1635,7 @@ namespace OmniDSP::Default {
       spdlog::get("OmniDSP")->error("Default::IIRPlanImpl<F32>: {}", e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::IIRFilterProcessorImpl<F32>>>(
-          std::unexpect, Status::Failure);
+          std::unexpect, OmniStatus::Failure);
     }
   }
   [[nodiscard]] OmniExpected<
@@ -1644,7 +1650,7 @@ namespace OmniDSP::Default {
       spdlog::get("OmniDSP")->error("Default::IIRPlanImpl<F64>: {}", e.what());
       return OmniExpected<
           std::unique_ptr<Abstract::IIRFilterProcessorImpl<F64>>>(
-          std::unexpect, Status::Failure);
+          std::unexpect, OmniStatus::Failure);
     }
   }
 

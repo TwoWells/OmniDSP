@@ -21,7 +21,7 @@ namespace OmniDSP::OneMKL::Details {
    * @param mkl_status The MKL_LONG status code returned by a DFTI function.
    * @return The corresponding OmniDSP::Status enum value.
    */
-  Status mkl_status_to_omnidsp_status(MKL_LONG mkl_status);
+  OmniStatus mkl_status_to_omnidsp_status(MKL_LONG mkl_status);
 
   /**
    * @brief Helper to get the corresponding DFTI precision enum value for a real

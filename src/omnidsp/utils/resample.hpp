@@ -22,7 +22,7 @@ namespace OmniDSP::Utils {
    * Status::InvalidArgument if rates are invalid, Status::Failure on other
    * errors (e.g., overflow).
    */
-  Status calculate_resampling_factors(
+  OmniStatus calculate_resampling_factors(
       double in_rate, double out_rate, size_t& L, size_t& M);
 
 }  // namespace OmniDSP::Utils

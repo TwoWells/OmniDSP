@@ -56,7 +56,7 @@ namespace OmniDSP::Default {
 
     ~ConvolutionPlanImpl() override = default;
 
-    Status execute(
+    OmniStatus execute(
         std::span<const T> input, std::span<T> output) const override;
     size_t get_kernel_length() const override;
     ConvolutionType get_type() const override;
@@ -125,7 +125,7 @@ namespace OmniDSP::Default {
 
     ~CorrelationPlanImpl() override = default;
 
-    Status execute(
+    OmniStatus execute(
         std::span<const T> input, std::span<T> output) const override;
     size_t get_template_length() const override;
     ConvolutionType get_type() const override;

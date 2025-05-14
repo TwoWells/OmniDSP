@@ -104,13 +104,13 @@ namespace OmniDSP::OneMKL {
 
   // fft Method Implementation
   template <typename T>
-  Status FFTPlanImpl<T>::fft(
+  OmniStatus FFTPlanImpl<T>::fft(
       std::span<const T> input, std::span<T> output) const
   {
-    if (!descriptor_handle_) return Status::InvalidOperation;
+    if (!descriptor_handle_) return OmniStatus::InvalidOperation;
     if (input.size() != length_ || output.size() != length_)
-      return Status::SizeMismatch;
-    if (length_ == 0) return Status::Success;
+      return OmniStatus::SizeMismatch;
+    if (length_ == 0) return OmniStatus::Success;
 
     MKL_LONG status = DftiComputeForward(
         descriptor_handle_,
@@ -122,13 +122,13 @@ namespace OmniDSP::OneMKL {
 
   // ifft Method Implementation
   template <typename T>
-  Status FFTPlanImpl<T>::ifft(
+  OmniStatus FFTPlanImpl<T>::ifft(
       std::span<const T> input, std::span<T> output) const
   {
-    if (!descriptor_handle_) return Status::InvalidOperation;
+    if (!descriptor_handle_) return OmniStatus::InvalidOperation;
     if (input.size() != length_ || output.size() != length_)
-      return Status::SizeMismatch;
-    if (length_ == 0) return Status::Success;
+      return OmniStatus::SizeMismatch;
+    if (length_ == 0) return OmniStatus::Success;
 
     MKL_LONG status = DftiComputeBackward(
         descriptor_handle_,
@@ -244,15 +244,15 @@ namespace OmniDSP::OneMKL {
 
   // rfft Method Implementation
   template <typename T>
-  Status RFFTPlanImpl<T>::rfft(
+  OmniStatus RFFTPlanImpl<T>::rfft(
       std::span<const T> input, std::span<Complex> output) const
   {
-    if (!descriptor_handle_) return Status::InvalidOperation;
+    if (!descriptor_handle_) return OmniStatus::InvalidOperation;
     size_t N = length_;
     size_t output_size_expected = (N / 2) + 1;
-    if (N == 0 && input.empty() && output.empty()) return Status::Success;
+    if (N == 0 && input.empty() && output.empty()) return OmniStatus::Success;
     if (input.size() != N || output.size() != output_size_expected)
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
 
     MKL_LONG status = DftiComputeForward(
         descriptor_handle_,
@@ -264,15 +264,15 @@ namespace OmniDSP::OneMKL {
 
   // irfft Method Implementation
   template <typename T>
-  Status RFFTPlanImpl<T>::irfft(
+  OmniStatus RFFTPlanImpl<T>::irfft(
       std::span<const Complex> input, std::span<T> output) const
   {
-    if (!descriptor_handle_) return Status::InvalidOperation;
+    if (!descriptor_handle_) return OmniStatus::InvalidOperation;
     size_t N = length_;
     size_t input_size_expected = (N / 2) + 1;
-    if (N == 0 && input.empty() && output.empty()) return Status::Success;
+    if (N == 0 && input.empty() && output.empty()) return OmniStatus::Success;
     if (input.size() != input_size_expected || output.size() != N)
-      return Status::SizeMismatch;
+      return OmniStatus::SizeMismatch;
 
     MKL_LONG status = DftiComputeBackward(
         descriptor_handle_,

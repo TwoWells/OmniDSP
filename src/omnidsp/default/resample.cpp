@@ -52,7 +52,7 @@ namespace OmniDSP::Default {
       throw OmniException(
           "ResampleProcessorImpl requires a valid owner AbstractBackend "
           "pointer.",
-          Status::InvalidArgument);
+          OmniStatus::InvalidArgument);
     }
 
     if (interpolation_factor_ == 0 || decimation_factor_ == 0) {
@@ -63,7 +63,7 @@ namespace OmniDSP::Default {
           decimation_factor_);
       throw OmniException(
           "Resampling factors L or M from design cannot be zero.",
-          Status::InvalidArgument);
+          OmniStatus::InvalidArgument);
     }
 
     design_filter();
@@ -152,7 +152,7 @@ namespace OmniDSP::Default {
           "filter design resulted in empty coefficients.");
       throw OmniException(
           "Resampling prototype filter design resulted in empty coefficients.",
-          Status::Failure);
+          OmniStatus::Failure);
     }
 
     filter_length_ = prototype_coeffs_.size();
@@ -208,7 +208,7 @@ namespace OmniDSP::Default {
   }
 
   template <typename T>
-  Status ResampleProcessorImpl<T>::execute(
+  OmniStatus ResampleProcessorImpl<T>::execute(
       std::span<const T> input, std::span<T> output)
   {
     if (interpolation_factor_ == 0 || decimation_factor_ == 0
@@ -227,7 +227,7 @@ namespace OmniDSP::Default {
           decimation_factor_,
           polyphase_coeffs_.size(),
           polyphase_coeffs_.empty() ? 0 : polyphase_coeffs_[0].size());
-      return Status::NotInitialized;
+      return OmniStatus::NotInitialized;
     }
 
     size_t input_len = input.size();
@@ -241,7 +241,7 @@ namespace OmniDSP::Default {
         std::fill(
             output.begin(), output.begin() + output_samples_to_write, T{0});
       }
-      return Status::Success;
+      return OmniStatus::Success;
     }
 
     const size_t L = interpolation_factor_;
@@ -298,15 +298,15 @@ namespace OmniDSP::Default {
     if (output_idx < output.size()) {
       std::fill(output.begin() + output_idx, output.end(), T{0});
     }
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   template <typename T>
-  Status ResampleProcessorImpl<T>::reset()
+  OmniStatus ResampleProcessorImpl<T>::reset()
   {
     std::fill(state_.begin(), state_.end(), T{0});
     current_phase_ = 0;
-    return Status::Success;
+    return OmniStatus::Success;
   }
 
   template <typename T>
