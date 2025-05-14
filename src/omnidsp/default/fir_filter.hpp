@@ -66,12 +66,12 @@ namespace OmniDSP::Default {
    * @tparam T Data type for coefficients (F32, F64, std::complex<F32>,
    * std::complex<F64>).
    * @param spec The fully resolved Design::FIRFilter.
-   * @return OmniExpected<FIRCoefs<T>> The designed coefficients or an error
-   * status. If T is complex, FIRCoefs<T> should resolve to a complex vector
-   * type (e.g. C32Vec).
+   * @return OmniExpected<Coefs::FIRFilter<T>> The designed coefficients or an
+   * error status. If T is complex, Coefs::FIRFilter<T> should resolve to a
+   * complex vector type (e.g. C32Vec).
    */
   template <typename T>
-  [[nodiscard]] OmniExpected<FIRCoefs<T>> generate_fir_filter_coeffs(
+  [[nodiscard]] OmniExpected<Coefs::FIRFilter<T>> generate_fir_filter_coeffs(
       const Design::FIRFilter& spec);
 
   // Explicit template instantiations (declarations for linking)
@@ -81,22 +81,22 @@ namespace OmniDSP::Default {
   extern template class FIRFilterProcessorImpl<C64>;
 
   // For real types
-  extern template OmniExpected<FIRCoefs<F32>> generate_fir_filter_coeffs<F32>(
-      const Design::FIRFilter& spec);
-  extern template OmniExpected<FIRCoefs<F64>> generate_fir_filter_coeffs<F64>(
-      const Design::FIRFilter& spec);
+  extern template OmniExpected<Coefs::FIRFilter<F32>>
+  generate_fir_filter_coeffs<F32>(const Design::FIRFilter& spec);
+  extern template OmniExpected<Coefs::FIRFilter<F64>>
+  generate_fir_filter_coeffs<F64>(const Design::FIRFilter& spec);
 
-  // For complex types (NEW - ensure FIRCoefs<std::complex<T>> matches C<N>Vec
-  // or is compatible) Assuming FIRCoefs<std::complex<float>> is compatible with
-  // C32Vec and FIRCoefs<std::complex<double>> is compatible with C64Vec. The
-  // linker error indicates it's looking for a function returning
-  // std::expected<std::vector<std::complex<...>>> So, we assume
-  // FIRCoefs<std::complex<float>> is effectively
+  // For complex types (NEW - ensure Coefs::FIRFilter<std::complex<T>> matches
+  // C<N>Vec or is compatible) Assuming Coefs::FIRFilter<std::complex<float>> is
+  // compatible with C32Vec and Coefs::FIRFilter<std::complex<double>> is
+  // compatible with C64Vec. The linker error indicates it's looking for a
+  // function returning std::expected<std::vector<std::complex<...>>> So, we
+  // assume Coefs::FIRFilter<std::complex<float>> is effectively
   // std::vector<std::complex<float>>
-  extern template OmniExpected<FIRCoefs<C32>> generate_fir_filter_coeffs<C32>(
-      const Design::FIRFilter& spec);
-  extern template OmniExpected<FIRCoefs<C64>> generate_fir_filter_coeffs<C64>(
-      const Design::FIRFilter& spec);
+  extern template OmniExpected<Coefs::FIRFilter<C32>>
+  generate_fir_filter_coeffs<C32>(const Design::FIRFilter& spec);
+  extern template OmniExpected<Coefs::FIRFilter<C64>>
+  generate_fir_filter_coeffs<C64>(const Design::FIRFilter& spec);
 
 }  // namespace OmniDSP::Default
 

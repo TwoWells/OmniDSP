@@ -9,15 +9,15 @@
 
 #include "OmniDSP/core_types.hpp"  // For F32, F64 etc. if needed for template, though std::vector<T> is generic
 
-namespace OmniDSP {
+namespace OmniDSP::Coefs {
 
   /**
    * @brief Type alias for a vector of FIR filter coefficients (taps).
    * @tparam T The data type of the coefficients (e.g., F32, F64, C32, C64).
    */
   template <typename T>
-  using FIRCoefs = std::vector<T>;
+  using FIRFilter = std::vector<T>;
 
-}  // namespace OmniDSP
+}  // namespace OmniDSP::Coefs
 
 #endif  // OMNIDSP_COEFS_FIR_FILTER_HPP

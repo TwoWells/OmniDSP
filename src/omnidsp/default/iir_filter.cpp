@@ -6,9 +6,9 @@
 
 #include "iir_filter.hpp"  // Corresponding header
 
-#include <OmniDSP/coefs/iir_filter.hpp>  // Public Design::IIRFilter, IIRFilterCoef
+#include <OmniDSP/coefs/iir_filter.hpp>  // Public Design::IIRFilter, Coefs::SOS
 #include <OmniDSP/core_types.hpp>        // Core types, Status, OmniExpected
-#include <OmniDSP/design/iir_filter.hpp>  // Public Design::IIRFilter, IIRFilterCoef
+#include <OmniDSP/design/iir_filter.hpp>  // Public Design::IIRFilter, Coefs::SOS
 #include <OmniDSP/types/filter.hpp>       // For FilterType enum
 #include <algorithm>                      // For std::fill, std::min
 #include <cmath>                          // For std::abs
@@ -26,8 +26,8 @@ namespace OmniDSP::Default {
   //--------------------------------------------------------------------------
   // IIR Filter Design Implementation (Placeholder)
   //--------------------------------------------------------------------------
-  [[nodiscard]] OmniExpected<std::vector<IIRFilterCoef>>
-  generate_iir_filter_coeffs(const Design::IIRFilter& spec)
+  [[nodiscard]] OmniExpected<Coefs::IIRFilterSOS> generate_iir_filter_coeffs(
+      const Design::IIRFilter& spec)
   {
     auto logger = spdlog::get("OmniDSP");
     if (!logger) {
@@ -49,7 +49,7 @@ namespace OmniDSP::Default {
   // --- IIRFilterProcessorImpl ---
   template <typename T>
   IIRFilterProcessorImpl<T>::IIRFilterProcessorImpl(
-      const std::vector<IIRFilterCoef>& sos_coefficients)
+      const Coefs::IIRFilterSOS& sos_coefficients)
   {
     if (sos_coefficients.empty()) {
       auto logger = spdlog::get("OmniDSP");

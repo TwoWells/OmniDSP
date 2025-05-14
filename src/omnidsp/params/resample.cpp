@@ -1,6 +1,6 @@
 /**
  * @file resample.cpp
- * @brief Implements the constructor and fluent setters for ResampleParams.
+ * @brief Implements the constructor and fluent setters for Params::Resample.
  */
 
 #include <spdlog/spdlog.h>  // Include spdlog for logging
@@ -11,10 +11,10 @@
 #include <string>              // For std::to_string, string concatenation
 #include <utility>             // For std::move
 
-namespace OmniDSP {
+namespace OmniDSP::Params {
 
   // Constructor (with spdlog integration)
-  ResampleParams::ResampleParams(
+  Resample::Resample(
       double p_input_rate,
       double p_output_rate,
       int p_quality,
@@ -31,19 +31,19 @@ namespace OmniDSP {
     std::string msg;
 
     if (input_rate_ <= 0.0) {
-      msg = "ResampleParams Constructor: input_rate_ ("
+      msg = "Params::Resample Constructor: input_rate_ ("
             + std::to_string(input_rate_) + ") must be positive.";
       if (logger) logger->error(msg);
       throw std::invalid_argument(msg);
     }
     if (output_rate_ <= 0.0) {
-      msg = "ResampleParams Constructor: output_rate ("
+      msg = "Params::Resample Constructor: output_rate ("
             + std::to_string(output_rate_) + ") must be positive.";
       if (logger) logger->error(msg);
       throw std::invalid_argument(msg);
     }
     if (quality_ < 0 || quality_ > 15) {
-      msg = "ResampleParams Constructor: quality (" + std::to_string(quality_)
+      msg = "Params::Resample Constructor: quality (" + std::to_string(quality_)
             + ") is out of the typical range [0, 15].";
       if (logger)
         logger->error(msg);  // Log as error as it's a validation failure
@@ -52,7 +52,7 @@ namespace OmniDSP {
     // WindowSetup is validated by its own constructor.
     if (logger)
       logger->trace(
-          "ResampleParams constructed: IR={}, OR={}, Q={}, WinType={}",
+          "Params::Resample constructed: IR={}, OR={}, Q={}, WinType={}",
           input_rate_,
           output_rate_,
           quality_,
@@ -61,58 +61,59 @@ namespace OmniDSP {
 
   // --- Fluent Setter Definitions ---
 
-  ResampleParams& ResampleParams::input_rate(double val)
+  Resample& Resample::input_rate(double val)
   {
     auto logger = spdlog::get("OmniDSP");
     if (!logger) {
       logger = spdlog::default_logger();
     }
     if (val <= 0.0) {
-      std::string msg = "ResampleParams::input_rate: value ("
+      std::string msg = "Params::Resample::input_rate: value ("
                         + std::to_string(val) + ") must be positive.";
       if (logger) logger->error(msg);
       throw std::invalid_argument(msg);
     }
     input_rate_ = val;
-    if (logger) logger->trace("ResampleParams::input_rate to {}", val);
+    if (logger) logger->trace("Params::Resample::input_rate to {}", val);
     return *this;
   }
 
-  ResampleParams& ResampleParams::output_rate(double val)
+  Resample& Resample::output_rate(double val)
   {
     auto logger = spdlog::get("OmniDSP");
     if (!logger) {
       logger = spdlog::default_logger();
     }
     if (val <= 0.0) {
-      std::string msg = "ResampleParams::output_rate: value ("
+      std::string msg = "Params::Resample::output_rate: value ("
                         + std::to_string(val) + ") must be positive.";
       if (logger) logger->error(msg);
       throw std::invalid_argument(msg);
     }
     output_rate_ = val;
-    if (logger) logger->trace("ResampleParams::output_rate to {}", val);
+    if (logger) logger->trace("Params::Resample::output_rate to {}", val);
     return *this;
   }
 
-  ResampleParams& ResampleParams::quality(int val)
+  Resample& Resample::quality(int val)
   {
     auto logger = spdlog::get("OmniDSP");
     if (!logger) {
       logger = spdlog::default_logger();
     }
     if (val < 0 || val > 15) {  // Example quality range
-      std::string msg = "ResampleParams::quality: value (" + std::to_string(val)
+      std::string msg = "Params::Resample::quality: value ("
+                        + std::to_string(val)
                         + ") is out of the typical range [0, 15].";
       if (logger) logger->error(msg);
       throw std::invalid_argument(msg);
     }
     quality_ = val;
-    if (logger) logger->trace("ResampleParams::quality to {}", val);
+    if (logger) logger->trace("Params::Resample::quality to {}", val);
     return *this;
   }
 
-  ResampleParams& ResampleParams::window_setup(WindowSetup val)
+  Resample& Resample::window_setup(WindowSetup val)
   {
     // WindowSetup's constructor handles its own validation and logging.
     window_setup_ = std::move(val);
@@ -122,9 +123,9 @@ namespace OmniDSP {
     }
     if (logger)
       logger->trace(
-          "ResampleParams::window_setup to type {}",
+          "Params::Resample::window_setup to type {}",
           static_cast<int>(window_setup_.type));
     return *this;
   }
 
-}  // namespace OmniDSP
+}  // namespace OmniDSP::Params

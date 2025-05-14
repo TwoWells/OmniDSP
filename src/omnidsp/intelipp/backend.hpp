@@ -19,8 +19,8 @@
 // Include necessary types referenced in method signatures
 #include <OmniDSP/core_types.hpp>
 #include <OmniDSP/fft.hpp>  // For public FFTPlan, RFFTPlan (though we return Impl)
-#include <OmniDSP/fir_filter.hpp>  // For public FIRFilterPlan, IIRFilterPlan, IIRFilterCoef
-#include <OmniDSP/iir_filter.hpp>  // For public FIRFilterPlan, IIRFilterPlan, IIRFilterCoef
+#include <OmniDSP/fir_filter.hpp>  // For public FIRFilterPlan, IIRFilterPlan, Coefs::SOS
+#include <OmniDSP/iir_filter.hpp>  // For public FIRFilterPlan, IIRFilterPlan, Coefs::SOS
 #include <OmniDSP/resample.hpp>  // For public ResamplePlan, Design::Resample
 #include <OmniDSP/window.hpp>    // For WindowSetup, specific window params
 
@@ -139,11 +139,11 @@ namespace OmniDSP::IntelIPP {
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::IIRFilterProcessorImpl<F32>>>
     create_iir_filter_processor_impl_f32(
-        const std::vector<IIRFilterCoef>& sos_coefficients) const override;
+        const Coefs::IIRFilterSOS& sos_coefficients) const override;
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::IIRFilterProcessorImpl<F64>>>
     create_iir_filter_processor_impl_f64(
-        const std::vector<IIRFilterCoef>& sos_coefficients) const override;
+        const Coefs::IIRFilterSOS& sos_coefficients) const override;
 
     // NOTE: create_cqt_processor_impl_*, create_convolution_plan_impl_*,
     // create_correlation_plan_impl_* are NOT overridden here, so they will be

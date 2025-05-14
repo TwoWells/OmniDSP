@@ -8,7 +8,7 @@
 #include <OmniDSP/core_types.hpp>
 #include <OmniDSP/cqt.hpp>              // For Design::CQT, Design::CQTOctave
 #include <OmniDSP/fft.hpp>              // For RFFTPlan, FFTPlan
-#include <OmniDSP/params/resample.hpp>  // For ResampleParams
+#include <OmniDSP/params/resample.hpp>  // For Params::Resample
 #include <OmniDSP/resample.hpp>  // For ResamplePlan, Design::Resample, ResampleProcessor
 #include <OmniDSP/utils.hpp>
 #include <OmniDSP/window.hpp>
@@ -75,7 +75,7 @@ namespace OmniDSP::Default {
           > 1e-6) {
         WindowParams kaiser_params;
         kaiser_params["beta"] = 5.0;
-        ResampleParams resample_params(
+        Params::Resample resample_params(
             spec_.original_sample_rate,
             octave_design_item.octave_sample_rate,
             10,

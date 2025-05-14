@@ -26,7 +26,7 @@
 
 // Coefficient types (may be returned by design methods)
 #include <OmniDSP/coefs/fir_filter.hpp>  // Defines FIRCoefs
-#include <OmniDSP/coefs/iir_filter.hpp>  // Defines IIRFilterCoef
+#include <OmniDSP/coefs/iir_filter.hpp>  // Defines Coefs::SOS
 
 namespace OmniDSP::Abstract {
 
@@ -339,35 +339,31 @@ namespace OmniDSP::Abstract {
     [[nodiscard]] virtual OmniExpected<
         std::unique_ptr<IIRFilterProcessorImpl<F32>>>
     create_iir_filter_processor_impl_f32(
-        const std::vector<IIRFilterCoef>& sos_coefficients) const
+        const Coefs::IIRFilterSOS& sos_coefficients) const
         = 0;
     [[nodiscard]] virtual OmniExpected<
         std::unique_ptr<IIRFilterProcessorImpl<F64>>>
     create_iir_filter_processor_impl_f64(
-        const std::vector<IIRFilterCoef>& sos_coefficients) const
+        const Coefs::IIRFilterSOS& sos_coefficients) const
         = 0;
 
     // Filter Design
     // For real coefficients
-    [[nodiscard]] virtual OmniExpected<FIRCoefs<F32>> design_fir_filter_f32(
-        const Design::FIRFilter& design) const
-        = 0;
-    [[nodiscard]] virtual OmniExpected<FIRCoefs<F64>> design_fir_filter_f64(
-        const Design::FIRFilter& design) const
-        = 0;
+    [[nodiscard]] virtual OmniExpected<Coefs::FIRFilter<F32>>
+    design_fir_filter_f32(const Design::FIRFilter& design) const = 0;
+    [[nodiscard]] virtual OmniExpected<Coefs::FIRFilter<F64>>
+    design_fir_filter_f64(const Design::FIRFilter& design) const = 0;
 
     // For complex coefficients
-    [[nodiscard]] virtual OmniExpected<FIRCoefs<C32>> design_fir_filter_c32(
-        const Design::FIRFilter& design) const
-        = 0;
-    [[nodiscard]] virtual OmniExpected<FIRCoefs<C64>> design_fir_filter_c64(
-        const Design::FIRFilter& design) const
-        = 0;
+    [[nodiscard]] virtual OmniExpected<Coefs::FIRFilter<C32>>
+    design_fir_filter_c32(const Design::FIRFilter& design) const = 0;
+    [[nodiscard]] virtual OmniExpected<Coefs::FIRFilter<C64>>
+    design_fir_filter_c64(const Design::FIRFilter& design) const = 0;
 
     // For IIR filters (real coefficients)
-    [[nodiscard]] virtual OmniExpected<std::vector<IIRFilterCoef>>
+    [[nodiscard]] virtual OmniExpected<Coefs::IIRFilterSOS>
     design_iir_filter_f32(const Design::IIRFilter& design) const = 0;
-    [[nodiscard]] virtual OmniExpected<std::vector<IIRFilterCoef>>
+    [[nodiscard]] virtual OmniExpected<Coefs::IIRFilterSOS>
     design_iir_filter_f64(const Design::IIRFilter& design) const = 0;
 
    protected:

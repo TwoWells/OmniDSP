@@ -28,13 +28,13 @@ namespace OmniDSP::Utils {
       const Params::FIRFilter& params);
 
   [[nodiscard]] OMNIDSP_EXPORT OmniExpected<Design::IIRFilter> create_spec(
-      const IIRFilterParams& params);
+      const Params::IIRFilter& params);
 
   [[nodiscard]] OMNIDSP_EXPORT OmniExpected<Design::Resample> create_spec(
-      const ResampleParams& params);
+      const Params::Resample& params);
 
   [[nodiscard]] OMNIDSP_EXPORT OmniExpected<Design::CQT> create_spec(
-      const CQTParams& params);
+      const Params::CQT& params);
 
 }  // namespace OmniDSP::Utils
 

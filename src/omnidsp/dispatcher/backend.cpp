@@ -522,7 +522,7 @@ namespace OmniDSP::Dispatcher {
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::IIRFilterProcessorImpl<F32>>>
   Backend::create_iir_filter_processor_impl_f32(
-      const std::vector<IIRFilterCoef>& sos_coefficients) const
+      const Coefs::IIRFilterSOS& sos_coefficients) const
   {
     return select_backend(OperationCategory::IIRFilter)
         ->create_iir_filter_processor_impl_f32(sos_coefficients);
@@ -530,23 +530,23 @@ namespace OmniDSP::Dispatcher {
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::IIRFilterProcessorImpl<F64>>>
   Backend::create_iir_filter_processor_impl_f64(
-      const std::vector<IIRFilterCoef>& sos_coefficients) const
+      const Coefs::IIRFilterSOS& sos_coefficients) const
   {
     return select_backend(OperationCategory::IIRFilter)
         ->create_iir_filter_processor_impl_f64(sos_coefficients);
   }
 
   // --- Filter Design ---
-  [[nodiscard]] OmniExpected<FIRCoefs<F32>> Backend::design_fir_filter_f32(
-      const Design::FIRFilter& spec) const
+  [[nodiscard]] OmniExpected<Coefs::FIRFilter<F32>>
+  Backend::design_fir_filter_f32(const Design::FIRFilter& spec) const
   {
     return select_backend(
                OperationCategory::FIRFilter)  // Or a more general Design
                                               // category
         ->design_fir_filter_f32(spec);
   }
-  [[nodiscard]] OmniExpected<FIRCoefs<F64>> Backend::design_fir_filter_f64(
-      const Design::FIRFilter& spec) const
+  [[nodiscard]] OmniExpected<Coefs::FIRFilter<F64>>
+  Backend::design_fir_filter_f64(const Design::FIRFilter& spec) const
   {
     return select_backend(
                OperationCategory::FIRFilter)  // Or a more general Design
@@ -555,8 +555,8 @@ namespace OmniDSP::Dispatcher {
   }
 
   // Implementations for complex FIR filter design
-  [[nodiscard]] OmniExpected<FIRCoefs<C32>> Backend::design_fir_filter_c32(
-      const Design::FIRFilter& design) const
+  [[nodiscard]] OmniExpected<Coefs::FIRFilter<C32>>
+  Backend::design_fir_filter_c32(const Design::FIRFilter& design) const
   {
     // Assuming FIRFilter category is appropriate for design of complex FIR
     // filters as well. If there's a more specific category (e.g.,
@@ -565,8 +565,8 @@ namespace OmniDSP::Dispatcher {
         ->design_fir_filter_c32(design);
   }
 
-  [[nodiscard]] OmniExpected<FIRCoefs<C64>> Backend::design_fir_filter_c64(
-      const Design::FIRFilter& design) const
+  [[nodiscard]] OmniExpected<Coefs::FIRFilter<C64>>
+  Backend::design_fir_filter_c64(const Design::FIRFilter& design) const
   {
     // Assuming FIRFilter category is appropriate for design of complex FIR
     // filters as well.
@@ -574,7 +574,7 @@ namespace OmniDSP::Dispatcher {
         ->design_fir_filter_c64(design);
   }
 
-  [[nodiscard]] OmniExpected<std::vector<IIRFilterCoef>>
+  [[nodiscard]] OmniExpected<Coefs::IIRFilterSOS>
   Backend::design_iir_filter_f32(const Design::IIRFilter& spec) const
   {
     return select_backend(
@@ -582,7 +582,7 @@ namespace OmniDSP::Dispatcher {
                                               // category
         ->design_iir_filter_f32(spec);
   }
-  [[nodiscard]] OmniExpected<std::vector<IIRFilterCoef>>
+  [[nodiscard]] OmniExpected<Coefs::IIRFilterSOS>
   Backend::design_iir_filter_f64(const Design::IIRFilter& spec) const
   {
     return select_backend(

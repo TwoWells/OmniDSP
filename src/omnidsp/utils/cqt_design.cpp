@@ -1,6 +1,7 @@
 /**
  * @file cqt_design.cpp
- * @brief Implements utility functions for creating Design::CQT from CQTParams.
+ * @brief Implements utility functions for creating Design::CQT from
+ * Params::CQT.
  */
 #include <algorithm>  // For std::sort, std::min, std::max, std::transform, std::unique
 #include <bit>  // For std::bit_ceil (C++20)
@@ -20,9 +21,9 @@
 
 namespace OmniDSP::Utils {
 
-  OmniExpected<Design::CQT> create_spec(const CQTParams& params)
+  OmniExpected<Design::CQT> create_spec(const Params::CQT& params)
   {
-    // CQTParams constructor already performed initial validation.
+    // Params::CQT constructor already performed initial validation.
     auto logger = spdlog::get("OmniDSP");
     if (!logger) {
       logger = spdlog::default_logger();
@@ -31,7 +32,7 @@ namespace OmniDSP::Utils {
     // 1. Calculate Quality Factor (Q)
     // Q = 1 / (2^(1/B) - 1), where B is bins_per_octave
     if (params.bins_per_octave_
-        <= 0) {  // Should be caught by CQTParams constructor
+        <= 0) {  // Should be caught by Params::CQT constructor
       return std::unexpected(Status::InvalidArgument);
     }
     double q_factor

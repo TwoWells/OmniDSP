@@ -32,8 +32,8 @@ namespace OmniDSP::Default {
   //--------------------------------------------------------------------------
   // Definition of the template function
   template <typename T>
-  [[nodiscard]] OmniExpected<FIRCoefs<T>>
-  generate_fir_filter_coeffs(  // Assuming FIRCoefs<T> is std::vector<T>
+  [[nodiscard]] OmniExpected<Coefs::FIRFilter<T>>
+  generate_fir_filter_coeffs(  // Assuming Coefs::FIRFilter<T> is std::vector<T>
       const Design::FIRFilter& spec)
   {
     auto logger = spdlog::get("OmniDSP");
@@ -88,7 +88,7 @@ namespace OmniDSP::Default {
       }
     }
 
-    FIRCoefs<T> ideal_coeffs_vec(num_taps);  // This is std::vector<T>
+    Coefs::FIRFilter<T> ideal_coeffs_vec(num_taps);  // This is std::vector<T>
     std::span<T> ideal_coeffs = ideal_coeffs_vec;
 
     const double center = static_cast<double>(spec.order) / 2.0;
@@ -214,7 +214,7 @@ namespace OmniDSP::Default {
       return std::unexpected(window_gen_status.error());
     }
 
-    FIRCoefs<T> final_coeffs_vec(num_taps);  // This is std::vector<T>
+    Coefs::FIRFilter<T> final_coeffs_vec(num_taps);  // This is std::vector<T>
     std::span<T> final_coeffs = final_coeffs_vec;
 
     for (size_t n = 0; n < num_taps; ++n) {
@@ -379,19 +379,20 @@ namespace OmniDSP::Default {
       const;
 
   // Explicit template instantiations for generate_fir_filter_coeffs
-  // Assuming FIRCoefs<T> is std::vector<T>
-  template OmniExpected<FIRCoefs<F32>> generate_fir_filter_coeffs<F32>(
+  // Assuming Coefs::FIRFilter<T> is std::vector<T>
+  template OmniExpected<Coefs::FIRFilter<F32>> generate_fir_filter_coeffs<F32>(
       const Design::FIRFilter& spec);
-  template OmniExpected<FIRCoefs<F64>> generate_fir_filter_coeffs<F64>(
+  template OmniExpected<Coefs::FIRFilter<F64>> generate_fir_filter_coeffs<F64>(
       const Design::FIRFilter& spec);
 
   // NEW: Explicit instantiations for complex types
   // The linker error showed it was looking for a function returning
   // std::expected<std::vector<std::complex<...>>> This means
-  // FIRCoefs<std::complex<float>> should be std::vector<std::complex<float>>.
-  template OmniExpected<FIRCoefs<C32>> generate_fir_filter_coeffs<C32>(
+  // Coefs::FIRFilter<std::complex<float>> should be
+  // std::vector<std::complex<float>>.
+  template OmniExpected<Coefs::FIRFilter<C32>> generate_fir_filter_coeffs<C32>(
       const Design::FIRFilter& spec);
-  template OmniExpected<FIRCoefs<C64>> generate_fir_filter_coeffs<C64>(
+  template OmniExpected<Coefs::FIRFilter<C64>> generate_fir_filter_coeffs<C64>(
       const Design::FIRFilter& spec);
 
 }  // namespace OmniDSP::Default

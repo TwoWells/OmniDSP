@@ -15,7 +15,7 @@
 
 // Forward declare any Params or Spec types if internal helpers were to use
 // them. namespace OmniDSP {
-//   struct IIRFilterParams;
+//   struct Params::IIRFilter;
 //   struct IIRFilterSpec;
 // }
 
@@ -28,7 +28,7 @@ namespace OmniDSP::Utils::Internal {
   // Example of a potential internal helper (currently not in your .cpp):
   /*
   [[nodiscard]] bool check_iir_parameter_consistency_internal(
-      const IIRFilterParams& params,
+      const Params::IIRFilter& params,
       double some_other_factor
   );
   */

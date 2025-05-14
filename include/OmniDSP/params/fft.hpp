@@ -14,7 +14,7 @@
 
 // spdlog include is deferred to .cpp
 
-namespace OmniDSP {
+namespace OmniDSP::Params {
 
   /**
    * @brief Parameters for specifying a complex-to-complex Fast Fourier
@@ -24,7 +24,7 @@ namespace OmniDSP {
    * an FFTPlan. Construction of this object validates the provided parameters.
    * Fluent setters are available for modifying parameters after construction.
    */
-  struct OMNIDSP_EXPORT FFTParams {
+  struct OMNIDSP_EXPORT FFT {
     size_t length_;  ///< Length of the FFT (number of complex input/output
                      ///< points). Must be positive.
 
@@ -34,17 +34,17 @@ namespace OmniDSP {
      * Specific backends might impose further restrictions (e.g., power of 2).
      * @throws std::invalid_argument if parameters are invalid.
      */
-    explicit FFTParams(size_t p_length);
+    explicit FFT(size_t p_length);
 
     // --- Fluent Setters ---
 
     /**
      * @brief Sets the FFT length.
      * @param val The new FFT length. Must be positive.
-     * @return A reference to this FFTParams object.
+     * @return A reference to this Params::FFT object.
      * @throws std::invalid_argument if val is not positive.
      */
-    FFTParams& length(size_t val);
+    FFT& length(size_t val);
   };
 
   /**
@@ -57,7 +57,7 @@ namespace OmniDSP {
    * validates the provided parameters. Fluent setters are available for
    * modifying parameters after construction.
    */
-  struct OMNIDSP_EXPORT RFFTParams {
+  struct OMNIDSP_EXPORT RFFT {
     size_t
         length_;  ///< Length of the RFFT (number of real input points). Must be
                   ///< positive. The complex output will have length N/2 + 1.
@@ -69,19 +69,19 @@ namespace OmniDSP {
      * (e.g., power of 2, minimum length).
      * @throws std::invalid_argument if parameters are invalid.
      */
-    explicit RFFTParams(size_t p_length);
+    explicit RFFT(size_t p_length);
 
     // --- Fluent Setters ---
 
     /**
      * @brief Sets the RFFT length (number of real input points).
      * @param val The new RFFT length. Must be positive.
-     * @return A reference to this RFFTParams object.
+     * @return A reference to this Params::RFFT object.
      * @throws std::invalid_argument if val is not positive.
      */
-    RFFTParams& length(size_t val);
+    RFFT& length(size_t val);
   };
 
-}  // namespace OmniDSP
+}  // namespace OmniDSP::Params
 
 #endif  // OMNIDSP_PARAMS_FFT_HPP

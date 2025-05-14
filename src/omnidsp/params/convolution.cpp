@@ -1,7 +1,7 @@
 /**
  * @file convolution.cpp
- * @brief Implements the constructors and fluent setters for ConvolutionParams
- * and CorrelationParams.
+ * @brief Implements the constructors and fluent setters for Params::Convolution
+ * and Params::Correlation.
  */
 
 #include "OmniDSP/params/convolution.hpp"  // Corresponding header
@@ -13,9 +13,9 @@
 
 namespace OmniDSP {
 
-  // --- ConvolutionParams Implementation ---
+  // --- Params::Convolution Implementation ---
 
-  ConvolutionParams::ConvolutionParams(
+  Params::Convolution::Params::Convolution(
       size_t p_max_input_length,
       size_t p_kernel_length,
       ConvolutionType p_type,
@@ -32,13 +32,13 @@ namespace OmniDSP {
     std::string msg;
 
     if (max_input_length_ == 0) {
-      msg = "ConvolutionParams Constructor: max_input_length ("
+      msg = "Params::Convolution Constructor: max_input_length ("
             + std::to_string(max_input_length_) + ") must be positive.";
       if (logger) logger->error(msg);
       throw std::invalid_argument(msg);
     }
     if (kernel_length_ == 0) {
-      msg = "ConvolutionParams Constructor: kernel_length ("
+      msg = "Params::Convolution Constructor: kernel_length ("
             + std::to_string(kernel_length_) + ") must be positive.";
       if (logger) logger->error(msg);
       throw std::invalid_argument(msg);
@@ -49,7 +49,7 @@ namespace OmniDSP {
     // creation.
     if (logger) {
       logger->trace(
-          "ConvolutionParams constructed: MaxInputLen={}, KernelLen={}, "
+          "Params::Convolution constructed: MaxInputLen={}, KernelLen={}, "
           "Type={}, MethodHint={}",
           max_input_length_,
           kernel_length_,
@@ -58,41 +58,42 @@ namespace OmniDSP {
     }
   }
 
-  ConvolutionParams& ConvolutionParams::max_input_length(size_t val)
+  Params::Convolution& Params::Convolution::max_input_length(size_t val)
   {
     auto logger = spdlog::get("OmniDSP");
     if (!logger) {
       logger = spdlog::default_logger();
     }
     if (val == 0) {
-      std::string msg = "ConvolutionParams::max_input_length: value ("
+      std::string msg = "Params::Convolution::max_input_length: value ("
                         + std::to_string(val) + ") must be positive.";
       if (logger) logger->error(msg);
       throw std::invalid_argument(msg);
     }
     max_input_length_ = val;
-    if (logger) logger->trace("ConvolutionParams::max_input_length to {}", val);
+    if (logger)
+      logger->trace("Params::Convolution::max_input_length to {}", val);
     return *this;
   }
 
-  ConvolutionParams& ConvolutionParams::kernel_length(size_t val)
+  Params::Convolution& Params::Convolution::kernel_length(size_t val)
   {
     auto logger = spdlog::get("OmniDSP");
     if (!logger) {
       logger = spdlog::default_logger();
     }
     if (val == 0) {
-      std::string msg = "ConvolutionParams::kernel_length: value ("
+      std::string msg = "Params::Convolution::kernel_length: value ("
                         + std::to_string(val) + ") must be positive.";
       if (logger) logger->error(msg);
       throw std::invalid_argument(msg);
     }
     kernel_length_ = val;
-    if (logger) logger->trace("ConvolutionParams::kernel_length to {}", val);
+    if (logger) logger->trace("Params::Convolution::kernel_length to {}", val);
     return *this;
   }
 
-  ConvolutionParams& ConvolutionParams::type(ConvolutionType val)
+  Params::Convolution& Params::Convolution::type(ConvolutionType val)
   {
     type_ = val;
     auto logger = spdlog::get("OmniDSP");
@@ -100,11 +101,11 @@ namespace OmniDSP {
       logger = spdlog::default_logger();
     }
     if (logger)
-      logger->trace("ConvolutionParams::type to {}", static_cast<int>(val));
+      logger->trace("Params::Convolution::type to {}", static_cast<int>(val));
     return *this;
   }
 
-  ConvolutionParams& ConvolutionParams::method_hint(ConvolutionMethod val)
+  Params::Convolution& Params::Convolution::method_hint(ConvolutionMethod val)
   {
     method_hint_ = val;
     auto logger = spdlog::get("OmniDSP");
@@ -113,13 +114,13 @@ namespace OmniDSP {
     }
     if (logger)
       logger->trace(
-          "ConvolutionParams::method_hint to {}", static_cast<int>(val));
+          "Params::Convolution::method_hint to {}", static_cast<int>(val));
     return *this;
   }
 
-  // --- CorrelationParams Implementation ---
+  // --- Params::Correlation Implementation ---
 
-  CorrelationParams::CorrelationParams(
+  Params::Correlation::Params::Correlation(
       size_t p_max_input_length,
       size_t p_template_length,
       ConvolutionType p_type,
@@ -136,13 +137,13 @@ namespace OmniDSP {
     std::string msg;
 
     if (max_input_length_ == 0) {
-      msg = "CorrelationParams Constructor: max_input_length ("
+      msg = "Params::Correlation Constructor: max_input_length ("
             + std::to_string(max_input_length_) + ") must be positive.";
       if (logger) logger->error(msg);
       throw std::invalid_argument(msg);
     }
     if (template_length_ == 0) {
-      msg = "CorrelationParams Constructor: template_length ("
+      msg = "Params::Correlation Constructor: template_length ("
             + std::to_string(template_length_) + ") must be positive.";
       if (logger) logger->error(msg);
       throw std::invalid_argument(msg);
@@ -150,7 +151,7 @@ namespace OmniDSP {
 
     if (logger) {
       logger->trace(
-          "CorrelationParams constructed: MaxInputLen={}, TemplateLen={}, "
+          "Params::Correlation constructed: MaxInputLen={}, TemplateLen={}, "
           "Type={}, MethodHint={}",
           max_input_length_,
           template_length_,
@@ -159,41 +160,43 @@ namespace OmniDSP {
     }
   }
 
-  CorrelationParams& CorrelationParams::max_input_length(size_t val)
+  Params::Correlation& Params::Correlation::max_input_length(size_t val)
   {
     auto logger = spdlog::get("OmniDSP");
     if (!logger) {
       logger = spdlog::default_logger();
     }
     if (val == 0) {
-      std::string msg = "CorrelationParams::max_input_length: value ("
+      std::string msg = "Params::Correlation::max_input_length: value ("
                         + std::to_string(val) + ") must be positive.";
       if (logger) logger->error(msg);
       throw std::invalid_argument(msg);
     }
     max_input_length_ = val;
-    if (logger) logger->trace("CorrelationParams::max_input_length to {}", val);
+    if (logger)
+      logger->trace("Params::Correlation::max_input_length to {}", val);
     return *this;
   }
 
-  CorrelationParams& CorrelationParams::template_length(size_t val)
+  Params::Correlation& Params::Correlation::template_length(size_t val)
   {
     auto logger = spdlog::get("OmniDSP");
     if (!logger) {
       logger = spdlog::default_logger();
     }
     if (val == 0) {
-      std::string msg = "CorrelationParams::template_length: value ("
+      std::string msg = "Params::Correlation::template_length: value ("
                         + std::to_string(val) + ") must be positive.";
       if (logger) logger->error(msg);
       throw std::invalid_argument(msg);
     }
     template_length_ = val;
-    if (logger) logger->trace("CorrelationParams::template_length to {}", val);
+    if (logger)
+      logger->trace("Params::Correlation::template_length to {}", val);
     return *this;
   }
 
-  CorrelationParams& CorrelationParams::type(ConvolutionType val)
+  Params::Correlation& Params::Correlation::type(ConvolutionType val)
   {
     type_ = val;
     auto logger = spdlog::get("OmniDSP");
@@ -201,11 +204,11 @@ namespace OmniDSP {
       logger = spdlog::default_logger();
     }
     if (logger)
-      logger->trace("CorrelationParams::type to {}", static_cast<int>(val));
+      logger->trace("Params::Correlation::type to {}", static_cast<int>(val));
     return *this;
   }
 
-  CorrelationParams& CorrelationParams::method_hint(ConvolutionMethod val)
+  Params::Correlation& Params::Correlation::method_hint(ConvolutionMethod val)
   {
     method_hint_ = val;
     auto logger = spdlog::get("OmniDSP");
@@ -214,7 +217,7 @@ namespace OmniDSP {
     }
     if (logger)
       logger->trace(
-          "CorrelationParams::method_hint to {}", static_cast<int>(val));
+          "Params::Correlation::method_hint to {}", static_cast<int>(val));
     return *this;
   }
 

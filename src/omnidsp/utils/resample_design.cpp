@@ -75,9 +75,9 @@ namespace OmniDSP::Utils::Internal {
 
 namespace OmniDSP::Utils {
 
-  OmniExpected<Design::Resample> create_spec(const ResampleParams& params)
+  OmniExpected<Design::Resample> create_spec(const Params::Resample& params)
   {
-    // ResampleParams constructor already performed initial validation.
+    // Params::Resample constructor already performed initial validation.
     auto logger = spdlog::get("OmniDSP");
     if (!logger) {
       logger = spdlog::default_logger();

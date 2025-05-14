@@ -7,13 +7,13 @@
 
 #include "OmniDSP/core_types.hpp"  // For OMNIDSP_EXPORT
 
-namespace OmniDSP {
+namespace OmniDSP::Coefs {
 
   /**
    * @brief Represents coefficients for a single second-order section (SOS) of
    * an IIR filter.
    */
-  struct OMNIDSP_EXPORT IIRFilterCoef {
+  struct OMNIDSP_EXPORT SOS {
     double b0 = 1.0;
     double b1 = 0.0;
     double b2 = 0.0;
@@ -22,6 +22,8 @@ namespace OmniDSP {
     double a2 = 0.0;
   };
 
-}  // namespace OmniDSP
+  using IIRFilterSOS = std::vector<SOS>;
+
+}  // namespace OmniDSP::Coefs
 
 #endif  // OMNIDSP_COEFS_IIR_HPP

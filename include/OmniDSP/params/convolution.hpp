@@ -16,7 +16,7 @@
 
 // spdlog include is deferred to .cpp
 
-namespace OmniDSP {
+namespace OmniDSP::Params {
 
   /**
    * @brief Parameters for specifying a Convolution operation.
@@ -29,7 +29,7 @@ namespace OmniDSP {
    * Construction of this object validates the provided parameters.
    * Fluent setters are available for modifying parameters after construction.
    */
-  struct OMNIDSP_EXPORT ConvolutionParams {
+  struct OMNIDSP_EXPORT Convolution {
     size_t max_input_length_;  ///< Maximum anticipated length of the input
                                ///< signal. Must be positive.
     size_t kernel_length_;     ///< Length of the convolution kernel. Must be
@@ -47,7 +47,7 @@ namespace OmniDSP {
      * @throws std::invalid_argument if parameters are invalid (e.g., zero
      * lengths).
      */
-    explicit ConvolutionParams(
+    explicit Convolution(
         size_t p_max_input_length,
         size_t p_kernel_length,
         ConvolutionType p_type = ConvolutionType::Full,
@@ -58,42 +58,42 @@ namespace OmniDSP {
     /**
      * @brief Sets the maximum anticipated input length.
      * @param val The new maximum input length. Must be positive.
-     * @return A reference to this ConvolutionParams object.
+     * @return A reference to this Params::Convolution object.
      * @throws std::invalid_argument if val is not positive.
      */
-    ConvolutionParams& max_input_length(size_t val);
+    Convolution& max_input_length(size_t val);
 
     /**
      * @brief Sets the kernel length.
      * @param val The new kernel length. Must be positive.
-     * @return A reference to this ConvolutionParams object.
+     * @return A reference to this Params::Convolution object.
      * @throws std::invalid_argument if val is not positive.
      */
-    ConvolutionParams& kernel_length(size_t val);
+    Convolution& kernel_length(size_t val);
 
     /**
      * @brief Sets the convolution type.
      * @param val The new convolution type.
-     * @return A reference to this ConvolutionParams object.
+     * @return A reference to this Params::Convolution object.
      */
-    ConvolutionParams& type(ConvolutionType val);
+    Convolution& type(ConvolutionType val);
 
     /**
      * @brief Sets the convolution method hint.
      * @param val The new convolution method hint.
-     * @return A reference to this ConvolutionParams object.
+     * @return A reference to this Params::Convolution object.
      */
-    ConvolutionParams& method_hint(ConvolutionMethod val);
+    Convolution& method_hint(ConvolutionMethod val);
   };
 
   /**
    * @brief Parameters for specifying a Correlation operation.
    *
-   * Similar to ConvolutionParams, this structure is used for configuring
+   * Similar to Params::Convolution, this structure is used for configuring
    * correlation. Construction of this object validates the provided parameters.
    * Fluent setters are available for modifying parameters after construction.
    */
-  struct OMNIDSP_EXPORT CorrelationParams {
+  struct OMNIDSP_EXPORT Correlation {
     size_t max_input_length_;  ///< Maximum anticipated length of the input
                                ///< signal. Must be positive.
     size_t template_length_;   ///< Length of the correlation template. Must be
@@ -112,7 +112,7 @@ namespace OmniDSP {
      * @throws std::invalid_argument if parameters are invalid (e.g., zero
      * lengths).
      */
-    explicit CorrelationParams(
+    explicit Correlation(
         size_t p_max_input_length,
         size_t p_template_length,
         ConvolutionType p_type = ConvolutionType::Full,
@@ -123,34 +123,34 @@ namespace OmniDSP {
     /**
      * @brief Sets the maximum anticipated input length.
      * @param val The new maximum input length. Must be positive.
-     * @return A reference to this CorrelationParams object.
+     * @return A reference to this Params::Correlation object.
      * @throws std::invalid_argument if val is not positive.
      */
-    CorrelationParams& max_input_length(size_t val);
+    Correlation& max_input_length(size_t val);
 
     /**
      * @brief Sets the template length.
      * @param val The new template length. Must be positive.
-     * @return A reference to this CorrelationParams object.
+     * @return A reference to this Params::Correlation object.
      * @throws std::invalid_argument if val is not positive.
      */
-    CorrelationParams& template_length(size_t val);
+    Correlation& template_length(size_t val);
 
     /**
      * @brief Sets the correlation type.
      * @param val The new correlation type.
-     * @return A reference to this CorrelationParams object.
+     * @return A reference to this Params::Correlation object.
      */
-    CorrelationParams& type(ConvolutionType val);
+    Correlation& type(ConvolutionType val);
 
     /**
      * @brief Sets the correlation method hint.
      * @param val The new correlation method hint.
-     * @return A reference to this CorrelationParams object.
+     * @return A reference to this Params::Correlation object.
      */
-    CorrelationParams& method_hint(ConvolutionMethod val);
+    Correlation& method_hint(ConvolutionMethod val);
   };
 
-}  // namespace OmniDSP
+}  // namespace OmniDSP::Params
 
 #endif  // OMNIDSP_PARAMS_CONVOLUTION_HPP

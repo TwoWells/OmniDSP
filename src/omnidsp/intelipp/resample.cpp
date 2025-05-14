@@ -81,7 +81,7 @@ namespace OmniDSP::IntelIPP {
 
     // Get prototype filter coefficients using the owner backend and the spec's
     // prototype_fir_spec
-    OmniExpected<FIRCoefs<T>> coeffs_expected;
+    OmniExpected<Coefs::FIRFilter<T>> coeffs_expected;
     if constexpr (std::is_same_v<T, float>) {
       coeffs_expected
           = owner->design_fir_filter_f32(spec_.prototype_fir_design);
@@ -109,7 +109,7 @@ namespace OmniDSP::IntelIPP {
       throw OmniException(msg, coeffs_expected.error());
     }
 
-    FIRCoefs<T> pTaps_unscaled = std::move(coeffs_expected.value());
+    Coefs::FIRFilter<T> pTaps_unscaled = std::move(coeffs_expected.value());
     if (pTaps_unscaled.empty()) {
       std::string msg
           = "IntelIPP::ResampleProcessorImpl: Internal prototype filter design "
@@ -119,7 +119,7 @@ namespace OmniDSP::IntelIPP {
     }
 
     // Scale taps by L (interpolation factor) for IPP FIRMR
-    FIRCoefs<T> pTaps = pTaps_unscaled;  // Make a mutable copy
+    Coefs::FIRFilter<T> pTaps = pTaps_unscaled;  // Make a mutable copy
     T scale_factor = static_cast<T>(L);
     for (T& coeff : pTaps) {
       coeff *= scale_factor;

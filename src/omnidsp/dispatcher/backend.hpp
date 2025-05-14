@@ -227,30 +227,30 @@ namespace OmniDSP::Dispatcher {
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::IIRFilterProcessorImpl<F32>>>
     create_iir_filter_processor_impl_f32(
-        const std::vector<IIRFilterCoef>& sos_coefficients) const override;
+        const Coefs::IIRFilterSOS& sos_coefficients) const override;
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::IIRFilterProcessorImpl<F64>>>
     create_iir_filter_processor_impl_f64(
-        const std::vector<IIRFilterCoef>& sos_coefficients) const override;
+        const Coefs::IIRFilterSOS& sos_coefficients) const override;
 
     // --- Filter Design ---
     // Real coefficient FIR filter design
-    [[nodiscard]] OmniExpected<FIRCoefs<F32>> design_fir_filter_f32(
+    [[nodiscard]] OmniExpected<Coefs::FIRFilter<F32>> design_fir_filter_f32(
         const Design::FIRFilter& design) const override;
-    [[nodiscard]] OmniExpected<FIRCoefs<F64>> design_fir_filter_f64(
+    [[nodiscard]] OmniExpected<Coefs::FIRFilter<F64>> design_fir_filter_f64(
         const Design::FIRFilter& design) const override;
 
     // Complex coefficient FIR filter design
-    [[nodiscard]] OmniExpected<FIRCoefs<C32>> design_fir_filter_c32(
+    [[nodiscard]] OmniExpected<Coefs::FIRFilter<C32>> design_fir_filter_c32(
         const Design::FIRFilter& design) const override;
-    [[nodiscard]] OmniExpected<FIRCoefs<C64>> design_fir_filter_c64(
+    [[nodiscard]] OmniExpected<Coefs::FIRFilter<C64>> design_fir_filter_c64(
         const Design::FIRFilter& design) const override;
 
     // IIR filter design
-    [[nodiscard]] OmniExpected<std::vector<IIRFilterCoef>>
-    design_iir_filter_f32(const Design::IIRFilter& design) const override;
-    [[nodiscard]] OmniExpected<std::vector<IIRFilterCoef>>
-    design_iir_filter_f64(const Design::IIRFilter& design) const override;
+    [[nodiscard]] OmniExpected<Coefs::IIRFilterSOS> design_iir_filter_f32(
+        const Design::IIRFilter& design) const override;
+    [[nodiscard]] OmniExpected<Coefs::IIRFilterSOS> design_iir_filter_f64(
+        const Design::IIRFilter& design) const override;
 
    private:
     std::unique_ptr<Abstract::Backend> primary_backend_;

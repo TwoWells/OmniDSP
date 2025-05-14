@@ -1,7 +1,7 @@
 /**
  * @file iir_filter_design.cpp
  * @brief Implements utility functions for creating Design::IIRFilter from
- * IIRFilterParams.
+ * Params::IIRFilter.
  */
 
 #include <spdlog/spdlog.h>
@@ -16,7 +16,7 @@
 namespace OmniDSP::Utils {
 
   // The public function's signature now returns OmniExpected<Design::IIRFilter>
-  OmniExpected<Design::IIRFilter> create_spec(const IIRFilterParams& params)
+  OmniExpected<Design::IIRFilter> create_spec(const Params::IIRFilter& params)
   {
     auto logger = spdlog::get("OmniDSP");
     if (!logger) {
@@ -42,12 +42,13 @@ namespace OmniDSP::Utils {
                                            // new Design::IIRFilter object
         logger->error(
             "Internal consistency validation failed for created "
-            "Design::IIRFilter from IIRFilterParams.");
+            "Design::IIRFilter from Params::IIRFilter.");
         return std::unexpected(Status::Failure);
       }
 
       logger->debug(
-          "Successfully created Design::IIRFilter from IIRFilterParams. Type: "
+          "Successfully created Design::IIRFilter from Params::IIRFilter. "
+          "Type: "
           "{}, Order: {}, SR: {}",
           static_cast<int>(design_obj.type),
           design_obj.order,
@@ -57,14 +58,14 @@ namespace OmniDSP::Utils {
     catch (const std::invalid_argument& e) {
       logger->error(
           "Invalid argument during Design::IIRFilter construction from "
-          "IIRFilterParams: {}",
+          "Params::IIRFilter: {}",
           e.what());
       return std::unexpected(Status::InvalidArgument);
     }
     catch (const std::exception& e) {
       logger->error(
           "Exception during Design::IIRFilter construction from "
-          "IIRFilterParams: {}",
+          "Params::IIRFilter: {}",
           e.what());
       return std::unexpected(Status::Failure);
     }

@@ -15,11 +15,11 @@ This document analyzes the progress of the OmniDSP project based on the provided
 
 - **`[x] Implement OmniDSP::create_plan overloads (taking Params/Coefs) for stateless operations (FFT, Convolution).`**
   - **Observation:** `omnidsp.hpp` and `omnidsp.cpp` (which includes `omnidsp.tpp`) are central for these factory methods.
-  - **Verification:** `omnidsp.hpp` declares `OmniDSP::create_plan` for `FFTPlan` (taking `FFTParams`), `RFFTPlan` (taking `RFFTParams`), and `ConvolutionPlan` (taking `ConvolutionParams` and kernel coefficients). Implementations are present in `omnidsp.tpp`.
+  - **Verification:** `omnidsp.hpp` declares `OmniDSP::create_plan` for `FFTPlan` (taking `Params::FFT`), `RFFTPlan` (taking `Params::RFFT`), and `ConvolutionPlan` (taking `Params::Convolution` and kernel coefficients). Implementations are present in `omnidsp.tpp`.
   - **Status:** Verified as complete for FFT and Convolution.
-- **`[x] Implement OmniDSP::create_plan overload for CorrelationPlan (taking CorrelationParams and kernel).`**
-  - **Details:** Added `OmniDSP::create_plan(const CorrelationParams&, const std::vector<T>&)` in `omnidsp.hpp` (declaration) and `omnidsp.tpp` (implementation). This now calls `pimpl_->create_correlation_plan_impl(...)`.
-  - **Verification:** The declaration and template implementation for `OmniDSP::create_plan` taking `CorrelationParams` and `kernel_coeffs` have been added to `omnidsp.hpp`.
+- **`[x] Implement OmniDSP::create_plan overload for CorrelationPlan (taking Params::Correlation and kernel).`**
+  - **Details:** Added `OmniDSP::create_plan(const Params::Correlation&, const std::vector<T>&)` in `omnidsp.hpp` (declaration) and `omnidsp.tpp` (implementation). This now calls `pimpl_->create_correlation_plan_impl(...)`.
+  - **Verification:** The declaration and template implementation for `OmniDSP::create_plan` taking `Params::Correlation` and `kernel_coeffs` have been added to `omnidsp.hpp`.
   - **Status:** Completed. (Note: Relies on `Abstract::Backend::create_correlation_plan_impl` update tracked below).
 - **`[ ] Implement OmniDSP::create_processor overloads (taking Params/Coefs) for stateful operations (FIR, IIR, Resample, CQT).`**
   - **Observation:** `omnidsp.hpp` and `omnidsp.cpp` are central. Structure for backend `create_*_processor_impl` methods exists. Renaming from `...Plan` to `...Processor` is largely done in `omnidsp.hpp` and `omnidsp.tpp` for these factory signatures.
@@ -33,8 +33,8 @@ This document analyzes the progress of the OmniDSP project based on the provided
 - **`[x] Add create_*_plan_impl virtual methods to Abstract::Backend (for FFT, RFFT, Convolution, Correlation).`**
   - **Verification:** `Abstract::Backend` in `interface/backend.hpp` declares `create_fft_plan_impl_c32/64`, `create_rfft_plan_impl_f32/64`, `create_convolution_plan_impl_X`, and `create_correlation_plan_impl_X`.
   - **Status:** Verified as complete.
-- **`[ ] Add/Update create_correlation_plan_impl in Abstract::Backend to accept CorrelationParams (or max_input_length) and kernel.`**
-  - **Details:** Current `Abstract::Backend::create_correlation_plan_impl` needs update to use `CorrelationParams` for proper FFT sizing, crucial for the new `OmniDSP::create_plan` for `CorrelationPlan`.
+- **`[ ] Add/Update create_correlation_plan_impl in Abstract::Backend to accept Params::Correlation (or max_input_length) and kernel.`**
+  - **Details:** Current `Abstract::Backend::create_correlation_plan_impl` needs update to use `Params::Correlation` for proper FFT sizing, crucial for the new `OmniDSP::create_plan` for `CorrelationPlan`.
   - **Likely Status:** Requires modification.
 - **`[x] Rename and finalize create_*_processor_impl virtual methods in Abstract::Backend (for FIR, IIR, Resample, CQT).`**
   - **Details:** Existing `create_*_plan_impl` methods for these types in `Abstract::Backend` have been renamed to `create_*_processor_impl`. `Abstract::CQTProcessorImpl` now includes `reset`.
@@ -59,7 +59,7 @@ This document analyzes the progress of the OmniDSP project based on the provided
 
 ### **Implement IIR Filter Module:**
 
-- **`[x] Define IIRFilterParams, IIRFilterSpec (as Design::IIRFilter), IIRFilterCoefs.`**
+- **`[x] Define Params::IIRFilter, IIRFilterSpec (as Design::IIRFilter), Coefs::SOSs.`**
   - **Status:** Verified as complete.
 - **`[x] Refactor IIRFilterPlan into IIRFilterProcessor class (with execute, reset) in iir_filter.hpp.`**
   - **Observation:** `include/OmniDSP/iir_filter.hpp` defines `IIRFilterProcessor`. Backend `Impl` classes renamed. `reset` method present.
@@ -90,12 +90,12 @@ This document analyzes the progress of the OmniDSP project based on the provided
 
 ### **Convolution / Correlation Module** (Stateless Plans)
 
-- **`[ ] Finalize ConvolutionParams, CorrelationParams definitions.`**
+- **`[ ] Finalize Params::Convolution, Params::Correlation definitions.`**
   - **Observation:** `params/convolution.hpp` defines these. This task is to ensure they are complete and meet all requirements for plan creation (e.g., `max_input_length` for FFT sizing).
   - **Likely Status:** Mostly complete, pending final review.
 - **`[x] Finalize public API and ensure consistent factory usage for ConvolutionPlan and CorrelationPlan.`**
   - **Observation:** `include/OmniDSP/convolution.hpp` defines the classes. `OmniDSP::create_plan` is now used for both.
-  - **Status:** API definition largely complete; backend `create_correlation_plan_impl` update (to use `CorrelationParams`) is pending.
+  - **Status:** API definition largely complete; backend `create_correlation_plan_impl` update (to use `Params::Correlation`) is pending.
 
 ### **Intel IPP Backend Enhancements (`IntelIPP::Backend`)**
 
@@ -108,7 +108,7 @@ This document analyzes the progress of the OmniDSP project based on the provided
 
 ### **CQT Module** (Stateful Processor)
 
-- **`[x] Define CQTParams, CQTSpec (as Design::CQT).`**
+- **`[x] Define Params::CQT, CQTSpec (as Design::CQT).`**
   - **Status:** Verified as complete.
 - **`[x] Refactor CQTPlan into CQTProcessor class (with execute, reset).`**
   - **Observation:** `include/OmniDSP/cqt.hpp` defines `CQTProcessor`. Backend `Impl` classes renamed. `reset` method now added to `Abstract::CQTProcessorImpl` and `Default::CQTProcessorImpl`.
@@ -121,7 +121,7 @@ This document analyzes the progress of the OmniDSP project based on the provided
 
 ### **Resampling Module** (Stateful Processor)
 
-- **`[x] Define ResampleParams, ResampleSpec (as Design::Resample).`**
+- **`[x] Define Params::Resample, ResampleSpec (as Design::Resample).`**
   - **Status:** Verified as complete.
 - **`[x] Refactor ResamplePlan into ResampleProcessor class (with execute, reset).`**
   - **Observation:** `include/OmniDSP/resample.hpp` defines `ResampleProcessor`. Backend `Impl` classes renamed. `reset` method present.
@@ -214,7 +214,7 @@ This document analyzes the progress of the OmniDSP project based on the provided
 Items in this section reflect foundational work or items that are substantially complete pending final refactoring or integration.
 
 - `[x] Refactor WindowSpec to WindowSetup.`
-- `[x] Define FIRFilterParams, ResampleParams, CQTParams.`
+- `[x] Define FIRFilterParams, Params::Resample, Params::CQT.`
 - `[x] Establish new directory structure.`
 - `[x] Define FilterType, FIRFilterDesignMethod, IIRFilterFormat.`
 - `[x] Refine/Define FIRFilterSpec (Design::FIRFilter), ResampleSpec (Design::Resample), CQTSpec (Design::CQT).`

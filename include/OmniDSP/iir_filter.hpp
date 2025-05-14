@@ -15,7 +15,7 @@
 #include <utility>  // For std::move
 #include <vector>
 
-#include "OmniDSP/coefs/iir_filter.hpp"  // Defines IIRFilterCoef
+#include "OmniDSP/coefs/iir_filter.hpp"  // Defines Coefs::SOS
 #include "OmniDSP/core_types.hpp"  // For Status, OmniExpected, F32, C32, Utils::IsComplex_v etc.
 #include "OmniDSP/design/iir_filter.hpp"  // Defines Design::IIRFilter (used by params)
 #include "OmniDSP/omnidsp_export.hpp"  // For OMNIDSP_EXPORT

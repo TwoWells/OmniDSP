@@ -21,7 +21,7 @@
 #include "details.hpp"
 
 // Include OmniDSP headers
-#include <OmniDSP/coefs/iir_filter.hpp>  // Defines IIRFilterCoef
+#include <OmniDSP/coefs/iir_filter.hpp>  // Defines Coefs::SOS
 #include <OmniDSP/core_types.hpp>        // Defines OmniException, Status etc.
 
 namespace OmniDSP::IntelIPP {
@@ -32,7 +32,7 @@ namespace OmniDSP::IntelIPP {
 
   template <typename T>
   IIRFilterProcessorImpl<T>::IIRFilterProcessorImpl(
-      const std::vector<IIRFilterCoef>& sos_coefficients)
+      const Coefs::IIRFilterSOS& sos_coefficients)
       : num_sections_(sos_coefficients.size()),
         order_(sos_coefficients.empty() ? 0 : sos_coefficients.size() * 2),
         p_state_(nullptr),  // Init pointer

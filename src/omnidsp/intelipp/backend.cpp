@@ -13,7 +13,7 @@
 // #include <OmniDSP/fft.hpp>
 // #include <OmniDSP/filter.hpp>
 // #include <OmniDSP/resample.hpp>
-#include <OmniDSP/coefs/iir_filter.hpp>  // For IIRFilterCoef (used in method signatures)
+#include <OmniDSP/coefs/iir_filter.hpp>  // For Coefs::SOS (used in method signatures)
 #include <OmniDSP/design/resample.hpp>  // For Design::Resample (used in method signatures)
 #include <OmniDSP/window.hpp>  // For WindowSetup, Design::Resample (used in method signatures)
 #include <exception>  // For std::exception, std::bad_alloc
@@ -512,7 +512,7 @@ namespace OmniDSP::IntelIPP {
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::IIRFilterProcessorImpl<F32>>>
   Backend::create_iir_filter_processor_impl_f32(
-      const std::vector<IIRFilterCoef>& sos_coefficients) const
+      const Coefs::IIRFilterSOS& sos_coefficients) const
   {
     try {
       return std::make_unique<IntelIPP::IIRFilterProcessorImpl<F32>>(
@@ -550,7 +550,7 @@ namespace OmniDSP::IntelIPP {
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::IIRFilterProcessorImpl<F64>>>
   Backend::create_iir_filter_processor_impl_f64(
-      const std::vector<IIRFilterCoef>& sos_coefficients) const
+      const Coefs::IIRFilterSOS& sos_coefficients) const
   {
     try {
       return std::make_unique<IntelIPP::IIRFilterProcessorImpl<F64>>(

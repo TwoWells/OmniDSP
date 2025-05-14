@@ -46,7 +46,8 @@ namespace OmniDSP::Utils {
    * (FIRCoefs<T>) on success, or a Status code on failure.
    */
   template <typename T>
-  [[nodiscard]] OmniExpected<FIRCoefs<T>> design_resampling_prototype_filter(
+  [[nodiscard]] OmniExpected<Coefs::FIRFilter<T>>
+  design_resampling_prototype_filter(
       const Abstract::Backend* owner_backend,
       size_t L,
       size_t M,
@@ -54,14 +55,14 @@ namespace OmniDSP::Utils {
       const WindowSetup& input_window_setup);
 
   // Explicit template instantiation declarations (implementation in .cpp)
-  extern template OmniExpected<FIRCoefs<F32>>
+  extern template OmniExpected<Coefs::FIRFilter<F32>>
   design_resampling_prototype_filter<F32>(
       const Abstract::Backend* owner_backend,
       size_t L,
       size_t M,
       int quality,
       const WindowSetup& input_window_setup);
-  extern template OmniExpected<FIRCoefs<F64>>
+  extern template OmniExpected<Coefs::FIRFilter<F64>>
   design_resampling_prototype_filter<F64>(
       const Abstract::Backend* owner_backend,
       size_t L,

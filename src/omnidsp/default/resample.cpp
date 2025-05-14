@@ -116,7 +116,7 @@ namespace OmniDSP::Default {
       throw std::logic_error("Cannot design filter without owner backend.");
     }
 
-    OmniExpected<FIRCoefs<T>> coeffs_expected;
+    OmniExpected<Coefs::FIRFilter<T>> coeffs_expected;
     if constexpr (std::is_same_v<T, float>) {
       coeffs_expected = owner_backend_->design_fir_filter_f32(
           spec_.prototype_fir_design);  // CHANGED HERE

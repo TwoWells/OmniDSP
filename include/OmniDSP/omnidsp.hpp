@@ -162,17 +162,17 @@ namespace OmniDSP {
     // Plan and Processor Factory Methods (Declarations only)
     template <typename T_Complex>
     [[nodiscard]] OmniExpected<std::unique_ptr<FFTPlan<T_Complex>>> create_plan(
-        const FFTParams& params) const;
+        const Params::FFT& params) const;
     template <typename T_Real>
     [[nodiscard]] OmniExpected<std::unique_ptr<RFFTPlan<T_Real>>> create_plan(
-        const RFFTParams& params) const;
+        const Params::RFFT& params) const;
     template <typename T>
     [[nodiscard]] OmniExpected<std::unique_ptr<ConvolutionPlan<T>>> create_plan(
-        const ConvolutionParams& params,
+        const Params::Convolution& params,
         const std::vector<T>& kernel_coeffs) const;
     template <typename T>
     [[nodiscard]] OmniExpected<std::unique_ptr<CorrelationPlan<T>>> create_plan(
-        const CorrelationParams& params,
+        const Params::Correlation& params,
         const std::vector<T>& kernel_coeffs) const;
 
     template <typename T>
@@ -182,19 +182,19 @@ namespace OmniDSP {
     template <typename T>
     [[nodiscard]] OmniExpected<
         std::unique_ptr<FIRFilterProcessor<T>>> /* TODO: FIRFilterProcessor */
-    create_processor(const FIRCoefs<T>& coeffs) const;
+    create_processor(const Coefs::FIRFilter<T>& coeffs) const;
     template <typename T_Real>
     [[nodiscard]] OmniExpected<std::unique_ptr<
         IIRFilterProcessor<T_Real>>> /* TODO: IIRFilterProcessor */
-    create_processor(const IIRFilterParams& params) const;
+    create_processor(const Params::IIRFilter& params) const;
     template <typename T_Real>
     [[nodiscard]] OmniExpected<std::unique_ptr<
         IIRFilterProcessor<T_Real>>> /* TODO: IIRFilterProcessor */
-    create_processor(const std::vector<IIRFilterCoef>& sos_coeffs) const;
+    create_processor(const Coefs::IIRFilterSOS& sos_coeffs) const;
     template <typename T_Real>
     [[nodiscard]] OmniExpected<std::unique_ptr<
         ResampleProcessor<T_Real>>> /* TODO: ResampleProcessor */
-    create_processor(const ResampleParams& params) const;
+    create_processor(const Params::Resample& params) const;
     template <typename T_Real>
     [[nodiscard]] OmniExpected<std::unique_ptr<
         ResampleProcessor<T_Real>>> /* TODO: ResampleProcessor */
@@ -202,7 +202,7 @@ namespace OmniDSP {
     template <typename T_Real>
     [[nodiscard]] OmniExpected<
         std::unique_ptr<CQTProcessor<T_Real>>> /* TODO: CQTProcessor */
-    create_processor(const CQTParams& params) const;
+    create_processor(const Params::CQT& params) const;
     template <typename T_Real>
     [[nodiscard]] OmniExpected<
         std::unique_ptr<CQTProcessor<T_Real>>> /* TODO: CQTProcessor */
@@ -210,11 +210,11 @@ namespace OmniDSP {
 
     // Filter Design Methods (Declarations only)
     template <typename T>
-    [[nodiscard]] OmniExpected<FIRCoefs<T>> design_fir_filter(
+    [[nodiscard]] OmniExpected<Coefs::FIRFilter<T>> design_fir_filter(
         const Params::FIRFilter& params) const;
     template <typename T_Real>
-    [[nodiscard]] OmniExpected<std::vector<IIRFilterCoef>> design_iir_filter(
-        const IIRFilterParams& params) const;
+    [[nodiscard]] OmniExpected<Coefs::IIRFilterSOS> design_iir_filter(
+        const Params::IIRFilter& params) const;
 
    private:
     OmniDSP(std::unique_ptr<Abstract::Backend> impl);  // Private constructor

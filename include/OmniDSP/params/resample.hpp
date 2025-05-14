@@ -15,7 +15,7 @@
 
 // spdlog include is deferred to .cpp as definitions are moved there.
 
-namespace OmniDSP {
+namespace OmniDSP::Params {
 
   /**
    * @brief Parameters for specifying a resampling operation.
@@ -29,7 +29,7 @@ namespace OmniDSP {
    * Construction of this object validates the provided parameters.
    * Fluent setters are available for modifying parameters after construction.
    */
-  struct OMNIDSP_EXPORT ResampleParams {
+  struct OMNIDSP_EXPORT Resample {
     double input_rate_;  ///< Input sample rate in Hz. Must be positive.
     double
         output_rate_;  ///< Desired output sample rate in Hz. Must be positive.
@@ -55,7 +55,7 @@ namespace OmniDSP {
      * Defaults to Kaiser (beta 5.0), with length 0 as it will be determined.
      * @throws std::invalid_argument if parameters are inconsistent or invalid.
      */
-    explicit ResampleParams(
+    explicit Resample(
         double p_input_rate,
         double p_output_rate,
         int p_quality,
@@ -67,36 +67,36 @@ namespace OmniDSP {
     /**
      * @brief Sets the input sample rate.
      * @param val The new input sample rate in Hz.
-     * @return A reference to this ResampleParams object.
+     * @return A reference to this Params::Resample object.
      * @throws std::invalid_argument if val is not positive.
      */
-    ResampleParams& input_rate(double val);
+    Resample& input_rate(double val);
 
     /**
      * @brief Sets the output sample rate.
      * @param val The new output sample rate in Hz.
-     * @return A reference to this ResampleParams object.
+     * @return A reference to this Params::Resample object.
      * @throws std::invalid_argument if val is not positive.
      */
-    ResampleParams& output_rate(double val);
+    Resample& output_rate(double val);
 
     /**
      * @brief Sets the quality setting for resampling.
      * @param val The new quality setting (e.g., 0-15).
-     * @return A reference to this ResampleParams object.
+     * @return A reference to this Params::Resample object.
      * @throws std::invalid_argument if val is outside the accepted range.
      */
-    ResampleParams& quality(int val);
+    Resample& quality(int val);
 
     /**
      * @brief Sets the window setup for the prototype filter.
      * @param val The new WindowSetup object. Its own constructor handles
      * validation.
-     * @return A reference to this ResampleParams object.
+     * @return A reference to this Params::Resample object.
      */
-    ResampleParams& window_setup(WindowSetup val);
+    Resample& window_setup(WindowSetup val);
   };
 
-}  // namespace OmniDSP
+}  // namespace OmniDSP::Params
 
 #endif  // OMNIDSP_PARAMS_RESAMPLE_HPP

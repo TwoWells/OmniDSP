@@ -23,7 +23,7 @@
 #include <OmniDSP/design/iir_filter.hpp>  // For Design::IIRFilter
 #include <OmniDSP/fft.hpp>                // For FFTPlan, RFFTPlan
 #include <OmniDSP/fir_filter.hpp>         // For FIRFilterPlan, FIRCoefs
-#include <OmniDSP/iir_filter.hpp>         // For IIRFilterPlan, IIRFilterCoef
+#include <OmniDSP/iir_filter.hpp>         // For IIRFilterPlan, Coefs::SOS
 #include <OmniDSP/resample.hpp>           // For ResamplePlan, Design::Resample
 #include <OmniDSP/window.hpp>  // For WindowSetup, WindowParams, and the free OmniDSP::generate_window
 
@@ -50,15 +50,15 @@ namespace OmniDSP::Default {
 
   // Forward declare the internal design helper functions (defined in
   // filter.cpp or similar, ensure they are accessible and correctly templated)
-  // Assuming FIRCoefs<T> is std::vector<T>
+  // Assuming Coefs::FIRFilter<T> is std::vector<T>
   template <typename T>
   [[nodiscard]] OmniExpected<std::vector<T>>
-  generate_fir_filter_coeffs(  // Changed FIRCoefs<T> to std::vector<T> for
-                               // clarity
+  generate_fir_filter_coeffs(  // Changed Coefs::FIRFilter<T> to std::vector<T>
+                               // for clarity
       const Design::FIRFilter& spec);
 
-  [[nodiscard]] OmniExpected<std::vector<IIRFilterCoef>>
-  generate_iir_filter_coeffs(const Design::IIRFilter& spec);
+  [[nodiscard]] OmniExpected<Coefs::IIRFilterSOS> generate_iir_filter_coeffs(
+      const Design::IIRFilter& spec);
 
   namespace convolution_detail {
     inline size_t next_power_of_two(size_t n)
@@ -1485,7 +1485,7 @@ namespace OmniDSP::Default {
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::IIRFilterProcessorImpl<F32>>>
   Backend::create_iir_filter_processor_impl_f32(
-      const std::vector<IIRFilterCoef>& sos_coefficients) const
+      const Coefs::IIRFilterSOS& sos_coefficients) const
   {
     try {
       return std::make_unique<IIRFilterProcessorImpl<F32>>(sos_coefficients);
@@ -1500,7 +1500,7 @@ namespace OmniDSP::Default {
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::IIRFilterProcessorImpl<F64>>>
   Backend::create_iir_filter_processor_impl_f64(
-      const std::vector<IIRFilterCoef>& sos_coefficients) const
+      const Coefs::IIRFilterSOS& sos_coefficients) const
   {
     try {
       return std::make_unique<IIRFilterProcessorImpl<F64>>(sos_coefficients);
@@ -1514,48 +1514,48 @@ namespace OmniDSP::Default {
   }
 
   // --- Filter Design ---
-  [[nodiscard]] OmniExpected<FIRCoefs<F32>> Backend::design_fir_filter_f32(
-      const Design::FIRFilter& spec) const
+  [[nodiscard]] OmniExpected<Coefs::FIRFilter<F32>>
+  Backend::design_fir_filter_f32(const Design::FIRFilter& spec) const
   {
-    // Assuming FIRCoefs<F32> is std::vector<F32>
+    // Assuming Coefs::FIRFilter<F32> is std::vector<F32>
     return generate_fir_filter_coeffs<F32>(spec);
   }
 
-  [[nodiscard]] OmniExpected<FIRCoefs<F64>> Backend::design_fir_filter_f64(
-      const Design::FIRFilter& spec) const
+  [[nodiscard]] OmniExpected<Coefs::FIRFilter<F64>>
+  Backend::design_fir_filter_f64(const Design::FIRFilter& spec) const
   {
-    // Assuming FIRCoefs<F64> is std::vector<F64>
+    // Assuming Coefs::FIRFilter<F64> is std::vector<F64>
     return generate_fir_filter_coeffs<F64>(spec);
   }
 
   // Implementations for complex FIR filter design
-  [[nodiscard]] OmniExpected<FIRCoefs<C32>> Backend::design_fir_filter_c32(
-      const Design::FIRFilter& spec) const
+  [[nodiscard]] OmniExpected<Coefs::FIRFilter<C32>>
+  Backend::design_fir_filter_c32(const Design::FIRFilter& spec) const
   {
     // generate_fir_filter_coeffs<std::complex<float>> should return
     // OmniExpected<std::vector<std::complex<float>>> which is compatible with
     // OmniExpected<C32Vec> if C32Vec is std::vector<std::complex<float>> and
-    // FIRCoefs<T> is std::vector<T>.
+    // Coefs::FIRFilter<T> is std::vector<T>.
     return generate_fir_filter_coeffs<C32>(spec);
   }
 
-  [[nodiscard]] OmniExpected<FIRCoefs<C64>> Backend::design_fir_filter_c64(
-      const Design::FIRFilter& spec) const
+  [[nodiscard]] OmniExpected<Coefs::FIRFilter<C64>>
+  Backend::design_fir_filter_c64(const Design::FIRFilter& spec) const
   {
     // generate_fir_filter_coeffs<std::complex<double>> should return
     // OmniExpected<std::vector<std::complex<double>>> which is compatible with
     // OmniExpected<C64Vec> if C64Vec is std::vector<std::complex<double>> and
-    // FIRCoefs<T> is std::vector<T>.
+    // Coefs::FIRFilter<T> is std::vector<T>.
     return generate_fir_filter_coeffs<C64>(spec);
   }
 
-  [[nodiscard]] OmniExpected<std::vector<IIRFilterCoef>>
+  [[nodiscard]] OmniExpected<Coefs::IIRFilterSOS>
   Backend::design_iir_filter_f32(const Design::IIRFilter& spec) const
   {
     return generate_iir_filter_coeffs(spec);
   }
 
-  [[nodiscard]] OmniExpected<std::vector<IIRFilterCoef>>
+  [[nodiscard]] OmniExpected<Coefs::IIRFilterSOS>
   Backend::design_iir_filter_f64(const Design::IIRFilter& spec) const
   {
     return generate_iir_filter_coeffs(spec);

@@ -21,7 +21,7 @@ namespace OmniDSP::Utils::Internal {
    *
    * @param L The upsampling factor.
    * @param M The downsampling factor.
-   * @param quality The quality parameter from ResampleParams.
+   * @param quality The quality parameter from Params::Resample.
    * @param normalized_cutoff The normalized cutoff frequency for the prototype
    * filter.
    * @return Estimated filter order (an even number).

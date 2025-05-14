@@ -8,7 +8,7 @@
 
 #include <ipp.h>  // Main IPP header including ipps.h
 
-#include <OmniDSP/coefs/iir_filter.hpp>  // For IIRFilterCoef definition
+#include <OmniDSP/coefs/iir_filter.hpp>  // For Coefs::SOS definition
 #include <OmniDSP/core_types.hpp>  // For F32, C32, F64, C64, Status, OmniException, Utils::* etc.
 #include <complex>
 #include <memory>       // For std::unique_ptr
@@ -152,7 +152,7 @@ namespace OmniDSP::IntelIPP {
 
    public:
     explicit IIRFilterProcessorImpl(
-        const std::vector<IIRFilterCoef>& sos_coefficients);
+        const Coefs::IIRFilterSOS& sos_coefficients);
     ~IIRFilterProcessorImpl() override;
 
     IIRFilterProcessorImpl(const IIRFilterProcessorImpl&) = delete;

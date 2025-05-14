@@ -14,7 +14,7 @@
 
 // spdlog include is deferred to .cpp
 
-namespace OmniDSP {
+namespace OmniDSP::Params {
 
   /**
    * @brief Parameters for designing an Infinite Impulse Response (IIR) filter.
@@ -26,7 +26,7 @@ namespace OmniDSP {
    * Construction of this object validates the provided parameters.
    * Fluent setters are available for modifying parameters after construction.
    */
-  struct OMNIDSP_EXPORT IIRFilterParams {
+  struct OMNIDSP_EXPORT IIRFilter {
     FilterType filter_type_;  ///< Type of filter (Lowpass, Highpass, etc.).
     double
         sample_rate_;  ///< Sample rate of the signal in Hz. Must be positive.
@@ -63,7 +63,7 @@ namespace OmniDSP {
      * SOS.
      * @throws std::invalid_argument if parameters are inconsistent or invalid.
      */
-    explicit IIRFilterParams(
+    explicit IIRFilter(
         FilterType p_type,
         double p_sample_rate,
         size_t p_order,
@@ -74,16 +74,16 @@ namespace OmniDSP {
         IIRFilterFormat p_output_format = IIRFilterFormat::SOS);
 
     // --- Fluent Setters (Declarations) ---
-    IIRFilterParams& filter_type(FilterType val);
-    IIRFilterParams& sample_rate(double val);
-    IIRFilterParams& order(size_t val);
-    IIRFilterParams& cutoff1(double val);
-    IIRFilterParams& cutoff2(std::optional<double> val);
-    IIRFilterParams& passband_ripple_db(std::optional<double> val);
-    IIRFilterParams& stopband_attenuation_db(std::optional<double> val);
-    IIRFilterParams& output_format(IIRFilterFormat val);
+    IIRFilter& filter_type(FilterType val);
+    IIRFilter& sample_rate(double val);
+    IIRFilter& order(size_t val);
+    IIRFilter& cutoff1(double val);
+    IIRFilter& cutoff2(std::optional<double> val);
+    IIRFilter& passband_ripple_db(std::optional<double> val);
+    IIRFilter& stopband_attenuation_db(std::optional<double> val);
+    IIRFilter& output_format(IIRFilterFormat val);
   };
 
-}  // namespace OmniDSP
+}  // namespace OmniDSP::Params
 
 #endif  // OMNIDSP_PARAMS_IIR_FILTER_HPP

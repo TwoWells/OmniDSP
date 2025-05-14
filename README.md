@@ -137,7 +137,7 @@ signal_in_real = np.random.randn(fs).astype(np.float32)
 
 try:
     # Configure using Params
-    fft_params = omni.FFTParams(length=len(signal_in_real))
+    fft_params = omni.Params::FFT(length=len(signal_in_real))
     # Create a stateless Plan
     rfft_plan_e = dsp.create_plan(fft_params) # Use create_plan
     if not rfft_plan_e: raise RuntimeError(f"RFFT plan error: {rfft_plan_e.error()}")
@@ -184,10 +184,10 @@ except Exception as e:
 
 ```cpp
 #include <OmniDSP/omnidsp.hpp>
-#include <OmniDSP/fft.hpp> // For FFTPlan, FFTParams
+#include <OmniDSP/fft.hpp> // For FFTPlan, Params::FFT
 #include <OmniDSP/filter.hpp> // For FIRFilterProcessor
 #include <OmniDSP/window.hpp>
-#include <OmniDSP/params/fft.hpp> // For FFTParams
+#include <OmniDSP/params/fft.hpp> // For Params::FFT
 #include <OmniDSP/params/fir_filter.hpp> // For FIRFilterParams
 #include <OmniDSP/utils.hpp>
 #include <OmniDSP/core_types.hpp>
@@ -217,9 +217,9 @@ int main() {
         std::vector<float> real_signal(1024); // Example data
         std::vector<std::complex<float>> spectrum;
 
-        OmniDSP::FFTParams fft_params; // Assuming default constructor + setters or direct init
+        OmniDSP::Params::FFT fft_params; // Assuming default constructor + setters or direct init
         fft_params.length = static_cast<int>(real_signal.size());
-        // Or: auto fft_params = OmniDSP::FFTParams().length(1024);
+        // Or: auto fft_params = OmniDSP::Params::FFT().length(1024);
 
         // Create stateless Plan
         auto rfft_plan_e = dsp->create_plan(fft_params); // Use create_plan
