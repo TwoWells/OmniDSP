@@ -11,14 +11,18 @@
 #include <memory>
 #include <span>
 #include <utility>  // For std::move
-#include <vector>
+#include <vector>  // Required for std::vector in old signature, kept for safety, review if removable
 
 #include "OmniDSP/core_types.hpp"  // Includes Status, OmniExpected, F32, C32 etc.
 #include "OmniDSP/omnidsp_export.hpp"  // For OMNIDSP_EXPORT on explicit instantiations
-#include "OmniDSP/types/convolution.hpp"
+#include "OmniDSP/types/convolution.hpp"  // For ConvolutionType, ConvolutionMethod (used by Params)
 
 // Include Abstract::Backend for the static create method
 #include "interface/backend.hpp"  // Defines Abstract::Backend
+
+// Include Params types for Convolution and Correlation for the static create
+// method
+#include "OmniDSP/params/convolution.hpp"  // For Params::Convolution, Params::Correlation
 
 // Forward declare Abstract Impl classes
 namespace OmniDSP::Abstract {
@@ -51,12 +55,19 @@ namespace OmniDSP {
     size_t get_output_length(size_t input_length) const;
     std::span<const T> get_kernel() const;
 
+    /**
+     * @brief Creates a ConvolutionPlan using a specific backend and parameters.
+     * @param backend The backend to use for creating the plan.
+     * @param params The parameters for the convolution operation.
+     * @param kernel_coeffs The convolution kernel coefficients.
+     * @return An OmniExpected containing a unique_ptr to the ConvolutionPlan or
+     * an error Status.
+     */
     [[nodiscard]] static OmniExpected<std::unique_ptr<ConvolutionPlan<T>>>
     create(
         const Abstract::Backend& backend,
-        const std::vector<T>& kernel,
-        ConvolutionType type,
-        ConvolutionMethod method = ConvolutionMethod::Auto);
+        const Params::Convolution& params,
+        std::span<const T> kernel_coeffs);
 
     // Declaration only for create_from_impl
     static std::unique_ptr<ConvolutionPlan<T>> create_from_impl(
@@ -89,12 +100,19 @@ namespace OmniDSP {
     size_t get_output_length(size_t input_length) const;
     std::span<const T> get_template() const;
 
+    /**
+     * @brief Creates a CorrelationPlan using a specific backend and parameters.
+     * @param backend The backend to use for creating the plan.
+     * @param params The parameters for the correlation operation.
+     * @param template_coeffs The correlation template coefficients.
+     * @return An OmniExpected containing a unique_ptr to the CorrelationPlan or
+     * an error Status.
+     */
     [[nodiscard]] static OmniExpected<std::unique_ptr<CorrelationPlan<T>>>
     create(
         const Abstract::Backend& backend,
-        const std::vector<T>& kernel,
-        ConvolutionType type,
-        ConvolutionMethod method = ConvolutionMethod::Auto);
+        const Params::Correlation& params,
+        std::span<const T> template_coeffs);
 
     // Declaration only for create_from_impl
     static std::unique_ptr<CorrelationPlan<T>> create_from_impl(

@@ -63,7 +63,8 @@ namespace OmniDSP {
   }
 
   // --- BackendType Selection Enum ---
-  enum class BackendType { Default, Accelerate, OneMKL, IntelIPP };
+  // Added Dispatcher as a distinct backend type
+  enum class BackendType { Default, Accelerate, OneMKL, IntelIPP, Dispatcher };
 
   inline std::string_view get_backend_name(BackendType backend) noexcept
   {
@@ -76,12 +77,15 @@ namespace OmniDSP {
         return "oneMKL";
       case BackendType::IntelIPP:
         return "IntelIPP";
+      case BackendType::Dispatcher:
+        return "Dispatcher";  // Added name for Dispatcher
       default:
         return "Unknown BackendType";
     }
   }
 
-  // --- OperationType Enum ---
+  // --- OperationCategory Enum ---
+  // Added FilterDesign
   enum class OperationCategory {
     FFT,
     RFFT,
@@ -92,8 +96,41 @@ namespace OmniDSP {
     Resample,
     CQT,
     Windowing,
+    FilterDesign,  // Added FilterDesign category
     GenericFallback
   };
+
+  // --- get_operation_category_name Function Implementation ---
+  inline std::string_view get_operation_category_name(
+      OperationCategory category) noexcept
+  {
+    switch (category) {
+      case OperationCategory::FFT:
+        return "FFT";
+      case OperationCategory::RFFT:
+        return "RFFT";
+      case OperationCategory::Convolution:
+        return "Convolution";
+      case OperationCategory::Correlation:
+        return "Correlation";
+      case OperationCategory::FIRFilter:
+        return "FIRFilter";
+      case OperationCategory::IIRFilter:
+        return "IIRFilter";
+      case OperationCategory::Resample:
+        return "Resample";
+      case OperationCategory::CQT:
+        return "CQT";
+      case OperationCategory::Windowing:
+        return "Windowing";
+      case OperationCategory::FilterDesign:  // Added case for FilterDesign
+        return "FilterDesign";
+      case OperationCategory::GenericFallback:
+        return "GenericFallback";
+      default:
+        return "Unknown OperationCategory";
+    }
+  }
 
   // --- Type Aliases ---
   using F32 = float;

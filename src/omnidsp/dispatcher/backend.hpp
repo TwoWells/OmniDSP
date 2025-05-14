@@ -9,26 +9,22 @@
 
 #include <map>
 #include <memory>
-#include <string>
-#include <vector>
+#include <span>  // For std::span
+#include <string>  // Included for completeness, though not directly used in this header
+#include <vector>  // Included for completeness, F32Vec etc. are std::vector
 
-#include "OmniDSP/core_types.hpp"
-#include "OmniDSP/types/convolution.hpp"
-#include "interface/backend.hpp"
+#include "OmniDSP/core_types.hpp"  // For OperationCategory, F32Vec etc.
+#include "OmniDSP/types/convolution.hpp"  // For ConvolutionType, ConvolutionMethod (used by Params)
+#include "interface/backend.hpp"  // Abstract::Backend
 
 // Ensure full definitions for types used in method signatures are available
-#include "OmniDSP/coefs/fir_filter.hpp"
-#include "OmniDSP/coefs/iir_filter.hpp"
-#include "OmniDSP/design/cqt.hpp"
-#include "OmniDSP/design/fir_filter.hpp"
-#include "OmniDSP/design/iir_filter.hpp"
-#include "OmniDSP/design/resample.hpp"
-// WindowSetup is included via core_types or other public headers if needed by
-// interface
-
-namespace OmniDSP {
-  // OperationCategory enum assumed to be available (e.g., via core_types.hpp)
-}
+#include "OmniDSP/coefs/fir_filter.hpp"   // For Coefs::FIRFilter
+#include "OmniDSP/coefs/iir_filter.hpp"   // For Coefs::IIRFilterSOS
+#include "OmniDSP/design/cqt.hpp"         // For Design::CQT
+#include "OmniDSP/design/fir_filter.hpp"  // For Design::FIRFilter
+#include "OmniDSP/design/iir_filter.hpp"  // For Design::IIRFilter
+#include "OmniDSP/design/resample.hpp"    // For Design::Resample
+#include "OmniDSP/params/convolution.hpp"  // For Params::Convolution, Params::Correlation
 
 namespace OmniDSP::Dispatcher {
 
@@ -44,6 +40,7 @@ namespace OmniDSP::Dispatcher {
     BackendType get_backend() const override;
 
     // --- One-off DSP Operations ---
+    // Signatures remain the same as in Abstract::Backend
     [[nodiscard]] OmniExpected<F32Vec> convolve_f32(
         const F32Vec& input,
         const F32Vec& kernel,
@@ -102,6 +99,7 @@ namespace OmniDSP::Dispatcher {
         const C64Vec& input, size_t output_length) const override;
 
     // --- Specific Window Generation Methods ---
+    // Signatures remain the same as in Abstract::Backend
     [[nodiscard]] Status bartlett_window_f32(
         size_t length, std::span<F32> output) const override;
     [[nodiscard]] Status bartlett_window_f64(
@@ -140,6 +138,8 @@ namespace OmniDSP::Dispatcher {
         size_t length, std::span<F64> output) const override;
 
     // --- Plan Impl / Processor Impl Factory Methods ---
+    // FFT, CQT, Resample, IIR signatures remain the same as in
+    // Abstract::Backend
     [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C32>>>
     create_fft_plan_impl_c32(size_t length) const override;
     [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::FFTPlanImpl<C64>>>
@@ -148,10 +148,12 @@ namespace OmniDSP::Dispatcher {
     create_rfft_plan_impl_f32(size_t length) const override;
     [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::RFFTPlanImpl<F64>>>
     create_rfft_plan_impl_f64(size_t length) const override;
+
     [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTProcessorImpl<F32>>>
     create_cqt_processor_impl_f32(const Design::CQT& design) const override;
     [[nodiscard]] OmniExpected<std::unique_ptr<Abstract::CQTProcessorImpl<F64>>>
     create_cqt_processor_impl_f64(const Design::CQT& design) const override;
+
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::ResampleProcessorImpl<F32>>>
     create_resample_processor_impl_f32(
@@ -160,70 +162,70 @@ namespace OmniDSP::Dispatcher {
         std::unique_ptr<Abstract::ResampleProcessorImpl<F64>>>
     create_resample_processor_impl_f64(
         const Design::Resample& design) const override;
+
+    // Updated Signatures for Convolution Plan Creation
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::ConvolutionPlanImpl<F32>>>
     create_convolution_plan_impl_f32(
-        const F32Vec& kernel,
-        ConvolutionType type,
-        ConvolutionMethod method) const override;
+        const Params::Convolution& params,
+        std::span<const F32> kernel_coeffs) const override;
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::ConvolutionPlanImpl<F64>>>
     create_convolution_plan_impl_f64(
-        const F64Vec& kernel,
-        ConvolutionType type,
-        ConvolutionMethod method) const override;
+        const Params::Convolution& params,
+        std::span<const F64> kernel_coeffs) const override;
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::ConvolutionPlanImpl<C32>>>
     create_convolution_plan_impl_c32(
-        const C32Vec& kernel,
-        ConvolutionType type,
-        ConvolutionMethod method) const override;
+        const Params::Convolution& params,
+        std::span<const C32> kernel_coeffs) const override;
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::ConvolutionPlanImpl<C64>>>
     create_convolution_plan_impl_c64(
-        const C64Vec& kernel,
-        ConvolutionType type,
-        ConvolutionMethod method) const override;
+        const Params::Convolution& params,
+        std::span<const C64> kernel_coeffs) const override;
+
+    // Updated Signatures for Correlation Plan Creation
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::CorrelationPlanImpl<F32>>>
     create_correlation_plan_impl_f32(
-        const F32Vec& kernel,
-        ConvolutionType type,
-        ConvolutionMethod method) const override;
+        const Params::Correlation& params,
+        std::span<const F32> template_coeffs) const override;
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::CorrelationPlanImpl<F64>>>
     create_correlation_plan_impl_f64(
-        const F64Vec& kernel,
-        ConvolutionType type,
-        ConvolutionMethod method) const override;
+        const Params::Correlation& params,
+        std::span<const F64> template_coeffs) const override;
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::CorrelationPlanImpl<C32>>>
     create_correlation_plan_impl_c32(
-        const C32Vec& kernel,
-        ConvolutionType type,
-        ConvolutionMethod method) const override;
+        const Params::Correlation& params,
+        std::span<const C32> template_coeffs) const override;
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::CorrelationPlanImpl<C64>>>
     create_correlation_plan_impl_c64(
-        const C64Vec& kernel,
-        ConvolutionType type,
-        ConvolutionMethod method) const override;
+        const Params::Correlation& params,
+        std::span<const C64> template_coeffs) const override;
+
+    // Updated Signatures for FIR Filter Processor Creation
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::FIRFilterProcessorImpl<F32>>>
     create_fir_filter_processor_impl_f32(
-        const F32Vec& coefficients) const override;
+        const Coefs::FIRFilter<F32>& coefficients) const override;
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::FIRFilterProcessorImpl<F64>>>
     create_fir_filter_processor_impl_f64(
-        const F64Vec& coefficients) const override;
+        const Coefs::FIRFilter<F64>& coefficients) const override;
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::FIRFilterProcessorImpl<C32>>>
     create_fir_filter_processor_impl_c32(
-        const C32Vec& coefficients) const override;
+        const Coefs::FIRFilter<C32>& coefficients) const override;
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::FIRFilterProcessorImpl<C64>>>
     create_fir_filter_processor_impl_c64(
-        const C64Vec& coefficients) const override;
+        const Coefs::FIRFilter<C64>& coefficients) const override;
+
+    // IIR signatures remain the same as in Abstract::Backend
     [[nodiscard]] OmniExpected<
         std::unique_ptr<Abstract::IIRFilterProcessorImpl<F32>>>
     create_iir_filter_processor_impl_f32(
@@ -234,19 +236,16 @@ namespace OmniDSP::Dispatcher {
         const Coefs::IIRFilterSOS& sos_coefficients) const override;
 
     // --- Filter Design ---
-    // Real coefficient FIR filter design
+    // Signatures remain the same as in Abstract::Backend
     [[nodiscard]] OmniExpected<Coefs::FIRFilter<F32>> design_fir_filter_f32(
         const Design::FIRFilter& design) const override;
     [[nodiscard]] OmniExpected<Coefs::FIRFilter<F64>> design_fir_filter_f64(
         const Design::FIRFilter& design) const override;
-
-    // Complex coefficient FIR filter design
     [[nodiscard]] OmniExpected<Coefs::FIRFilter<C32>> design_fir_filter_c32(
         const Design::FIRFilter& design) const override;
     [[nodiscard]] OmniExpected<Coefs::FIRFilter<C64>> design_fir_filter_c64(
         const Design::FIRFilter& design) const override;
 
-    // IIR filter design
     [[nodiscard]] OmniExpected<Coefs::IIRFilterSOS> design_iir_filter_f32(
         const Design::IIRFilter& design) const override;
     [[nodiscard]] OmniExpected<Coefs::IIRFilterSOS> design_iir_filter_f64(

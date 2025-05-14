@@ -351,78 +351,75 @@ OmniDSP::create_plan(const Params::RFFT& params) const {
     return plan;
 }
 
-template <typename T>
-OmniExpected<std::unique_ptr<ConvolutionPlan<T>>>
-OmniDSP::create_plan(const Params::Convolution& params, const std::vector<T>& kernel_coeffs) const {
-    if (!pimpl_) {
-        // spdlog::get("OmniDSP")->error("OmniDSP::create_plan (Params::Convolution): pimpl_ is null.");
-        return std::unexpected(Status::NotInitialized);
-    }
-    OmniExpected<std::unique_ptr<Abstract::ConvolutionPlanImpl<T>>> plan_impl_expected;
+// ConvolutionPlan Factory - Updated
+template <typename T> // T is F32, F64, C32, or C64
+[[nodiscard]] OmniExpected<std::unique_ptr<ConvolutionPlan<T>>> OmniDSP::create_plan(
+    const Params::Convolution& params,
+    const std::vector<T>& kernel_coeffs) const
+{
+    if (!pimpl_) return std::unexpected(Status::NotInitialized);
+    OmniExpected<std::unique_ptr<Abstract::ConvolutionPlanImpl<T>>> pimpl_expected;
+    std::span<const T> kernel_coeffs_span(kernel_coeffs);
+
     if constexpr (std::is_same_v<T, F32>) {
-        plan_impl_expected = pimpl_->create_convolution_plan_impl_f32(kernel_coeffs, params.type_, params.method_hint_);
+        pimpl_expected = pimpl_->create_convolution_plan_impl_f32(params, kernel_coeffs_span);
     } else if constexpr (std::is_same_v<T, F64>) {
-        plan_impl_expected = pimpl_->create_convolution_plan_impl_f64(kernel_coeffs, params.type_, params.method_hint_);
+        pimpl_expected = pimpl_->create_convolution_plan_impl_f64(params, kernel_coeffs_span);
     } else if constexpr (std::is_same_v<T, C32>) {
-        plan_impl_expected = pimpl_->create_convolution_plan_impl_c32(kernel_coeffs, params.type_, params.method_hint_);
+        pimpl_expected = pimpl_->create_convolution_plan_impl_c32(params, kernel_coeffs_span);
     } else if constexpr (std::is_same_v<T, C64>) {
-        plan_impl_expected = pimpl_->create_convolution_plan_impl_c64(kernel_coeffs, params.type_, params.method_hint_);
+        pimpl_expected = pimpl_->create_convolution_plan_impl_c64(params, kernel_coeffs_span);
     } else {
-        // spdlog::get("OmniDSP")->error("OmniDSP::create_plan (Params::Convolution): Unsupported data type.");
-        static_assert(always_false<T>::value, "Unsupported type for ConvolutionPlan");
+        static_assert(always_false<T>::value, "Unsupported type for ConvolutionPlan.");
         return std::unexpected(Status::UnsupportedFeature);
     }
 
-    if (!plan_impl_expected) {
-        // spdlog::get("OmniDSP")->error("OmniDSP::create_plan (Params::Convolution): Failed to create ConvolutionPlanImpl. Status: {}", static_cast<int>(plan_impl_expected.error()));
-        return std::unexpected(plan_impl_expected.error());
+    if (!pimpl_expected) {
+        return std::unexpected(pimpl_expected.error());
     }
-
-    auto plan = ConvolutionPlan<T>::create_from_impl(std::move(plan_impl_expected.value()));
-     if (!plan) {
-        // spdlog::get("OmniDSP")->error("OmniDSP::create_plan (Params::Convolution): Failed to wrap ConvolutionPlanImpl.");
-        return std::unexpected(Status::Failure);
-    }
-    // spdlog::get("OmniDSP")->debug("Successfully created ConvolutionPlan from Params::Convolution.");
-    return plan;
-}
-
-
-template <typename T>
-OmniExpected<std::unique_ptr<CorrelationPlan<T>>>
-OmniDSP::create_plan(const Params::Correlation& params, const std::vector<T>& kernel_coeffs) const {
-    if (!pimpl_) {
-        // spdlog::get("OmniDSP")->error("OmniDSP::create_plan (Params::Correlation): pimpl_ is null.");
-        return std::unexpected(Status::NotInitialized);
-    }
-    OmniExpected<std::unique_ptr<Abstract::CorrelationPlanImpl<T>>> plan_impl_expected;
-     if constexpr (std::is_same_v<T, F32>) {
-        plan_impl_expected = pimpl_->create_correlation_plan_impl_f32(kernel_coeffs, params.type_, params.method_hint_);
-    } else if constexpr (std::is_same_v<T, F64>) {
-        plan_impl_expected = pimpl_->create_correlation_plan_impl_f64(kernel_coeffs, params.type_, params.method_hint_);
-    } else if constexpr (std::is_same_v<T, C32>) {
-        plan_impl_expected = pimpl_->create_correlation_plan_impl_c32(kernel_coeffs, params.type_, params.method_hint_);
-    } else if constexpr (std::is_same_v<T, C64>) {
-        plan_impl_expected = pimpl_->create_correlation_plan_impl_c64(kernel_coeffs, params.type_, params.method_hint_);
-    } else {
-        // spdlog::get("OmniDSP")->error("OmniDSP::create_plan (Params::Correlation): Unsupported data type.");
-        static_assert(always_false<T>::value, "Unsupported type for CorrelationPlan");
-        return std::unexpected(Status::UnsupportedFeature);
-    }
-
-    if (!plan_impl_expected) {
-        // spdlog::get("OmniDSP")->error("OmniDSP::create_plan (Params::Correlation): Failed to create CorrelationPlanImpl. Status: {}", static_cast<int>(plan_impl_expected.error()));
-        return std::unexpected(plan_impl_expected.error());
-    }
-
-    auto plan = CorrelationPlan<T>::create_from_impl(std::move(plan_impl_expected.value()));
+    auto plan = ConvolutionPlan<T>::create_from_impl(std::move(pimpl_expected.value()));
     if (!plan) {
-        // spdlog::get("OmniDSP")->error("OmniDSP::create_plan (Params::Correlation): Failed to wrap CorrelationPlanImpl.");
+        spdlog::get("OmniDSP")->error("OmniDSP::create_plan (ConvolutionPlan): Failed to create public plan from impl.");
         return std::unexpected(Status::Failure);
     }
-    // spdlog::get("OmniDSP")->debug("Successfully created CorrelationPlan from Params::Correlation.");
     return plan;
 }
+
+// CorrelationPlan Factory - Updated
+template <typename T> // T is F32, F64, C32, or C64
+[[nodiscard]] OmniExpected<std::unique_ptr<CorrelationPlan<T>>> OmniDSP::create_plan(
+    const Params::Correlation& params,
+    const std::vector<T>& template_coeffs) const // Renamed kernel_coeffs to template_coeffs for clarity
+{
+    if (!pimpl_) return std::unexpected(Status::NotInitialized);
+    OmniExpected<std::unique_ptr<Abstract::CorrelationPlanImpl<T>>> pimpl_expected;
+    std::span<const T> template_coeffs_span(template_coeffs);
+
+    if constexpr (std::is_same_v<T, F32>) {
+        pimpl_expected = pimpl_->create_correlation_plan_impl_f32(params, template_coeffs_span);
+    } else if constexpr (std::is_same_v<T, F64>) {
+        pimpl_expected = pimpl_->create_correlation_plan_impl_f64(params, template_coeffs_span);
+    } else if constexpr (std::is_same_v<T, C32>) {
+        pimpl_expected = pimpl_->create_correlation_plan_impl_c32(params, template_coeffs_span);
+    } else if constexpr (std::is_same_v<T, C64>) {
+        pimpl_expected = pimpl_->create_correlation_plan_impl_c64(params, template_coeffs_span);
+    } else {
+        static_assert(always_false<T>::value, "Unsupported type for CorrelationPlan.");
+        return std::unexpected(Status::UnsupportedFeature);
+    }
+
+    if (!pimpl_expected) {
+        return std::unexpected(pimpl_expected.error());
+    }
+    auto plan = CorrelationPlan<T>::create_from_impl(std::move(pimpl_expected.value()));
+     if (!plan) {
+        spdlog::get("OmniDSP")->error("OmniDSP::create_plan (CorrelationPlan): Failed to create public plan from impl.");
+        return std::unexpected(Status::Failure);
+    }
+    return plan;
+}
+
+
 
 
 //--------------------------------------------------------------------------

@@ -15,8 +15,11 @@
 
 // Core types are fundamental and are included directly.
 #include <OmniDSP/core_types.hpp>  // For Status, OmniExpected, F32, C32, C32Vec, C64Vec, BackendType, Utils::GetComplexType etc.
-#include <OmniDSP/types/convolution.hpp>  // For ConvolutionType, ConvolutionMethod
+#include <OmniDSP/types/convolution.hpp>  // For ConvolutionType, ConvolutionMethod (used by Params::Correlation)
 #include <OmniDSP/window.hpp>  // For WindowSetup (used in some design method params if any, or by Design structs)
+
+// Parameter types (needed for method parameters)
+#include <OmniDSP/params/convolution.hpp>  // For Params::Correlation
 
 // Design specifications (needed for method parameters)
 #include <OmniDSP/design/cqt.hpp>         // Defines Design::CQT
@@ -25,8 +28,8 @@
 #include <OmniDSP/design/resample.hpp>    // Defines Design::Resample
 
 // Coefficient types (may be returned by design methods)
-#include <OmniDSP/coefs/fir_filter.hpp>  // Defines FIRCoefs
-#include <OmniDSP/coefs/iir_filter.hpp>  // Defines Coefs::SOS
+#include <OmniDSP/coefs/fir_filter.hpp>  // Defines Coefs::FIRFilter
+#include <OmniDSP/coefs/iir_filter.hpp>
 
 namespace OmniDSP::Abstract {
 
@@ -268,73 +271,78 @@ namespace OmniDSP::Abstract {
     [[nodiscard]] virtual OmniExpected<
         std::unique_ptr<ConvolutionPlanImpl<F32>>>
     create_convolution_plan_impl_f32(
-        const F32Vec& kernel,
-        ConvolutionType type,
-        ConvolutionMethod method) const
+        const Params::Convolution&
+            params,  // Changed to use Params::Convolution
+        std::span<const F32> kernel_coeffs) const  // Changed to span and name
         = 0;
     [[nodiscard]] virtual OmniExpected<
         std::unique_ptr<ConvolutionPlanImpl<F64>>>
     create_convolution_plan_impl_f64(
-        const F64Vec& kernel,
-        ConvolutionType type,
-        ConvolutionMethod method) const
+        const Params::Convolution&
+            params,  // Changed to use Params::Convolution
+        std::span<const F64> kernel_coeffs) const  // Changed to span and name
         = 0;
     [[nodiscard]] virtual OmniExpected<
         std::unique_ptr<ConvolutionPlanImpl<C32>>>
     create_convolution_plan_impl_c32(
-        const C32Vec& kernel,
-        ConvolutionType type,
-        ConvolutionMethod method) const
+        const Params::Convolution&
+            params,  // Changed to use Params::Convolution
+        std::span<const C32> kernel_coeffs) const  // Changed to span and name
         = 0;
     [[nodiscard]] virtual OmniExpected<
         std::unique_ptr<ConvolutionPlanImpl<C64>>>
     create_convolution_plan_impl_c64(
-        const C64Vec& kernel,
-        ConvolutionType type,
-        ConvolutionMethod method) const
+        const Params::Convolution&
+            params,  // Changed to use Params::Convolution
+        std::span<const C64> kernel_coeffs) const  // Changed to span and name
         = 0;
 
+    // Updated create_correlation_plan_impl signatures
     [[nodiscard]] virtual OmniExpected<
         std::unique_ptr<CorrelationPlanImpl<F32>>>
     create_correlation_plan_impl_f32(
-        const F32Vec& kernel,
-        ConvolutionType type,
-        ConvolutionMethod method) const
+        const Params::Correlation& params,
+        std::span<const F32> template_coeffs) const
         = 0;
     [[nodiscard]] virtual OmniExpected<
         std::unique_ptr<CorrelationPlanImpl<F64>>>
     create_correlation_plan_impl_f64(
-        const F64Vec& kernel,
-        ConvolutionType type,
-        ConvolutionMethod method) const
+        const Params::Correlation& params,
+        std::span<const F64> template_coeffs) const
         = 0;
     [[nodiscard]] virtual OmniExpected<
         std::unique_ptr<CorrelationPlanImpl<C32>>>
     create_correlation_plan_impl_c32(
-        const C32Vec& kernel,
-        ConvolutionType type,
-        ConvolutionMethod method) const
+        const Params::Correlation& params,
+        std::span<const C32> template_coeffs) const
         = 0;
     [[nodiscard]] virtual OmniExpected<
         std::unique_ptr<CorrelationPlanImpl<C64>>>
     create_correlation_plan_impl_c64(
-        const C64Vec& kernel,
-        ConvolutionType type,
-        ConvolutionMethod method) const
+        const Params::Correlation& params,
+        std::span<const C64> template_coeffs) const
         = 0;
 
     [[nodiscard]] virtual OmniExpected<
         std::unique_ptr<FIRFilterProcessorImpl<F32>>>
-    create_fir_filter_processor_impl_f32(const F32Vec& coefficients) const = 0;
+    create_fir_filter_processor_impl_f32(
+        const Coefs::FIRFilter<F32>& coefficients) const
+        = 0;  // Assuming Coefs::FIRFilter<T> holds std::vector<T> or similar
     [[nodiscard]] virtual OmniExpected<
         std::unique_ptr<FIRFilterProcessorImpl<F64>>>
-    create_fir_filter_processor_impl_f64(const F64Vec& coefficients) const = 0;
+    create_fir_filter_processor_impl_f64(
+        const Coefs::FIRFilter<F64>& coefficients) const
+        = 0;
     [[nodiscard]] virtual OmniExpected<
         std::unique_ptr<FIRFilterProcessorImpl<C32>>>
-    create_fir_filter_processor_impl_c32(const C32Vec& coefficients) const = 0;
+    create_fir_filter_processor_impl_c32(
+        const Coefs::FIRFilter<C32>& coefficients) const
+        = 0;
     [[nodiscard]] virtual OmniExpected<
         std::unique_ptr<FIRFilterProcessorImpl<C64>>>
-    create_fir_filter_processor_impl_c64(const C64Vec& coefficients) const = 0;
+    create_fir_filter_processor_impl_c64(
+        const Coefs::FIRFilter<C64>& coefficients) const
+        = 0;
 
     [[nodiscard]] virtual OmniExpected<
         std::unique_ptr<IIRFilterProcessorImpl<F32>>>

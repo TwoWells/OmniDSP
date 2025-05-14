@@ -19,12 +19,10 @@
 #include <OmniDSP/convolution.hpp>  // For ConvolutionPlan
 #include <OmniDSP/core_types.hpp>   // For F32, F64, Status, OmniExpected etc.
 #include <OmniDSP/cqt.hpp>          // For CQTPlan
-#include <OmniDSP/design/fir_filter.hpp>  // For Design::FIRFilter (ensure this is included)
-#include <OmniDSP/design/iir_filter.hpp>  // For Design::IIRFilter
-#include <OmniDSP/fft.hpp>                // For FFTPlan, RFFTPlan
-#include <OmniDSP/fir_filter.hpp>         // For FIRFilterPlan, FIRCoefs
-#include <OmniDSP/iir_filter.hpp>         // For IIRFilterPlan, Coefs::SOS
-#include <OmniDSP/resample.hpp>           // For ResamplePlan, Design::Resample
+#include <OmniDSP/fft.hpp>          // For FFTPlan, RFFTPlan
+#include <OmniDSP/fir_filter.hpp>  // For FIRFilterPlan, Design::FIRFilter, Coefs::FIRFilter
+#include <OmniDSP/iir_filter.hpp>  // For IIRFilterPlan, Design::IIRFilter, Coefs::IIRFilterSOS
+#include <OmniDSP/resample.hpp>  // For ResamplePlan, Design::Resample
 #include <OmniDSP/window.hpp>  // For WindowSetup, WindowParams, and the free OmniDSP::generate_window
 
 // Standard library headers
@@ -60,7 +58,7 @@ namespace OmniDSP::Default {
   [[nodiscard]] OmniExpected<Coefs::IIRFilterSOS> generate_iir_filter_coeffs(
       const Design::IIRFilter& spec);
 
-  namespace convolution_detail {
+  namespace detail {
     inline size_t next_power_of_two(size_t n)
     {
       if (n == 0) return 1;  // Should ideally not happen for FFT lengths
@@ -76,7 +74,7 @@ namespace OmniDSP::Default {
       }
       return power;
     }
-  }  // namespace convolution_detail
+  }  // namespace detail
 
   //--------------------------------------------------------------------------
   // Backend Method Definitions
@@ -95,33 +93,31 @@ namespace OmniDSP::Default {
   BackendType Backend::get_backend() const { return BackendType::Default; }
 
   // --- DSP Operations (One-Off Implementations) ---
-  // (Implementations for convolve, correlate, fft, ifft, rfft, irfft as
-  // previously provided)
-  // ... (Existing implementations for convolve_f32, etc. - keeping them concise
-  // here for brevity)
+
   [[nodiscard]] OmniExpected<F32Vec> Backend::convolve_f32(
       const F32Vec& input,
       const F32Vec& kernel,
       ConvolutionType type,
       ConvolutionMethod method) const
   {
+    if (kernel.empty())
+      return OmniExpected<F32Vec>(std::unexpect, Status::InvalidArgument);
+    Params::Convolution params(
+        input.size(),
+        kernel.size(),
+        type,
+        method);  // Max input length is current input size
     auto pimpl_expected
-        = this->create_convolution_plan_impl_f32(kernel, type, method);
+        = this->create_convolution_plan_impl_f32(params, kernel);
     if (!pimpl_expected) {
       return OmniExpected<F32Vec>(std::unexpect, pimpl_expected.error());
     }
-    auto plan = ConvolutionPlan<F32>::create_from_impl(
-        std::move(pimpl_expected.value()));
-    if (!plan) {
-      spdlog::get("OmniDSP")->error(
-          "Default::convolve_f32: Failed to create public ConvolutionPlan from "
-          "impl.");
-      return OmniExpected<F32Vec>(std::unexpect, Status::Failure);
-    }
-
-    size_t output_len = plan->get_output_length(input.size());
+    // The public ConvolutionPlan::create now also takes Params and span.
+    // For one-off, we are directly using the Impl.
+    auto plan_impl = std::move(pimpl_expected.value());
+    size_t output_len = plan_impl->get_output_length(input.size());
     F32Vec output(output_len);
-    Status status = plan->execute(input, output);
+    Status status = plan_impl->execute(input, output);
     if (status != Status::Success) {
       return OmniExpected<F32Vec>(std::unexpect, status);
     }
@@ -134,23 +130,18 @@ namespace OmniDSP::Default {
       ConvolutionType type,
       ConvolutionMethod method) const
   {
+    if (kernel.empty())
+      return OmniExpected<F64Vec>(std::unexpect, Status::InvalidArgument);
+    Params::Convolution params(input.size(), kernel.size(), type, method);
     auto pimpl_expected
-        = this->create_convolution_plan_impl_f64(kernel, type, method);
+        = this->create_convolution_plan_impl_f64(params, kernel);
     if (!pimpl_expected) {
       return OmniExpected<F64Vec>(std::unexpect, pimpl_expected.error());
     }
-    auto plan = ConvolutionPlan<F64>::create_from_impl(
-        std::move(pimpl_expected.value()));
-    if (!plan) {
-      spdlog::get("OmniDSP")->error(
-          "Default::convolve_f64: Failed to create public ConvolutionPlan from "
-          "impl.");
-      return OmniExpected<F64Vec>(std::unexpect, Status::Failure);
-    }
-
-    size_t output_len = plan->get_output_length(input.size());
+    auto plan_impl = std::move(pimpl_expected.value());
+    size_t output_len = plan_impl->get_output_length(input.size());
     F64Vec output(output_len);
-    Status status = plan->execute(input, output);
+    Status status = plan_impl->execute(input, output);
     if (status != Status::Success) {
       return OmniExpected<F64Vec>(std::unexpect, status);
     }
@@ -163,23 +154,18 @@ namespace OmniDSP::Default {
       ConvolutionType type,
       ConvolutionMethod method) const
   {
+    if (kernel.empty())
+      return OmniExpected<C32Vec>(std::unexpect, Status::InvalidArgument);
+    Params::Convolution params(input.size(), kernel.size(), type, method);
     auto pimpl_expected
-        = this->create_convolution_plan_impl_c32(kernel, type, method);
+        = this->create_convolution_plan_impl_c32(params, kernel);
     if (!pimpl_expected) {
       return OmniExpected<C32Vec>(std::unexpect, pimpl_expected.error());
     }
-    auto plan = ConvolutionPlan<C32>::create_from_impl(
-        std::move(pimpl_expected.value()));
-    if (!plan) {
-      spdlog::get("OmniDSP")->error(
-          "Default::convolve_c32: Failed to create public ConvolutionPlan from "
-          "impl.");
-      return OmniExpected<C32Vec>(std::unexpect, Status::Failure);
-    }
-
-    size_t output_len = plan->get_output_length(input.size());
+    auto plan_impl = std::move(pimpl_expected.value());
+    size_t output_len = plan_impl->get_output_length(input.size());
     C32Vec output(output_len);
-    Status status = plan->execute(input, output);
+    Status status = plan_impl->execute(input, output);
     if (status != Status::Success) {
       return OmniExpected<C32Vec>(std::unexpect, status);
     }
@@ -192,23 +178,18 @@ namespace OmniDSP::Default {
       ConvolutionType type,
       ConvolutionMethod method) const
   {
+    if (kernel.empty())
+      return OmniExpected<C64Vec>(std::unexpect, Status::InvalidArgument);
+    Params::Convolution params(input.size(), kernel.size(), type, method);
     auto pimpl_expected
-        = this->create_convolution_plan_impl_c64(kernel, type, method);
+        = this->create_convolution_plan_impl_c64(params, kernel);
     if (!pimpl_expected) {
       return OmniExpected<C64Vec>(std::unexpect, pimpl_expected.error());
     }
-    auto plan = ConvolutionPlan<C64>::create_from_impl(
-        std::move(pimpl_expected.value()));
-    if (!plan) {
-      spdlog::get("OmniDSP")->error(
-          "Default::convolve_c64: Failed to create public ConvolutionPlan from "
-          "impl.");
-      return OmniExpected<C64Vec>(std::unexpect, Status::Failure);
-    }
-
-    size_t output_len = plan->get_output_length(input.size());
+    auto plan_impl = std::move(pimpl_expected.value());
+    size_t output_len = plan_impl->get_output_length(input.size());
     C64Vec output(output_len);
-    Status status = plan->execute(input, output);
+    Status status = plan_impl->execute(input, output);
     if (status != Status::Success) {
       return OmniExpected<C64Vec>(std::unexpect, status);
     }
@@ -217,27 +198,23 @@ namespace OmniDSP::Default {
 
   [[nodiscard]] OmniExpected<F32Vec> Backend::correlate_f32(
       const F32Vec& input,
-      const F32Vec& kernel,
+      const F32Vec& template_coeffs,  // Renamed from kernel for clarity
       ConvolutionType type,
       ConvolutionMethod method) const
   {
+    if (template_coeffs.empty())
+      return OmniExpected<F32Vec>(std::unexpect, Status::InvalidArgument);
+    Params::Correlation params(
+        input.size(), template_coeffs.size(), type, method);
     auto pimpl_expected
-        = this->create_correlation_plan_impl_f32(kernel, type, method);
+        = this->create_correlation_plan_impl_f32(params, template_coeffs);
     if (!pimpl_expected) {
       return OmniExpected<F32Vec>(std::unexpect, pimpl_expected.error());
     }
-    auto plan = CorrelationPlan<F32>::create_from_impl(
-        std::move(pimpl_expected.value()));
-    if (!plan) {
-      spdlog::get("OmniDSP")->error(
-          "Default::correlate_f32: Failed to create public CorrelationPlan "
-          "from impl.");
-      return OmniExpected<F32Vec>(std::unexpect, Status::Failure);
-    }
-
-    size_t output_len = plan->get_output_length(input.size());
+    auto plan_impl = std::move(pimpl_expected.value());
+    size_t output_len = plan_impl->get_output_length(input.size());
     F32Vec output(output_len);
-    Status status = plan->execute(input, output);
+    Status status = plan_impl->execute(input, output);
     if (status != Status::Success) {
       return OmniExpected<F32Vec>(std::unexpect, status);
     }
@@ -246,27 +223,23 @@ namespace OmniDSP::Default {
 
   [[nodiscard]] OmniExpected<F64Vec> Backend::correlate_f64(
       const F64Vec& input,
-      const F64Vec& kernel,
+      const F64Vec& template_coeffs,
       ConvolutionType type,
       ConvolutionMethod method) const
   {
+    if (template_coeffs.empty())
+      return OmniExpected<F64Vec>(std::unexpect, Status::InvalidArgument);
+    Params::Correlation params(
+        input.size(), template_coeffs.size(), type, method);
     auto pimpl_expected
-        = this->create_correlation_plan_impl_f64(kernel, type, method);
+        = this->create_correlation_plan_impl_f64(params, template_coeffs);
     if (!pimpl_expected) {
       return OmniExpected<F64Vec>(std::unexpect, pimpl_expected.error());
     }
-    auto plan = CorrelationPlan<F64>::create_from_impl(
-        std::move(pimpl_expected.value()));
-    if (!plan) {
-      spdlog::get("OmniDSP")->error(
-          "Default::correlate_f64: Failed to create public CorrelationPlan "
-          "from impl.");
-      return OmniExpected<F64Vec>(std::unexpect, Status::Failure);
-    }
-
-    size_t output_len = plan->get_output_length(input.size());
+    auto plan_impl = std::move(pimpl_expected.value());
+    size_t output_len = plan_impl->get_output_length(input.size());
     F64Vec output(output_len);
-    Status status = plan->execute(input, output);
+    Status status = plan_impl->execute(input, output);
     if (status != Status::Success) {
       return OmniExpected<F64Vec>(std::unexpect, status);
     }
@@ -275,27 +248,23 @@ namespace OmniDSP::Default {
 
   [[nodiscard]] OmniExpected<C32Vec> Backend::correlate_c32(
       const C32Vec& input,
-      const C32Vec& kernel,
+      const C32Vec& template_coeffs,
       ConvolutionType type,
       ConvolutionMethod method) const
   {
+    if (template_coeffs.empty())
+      return OmniExpected<C32Vec>(std::unexpect, Status::InvalidArgument);
+    Params::Correlation params(
+        input.size(), template_coeffs.size(), type, method);
     auto pimpl_expected
-        = this->create_correlation_plan_impl_c32(kernel, type, method);
+        = this->create_correlation_plan_impl_c32(params, template_coeffs);
     if (!pimpl_expected) {
       return OmniExpected<C32Vec>(std::unexpect, pimpl_expected.error());
     }
-    auto plan = CorrelationPlan<C32>::create_from_impl(
-        std::move(pimpl_expected.value()));
-    if (!plan) {
-      spdlog::get("OmniDSP")->error(
-          "Default::correlate_c32: Failed to create public CorrelationPlan "
-          "from impl.");
-      return OmniExpected<C32Vec>(std::unexpect, Status::Failure);
-    }
-
-    size_t output_len = plan->get_output_length(input.size());
+    auto plan_impl = std::move(pimpl_expected.value());
+    size_t output_len = plan_impl->get_output_length(input.size());
     C32Vec output(output_len);
-    Status status = plan->execute(input, output);
+    Status status = plan_impl->execute(input, output);
     if (status != Status::Success) {
       return OmniExpected<C32Vec>(std::unexpect, status);
     }
@@ -304,27 +273,23 @@ namespace OmniDSP::Default {
 
   [[nodiscard]] OmniExpected<C64Vec> Backend::correlate_c64(
       const C64Vec& input,
-      const C64Vec& kernel,
+      const C64Vec& template_coeffs,
       ConvolutionType type,
       ConvolutionMethod method) const
   {
+    if (template_coeffs.empty())
+      return OmniExpected<C64Vec>(std::unexpect, Status::InvalidArgument);
+    Params::Correlation params(
+        input.size(), template_coeffs.size(), type, method);
     auto pimpl_expected
-        = this->create_correlation_plan_impl_c64(kernel, type, method);
+        = this->create_correlation_plan_impl_c64(params, template_coeffs);
     if (!pimpl_expected) {
       return OmniExpected<C64Vec>(std::unexpect, pimpl_expected.error());
     }
-    auto plan = CorrelationPlan<C64>::create_from_impl(
-        std::move(pimpl_expected.value()));
-    if (!plan) {
-      spdlog::get("OmniDSP")->error(
-          "Default::correlate_c64: Failed to create public CorrelationPlan "
-          "from impl.");
-      return OmniExpected<C64Vec>(std::unexpect, Status::Failure);
-    }
-
-    size_t output_len = plan->get_output_length(input.size());
+    auto plan_impl = std::move(pimpl_expected.value());
+    size_t output_len = plan_impl->get_output_length(input.size());
     C64Vec output(output_len);
-    Status status = plan->execute(input, output);
+    Status status = plan_impl->execute(input, output);
     if (status != Status::Success) {
       return OmniExpected<C64Vec>(std::unexpect, status);
     }
@@ -1091,43 +1056,66 @@ namespace OmniDSP::Default {
     }
   }
 
+  // ConvolutionPlanImpl Factories (Reverted to explicit, verbose form)
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::ConvolutionPlanImpl<F32>>>
   Backend::create_convolution_plan_impl_f32(
-      const F32Vec& kernel,
-      ConvolutionType type,
-      ConvolutionMethod method) const
+      const Params::Convolution& params,
+      std::span<const F32> kernel_coeffs) const
   {
     try {
-      ConvolutionPlanImpl<F32>::FFTPlanImplVariant fft_plan_variant;
-      if (method == ConvolutionMethod::FFT || (method == ConvolutionMethod::Auto /* && decide_if_fft_is_better() based on kernel/input sizes */)) {
-        size_t kernel_length = kernel.size();
-        if (kernel_length == 0)
-          return OmniExpected<
-              std::unique_ptr<Abstract::ConvolutionPlanImpl<F32>>>(
-              std::unexpect, Status::InvalidArgument);
+      Default::ConvolutionPlanImpl<F32>::FFTPlanImplVariant fft_plan_variant;
+      if (params.method_hint_ == ConvolutionMethod::FFT
+          || (params.method_hint_ == ConvolutionMethod::Auto
+              && !kernel_coeffs.empty())) {
+        size_t kernel_len = kernel_coeffs.size();
+        size_t fft_len = params.max_input_length_ + kernel_len - 1;
+        if (params.max_input_length_ == 0 && kernel_len == 0) {
+          fft_len = 0;
+        }
+        else if (params.max_input_length_ == 0 || kernel_len == 0) {
+          fft_len = std::max(params.max_input_length_, kernel_len);
+        }
 
-        size_t temp_input_len_for_fft_calc
-            = kernel_length;  // Simplified assumption for FFT length
-        size_t fft_len = convolution_detail::next_power_of_two(
-            kernel_length + temp_input_len_for_fft_calc - 1);
-        if (fft_len == 0)  // Should be caught by kernel_length == 0 or
-                           // next_power_of_two returning non-zero
-          return OmniExpected<
-              std::unique_ptr<Abstract::ConvolutionPlanImpl<F32>>>(
-              std::unexpect, Status::InvalidArgument);
-        if (fft_len < 2) fft_len = 2;  // Minimum FFT length for some libraries
-
-        auto rfft_plan_expected = this->create_rfft_plan_impl_f32(fft_len);
-        if (!rfft_plan_expected)
-          return OmniExpected<
-              std::unique_ptr<Abstract::ConvolutionPlanImpl<F32>>>(
-              std::unexpect, rfft_plan_expected.error());
-        fft_plan_variant.emplace<std::unique_ptr<Abstract::RFFTPlanImpl<F32>>>(
-            std::move(rfft_plan_expected.value()));
+        if (fft_len > 0) {
+          fft_len = detail::next_power_of_two(fft_len);
+          if (fft_len == 0) {
+            spdlog::get("OmniDSP")->error(
+                "FFT length calculation overflowed for F32 convolution.");
+            return OmniExpected<
+                std::unique_ptr<Abstract::ConvolutionPlanImpl<F32>>>(
+                std::unexpect, Status::InvalidArgument);
+          }
+          if (fft_len < 2) fft_len = 2;  // RFFT often needs min length 2
+          auto rfft_plan_expected = this->create_rfft_plan_impl_f32(fft_len);
+          if (!rfft_plan_expected) {
+            return OmniExpected<
+                std::unique_ptr<Abstract::ConvolutionPlanImpl<F32>>>(
+                std::unexpect, rfft_plan_expected.error());
+          }
+          fft_plan_variant
+              .emplace<std::unique_ptr<Abstract::RFFTPlanImpl<F32>>>(
+                  std::move(rfft_plan_expected.value()));
+        }
+        else if (
+            params.method_hint_
+            == ConvolutionMethod::FFT) {  // FFT forced, but lengths are zero
+          // Create a minimal FFT plan if FFT is explicitly requested for
+          // zero-length operation
+          auto rfft_plan_expected
+              = this->create_rfft_plan_impl_f32(2);  // Minimal sensible default
+          if (!rfft_plan_expected) {
+            return OmniExpected<
+                std::unique_ptr<Abstract::ConvolutionPlanImpl<F32>>>(
+                std::unexpect, rfft_plan_expected.error());
+          }
+          fft_plan_variant
+              .emplace<std::unique_ptr<Abstract::RFFTPlanImpl<F32>>>(
+                  std::move(rfft_plan_expected.value()));
+        }
       }
-      return std::make_unique<ConvolutionPlanImpl<F32>>(
-          std::move(fft_plan_variant), kernel, type, method);
+      return std::make_unique<Default::ConvolutionPlanImpl<F32>>(
+          std::move(fft_plan_variant), params, kernel_coeffs);
     }
     catch (const std::exception& e) {
       spdlog::get("OmniDSP")->error(
@@ -1136,286 +1124,433 @@ namespace OmniDSP::Default {
           std::unexpect, Status::Failure);
     }
   }
+
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::ConvolutionPlanImpl<F64>>>
   Backend::create_convolution_plan_impl_f64(
-      const F64Vec& kernel,
-      ConvolutionType type,
-      ConvolutionMethod method) const
+      const Params::Convolution& params,
+      std::span<const F64> kernel_coeffs) const
   {
     try {
-      ConvolutionPlanImpl<F64>::FFTPlanImplVariant fft_plan_variant;
-      if (method == ConvolutionMethod::FFT
-          || (method == ConvolutionMethod::Auto)) {
-        size_t kernel_length = kernel.size();
-        if (kernel_length == 0)
-          return OmniExpected<
-              std::unique_ptr<Abstract::ConvolutionPlanImpl<F64>>>(
-              std::unexpect, Status::InvalidArgument);
-        size_t temp_input_len_for_fft_calc = kernel_length;
-        size_t fft_len = convolution_detail::next_power_of_two(
-            kernel_length + temp_input_len_for_fft_calc - 1);
-        if (fft_len == 0)
-          return OmniExpected<
-              std::unique_ptr<Abstract::ConvolutionPlanImpl<F64>>>(
-              std::unexpect, Status::InvalidArgument);
-        if (fft_len < 2) fft_len = 2;
-        auto rfft_plan_expected = this->create_rfft_plan_impl_f64(fft_len);
-        if (!rfft_plan_expected)
-          return OmniExpected<
-              std::unique_ptr<Abstract::ConvolutionPlanImpl<F64>>>(
-              std::unexpect, rfft_plan_expected.error());
-        fft_plan_variant.emplace<std::unique_ptr<Abstract::RFFTPlanImpl<F64>>>(
-            std::move(rfft_plan_expected.value()));
+      Default::ConvolutionPlanImpl<F64>::FFTPlanImplVariant fft_plan_variant;
+      if (params.method_hint_ == ConvolutionMethod::FFT
+          || (params.method_hint_ == ConvolutionMethod::Auto
+              && !kernel_coeffs.empty())) {
+        size_t kernel_len = kernel_coeffs.size();
+        size_t fft_len = params.max_input_length_ + kernel_len - 1;
+        if (params.max_input_length_ == 0 && kernel_len == 0) {
+          fft_len = 0;
+        }
+        else if (params.max_input_length_ == 0 || kernel_len == 0) {
+          fft_len = std::max(params.max_input_length_, kernel_len);
+        }
+
+        if (fft_len > 0) {
+          fft_len = detail::next_power_of_two(fft_len);
+          if (fft_len == 0) {
+            spdlog::get("OmniDSP")->error(
+                "FFT length calculation overflowed for F64 convolution.");
+            return OmniExpected<
+                std::unique_ptr<Abstract::ConvolutionPlanImpl<F64>>>(
+                std::unexpect, Status::InvalidArgument);
+          }
+          if (fft_len < 2) fft_len = 2;
+          auto rfft_plan_expected = this->create_rfft_plan_impl_f64(fft_len);
+          if (!rfft_plan_expected) {
+            return OmniExpected<
+                std::unique_ptr<Abstract::ConvolutionPlanImpl<F64>>>(
+                std::unexpect, rfft_plan_expected.error());
+          }
+          fft_plan_variant
+              .emplace<std::unique_ptr<Abstract::RFFTPlanImpl<F64>>>(
+                  std::move(rfft_plan_expected.value()));
+        }
+        else if (params.method_hint_ == ConvolutionMethod::FFT) {
+          auto rfft_plan_expected = this->create_rfft_plan_impl_f64(2);
+          if (!rfft_plan_expected) {
+            return OmniExpected<
+                std::unique_ptr<Abstract::ConvolutionPlanImpl<F64>>>(
+                std::unexpect, rfft_plan_expected.error());
+          }
+          fft_plan_variant
+              .emplace<std::unique_ptr<Abstract::RFFTPlanImpl<F64>>>(
+                  std::move(rfft_plan_expected.value()));
+        }
       }
-      return std::make_unique<ConvolutionPlanImpl<F64>>(
-          std::move(fft_plan_variant), kernel, type, method);
+      return std::make_unique<Default::ConvolutionPlanImpl<F64>>(
+          std::move(fft_plan_variant), params, kernel_coeffs);
     }
     catch (const std::exception& e) {
-      spdlog::get("OmniDSP")->error("Default::ConvPlanImpl<F64>: {}", e.what());
+      spdlog::get("OmniDSP")->error(
+          "Error creating Default::ConvolutionPlanImpl<F64>: {}", e.what());
       return OmniExpected<std::unique_ptr<Abstract::ConvolutionPlanImpl<F64>>>(
-          std::unexpect, Status::Failure);
-    }
-  }
-  [[nodiscard]] OmniExpected<
-      std::unique_ptr<Abstract::ConvolutionPlanImpl<C32>>>
-  Backend::create_convolution_plan_impl_c32(
-      const C32Vec& kernel,
-      ConvolutionType type,
-      ConvolutionMethod method) const
-  {
-    try {
-      ConvolutionPlanImpl<C32>::FFTPlanImplVariant fft_plan_variant;
-      if (method == ConvolutionMethod::FFT
-          || (method == ConvolutionMethod::Auto)) {
-        size_t kernel_length = kernel.size();
-        if (kernel_length == 0)
-          return OmniExpected<
-              std::unique_ptr<Abstract::ConvolutionPlanImpl<C32>>>(
-              std::unexpect, Status::InvalidArgument);
-        size_t temp_input_len_for_fft_calc = kernel_length;
-        size_t fft_len = convolution_detail::next_power_of_two(
-            kernel_length + temp_input_len_for_fft_calc - 1);
-        if (fft_len == 0)
-          return OmniExpected<
-              std::unique_ptr<Abstract::ConvolutionPlanImpl<C32>>>(
-              std::unexpect, Status::InvalidArgument);
-        auto cfft_plan_expected = this->create_fft_plan_impl_c32(fft_len);
-        if (!cfft_plan_expected)
-          return OmniExpected<
-              std::unique_ptr<Abstract::ConvolutionPlanImpl<C32>>>(
-              std::unexpect, cfft_plan_expected.error());
-        fft_plan_variant.emplace<std::unique_ptr<Abstract::FFTPlanImpl<C32>>>(
-            std::move(cfft_plan_expected.value()));
-      }
-      return std::make_unique<ConvolutionPlanImpl<C32>>(
-          std::move(fft_plan_variant), kernel, type, method);
-    }
-    catch (const std::exception& e) {
-      spdlog::get("OmniDSP")->error("Default::ConvPlanImpl<C32>: {}", e.what());
-      return OmniExpected<std::unique_ptr<Abstract::ConvolutionPlanImpl<C32>>>(
-          std::unexpect, Status::Failure);
-    }
-  }
-  [[nodiscard]] OmniExpected<
-      std::unique_ptr<Abstract::ConvolutionPlanImpl<C64>>>
-  Backend::create_convolution_plan_impl_c64(
-      const C64Vec& kernel,
-      ConvolutionType type,
-      ConvolutionMethod method) const
-  {
-    try {
-      ConvolutionPlanImpl<C64>::FFTPlanImplVariant fft_plan_variant;
-      if (method == ConvolutionMethod::FFT
-          || (method == ConvolutionMethod::Auto)) {
-        size_t kernel_length = kernel.size();
-        if (kernel_length == 0)
-          return OmniExpected<
-              std::unique_ptr<Abstract::ConvolutionPlanImpl<C64>>>(
-              std::unexpect, Status::InvalidArgument);
-        size_t temp_input_len_for_fft_calc = kernel_length;
-        size_t fft_len = convolution_detail::next_power_of_two(
-            kernel_length + temp_input_len_for_fft_calc - 1);
-        if (fft_len == 0)
-          return OmniExpected<
-              std::unique_ptr<Abstract::ConvolutionPlanImpl<C64>>>(
-              std::unexpect, Status::InvalidArgument);
-        auto cfft_plan_expected = this->create_fft_plan_impl_c64(fft_len);
-        if (!cfft_plan_expected)
-          return OmniExpected<
-              std::unique_ptr<Abstract::ConvolutionPlanImpl<C64>>>(
-              std::unexpect, cfft_plan_expected.error());
-        fft_plan_variant.emplace<std::unique_ptr<Abstract::FFTPlanImpl<C64>>>(
-            std::move(cfft_plan_expected.value()));
-      }
-      return std::make_unique<ConvolutionPlanImpl<C64>>(
-          std::move(fft_plan_variant), kernel, type, method);
-    }
-    catch (const std::exception& e) {
-      spdlog::get("OmniDSP")->error("Default::ConvPlanImpl<C64>: {}", e.what());
-      return OmniExpected<std::unique_ptr<Abstract::ConvolutionPlanImpl<C64>>>(
           std::unexpect, Status::Failure);
     }
   }
 
   [[nodiscard]] OmniExpected<
-      std::unique_ptr<Abstract::CorrelationPlanImpl<F32>>>
-  Backend::create_correlation_plan_impl_f32(
-      const F32Vec& kernel,
-      ConvolutionType type,
-      ConvolutionMethod method) const
+      std::unique_ptr<Abstract::ConvolutionPlanImpl<C32>>>
+  Backend::create_convolution_plan_impl_c32(
+      const Params::Convolution& params,
+      std::span<const C32> kernel_coeffs) const
   {
     try {
-      CorrelationPlanImpl<F32>::FFTPlanImplVariant fft_plan_variant;
-      if (method == ConvolutionMethod::FFT
-          || (method == ConvolutionMethod::Auto)) {
-        size_t kernel_length = kernel.size();
-        if (kernel_length == 0)
-          return OmniExpected<
-              std::unique_ptr<Abstract::CorrelationPlanImpl<F32>>>(
-              std::unexpect, Status::InvalidArgument);
-        size_t temp_input_len_for_fft_calc = kernel_length;
-        size_t fft_len = convolution_detail::next_power_of_two(
-            kernel_length + temp_input_len_for_fft_calc - 1);
-        if (fft_len == 0)
-          return OmniExpected<
-              std::unique_ptr<Abstract::CorrelationPlanImpl<F32>>>(
-              std::unexpect, Status::InvalidArgument);
-        if (fft_len < 2) fft_len = 2;
-        auto rfft_plan_expected = this->create_rfft_plan_impl_f32(fft_len);
-        if (!rfft_plan_expected)
-          return OmniExpected<
-              std::unique_ptr<Abstract::CorrelationPlanImpl<F32>>>(
-              std::unexpect, rfft_plan_expected.error());
-        fft_plan_variant.emplace<std::unique_ptr<Abstract::RFFTPlanImpl<F32>>>(
-            std::move(rfft_plan_expected.value()));
+      Default::ConvolutionPlanImpl<C32>::FFTPlanImplVariant fft_plan_variant;
+      if (params.method_hint_ == ConvolutionMethod::FFT
+          || (params.method_hint_ == ConvolutionMethod::Auto
+              && !kernel_coeffs.empty())) {
+        size_t kernel_len = kernel_coeffs.size();
+        size_t fft_len = params.max_input_length_ + kernel_len - 1;
+        if (params.max_input_length_ == 0 && kernel_len == 0) {
+          fft_len = 0;
+        }
+        else if (params.max_input_length_ == 0 || kernel_len == 0) {
+          fft_len = std::max(params.max_input_length_, kernel_len);
+        }
+
+        if (fft_len > 0) {
+          fft_len = detail::next_power_of_two(fft_len);
+          if (fft_len == 0) {
+            spdlog::get("OmniDSP")->error(
+                "FFT length calculation overflowed for C32 convolution.");
+            return OmniExpected<
+                std::unique_ptr<Abstract::ConvolutionPlanImpl<C32>>>(
+                std::unexpect, Status::InvalidArgument);
+          }
+          auto cfft_plan_expected = this->create_fft_plan_impl_c32(fft_len);
+          if (!cfft_plan_expected) {
+            return OmniExpected<
+                std::unique_ptr<Abstract::ConvolutionPlanImpl<C32>>>(
+                std::unexpect, cfft_plan_expected.error());
+          }
+          fft_plan_variant.emplace<std::unique_ptr<Abstract::FFTPlanImpl<C32>>>(
+              std::move(cfft_plan_expected.value()));
+        }
+        else if (params.method_hint_ == ConvolutionMethod::FFT) {
+          auto cfft_plan_expected = this->create_fft_plan_impl_c32(
+              1);  // CFFT can often handle length 1
+          if (!cfft_plan_expected) {
+            return OmniExpected<
+                std::unique_ptr<Abstract::ConvolutionPlanImpl<C32>>>(
+                std::unexpect, cfft_plan_expected.error());
+          }
+          fft_plan_variant.emplace<std::unique_ptr<Abstract::FFTPlanImpl<C32>>>(
+              std::move(cfft_plan_expected.value()));
+        }
       }
-      return std::make_unique<CorrelationPlanImpl<F32>>(
-          std::move(fft_plan_variant), kernel, type, method);
+      return std::make_unique<Default::ConvolutionPlanImpl<C32>>(
+          std::move(fft_plan_variant), params, kernel_coeffs);
     }
     catch (const std::exception& e) {
-      spdlog::get("OmniDSP")->error("Default::CorrPlanImpl<F32>: {}", e.what());
+      spdlog::get("OmniDSP")->error(
+          "Error creating Default::ConvolutionPlanImpl<C32>: {}", e.what());
+      return OmniExpected<std::unique_ptr<Abstract::ConvolutionPlanImpl<C32>>>(
+          std::unexpect, Status::Failure);
+    }
+  }
+
+  [[nodiscard]] OmniExpected<
+      std::unique_ptr<Abstract::ConvolutionPlanImpl<C64>>>
+  Backend::create_convolution_plan_impl_c64(
+      const Params::Convolution& params,
+      std::span<const C64> kernel_coeffs) const
+  {
+    try {
+      Default::ConvolutionPlanImpl<C64>::FFTPlanImplVariant fft_plan_variant;
+      if (params.method_hint_ == ConvolutionMethod::FFT
+          || (params.method_hint_ == ConvolutionMethod::Auto
+              && !kernel_coeffs.empty())) {
+        size_t kernel_len = kernel_coeffs.size();
+        size_t fft_len = params.max_input_length_ + kernel_len - 1;
+        if (params.max_input_length_ == 0 && kernel_len == 0) {
+          fft_len = 0;
+        }
+        else if (params.max_input_length_ == 0 || kernel_len == 0) {
+          fft_len = std::max(params.max_input_length_, kernel_len);
+        }
+
+        if (fft_len > 0) {
+          fft_len = detail::next_power_of_two(fft_len);
+          if (fft_len == 0) {
+            spdlog::get("OmniDSP")->error(
+                "FFT length calculation overflowed for C64 convolution.");
+            return OmniExpected<
+                std::unique_ptr<Abstract::ConvolutionPlanImpl<C64>>>(
+                std::unexpect, Status::InvalidArgument);
+          }
+          auto cfft_plan_expected = this->create_fft_plan_impl_c64(fft_len);
+          if (!cfft_plan_expected) {
+            return OmniExpected<
+                std::unique_ptr<Abstract::ConvolutionPlanImpl<C64>>>(
+                std::unexpect, cfft_plan_expected.error());
+          }
+          fft_plan_variant.emplace<std::unique_ptr<Abstract::FFTPlanImpl<C64>>>(
+              std::move(cfft_plan_expected.value()));
+        }
+        else if (params.method_hint_ == ConvolutionMethod::FFT) {
+          auto cfft_plan_expected = this->create_fft_plan_impl_c64(1);
+          if (!cfft_plan_expected) {
+            return OmniExpected<
+                std::unique_ptr<Abstract::ConvolutionPlanImpl<C64>>>(
+                std::unexpect, cfft_plan_expected.error());
+          }
+          fft_plan_variant.emplace<std::unique_ptr<Abstract::FFTPlanImpl<C64>>>(
+              std::move(cfft_plan_expected.value()));
+        }
+      }
+      return std::make_unique<Default::ConvolutionPlanImpl<C64>>(
+          std::move(fft_plan_variant), params, kernel_coeffs);
+    }
+    catch (const std::exception& e) {
+      spdlog::get("OmniDSP")->error(
+          "Error creating Default::ConvolutionPlanImpl<C64>: {}", e.what());
+      return OmniExpected<std::unique_ptr<Abstract::ConvolutionPlanImpl<C64>>>(
+          std::unexpect, Status::Failure);
+    }
+  }
+
+  // CorrelationPlanImpl Factories (Reverted to explicit, verbose form)
+  [[nodiscard]] OmniExpected<
+      std::unique_ptr<Abstract::CorrelationPlanImpl<F32>>>
+  Backend::create_correlation_plan_impl_f32(
+      const Params::Correlation& params,
+      std::span<const F32> template_coeffs) const
+  {
+    try {
+      Default::CorrelationPlanImpl<F32>::FFTPlanImplVariant fft_plan_variant;
+      if (params.method_hint_ == ConvolutionMethod::FFT
+          || (params.method_hint_ == ConvolutionMethod::Auto
+              && !template_coeffs.empty())) {
+        size_t template_len = template_coeffs.size();
+        size_t fft_len = params.max_input_length_ + template_len - 1;
+        if (params.max_input_length_ == 0 && template_len == 0) {
+          fft_len = 0;
+        }
+        else if (params.max_input_length_ == 0 || template_len == 0) {
+          fft_len = std::max(params.max_input_length_, template_len);
+        }
+
+        if (fft_len > 0) {
+          fft_len = detail::next_power_of_two(fft_len);
+          if (fft_len == 0) {
+            spdlog::get("OmniDSP")->error(
+                "FFT length calculation overflowed for F32 correlation.");
+            return OmniExpected<
+                std::unique_ptr<Abstract::CorrelationPlanImpl<F32>>>(
+                std::unexpect, Status::InvalidArgument);
+          }
+          if (fft_len < 2) fft_len = 2;
+          auto rfft_plan_expected = this->create_rfft_plan_impl_f32(fft_len);
+          if (!rfft_plan_expected) {
+            return OmniExpected<
+                std::unique_ptr<Abstract::CorrelationPlanImpl<F32>>>(
+                std::unexpect, rfft_plan_expected.error());
+          }
+          fft_plan_variant
+              .emplace<std::unique_ptr<Abstract::RFFTPlanImpl<F32>>>(
+                  std::move(rfft_plan_expected.value()));
+        }
+        else if (params.method_hint_ == ConvolutionMethod::FFT) {
+          auto rfft_plan_expected = this->create_rfft_plan_impl_f32(2);
+          if (!rfft_plan_expected) {
+            return OmniExpected<
+                std::unique_ptr<Abstract::CorrelationPlanImpl<F32>>>(
+                std::unexpect, rfft_plan_expected.error());
+          }
+          fft_plan_variant
+              .emplace<std::unique_ptr<Abstract::RFFTPlanImpl<F32>>>(
+                  std::move(rfft_plan_expected.value()));
+        }
+      }
+      return std::make_unique<Default::CorrelationPlanImpl<F32>>(
+          std::move(fft_plan_variant), params, template_coeffs);
+    }
+    catch (const std::exception& e) {
+      spdlog::get("OmniDSP")->error(
+          "Error creating Default::CorrelationPlanImpl<F32>: {}", e.what());
       return OmniExpected<std::unique_ptr<Abstract::CorrelationPlanImpl<F32>>>(
           std::unexpect, Status::Failure);
     }
   }
+
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::CorrelationPlanImpl<F64>>>
   Backend::create_correlation_plan_impl_f64(
-      const F64Vec& kernel,
-      ConvolutionType type,
-      ConvolutionMethod method) const
+      const Params::Correlation& params,
+      std::span<const F64> template_coeffs) const
   {
     try {
-      CorrelationPlanImpl<F64>::FFTPlanImplVariant fft_plan_variant;
-      if (method == ConvolutionMethod::FFT
-          || (method == ConvolutionMethod::Auto)) {
-        size_t kernel_length = kernel.size();
-        if (kernel_length == 0)
-          return OmniExpected<
-              std::unique_ptr<Abstract::CorrelationPlanImpl<F64>>>(
-              std::unexpect, Status::InvalidArgument);
-        size_t temp_input_len_for_fft_calc = kernel_length;
-        size_t fft_len = convolution_detail::next_power_of_two(
-            kernel_length + temp_input_len_for_fft_calc - 1);
-        if (fft_len == 0)
-          return OmniExpected<
-              std::unique_ptr<Abstract::CorrelationPlanImpl<F64>>>(
-              std::unexpect, Status::InvalidArgument);
-        if (fft_len < 2) fft_len = 2;
-        auto rfft_plan_expected = this->create_rfft_plan_impl_f64(fft_len);
-        if (!rfft_plan_expected)
-          return OmniExpected<
-              std::unique_ptr<Abstract::CorrelationPlanImpl<F64>>>(
-              std::unexpect, rfft_plan_expected.error());
-        fft_plan_variant.emplace<std::unique_ptr<Abstract::RFFTPlanImpl<F64>>>(
-            std::move(rfft_plan_expected.value()));
+      Default::CorrelationPlanImpl<F64>::FFTPlanImplVariant fft_plan_variant;
+      if (params.method_hint_ == ConvolutionMethod::FFT
+          || (params.method_hint_ == ConvolutionMethod::Auto
+              && !template_coeffs.empty())) {
+        size_t template_len = template_coeffs.size();
+        size_t fft_len = params.max_input_length_ + template_len - 1;
+        if (params.max_input_length_ == 0 && template_len == 0) {
+          fft_len = 0;
+        }
+        else if (params.max_input_length_ == 0 || template_len == 0) {
+          fft_len = std::max(params.max_input_length_, template_len);
+        }
+
+        if (fft_len > 0) {
+          fft_len = detail::next_power_of_two(fft_len);
+          if (fft_len == 0) {
+            spdlog::get("OmniDSP")->error(
+                "FFT length calculation overflowed for F64 correlation.");
+            return OmniExpected<
+                std::unique_ptr<Abstract::CorrelationPlanImpl<F64>>>(
+                std::unexpect, Status::InvalidArgument);
+          }
+          if (fft_len < 2) fft_len = 2;
+          auto rfft_plan_expected = this->create_rfft_plan_impl_f64(fft_len);
+          if (!rfft_plan_expected) {
+            return OmniExpected<
+                std::unique_ptr<Abstract::CorrelationPlanImpl<F64>>>(
+                std::unexpect, rfft_plan_expected.error());
+          }
+          fft_plan_variant
+              .emplace<std::unique_ptr<Abstract::RFFTPlanImpl<F64>>>(
+                  std::move(rfft_plan_expected.value()));
+        }
+        else if (params.method_hint_ == ConvolutionMethod::FFT) {
+          auto rfft_plan_expected = this->create_rfft_plan_impl_f64(2);
+          if (!rfft_plan_expected) {
+            return OmniExpected<
+                std::unique_ptr<Abstract::CorrelationPlanImpl<F64>>>(
+                std::unexpect, rfft_plan_expected.error());
+          }
+          fft_plan_variant
+              .emplace<std::unique_ptr<Abstract::RFFTPlanImpl<F64>>>(
+                  std::move(rfft_plan_expected.value()));
+        }
       }
-      return std::make_unique<CorrelationPlanImpl<F64>>(
-          std::move(fft_plan_variant), kernel, type, method);
+      return std::make_unique<Default::CorrelationPlanImpl<F64>>(
+          std::move(fft_plan_variant), params, template_coeffs);
     }
     catch (const std::exception& e) {
-      spdlog::get("OmniDSP")->error("Default::CorrPlanImpl<F64>: {}", e.what());
+      spdlog::get("OmniDSP")->error(
+          "Error creating Default::CorrelationPlanImpl<F64>: {}", e.what());
       return OmniExpected<std::unique_ptr<Abstract::CorrelationPlanImpl<F64>>>(
           std::unexpect, Status::Failure);
     }
   }
+
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::CorrelationPlanImpl<C32>>>
   Backend::create_correlation_plan_impl_c32(
-      const C32Vec& kernel,
-      ConvolutionType type,
-      ConvolutionMethod method) const
+      const Params::Correlation& params,
+      std::span<const C32> template_coeffs) const
   {
     try {
-      CorrelationPlanImpl<C32>::FFTPlanImplVariant fft_plan_variant;
-      if (method == ConvolutionMethod::FFT
-          || (method == ConvolutionMethod::Auto)) {
-        size_t kernel_length = kernel.size();
-        if (kernel_length == 0)
-          return OmniExpected<
-              std::unique_ptr<Abstract::CorrelationPlanImpl<C32>>>(
-              std::unexpect, Status::InvalidArgument);
-        size_t temp_input_len_for_fft_calc = kernel_length;
-        size_t fft_len = convolution_detail::next_power_of_two(
-            kernel_length + temp_input_len_for_fft_calc - 1);
-        if (fft_len == 0)
-          return OmniExpected<
-              std::unique_ptr<Abstract::CorrelationPlanImpl<C32>>>(
-              std::unexpect, Status::InvalidArgument);
-        auto cfft_plan_expected = this->create_fft_plan_impl_c32(fft_len);
-        if (!cfft_plan_expected)
-          return OmniExpected<
-              std::unique_ptr<Abstract::CorrelationPlanImpl<C32>>>(
-              std::unexpect, cfft_plan_expected.error());
-        fft_plan_variant.emplace<std::unique_ptr<Abstract::FFTPlanImpl<C32>>>(
-            std::move(cfft_plan_expected.value()));
+      Default::CorrelationPlanImpl<C32>::FFTPlanImplVariant fft_plan_variant;
+      if (params.method_hint_ == ConvolutionMethod::FFT
+          || (params.method_hint_ == ConvolutionMethod::Auto
+              && !template_coeffs.empty())) {
+        size_t template_len = template_coeffs.size();
+        size_t fft_len = params.max_input_length_ + template_len - 1;
+        if (params.max_input_length_ == 0 && template_len == 0) {
+          fft_len = 0;
+        }
+        else if (params.max_input_length_ == 0 || template_len == 0) {
+          fft_len = std::max(params.max_input_length_, template_len);
+        }
+
+        if (fft_len > 0) {
+          fft_len = detail::next_power_of_two(fft_len);
+          if (fft_len == 0) {
+            spdlog::get("OmniDSP")->error(
+                "FFT length calculation overflowed for C32 correlation.");
+            return OmniExpected<
+                std::unique_ptr<Abstract::CorrelationPlanImpl<C32>>>(
+                std::unexpect, Status::InvalidArgument);
+          }
+          auto cfft_plan_expected = this->create_fft_plan_impl_c32(fft_len);
+          if (!cfft_plan_expected) {
+            return OmniExpected<
+                std::unique_ptr<Abstract::CorrelationPlanImpl<C32>>>(
+                std::unexpect, cfft_plan_expected.error());
+          }
+          fft_plan_variant.emplace<std::unique_ptr<Abstract::FFTPlanImpl<C32>>>(
+              std::move(cfft_plan_expected.value()));
+        }
+        else if (params.method_hint_ == ConvolutionMethod::FFT) {
+          auto cfft_plan_expected = this->create_fft_plan_impl_c32(1);
+          if (!cfft_plan_expected) {
+            return OmniExpected<
+                std::unique_ptr<Abstract::CorrelationPlanImpl<C32>>>(
+                std::unexpect, cfft_plan_expected.error());
+          }
+          fft_plan_variant.emplace<std::unique_ptr<Abstract::FFTPlanImpl<C32>>>(
+              std::move(cfft_plan_expected.value()));
+        }
       }
-      return std::make_unique<CorrelationPlanImpl<C32>>(
-          std::move(fft_plan_variant), kernel, type, method);
+      return std::make_unique<Default::CorrelationPlanImpl<C32>>(
+          std::move(fft_plan_variant), params, template_coeffs);
     }
     catch (const std::exception& e) {
-      spdlog::get("OmniDSP")->error("Default::CorrPlanImpl<C32>: {}", e.what());
+      spdlog::get("OmniDSP")->error(
+          "Error creating Default::CorrelationPlanImpl<C32>: {}", e.what());
       return OmniExpected<std::unique_ptr<Abstract::CorrelationPlanImpl<C32>>>(
           std::unexpect, Status::Failure);
     }
   }
+
   [[nodiscard]] OmniExpected<
       std::unique_ptr<Abstract::CorrelationPlanImpl<C64>>>
   Backend::create_correlation_plan_impl_c64(
-      const C64Vec& kernel,
-      ConvolutionType type,
-      ConvolutionMethod method) const
+      const Params::Correlation& params,
+      std::span<const C64> template_coeffs) const
   {
     try {
-      CorrelationPlanImpl<C64>::FFTPlanImplVariant fft_plan_variant;
-      if (method == ConvolutionMethod::FFT
-          || (method == ConvolutionMethod::Auto)) {
-        size_t kernel_length = kernel.size();
-        if (kernel_length == 0)
-          return OmniExpected<
-              std::unique_ptr<Abstract::CorrelationPlanImpl<C64>>>(
-              std::unexpect, Status::InvalidArgument);
-        size_t temp_input_len_for_fft_calc = kernel_length;
-        size_t fft_len = convolution_detail::next_power_of_two(
-            kernel_length + temp_input_len_for_fft_calc - 1);
-        if (fft_len == 0)
-          return OmniExpected<
-              std::unique_ptr<Abstract::CorrelationPlanImpl<C64>>>(
-              std::unexpect, Status::InvalidArgument);
-        auto cfft_plan_expected = this->create_fft_plan_impl_c64(fft_len);
-        if (!cfft_plan_expected)
-          return OmniExpected<
-              std::unique_ptr<Abstract::CorrelationPlanImpl<C64>>>(
-              std::unexpect, cfft_plan_expected.error());
-        fft_plan_variant.emplace<std::unique_ptr<Abstract::FFTPlanImpl<C64>>>(
-            std::move(cfft_plan_expected.value()));
+      Default::CorrelationPlanImpl<C64>::FFTPlanImplVariant fft_plan_variant;
+      if (params.method_hint_ == ConvolutionMethod::FFT
+          || (params.method_hint_ == ConvolutionMethod::Auto
+              && !template_coeffs.empty())) {
+        size_t template_len = template_coeffs.size();
+        size_t fft_len = params.max_input_length_ + template_len - 1;
+        if (params.max_input_length_ == 0 && template_len == 0) {
+          fft_len = 0;
+        }
+        else if (params.max_input_length_ == 0 || template_len == 0) {
+          fft_len = std::max(params.max_input_length_, template_len);
+        }
+
+        if (fft_len > 0) {
+          fft_len = detail::next_power_of_two(fft_len);
+          if (fft_len == 0) {
+            spdlog::get("OmniDSP")->error(
+                "FFT length calculation overflowed for C64 correlation.");
+            return OmniExpected<
+                std::unique_ptr<Abstract::CorrelationPlanImpl<C64>>>(
+                std::unexpect, Status::InvalidArgument);
+          }
+          auto cfft_plan_expected = this->create_fft_plan_impl_c64(fft_len);
+          if (!cfft_plan_expected) {
+            return OmniExpected<
+                std::unique_ptr<Abstract::CorrelationPlanImpl<C64>>>(
+                std::unexpect, cfft_plan_expected.error());
+          }
+          fft_plan_variant.emplace<std::unique_ptr<Abstract::FFTPlanImpl<C64>>>(
+              std::move(cfft_plan_expected.value()));
+        }
+        else if (params.method_hint_ == ConvolutionMethod::FFT) {
+          auto cfft_plan_expected = this->create_fft_plan_impl_c64(1);
+          if (!cfft_plan_expected) {
+            return OmniExpected<
+                std::unique_ptr<Abstract::CorrelationPlanImpl<C64>>>(
+                std::unexpect, cfft_plan_expected.error());
+          }
+          fft_plan_variant.emplace<std::unique_ptr<Abstract::FFTPlanImpl<C64>>>(
+              std::move(cfft_plan_expected.value()));
+        }
       }
-      return std::make_unique<CorrelationPlanImpl<C64>>(
-          std::move(fft_plan_variant), kernel, type, method);
+      return std::make_unique<Default::CorrelationPlanImpl<C64>>(
+          std::move(fft_plan_variant), params, template_coeffs);
     }
     catch (const std::exception& e) {
-      spdlog::get("OmniDSP")->error("Default::CorrPlanImpl<C64>: {}", e.what());
+      spdlog::get("OmniDSP")->error(
+          "Error creating Default::CorrelationPlanImpl<C64>: {}", e.what());
       return OmniExpected<std::unique_ptr<Abstract::CorrelationPlanImpl<C64>>>(
           std::unexpect, Status::Failure);
     }

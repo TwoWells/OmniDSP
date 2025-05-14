@@ -11,11 +11,11 @@
 #include <stdexcept>  // For std::invalid_argument
 #include <string>     // For std::to_string, string concatenation
 
-namespace OmniDSP {
+namespace OmniDSP::Params {
 
   // --- Params::Convolution Implementation ---
 
-  Params::Convolution::Params::Convolution(
+  Convolution::Convolution(
       size_t p_max_input_length,
       size_t p_kernel_length,
       ConvolutionType p_type,
@@ -58,7 +58,7 @@ namespace OmniDSP {
     }
   }
 
-  Params::Convolution& Params::Convolution::max_input_length(size_t val)
+  Convolution& Convolution::max_input_length(size_t val)
   {
     auto logger = spdlog::get("OmniDSP");
     if (!logger) {
@@ -76,7 +76,7 @@ namespace OmniDSP {
     return *this;
   }
 
-  Params::Convolution& Params::Convolution::kernel_length(size_t val)
+  Convolution& Convolution::kernel_length(size_t val)
   {
     auto logger = spdlog::get("OmniDSP");
     if (!logger) {
@@ -93,7 +93,7 @@ namespace OmniDSP {
     return *this;
   }
 
-  Params::Convolution& Params::Convolution::type(ConvolutionType val)
+  Convolution& Convolution::type(ConvolutionType val)
   {
     type_ = val;
     auto logger = spdlog::get("OmniDSP");
@@ -105,7 +105,7 @@ namespace OmniDSP {
     return *this;
   }
 
-  Params::Convolution& Params::Convolution::method_hint(ConvolutionMethod val)
+  Convolution& Convolution::method_hint(ConvolutionMethod val)
   {
     method_hint_ = val;
     auto logger = spdlog::get("OmniDSP");
@@ -120,7 +120,7 @@ namespace OmniDSP {
 
   // --- Params::Correlation Implementation ---
 
-  Params::Correlation::Params::Correlation(
+  Correlation::Correlation(
       size_t p_max_input_length,
       size_t p_template_length,
       ConvolutionType p_type,
@@ -160,7 +160,7 @@ namespace OmniDSP {
     }
   }
 
-  Params::Correlation& Params::Correlation::max_input_length(size_t val)
+  Correlation& Correlation::max_input_length(size_t val)
   {
     auto logger = spdlog::get("OmniDSP");
     if (!logger) {
@@ -178,7 +178,7 @@ namespace OmniDSP {
     return *this;
   }
 
-  Params::Correlation& Params::Correlation::template_length(size_t val)
+  Correlation& Correlation::template_length(size_t val)
   {
     auto logger = spdlog::get("OmniDSP");
     if (!logger) {
@@ -196,7 +196,7 @@ namespace OmniDSP {
     return *this;
   }
 
-  Params::Correlation& Params::Correlation::type(ConvolutionType val)
+  Correlation& Correlation::type(ConvolutionType val)
   {
     type_ = val;
     auto logger = spdlog::get("OmniDSP");
@@ -208,7 +208,7 @@ namespace OmniDSP {
     return *this;
   }
 
-  Params::Correlation& Params::Correlation::method_hint(ConvolutionMethod val)
+  Correlation& Correlation::method_hint(ConvolutionMethod val)
   {
     method_hint_ = val;
     auto logger = spdlog::get("OmniDSP");
@@ -221,4 +221,4 @@ namespace OmniDSP {
     return *this;
   }
 
-}  // namespace OmniDSP
+}  // namespace OmniDSP::Params

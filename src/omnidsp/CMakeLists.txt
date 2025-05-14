@@ -43,12 +43,14 @@ set(OMNIDSP_BACKEND_ONEMKL_ENABLED 0)
 set(OMNIDSP_BACKEND_INTELIPP_ENABLED 0)
 
 # --- Define Core Library Sources ---
+
 set(OMNIDSP_CORE_HEADERS
     "${CMAKE_SOURCE_DIR}/include/OmniDSP/convolution.hpp"
     "${CMAKE_SOURCE_DIR}/include/OmniDSP/core_types.hpp"
     "${CMAKE_SOURCE_DIR}/include/OmniDSP/cqt.hpp"
     "${CMAKE_SOURCE_DIR}/include/OmniDSP/fft.hpp"
-    "${CMAKE_SOURCE_DIR}/include/OmniDSP/filter.hpp"
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/fir_filter.hpp"
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/iir_filter.hpp"
     "${CMAKE_SOURCE_DIR}/include/OmniDSP/omnidsp.hpp"
     "${CMAKE_SOURCE_DIR}/include/OmniDSP/resample.hpp"
     "${CMAKE_SOURCE_DIR}/include/OmniDSP/utils.hpp"
@@ -63,13 +65,25 @@ set(OMNIDSP_CORE_HEADERS
     # include/OmniDSP/types
     "${CMAKE_SOURCE_DIR}/include/OmniDSP/types/convolution.hpp"
     "${CMAKE_SOURCE_DIR}/include/OmniDSP/types/filter.hpp"
+    # include/OmniDSP/coefs
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/coefs/fir_filter.hpp"
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/coefs/iir_filter.hpp"
+    # include/OmniDSP/design
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/design/cqt.hpp"
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/design/fir_filter.hpp"
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/design/iir_filter.hpp"
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/design/resample.hpp"
 )
+
 set(OMNIDSP_CORE_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/omnidsp.cpp" # Main class implementation
     # Params implementations (constructors)
-    "${CMAKE_CURRENT_SOURCE_DIR}/params/fir_filter.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/params/resample.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/params/convolution.cpp" # Added this line
     "${CMAKE_CURRENT_SOURCE_DIR}/params/cqt.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/params/fft.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/params/fir_filter.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/params/iir_filter.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/params/resample.cpp"
     # Interface implementations (Pimpl wrappers)
     "${CMAKE_CURRENT_SOURCE_DIR}/interface/convolution.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/interface/cqt.cpp"

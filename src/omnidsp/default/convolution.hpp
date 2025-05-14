@@ -1,25 +1,20 @@
 #ifndef OMNIDSP_DEFAULT_CONVOLUTION_HPP
 #define OMNIDSP_DEFAULT_CONVOLUTION_HPP
 
-#include <OmniDSP/convolution.hpp>  // For ConvolutionType, ConvolutionMethod
-#include <OmniDSP/core_types.hpp>   // For Status, F32, C32, etc.
+#include <OmniDSP/core_types.hpp>  // For Status, F32, C32, etc., Utils::*
+#include <OmniDSP/params/convolution.hpp>  // For Params::Convolution, Params::Correlation
 #include <complex>
 #include <memory>     // For std::unique_ptr
 #include <span>       // For std::span
-#include <stdexcept>  // For std::logic_error
+#include <stdexcept>  // For std::logic_error, std::invalid_argument
 #include <variant>    // Include for std::variant
 #include <vector>
 
-#include "../interface/backend.hpp"  // Defines ConvolutionPlanImpl/CorrelationPlanImpl and AbstractBackend
+#include "../interface/backend.hpp"  // Defines Abstract::ConvolutionPlanImpl/CorrelationPlanImpl
 
 // Forward declare FFT plan impl BASE classes used internally
 // These are defined in interface/backend.hpp
-// namespace OmniDSP::backend {
-//   template <typename T_Complex>
-//   class FFTPlanImpl;
-//   template <typename T_Real>
-//   class RFFTPlanImpl;
-// }  // namespace OmniDSP::backend
+// (Already forward-declared or included via backend.hpp)
 
 namespace OmniDSP::Default {
 
@@ -31,14 +26,10 @@ namespace OmniDSP::Default {
    */
   template <typename T>
   class ConvolutionPlanImpl final : public Abstract::ConvolutionPlanImpl<T> {
-    // Define complex type corresponding to T
-    // *** UPDATED Namespace ***
     using T_Complex = Utils::GetComplexType<T>;
-    // Define real type corresponding to T
-    // *** UPDATED Namespace ***
     using T_Real = Utils::GetRealType<T>;
 
-   public:  // <-- Make variant public
+   public:
     // Define the variant type to hold a pointer to the appropriate base FFT
     // plan implementation
     using FFTPlanImplVariant = std::variant<
@@ -46,33 +37,31 @@ namespace OmniDSP::Default {
         std::unique_ptr<Abstract::RFFTPlanImpl<T_Real>>     // For real T
         >;
 
-    // public constructor and methods remain here
    public:
     /**
      * @brief Constructor.
      * @param fft_plan_variant Variant holding the unique_ptr to the appropriate
      * FFT plan implementation.
-     * @param kernel The convolution kernel.
-     * @param type The convolution boundary type (Full, Same, Valid).
-     * @param method The requested convolution method (Auto, Direct, FFT).
-     * Currently only FFT is implemented here.
-     * @throws std::invalid_argument if kernel is empty or fft_plan_variant
-     * holds null.
-     * @throws std::length_error if calculated FFT length overflows.
+     * @param params The convolution parameters.
+     * @param kernel_coeffs The convolution kernel coefficients.
+     * @throws std::invalid_argument if kernel_coeffs is empty, fft_plan_variant
+     * holds null, or if the provided FFT plan's length is insufficient for
+     * the operation defined by params and kernel_coeffs.
      * @throws std::runtime_error on internal errors (e.g., allocation).
      */
     ConvolutionPlanImpl(
         FFTPlanImplVariant&& fft_plan_variant,
-        const std::vector<T>& kernel,
-        ConvolutionType type,
-        ConvolutionMethod method);
-    ~ConvolutionPlanImpl() override = default;  // Defined here
+        const Params::Convolution& params,
+        std::span<const T> kernel_coeffs);
+
+    ~ConvolutionPlanImpl() override = default;
 
     Status execute(
         std::span<const T> input, std::span<T> output) const override;
     size_t get_kernel_length() const override;
     ConvolutionType get_type() const override;
-    ConvolutionMethod get_method() const override;
+    ConvolutionMethod get_method()
+        const override;  // Will return method_hint from params
     size_t get_output_length(size_t input_length) const override;
     std::span<const T> get_kernel() const override;
 
@@ -84,16 +73,15 @@ namespace OmniDSP::Default {
 
    private:
     ConvolutionType type_;
-    ConvolutionMethod method_;
-    std::vector<T> original_kernel_;
+    ConvolutionMethod method_hint_;  // Stores the hint from Params::Convolution
+    std::vector<T>
+        original_kernel_;  // Stores a copy of the kernel coefficients
     size_t kernel_length_;
-    size_t fft_length_;  // Pre-calculated FFT length based on kernel
+    size_t fft_length_;        // FFT length derived from the provided FFT plan
+    size_t max_input_length_;  // Stored from params for validation if needed
 
-    // Store the FFT of the (padded, reversed) kernel
     std::vector<T_Complex> kernel_fft_;
-
-    // Single variant to hold the appropriate FFT plan implementation pointer
-    FFTPlanImplVariant fft_plan_impl_variant_;  // Now stores the passed-in plan
+    FFTPlanImplVariant fft_plan_impl_variant_;
 
     // Temporary Buffers
     mutable std::unique_ptr<T[]> input_padded_;
@@ -110,48 +98,39 @@ namespace OmniDSP::Default {
    */
   template <typename T>
   class CorrelationPlanImpl final : public Abstract::CorrelationPlanImpl<T> {
-    // Define complex type corresponding to T
-    // *** UPDATED Namespace ***
     using T_Complex = Utils::GetComplexType<T>;
-    // Define real type corresponding to T
-    // *** UPDATED Namespace ***
     using T_Real = Utils::GetRealType<T>;
 
-   public:  // <-- Make variant public
-    // Define the variant type to hold a pointer to the appropriate base FFT
-    // plan implementation
+   public:
     using FFTPlanImplVariant = std::variant<
-        std::unique_ptr<Abstract::FFTPlanImpl<T_Complex>>,  // For complex T
-        std::unique_ptr<Abstract::RFFTPlanImpl<T_Real>>     // For real T
-        >;
+        std::unique_ptr<Abstract::FFTPlanImpl<T_Complex>>,
+        std::unique_ptr<Abstract::RFFTPlanImpl<T_Real>>>;
 
-    // public constructor and methods remain here
    public:
     /**
      * @brief Constructor.
      * @param fft_plan_variant Variant holding the unique_ptr to the appropriate
      * FFT plan implementation.
-     * @param kernel The correlation kernel (template).
-     * @param type The correlation boundary type (Full, Same, Valid).
-     * @param method The requested correlation method (Auto, Direct, FFT).
-     * Currently only FFT is implemented here.
-     * @throws std::invalid_argument if kernel is empty or fft_plan_variant
-     * holds null.
-     * @throws std::length_error if calculated FFT length overflows.
+     * @param params The correlation parameters.
+     * @param template_coeffs The correlation template coefficients.
+     * @throws std::invalid_argument if template_coeffs is empty,
+     * fft_plan_variant holds null, or if the provided FFT plan's length is
+     * insufficient for the operation defined by params and template_coeffs.
      * @throws std::runtime_error on internal errors (e.g., allocation).
      */
     CorrelationPlanImpl(
         FFTPlanImplVariant&& fft_plan_variant,
-        const std::vector<T>& kernel,
-        ConvolutionType type,
-        ConvolutionMethod method);
-    ~CorrelationPlanImpl() override = default;  // Defined here
+        const Params::Correlation& params,
+        std::span<const T> template_coeffs);
+
+    ~CorrelationPlanImpl() override = default;
 
     Status execute(
         std::span<const T> input, std::span<T> output) const override;
     size_t get_template_length() const override;
     ConvolutionType get_type() const override;
-    ConvolutionMethod get_method() const override;
+    ConvolutionMethod get_method()
+        const override;  // Will return method_hint from params
     size_t get_output_length(size_t input_length) const override;
     std::span<const T> get_template() const override;
 
@@ -163,16 +142,16 @@ namespace OmniDSP::Default {
 
    private:
     ConvolutionType type_;
-    ConvolutionMethod method_;
-    std::vector<T> original_kernel_;  // Stores the original template
-    size_t kernel_length_;
-    size_t fft_length_;
+    ConvolutionMethod method_hint_;  // Stores the hint from Params::Correlation
+    std::vector<T>
+        original_template_;  // Stores a copy of the template coefficients
+    size_t template_length_;
+    size_t fft_length_;        // FFT length derived from the provided FFT plan
+    size_t max_input_length_;  // Stored from params for validation if needed
 
-    // Store the CONJUGATE of the FFT of the (padded) kernel
-    std::vector<T_Complex> kernel_fft_conj_;
-
-    // Single variant to hold the appropriate FFT plan implementation pointer
-    FFTPlanImplVariant fft_plan_impl_variant_;  // Now stores the passed-in plan
+    std::vector<T_Complex>
+        template_fft_conj_;  // Stores conjugate of template FFT
+    FFTPlanImplVariant fft_plan_impl_variant_;
 
     // Temporary Buffers
     mutable std::unique_ptr<T[]> input_padded_;
@@ -182,52 +161,11 @@ namespace OmniDSP::Default {
   };
 
   // --- Explicit Template Instantiations (Declaration) ---
-  extern template class ConvolutionPlanImpl<F32>;
-  extern template class ConvolutionPlanImpl<F64>;
-  extern template class ConvolutionPlanImpl<C32>;
-  extern template class ConvolutionPlanImpl<C64>;
-
-  extern template class CorrelationPlanImpl<F32>;
-  extern template class CorrelationPlanImpl<F64>;
-  extern template class CorrelationPlanImpl<C32>;
-  extern template class CorrelationPlanImpl<C64>;
-
-  // --- BackendType Factory Function Declarations (Implementation in
-  // backend.cpp)
-  // --- These declarations remain unchanged (match Backend)
-  [[nodiscard]] OmniExpected<
-      std::unique_ptr<Abstract::ConvolutionPlanImpl<F32>>>
-  create_default_convolution_plan_impl_f32(
-      const F32Vec& kernel, ConvolutionType type, ConvolutionMethod method);
-  [[nodiscard]] OmniExpected<
-      std::unique_ptr<Abstract::ConvolutionPlanImpl<F64>>>
-  create_default_convolution_plan_impl_f64(
-      const F64Vec& kernel, ConvolutionType type, ConvolutionMethod method);
-  [[nodiscard]] OmniExpected<
-      std::unique_ptr<Abstract::ConvolutionPlanImpl<C32>>>
-  create_default_convolution_plan_impl_c32(
-      const C32Vec& kernel, ConvolutionType type, ConvolutionMethod method);
-  [[nodiscard]] OmniExpected<
-      std::unique_ptr<Abstract::ConvolutionPlanImpl<C64>>>
-  create_default_convolution_plan_impl_c64(
-      const C64Vec& kernel, ConvolutionType type, ConvolutionMethod method);
-
-  [[nodiscard]] OmniExpected<
-      std::unique_ptr<Abstract::CorrelationPlanImpl<F32>>>
-  create_default_correlation_plan_impl_f32(
-      const F32Vec& kernel, ConvolutionType type, ConvolutionMethod method);
-  [[nodiscard]] OmniExpected<
-      std::unique_ptr<Abstract::CorrelationPlanImpl<F64>>>
-  create_default_correlation_plan_impl_f64(
-      const F64Vec& kernel, ConvolutionType type, ConvolutionMethod method);
-  [[nodiscard]] OmniExpected<
-      std::unique_ptr<Abstract::CorrelationPlanImpl<C32>>>
-  create_default_correlation_plan_impl_c32(
-      const C32Vec& kernel, ConvolutionType type, ConvolutionMethod method);
-  [[nodiscard]] OmniExpected<
-      std::unique_ptr<Abstract::CorrelationPlanImpl<C64>>>
-  create_default_correlation_plan_impl_c64(
-      const C64Vec& kernel, ConvolutionType type, ConvolutionMethod method);
+  // These are typically done in the .cpp file if not header-only.
+  // If you need them exported from a DLL, they might be here.
+  // For now, assuming they will be in the .cpp file.
+  // extern template class ConvolutionPlanImpl<F32>;
+  // ... and so on for other types and CorrelationPlanImpl
 
 }  // namespace OmniDSP::Default
 
