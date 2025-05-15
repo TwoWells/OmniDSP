@@ -7,11 +7,16 @@
 #define OMNIDSP_PARAMS_RESAMPLE_HPP
 
 #include <optional>  // Not strictly needed for current members, but good practice for Params structs
+#include <ostream>  // For std::ostream (needed for operator<<)
 #include <string>   // For std::string in validation messages
 #include <utility>  // For std::move
 
 #include "OmniDSP/core_types.hpp"  // For OMNIDSP_EXPORT
-#include "OmniDSP/window.hpp"      // For WindowSetup, WindowType, WindowParams
+#include "OmniDSP/window.hpp"  // For WindowSetup, Type::Window, WindowParams, and operator<<(WindowSetup)
+
+// Include fmt headers for custom formatter specialization
+#include <fmt/core.h>     // For basic formatting
+#include <fmt/ostream.h>  // Specifically for ostream_formatter
 
 // spdlog include is deferred to .cpp as definitions are moved there.
 
@@ -21,7 +26,7 @@ namespace OmniDSP::Params {
    * @brief Parameters for specifying a resampling operation.
    *
    * This structure is typically used as input to a utility function
-   * (e.g., `OmniDSP::Utils::create_spec`) which then calculates a full
+   * (e.g., `OmniDSP::Utils::create_design`) which then calculates a full
    * `OmniDSP::ResampleSpec`. The prototype anti-aliasing/anti-imaging
    * filter's characteristics (like order) will be determined based on these
    * parameters, particularly the quality setting and resampling ratio.
@@ -40,8 +45,8 @@ namespace OmniDSP::Params {
         window_setup_;  ///< Windowing function setup to be used for designing
                         ///< the internal prototype FIR filter. The `length`
                         ///< field of this `WindowSetup` is typically ignored by
-                        ///< `Utils::create_spec`, as the filter order (and thus
-                        ///< window length) is determined by the resampling
+                        ///< `Utils::create_design`, as the filter order (and
+                        ///< thus window length) is determined by the resampling
                         ///< parameters and quality. The user should specify the
                         ///< window type and its specific parameters (e.g., beta
                         ///< for Kaiser).
@@ -60,7 +65,7 @@ namespace OmniDSP::Params {
         double p_output_rate,
         int p_quality,
         WindowSetup p_window_setup
-        = WindowSetup{WindowType::Kaiser, 0, WindowParams{{"beta", 5.0}}});
+        = WindowSetup{Type::Window::Kaiser, 0, WindowParams{{"beta", 5.0}}});
 
     // --- Fluent Setters (Declarations) ---
 
@@ -97,6 +102,29 @@ namespace OmniDSP::Params {
     Resample& window_setup(WindowSetup val);
   };
 
+  /**
+   * @brief Overloads the << operator for easy printing/logging of
+   * Params::Resample.
+   * @param os The output stream.
+   * @param params The Params::Resample object to print.
+   * @return A reference to the output stream.
+   */
+  inline std::ostream& operator<<(std::ostream& os, const Resample& params)
+  {
+    os << "Params::Resample(InputRate: " << params.input_rate_
+       << ", OutputRate: " << params.output_rate_
+       << ", Quality: " << params.quality_ << ", Window: "
+       << params.window_setup_  // Relies on WindowSetup's operator<<
+       << ")";
+    return os;
+  }
+
 }  // namespace OmniDSP::Params
+
+// Specialization of fmt::formatter for OmniDSP::Params::Resample
+// This allows spdlog (which uses fmtlib) to format Resample objects
+// by using the operator<< we defined.
+template <>
+struct fmt::formatter<OmniDSP::Params::Resample> : fmt::ostream_formatter {};
 
 #endif  // OMNIDSP_PARAMS_RESAMPLE_HPP

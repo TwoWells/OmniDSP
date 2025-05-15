@@ -16,14 +16,18 @@
 
 // Public API headers (needed for types used in method signatures and for public
 // Plan classes)
-#include <OmniDSP/convolution.hpp>  // For ConvolutionPlan
-#include <OmniDSP/core_types.hpp>   // For F32, F64, Status, OmniExpected etc.
-#include <OmniDSP/cqt.hpp>          // For CQTPlan
-#include <OmniDSP/fft.hpp>          // For FFTPlan, RFFTPlan
-#include <OmniDSP/fir_filter.hpp>  // For FIRFilterPlan, Design::FIRFilter, Coefs::FIRFilter
-#include <OmniDSP/iir_filter.hpp>  // For IIRFilterPlan, Design::IIRFilter, Coefs::IIRFilterSOS
-#include <OmniDSP/resample.hpp>  // For ResamplePlan, Design::Resample
-#include <OmniDSP/window.hpp>  // For WindowSetup, WindowParams, and the free OmniDSP::generate_window
+
+#include "OmniDSP/coefs/fir_filter.hpp"  // For FIRFilterPlan, Design::FIRFilter, Coefs::FIRFilter
+#include "OmniDSP/coefs/iir_filter.hpp"  // For IIRFilterPlan, Design::IIRFilter, Coefs::IIRFilterSOS
+#include "OmniDSP/core_types.hpp"  // For F32, F64, Status, OmniExpected etc.
+#include "OmniDSP/plan/convolution.hpp"  // For Plan::Convolution, Plan::Correlation
+#include "OmniDSP/plan/fft.hpp"          // For Plan::FFT, Plan::RFFT
+#include "OmniDSP/processor/cqt.hpp"  // For Processor::CQT
+                                      //
+#include "OmniDSP/design/fir_filter.hpp"  // For FIRFilterPlan, Design::FIRFilter, Coefs::FIRFilter
+#include "OmniDSP/design/iir_filter.hpp"  // For IIRFilterPlan, Design::IIRFilter, Coefs::IIRFilterSOS
+#include "OmniDSP/design/resample.hpp"  // For ResamplePlan, Design::Resample
+#include "OmniDSP/window.hpp"  // For WindowSetup, WindowParams, and the free OmniDSP::generate_window
 
 // Standard library headers
 #include <algorithm>
@@ -112,7 +116,7 @@ namespace OmniDSP::Default {
     if (!pimpl_expected) {
       return OmniExpected<F32Vec>(std::unexpect, pimpl_expected.error());
     }
-    // The public ConvolutionPlan::create now also takes Params and span.
+    // The public Plan::Convolution::create now also takes Params and span.
     // For one-off, we are directly using the Impl.
     auto plan_impl = std::move(pimpl_expected.value());
     size_t output_len = plan_impl->get_output_length(input.size());
@@ -303,10 +307,10 @@ namespace OmniDSP::Default {
       return OmniExpected<C32Vec>(std::unexpect, pimpl_expected.error());
     }
     auto plan
-        = FFTPlan<C32>::create_from_impl(std::move(pimpl_expected.value()));
+        = Plan::FFT<C32>::create_from_impl(std::move(pimpl_expected.value()));
     if (!plan) {
       spdlog::get("OmniDSP")->error(
-          "Default::fft_c32: Failed to create public FFTPlan from impl.");
+          "Default::fft_c32: Failed to create public Plan::FFT from impl.");
       return OmniExpected<C32Vec>(std::unexpect, OmniStatus::Failure);
     }
 
@@ -325,10 +329,10 @@ namespace OmniDSP::Default {
       return OmniExpected<C64Vec>(std::unexpect, pimpl_expected.error());
     }
     auto plan
-        = FFTPlan<C64>::create_from_impl(std::move(pimpl_expected.value()));
+        = Plan::FFT<C64>::create_from_impl(std::move(pimpl_expected.value()));
     if (!plan) {
       spdlog::get("OmniDSP")->error(
-          "Default::fft_c64: Failed to create public FFTPlan from impl.");
+          "Default::fft_c64: Failed to create public Plan::FFT from impl.");
       return OmniExpected<C64Vec>(std::unexpect, OmniStatus::Failure);
     }
 
@@ -348,10 +352,10 @@ namespace OmniDSP::Default {
       return OmniExpected<C32Vec>(std::unexpect, pimpl_expected.error());
     }
     auto plan
-        = FFTPlan<C32>::create_from_impl(std::move(pimpl_expected.value()));
+        = Plan::FFT<C32>::create_from_impl(std::move(pimpl_expected.value()));
     if (!plan) {
       spdlog::get("OmniDSP")->error(
-          "Default::ifft_c32: Failed to create public FFTPlan from impl.");
+          "Default::ifft_c32: Failed to create public Plan::FFT from impl.");
       return OmniExpected<C32Vec>(std::unexpect, OmniStatus::Failure);
     }
 
@@ -371,10 +375,10 @@ namespace OmniDSP::Default {
       return OmniExpected<C64Vec>(std::unexpect, pimpl_expected.error());
     }
     auto plan
-        = FFTPlan<C64>::create_from_impl(std::move(pimpl_expected.value()));
+        = Plan::FFT<C64>::create_from_impl(std::move(pimpl_expected.value()));
     if (!plan) {
       spdlog::get("OmniDSP")->error(
-          "Default::ifft_c64: Failed to create public FFTPlan from impl.");
+          "Default::ifft_c64: Failed to create public Plan::FFT from impl.");
       return OmniExpected<C64Vec>(std::unexpect, OmniStatus::Failure);
     }
 
@@ -394,10 +398,10 @@ namespace OmniDSP::Default {
       return OmniExpected<C32Vec>(std::unexpect, pimpl_expected.error());
     }
     auto plan
-        = RFFTPlan<F32>::create_from_impl(std::move(pimpl_expected.value()));
+        = Plan::RFFT<F32>::create_from_impl(std::move(pimpl_expected.value()));
     if (!plan) {
       spdlog::get("OmniDSP")->error(
-          "Default::rfft_f32: Failed to create public RFFTPlan from impl.");
+          "Default::rfft_f32: Failed to create public Plan::RFFT from impl.");
       return OmniExpected<C32Vec>(std::unexpect, OmniStatus::Failure);
     }
 
@@ -418,10 +422,10 @@ namespace OmniDSP::Default {
       return OmniExpected<C64Vec>(std::unexpect, pimpl_expected.error());
     }
     auto plan
-        = RFFTPlan<F64>::create_from_impl(std::move(pimpl_expected.value()));
+        = Plan::RFFT<F64>::create_from_impl(std::move(pimpl_expected.value()));
     if (!plan) {
       spdlog::get("OmniDSP")->error(
-          "Default::rfft_f64: Failed to create public RFFTPlan from impl.");
+          "Default::rfft_f64: Failed to create public Plan::RFFT from impl.");
       return OmniExpected<C64Vec>(std::unexpect, OmniStatus::Failure);
     }
 
@@ -458,10 +462,10 @@ namespace OmniDSP::Default {
       return OmniExpected<F32Vec>(std::unexpect, pimpl_expected.error());
     }
     auto plan
-        = RFFTPlan<F32>::create_from_impl(std::move(pimpl_expected.value()));
+        = Plan::RFFT<F32>::create_from_impl(std::move(pimpl_expected.value()));
     if (!plan) {
       spdlog::get("OmniDSP")->error(
-          "Default::irfft_c32: Failed to create public RFFTPlan from impl.");
+          "Default::irfft_c32: Failed to create public Plan::RFFT from impl.");
       return OmniExpected<F32Vec>(std::unexpect, OmniStatus::Failure);
     }
 
@@ -497,10 +501,10 @@ namespace OmniDSP::Default {
       return OmniExpected<F64Vec>(std::unexpect, pimpl_expected.error());
     }
     auto plan
-        = RFFTPlan<F64>::create_from_impl(std::move(pimpl_expected.value()));
+        = Plan::RFFT<F64>::create_from_impl(std::move(pimpl_expected.value()));
     if (!plan) {
       spdlog::get("OmniDSP")->error(
-          "Default::irfft_c64: Failed to create public RFFTPlan from impl.");
+          "Default::irfft_c64: Failed to create public Plan::RFFT from impl.");
       return OmniExpected<F64Vec>(std::unexpect, OmniStatus::Failure);
     }
 
@@ -527,7 +531,7 @@ namespace OmniDSP::Default {
       return OmniStatus::SizeMismatch;
     }
     try {
-      WindowSetup setup(WindowType::Bartlett, static_cast<int>(length));
+      WindowSetup setup(Type::Window::Bartlett, static_cast<int>(length));
       auto result = generate_window<F32>(setup, output.first(length));
       return result ? OmniStatus::Success : result.error();
     }
@@ -550,7 +554,7 @@ namespace OmniDSP::Default {
       return OmniStatus::SizeMismatch;
     }
     try {
-      WindowSetup setup(WindowType::Bartlett, static_cast<int>(length));
+      WindowSetup setup(Type::Window::Bartlett, static_cast<int>(length));
       auto result = generate_window<F64>(setup, output.first(length));
       return result ? OmniStatus::Success : result.error();
     }
@@ -573,7 +577,7 @@ namespace OmniDSP::Default {
       return OmniStatus::SizeMismatch;
     }
     try {
-      WindowSetup setup(WindowType::Blackman, static_cast<int>(length));
+      WindowSetup setup(Type::Window::Blackman, static_cast<int>(length));
       auto result = generate_window<F32>(setup, output.first(length));
       return result ? OmniStatus::Success : result.error();
     }
@@ -595,7 +599,7 @@ namespace OmniDSP::Default {
       return OmniStatus::SizeMismatch;
     }
     try {
-      WindowSetup setup(WindowType::Blackman, static_cast<int>(length));
+      WindowSetup setup(Type::Window::Blackman, static_cast<int>(length));
       auto result = generate_window<F64>(setup, output.first(length));
       return result ? OmniStatus::Success : result.error();
     }
@@ -617,7 +621,7 @@ namespace OmniDSP::Default {
       return OmniStatus::SizeMismatch;
     }
     try {
-      WindowSetup setup(WindowType::Flattop, static_cast<int>(length));
+      WindowSetup setup(Type::Window::Flattop, static_cast<int>(length));
       auto result = generate_window<F32>(setup, output.first(length));
       return result ? OmniStatus::Success : result.error();
     }
@@ -639,7 +643,7 @@ namespace OmniDSP::Default {
       return OmniStatus::SizeMismatch;
     }
     try {
-      WindowSetup setup(WindowType::Flattop, static_cast<int>(length));
+      WindowSetup setup(Type::Window::Flattop, static_cast<int>(length));
       auto result = generate_window<F64>(setup, output.first(length));
       return result ? OmniStatus::Success : result.error();
     }
@@ -662,7 +666,7 @@ namespace OmniDSP::Default {
     }
     try {
       WindowSetup setup(
-          WindowType::Gaussian,
+          Type::Window::Gaussian,
           static_cast<int>(length),
           WindowParams{{"sigma", stddev}});
       auto result = generate_window<F32>(setup, output.first(length));
@@ -687,7 +691,7 @@ namespace OmniDSP::Default {
     }
     try {
       WindowSetup setup(
-          WindowType::Gaussian,
+          Type::Window::Gaussian,
           static_cast<int>(length),
           WindowParams{{"sigma", stddev}});
       auto result = generate_window<F64>(setup, output.first(length));
@@ -711,7 +715,7 @@ namespace OmniDSP::Default {
       return OmniStatus::SizeMismatch;
     }
     try {
-      WindowSetup setup(WindowType::Hamming, static_cast<int>(length));
+      WindowSetup setup(Type::Window::Hamming, static_cast<int>(length));
       auto result = generate_window<F32>(setup, output.first(length));
       return result ? OmniStatus::Success : result.error();
     }
@@ -733,7 +737,7 @@ namespace OmniDSP::Default {
       return OmniStatus::SizeMismatch;
     }
     try {
-      WindowSetup setup(WindowType::Hamming, static_cast<int>(length));
+      WindowSetup setup(Type::Window::Hamming, static_cast<int>(length));
       auto result = generate_window<F64>(setup, output.first(length));
       return result ? OmniStatus::Success : result.error();
     }
@@ -755,7 +759,7 @@ namespace OmniDSP::Default {
       return OmniStatus::SizeMismatch;
     }
     try {
-      WindowSetup setup(WindowType::Hann, static_cast<int>(length));
+      WindowSetup setup(Type::Window::Hann, static_cast<int>(length));
       auto result = generate_window<F32>(setup, output.first(length));
       return result ? OmniStatus::Success : result.error();
     }
@@ -776,7 +780,7 @@ namespace OmniDSP::Default {
       return OmniStatus::SizeMismatch;
     }
     try {
-      WindowSetup setup(WindowType::Hann, static_cast<int>(length));
+      WindowSetup setup(Type::Window::Hann, static_cast<int>(length));
       auto result = generate_window<F64>(setup, output.first(length));
       return result ? OmniStatus::Success : result.error();
     }
@@ -798,7 +802,7 @@ namespace OmniDSP::Default {
     }
     try {
       WindowSetup setup(
-          WindowType::Kaiser,
+          Type::Window::Kaiser,
           static_cast<int>(length),
           WindowParams{{"beta", beta_param}});
       auto result = generate_window<F32>(setup, output.first(length));
@@ -822,7 +826,7 @@ namespace OmniDSP::Default {
     }
     try {
       WindowSetup setup(
-          WindowType::Kaiser,
+          Type::Window::Kaiser,
           static_cast<int>(length),
           WindowParams{{"beta", beta_param}});
       auto result = generate_window<F64>(setup, output.first(length));
@@ -845,7 +849,7 @@ namespace OmniDSP::Default {
       return OmniStatus::SizeMismatch;
     }
     try {
-      WindowSetup setup(WindowType::Rectangular, static_cast<int>(length));
+      WindowSetup setup(Type::Window::Rectangular, static_cast<int>(length));
       auto result = generate_window<F32>(setup, output.first(length));
       return result ? OmniStatus::Success : result.error();
     }
@@ -867,7 +871,7 @@ namespace OmniDSP::Default {
       return OmniStatus::SizeMismatch;
     }
     try {
-      WindowSetup setup(WindowType::Rectangular, static_cast<int>(length));
+      WindowSetup setup(Type::Window::Rectangular, static_cast<int>(length));
       auto result = generate_window<F64>(setup, output.first(length));
       return result ? OmniStatus::Success : result.error();
     }
@@ -889,7 +893,7 @@ namespace OmniDSP::Default {
       return OmniStatus::SizeMismatch;
     }
     try {
-      WindowSetup setup(WindowType::Triangular, static_cast<int>(length));
+      WindowSetup setup(Type::Window::Triangular, static_cast<int>(length));
       auto result = generate_window<F32>(setup, output.first(length));
       return result ? OmniStatus::Success : result.error();
     }
@@ -911,7 +915,7 @@ namespace OmniDSP::Default {
       return OmniStatus::SizeMismatch;
     }
     try {
-      WindowSetup setup(WindowType::Triangular, static_cast<int>(length));
+      WindowSetup setup(Type::Window::Triangular, static_cast<int>(length));
       auto result = generate_window<F64>(setup, output.first(length));
       return result ? OmniStatus::Success : result.error();
     }

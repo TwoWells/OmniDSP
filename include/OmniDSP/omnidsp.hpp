@@ -22,13 +22,13 @@
 #include "OmniDSP/omnidsp_export.hpp"
 // Include individual operation headers - these define Plan/Processor classes
 // and their associated Params/Design/Coefs structs or forward declare them.
-#include "OmniDSP/convolution.hpp"
 #include "OmniDSP/core_types.hpp"
-#include "OmniDSP/cqt.hpp"
-#include "OmniDSP/fft.hpp"
-#include "OmniDSP/fir_filter.hpp"
-#include "OmniDSP/iir_filter.hpp"
-#include "OmniDSP/resample.hpp"
+#include "OmniDSP/plan/convolution.hpp"
+#include "OmniDSP/plan/fft.hpp"
+#include "OmniDSP/processor/cqt.hpp"
+#include "OmniDSP/processor/fir_filter.hpp"
+#include "OmniDSP/processor/iir_filter.hpp"
+#include "OmniDSP/processor/resample.hpp"
 #include "OmniDSP/window.hpp"
 
 // Include Params headers specifically if they are not fully covered by
@@ -161,51 +161,45 @@ namespace OmniDSP {
 
     // Plan and Processor Factory Methods (Declarations only)
     template <typename T_Complex>
-    [[nodiscard]] OmniExpected<std::unique_ptr<FFTPlan<T_Complex>>> create_plan(
-        const Params::FFT& params) const;
+    [[nodiscard]] OmniExpected<std::unique_ptr<Plan::FFT<T_Complex>>>
+    create_plan(const Params::FFT& params) const;
     template <typename T_Real>
-    [[nodiscard]] OmniExpected<std::unique_ptr<RFFTPlan<T_Real>>> create_plan(
+    [[nodiscard]] OmniExpected<std::unique_ptr<Plan::RFFT<T_Real>>> create_plan(
         const Params::RFFT& params) const;
     template <typename T>
-    [[nodiscard]] OmniExpected<std::unique_ptr<ConvolutionPlan<T>>> create_plan(
+    [[nodiscard]] OmniExpected<std::unique_ptr<Plan::Convolution<T>>>
+    create_plan(
         const Params::Convolution& params,
         const std::vector<T>& kernel_coeffs) const;
     template <typename T>
-    [[nodiscard]] OmniExpected<std::unique_ptr<CorrelationPlan<T>>> create_plan(
+    [[nodiscard]] OmniExpected<std::unique_ptr<Plan::Correlation<T>>>
+    create_plan(
         const Params::Correlation& params,
         const std::vector<T>& kernel_coeffs) const;
 
     template <typename T>
-    [[nodiscard]] OmniExpected<
-        std::unique_ptr<FIRFilterProcessor<T>>> /* TODO: FIRFilterProcessor */
+    [[nodiscard]] OmniExpected<std::unique_ptr<Processor::FIRFilter<T>>>
     create_processor(const Params::FIRFilter& params) const;
     template <typename T>
-    [[nodiscard]] OmniExpected<
-        std::unique_ptr<FIRFilterProcessor<T>>> /* TODO: FIRFilterProcessor */
+    [[nodiscard]] OmniExpected<std::unique_ptr<Processor::FIRFilter<T>>>
     create_processor(const Coefs::FIRFilter<T>& coeffs) const;
     template <typename T_Real>
-    [[nodiscard]] OmniExpected<std::unique_ptr<
-        IIRFilterProcessor<T_Real>>> /* TODO: IIRFilterProcessor */
+    [[nodiscard]] OmniExpected<std::unique_ptr<Processor::IIRFilter<T_Real>>>
     create_processor(const Params::IIRFilter& params) const;
     template <typename T_Real>
-    [[nodiscard]] OmniExpected<std::unique_ptr<
-        IIRFilterProcessor<T_Real>>> /* TODO: IIRFilterProcessor */
+    [[nodiscard]] OmniExpected<std::unique_ptr<Processor::IIRFilter<T_Real>>>
     create_processor(const Coefs::IIRFilterSOS& sos_coeffs) const;
     template <typename T_Real>
-    [[nodiscard]] OmniExpected<std::unique_ptr<
-        ResampleProcessor<T_Real>>> /* TODO: ResampleProcessor */
+    [[nodiscard]] OmniExpected<std::unique_ptr<Processor::Resample<T_Real>>>
     create_processor(const Params::Resample& params) const;
     template <typename T_Real>
-    [[nodiscard]] OmniExpected<std::unique_ptr<
-        ResampleProcessor<T_Real>>> /* TODO: ResampleProcessor */
+    [[nodiscard]] OmniExpected<std::unique_ptr<Processor::Resample<T_Real>>>
     create_processor(const Design::Resample& spec) const;
     template <typename T_Real>
-    [[nodiscard]] OmniExpected<
-        std::unique_ptr<CQTProcessor<T_Real>>> /* TODO: CQTProcessor */
+    [[nodiscard]] OmniExpected<std::unique_ptr<Processor::CQT<T_Real>>>
     create_processor(const Params::CQT& params) const;
     template <typename T_Real>
-    [[nodiscard]] OmniExpected<
-        std::unique_ptr<CQTProcessor<T_Real>>> /* TODO: CQTProcessor */
+    [[nodiscard]] OmniExpected<std::unique_ptr<Processor::CQT<T_Real>>>
     create_processor(const Design::CQT& spec) const;
 
     // Filter Design Methods (Declarations only)

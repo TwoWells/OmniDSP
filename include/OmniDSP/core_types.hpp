@@ -3,18 +3,25 @@
 
 #include <complex>
 #include <expected>  // For std::expected, std::unexpected
+#include <ostream>   // For std::ostream (for operator<<)
 #include <span>
-#include <stdexcept>    // Required for std::runtime_error
-#include <string>       // Required for std::string
-#include <string_view>  // Required for get_backend_name, get_status_string
+#include <stdexcept>  // Required for std::runtime_error
+#include <string>     // Required for std::string
+#include <string_view>  // Required for string views if still used, though operator<< will dominate
 #include <type_traits>  // Required for type traits helpers
 #include <vector>
 
 #include "OmniDSP/omnidsp_export.hpp"
 
+// Include fmt headers for custom formatter specialization
+#include <fmt/core.h>     // For basic formatting
+#include <fmt/ostream.h>  // Specifically for ostream_formatter
+
 namespace OmniDSP {
 
-  // --- Core OmniStatus Enum ---
+  /**
+   * @brief Enumeration of core status codes for OmniDSP operations.
+   */
   enum class OmniStatus {
     Success = 0,
     Failure = 1,
@@ -30,62 +37,97 @@ namespace OmniDSP {
     NotImplemented = 11,
   };
 
-  inline std::string_view get_status_string(OmniStatus status) noexcept
+  /**
+   * @brief Overloads the << operator for easy printing/logging of OmniStatus.
+   * @param os The output stream.
+   * @param status The OmniStatus enum value to print.
+   * @return A reference to the output stream.
+   */
+  inline std::ostream& operator<<(std::ostream& os, OmniStatus status)
   {
     switch (status) {
       case OmniStatus::Success:
-        return "Success";
+        os << "Success";
+        break;
       case OmniStatus::Failure:
-        return "Failure";
+        os << "Failure";
+        break;
       case OmniStatus::InvalidArgument:
-        return "InvalidArgument";
+        os << "InvalidArgument";
+        break;
       case OmniStatus::SizeMismatch:
-        return "SizeMismatch";
+        os << "SizeMismatch";
+        break;
       case OmniStatus::AllocationError:
-        return "AllocationError";
+        os << "AllocationError";
+        break;
       case OmniStatus::BackendError:
-        return "BackendError";
+        os << "BackendError";
+        break;
       case OmniStatus::NotInitialized:
-        return "NotInitialized";
+        os << "NotInitialized";
+        break;
       case OmniStatus::InvalidOperation:
-        return "InvalidOperation";
+        os << "InvalidOperation";
+        break;
       case OmniStatus::NotImplemented:
-        return "NotImplemented";
+        os << "NotImplemented";
+        break;
       case OmniStatus::UnsupportedFeature:
-        return "UnsupportedFeature";
+        os << "UnsupportedFeature";
+        break;
       case OmniStatus::OutOfBounds:
-        return "OutOfBounds";
+        os << "OutOfBounds";
+        break;
       case OmniStatus::Timeout:
-        return "Timeout";
+        os << "Timeout";
+        break;
       default:
-        return "Unknown OmniStatus";
+        os << "Unknown OmniStatus";
+        break;
     }
+    return os;
   }
 
-  // --- BackendType Selection Enum ---
-  // Added Dispatcher as a distinct backend type
+  /**
+   * @brief Enumeration of available backend types in OmniDSP.
+   */
   enum class BackendType { Default, Accelerate, OneMKL, IntelIPP, Dispatcher };
 
-  inline std::string_view get_backend_name(BackendType backend) noexcept
+  /**
+   * @brief Overloads the << operator for easy printing/logging of BackendType.
+   * @param os The output stream.
+   * @param backend The BackendType enum value to print.
+   * @return A reference to the output stream.
+   */
+  inline std::ostream& operator<<(std::ostream& os, BackendType backend)
   {
     switch (backend) {
       case BackendType::Default:
-        return "Default";
+        os << "Default";
+        break;
       case BackendType::Accelerate:
-        return "Accelerate";
+        os << "Accelerate";
+        break;
       case BackendType::OneMKL:
-        return "oneMKL";
+        os << "oneMKL";
+        break;
       case BackendType::IntelIPP:
-        return "IntelIPP";
+        os << "IntelIPP";
+        break;
       case BackendType::Dispatcher:
-        return "Dispatcher";  // Added name for Dispatcher
+        os << "Dispatcher";
+        break;
       default:
-        return "Unknown BackendType";
+        os << "Unknown BackendType";
+        break;
     }
+    return os;
   }
 
-  // --- OperationCategory Enum ---
-  // Added FilterDesign
+  /**
+   * @brief Enumeration of operation categories for backend dispatching.
+   */
   enum class OperationCategory {
     FFT,
     RFFT,
@@ -96,40 +138,58 @@ namespace OmniDSP {
     Resample,
     CQT,
     Windowing,
-    FilterDesign,  // Added FilterDesign category
+    FilterDesign,
     GenericFallback
   };
 
-  // --- get_operation_category_name Function Implementation ---
-  inline std::string_view get_operation_category_name(
-      OperationCategory category) noexcept
+  /**
+   * @brief Overloads the << operator for easy printing/logging of
+   * OperationCategory.
+   * @param os The output stream.
+   * @param category The OperationCategory enum value to print.
+   * @return A reference to the output stream.
+   */
+  inline std::ostream& operator<<(std::ostream& os, OperationCategory category)
   {
     switch (category) {
       case OperationCategory::FFT:
-        return "FFT";
+        os << "FFT";
+        break;
       case OperationCategory::RFFT:
-        return "RFFT";
+        os << "RFFT";
+        break;
       case OperationCategory::Convolution:
-        return "Convolution";
+        os << "Convolution";
+        break;
       case OperationCategory::Correlation:
-        return "Correlation";
+        os << "Correlation";
+        break;
       case OperationCategory::FIRFilter:
-        return "FIRFilter";
+        os << "FIRFilter";
+        break;
       case OperationCategory::IIRFilter:
-        return "IIRFilter";
+        os << "IIRFilter";
+        break;
       case OperationCategory::Resample:
-        return "Resample";
+        os << "Resample";
+        break;
       case OperationCategory::CQT:
-        return "CQT";
+        os << "CQT";
+        break;
       case OperationCategory::Windowing:
-        return "Windowing";
-      case OperationCategory::FilterDesign:  // Added case for FilterDesign
-        return "FilterDesign";
+        os << "Windowing";
+        break;
+      case OperationCategory::FilterDesign:
+        os << "FilterDesign";
+        break;
       case OperationCategory::GenericFallback:
-        return "GenericFallback";
+        os << "GenericFallback";
+        break;
       default:
-        return "Unknown OperationCategory";
+        os << "Unknown OperationCategory";
+        break;
     }
+    return os;
   }
 
   // --- Type Aliases ---
@@ -147,81 +207,126 @@ namespace OmniDSP {
   template <typename T>
   using OmniExpected = std::expected<T, OmniStatus>;
 
-  // --- OmniException Definition ---
+  /**
+   * @brief Custom exception class for OmniDSP library errors.
+   * Derives from std::runtime_error and includes an OmniStatus code.
+   */
   class OmniException : public std::runtime_error {
    private:
     OmniStatus error_status_;
 
    public:
+    /**
+     * @brief Constructs an OmniException with a message and status code.
+     * @param message The error message.
+     * @param status The OmniStatus code associated with the error. Defaults to
+     * OmniStatus::Failure.
+     */
     explicit OmniException(
         const std::string& message, OmniStatus status = OmniStatus::Failure)
         : std::runtime_error(message), error_status_(status)
     {}
+    /**
+     * @brief Constructs an OmniException with a C-string message and status
+     * code.
+     * @param message The error message as a C-string.
+     * @param status The OmniStatus code associated with the error. Defaults to
+     * OmniStatus::Failure.
+     */
     explicit OmniException(
         const char* message, OmniStatus status = OmniStatus::Failure)
         : std::runtime_error(message), error_status_(status)
     {}
+    /**
+     * @brief Gets the OmniStatus code associated with this exception.
+     * @return The OmniStatus code.
+     */
     OmniStatus get_status() const noexcept { return error_status_; }
   };
 
   // --- Utility Type Traits ---
+  /**
+   * @namespace OmniDSP::Utils
+   * @brief Contains utility type traits and helper functions for the OmniDSP
+   * library.
+   */
   namespace Utils {
+    /** @brief Metafunction to get the corresponding complex type for a given
+     * real or complex type. */
     template <typename T>
     struct GetComplex {
-      using type = void;
+      using type
+          = void;  ///< Default to void if T is not F32, F64, C32, or C64.
     };
     template <>
     struct GetComplex<F32> {
-      using type = C32;
+      using type = C32;  ///< float -> std::complex<float>
     };
     template <>
     struct GetComplex<F64> {
-      using type = C64;
+      using type = C64;  ///< double -> std::complex<double>
     };
     template <>
     struct GetComplex<C32> {
-      using type = C32;
+      using type = C32;  ///< std::complex<float> -> std::complex<float>
     };
     template <>
     struct GetComplex<C64> {
-      using type = C64;
+      using type = C64;  ///< std::complex<double> -> std::complex<double>
     };
+    /** @brief Type alias for `typename GetComplex<T>::type`. */
     template <typename T>
     using GetComplexType = typename GetComplex<T>::type;
 
+    /** @brief Metafunction to get the corresponding real type for a given real
+     * or complex type. */
     template <typename T>
     struct GetReal {
-      using type = void;
+      using type
+          = void;  ///< Default to void if T is not F32, F64, C32, or C64.
     };
     template <>
     struct GetReal<F32> {
-      using type = F32;
+      using type = F32;  ///< float -> float
     };
     template <>
     struct GetReal<F64> {
-      using type = F64;
+      using type = F64;  ///< double -> double
     };
     template <>
     struct GetReal<C32> {
-      using type = F32;
+      using type = F32;  ///< std::complex<float> -> float
     };
     template <>
     struct GetReal<C64> {
-      using type = F64;
+      using type = F64;  ///< std::complex<double> -> double
     };
+    /** @brief Type alias for `typename GetReal<T>::type`. */
     template <typename T>
     using GetRealType = typename GetReal<T>::type;
 
+    /** @brief Type trait to check if a type is one of OmniDSP's complex types
+     * (C32 or C64). */
     template <typename T>
     struct IsComplex : std::false_type {};
     template <>
     struct IsComplex<C32> : std::true_type {};
     template <>
     struct IsComplex<C64> : std::true_type {};
+    /** @brief Value of the IsComplex type trait. True if T is C32 or C64, false
+     * otherwise. */
     template <typename T>
     inline constexpr bool IsComplex_v = IsComplex<T>::value;
   }  // namespace Utils
 
 }  // namespace OmniDSP
+
+// fmt::formatter specializations for direct logging with spdlog using {}
+template <>
+struct fmt::formatter<OmniDSP::OmniStatus> : fmt::ostream_formatter {};
+template <>
+struct fmt::formatter<OmniDSP::BackendType> : fmt::ostream_formatter {};
+template <>
+struct fmt::formatter<OmniDSP::OperationCategory> : fmt::ostream_formatter {};
 
 #endif  // OMNIDSP_CORE_TYPES_HPP

@@ -5,16 +5,43 @@
 
 #include "OmniDSP/params/iir_filter.hpp"  // Corresponding header
 
+#include <spdlog/fmt/ostr.h>  // Include for custom ostream operator support with spdlog
 #include <spdlog/spdlog.h>  // Include spdlog for logging
 
-#include <OmniDSP/types/filter.hpp>  // For FilterType, IIRFilterFormat
-#include <stdexcept>                 // For std::invalid_argument
-#include <string>                    // For std::to_string, string concatenation
-#include <utility>                   // For std::move
+#include <stdexcept>  // For std::invalid_argument
+#include <string>     // For std::to_string, string concatenation
+#include <utility>    // For std::move
 
+#include "OmniDSP/types/filter.hpp"  // For FilterType, IIRFilterFormat
+
+/**
+ * @namespace OmniDSP::Params
+ * @brief Contains structures for specifying parameters for various DSP
+ * operations before full design.
+ */
 namespace OmniDSP::Params {
 
-  // Constructor (with spdlog integration)
+  /**
+   * @brief Constructor for IIRFilter parameters.
+   * @details Initializes and validates parameters for designing an IIR filter.
+   * @param p_type Type of the filter (e.g., Lowpass, Highpass).
+   * @param p_sample_rate Sample rate of the signal in Hz. Must be positive.
+   * @param p_order Desired filter order. Must be positive.
+   * @param p_cutoff1 Primary cutoff frequency in Hz. Must be positive and less
+   * than Nyquist.
+   * @param p_cutoff2 Optional secondary cutoff frequency in Hz. Required for
+   * Bandpass/Bandstop. Must be positive, less than Nyquist, and greater than
+   * p_cutoff1 if specified.
+   * @param p_passband_ripple_db Optional desired passband ripple in positive
+   * dB. Must be positive if specified.
+   * @param p_stopband_attenuation_db Optional desired stopband attenuation in
+   * positive dB. Must be positive if specified.
+   * @param p_output_format Desired output format for coefficients (SOS or
+   * TransferFunction).
+   * @throws std::invalid_argument if essential parameters are invalid (e.g.,
+   * non-positive sample rate or order, invalid cutoffs, negative
+   * ripple/attenuation).
+   */
   IIRFilter::IIRFilter(
       FilterType p_type,
       double p_sample_rate,
@@ -117,34 +144,34 @@ namespace OmniDSP::Params {
       throw std::invalid_argument(msg);
     }
 
-    if (logger) {
-      logger->trace(
-          "Params::IIRFilter constructed: Type={}, SR={}, Order={}, "
-          "Cutoff1={}, "
-          "OutputFormat={}",
-          static_cast<int>(filter_type_),
-          sample_rate_,
-          order_,
-          cutoff1_,
-          static_cast<int>(output_format_));
+    if (logger && logger->should_log(spdlog::level::trace)) {
+      logger->trace("Params::IIRFilter constructed: {}", *this);
     }
   }
 
   // --- Fluent Setter Definitions ---
 
+  /**
+   * @brief Sets the filter type.
+   * @param val The new filter type.
+   * @return A reference to this Params::IIRFilter object for chaining.
+   */
   IIRFilter& IIRFilter::filter_type(FilterType val)
   {
     filter_type_ = val;
-    // Basic re-validation or warning if type change conflicts with cutoff2
-    // might be added. For simplicity, detailed cross-validation is often
-    // handled when creating the full Spec.
     auto logger = spdlog::get("OmniDSP");
-    if (logger)
-      logger->trace(
-          "Params::IIRFilter::filter_type to {}", static_cast<int>(val));
+    if (logger && logger->should_log(spdlog::level::trace)) {
+      logger->trace("Params::IIRFilter::filter_type updated: {}", *this);
+    }
     return *this;
   }
 
+  /**
+   * @brief Sets the sample rate.
+   * @param val The new sample rate in Hz. Must be positive.
+   * @return A reference to this Params::IIRFilter object for chaining.
+   * @throws std::invalid_argument if val is not positive.
+   */
   IIRFilter& IIRFilter::sample_rate(double val)
   {
     auto logger = spdlog::get("OmniDSP");
@@ -158,10 +185,18 @@ namespace OmniDSP::Params {
       throw std::invalid_argument(msg);
     }
     sample_rate_ = val;
-    if (logger) logger->trace("Params::IIRFilter::sample_rate to {}", val);
+    if (logger && logger->should_log(spdlog::level::trace)) {
+      logger->trace("Params::IIRFilter::sample_rate updated: {}", *this);
+    }
     return *this;
   }
 
+  /**
+   * @brief Sets the filter order.
+   * @param val The new filter order. Must be positive.
+   * @return A reference to this Params::IIRFilter object for chaining.
+   * @throws std::invalid_argument if val is zero.
+   */
   IIRFilter& IIRFilter::order(size_t val)
   {
     auto logger = spdlog::get("OmniDSP");
@@ -175,10 +210,20 @@ namespace OmniDSP::Params {
       throw std::invalid_argument(msg);
     }
     order_ = val;
-    if (logger) logger->trace("Params::IIRFilter::order to {}", val);
+    if (logger && logger->should_log(spdlog::level::trace)) {
+      logger->trace("Params::IIRFilter::order updated: {}", *this);
+    }
     return *this;
   }
 
+  /**
+   * @brief Sets the primary cutoff frequency.
+   * @param val The new primary cutoff frequency in Hz. Must be positive and
+   * less than Nyquist.
+   * @return A reference to this Params::IIRFilter object for chaining.
+   * @throws std::invalid_argument if val is not positive or is >= Nyquist
+   * frequency.
+   */
   IIRFilter& IIRFilter::cutoff1(double val)
   {
     auto logger = spdlog::get("OmniDSP");
@@ -200,10 +245,20 @@ namespace OmniDSP::Params {
       throw std::invalid_argument(msg);
     }
     cutoff1_ = val;
-    if (logger) logger->trace("Params::IIRFilter::cutoff1 to {}", val);
+    if (logger && logger->should_log(spdlog::level::trace)) {
+      logger->trace("Params::IIRFilter::cutoff1 updated: {}", *this);
+    }
     return *this;
   }
 
+  /**
+   * @brief Sets the secondary cutoff frequency.
+   * @param val An std::optional<double> containing the new secondary cutoff
+   * frequency in Hz. If specified, must be positive and less than Nyquist.
+   * @return A reference to this Params::IIRFilter object for chaining.
+   * @throws std::invalid_argument if val has a value that is not positive or is
+   * >= Nyquist frequency.
+   */
   IIRFilter& IIRFilter::cutoff2(std::optional<double> val)
   {
     auto logger = spdlog::get("OmniDSP");
@@ -229,15 +284,19 @@ namespace OmniDSP::Params {
       }
     }
     cutoff2_ = val;
-    if (logger) {
-      if (val.has_value())
-        logger->trace("Params::IIRFilter::cutoff2 to {}", val.value());
-      else
-        logger->trace("Params::IIRFilter::cutoff2 to nullopt");
+    if (logger && logger->should_log(spdlog::level::trace)) {
+      logger->trace("Params::IIRFilter::cutoff2 updated: {}", *this);
     }
     return *this;
   }
 
+  /**
+   * @brief Sets the passband ripple.
+   * @param val An std::optional<double> containing the new passband ripple in
+   * positive dB. Must be positive if specified.
+   * @return A reference to this Params::IIRFilter object for chaining.
+   * @throws std::invalid_argument if val has a value that is not positive.
+   */
   IIRFilter& IIRFilter::passband_ripple_db(std::optional<double> val)
   {
     auto logger = spdlog::get("OmniDSP");
@@ -252,16 +311,19 @@ namespace OmniDSP::Params {
       throw std::invalid_argument(msg);
     }
     passband_ripple_db_ = val;
-    if (logger) {
-      if (val.has_value())
-        logger->trace(
-            "Params::IIRFilter::passband_ripple_db to {}", val.value());
-      else
-        logger->trace("Params::IIRFilter::passband_ripple_db to nullopt");
+    if (logger && logger->should_log(spdlog::level::trace)) {
+      logger->trace("Params::IIRFilter::passband_ripple_db updated: {}", *this);
     }
     return *this;
   }
 
+  /**
+   * @brief Sets the stopband attenuation.
+   * @param val An std::optional<double> containing the new stopband attenuation
+   * in positive dB. Must be positive if specified.
+   * @return A reference to this Params::IIRFilter object for chaining.
+   * @throws std::invalid_argument if val has a value that is not positive.
+   */
   IIRFilter& IIRFilter::stopband_attenuation_db(std::optional<double> val)
   {
     auto logger = spdlog::get("OmniDSP");
@@ -276,23 +338,25 @@ namespace OmniDSP::Params {
       throw std::invalid_argument(msg);
     }
     stopband_attenuation_db_ = val;
-    if (logger) {
-      if (val.has_value())
-        logger->trace(
-            "Params::IIRFilter::stopband_attenuation_db to {}", val.value());
-      else
-        logger->trace("Params::IIRFilter::stopband_attenuation_db to nullopt");
+    if (logger && logger->should_log(spdlog::level::trace)) {
+      logger->trace(
+          "Params::IIRFilter::stopband_attenuation_db updated: {}", *this);
     }
     return *this;
   }
 
+  /**
+   * @brief Sets the desired output format for filter coefficients.
+   * @param val The new IIRFilterFormat (e.g., SOS, TransferFunction).
+   * @return A reference to this Params::IIRFilter object for chaining.
+   */
   IIRFilter& IIRFilter::output_format(IIRFilterFormat val)
   {
     output_format_ = val;
     auto logger = spdlog::get("OmniDSP");
-    if (logger)
-      logger->trace(
-          "Params::IIRFilter::output_format to {}", static_cast<int>(val));
+    if (logger && logger->should_log(spdlog::level::trace)) {
+      logger->trace("Params::IIRFilter::output_format updated: {}", *this);
+    }
     return *this;
   }
 

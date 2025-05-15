@@ -7,10 +7,15 @@
 #define OMNIDSP_PARAMS_FFT_HPP
 
 #include <cstddef>    // For size_t
+#include <ostream>    // For std::ostream
 #include <stdexcept>  // For std::invalid_argument
 #include <string>     // For std::string in validation messages
 
 #include "OmniDSP/core_types.hpp"  // For logging (spdlog is included in .cpp)
+
+// Include fmt headers for custom formatter specialization
+#include <fmt/core.h>     // For basic formatting
+#include <fmt/ostream.h>  // Specifically for ostream_formatter
 
 // spdlog include is deferred to .cpp
 
@@ -48,6 +53,18 @@ namespace OmniDSP::Params {
   };
 
   /**
+   * @brief Overloads the << operator for easy printing/logging of Params::FFT.
+   * @param os The output stream.
+   * @param params The Params::FFT object to print.
+   * @return A reference to the output stream.
+   */
+  inline std::ostream& operator<<(std::ostream& os, const FFT& params)
+  {
+    os << "Params::FFT(Length: " << params.length_ << ")";
+    return os;
+  }
+
+  /**
    * @brief Parameters for specifying a real-to-complex Fast Fourier Transform
    * (RFFT).
    *
@@ -82,6 +99,25 @@ namespace OmniDSP::Params {
     RFFT& length(size_t val);
   };
 
+  /**
+   * @brief Overloads the << operator for easy printing/logging of Params::RFFT.
+   * @param os The output stream.
+   * @param params The Params::RFFT object to print.
+   * @return A reference to the output stream.
+   */
+  inline std::ostream& operator<<(std::ostream& os, const RFFT& params)
+  {
+    os << "Params::RFFT(Length: " << params.length_ << ")";
+    return os;
+  }
+
 }  // namespace OmniDSP::Params
+
+// Specialization of fmt::formatter for OmniDSP::Params::FFT and
+// OmniDSP::Params::RFFT
+template <>
+struct fmt::formatter<OmniDSP::Params::FFT> : fmt::ostream_formatter {};
+template <>
+struct fmt::formatter<OmniDSP::Params::RFFT> : fmt::ostream_formatter {};
 
 #endif  // OMNIDSP_PARAMS_FFT_HPP

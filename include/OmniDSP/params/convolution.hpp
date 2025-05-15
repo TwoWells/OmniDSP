@@ -8,11 +8,16 @@
 #define OMNIDSP_PARAMS_CONVOLUTION_HPP
 
 #include <cstddef>    // For size_t
+#include <ostream>    // For std::ostream
 #include <stdexcept>  // For std::invalid_argument
 #include <string>     // For std::string in validation messages
 
-#include "OmniDSP/core_types.hpp"         // For OMNIDSP_EXPORT
-#include "OmniDSP/types/convolution.hpp"  // For ConvolutionType, ConvolutionMethod
+#include "OmniDSP/core_types.hpp"  // For OMNIDSP_EXPORT
+#include "OmniDSP/types/convolution.hpp"  // For ConvolutionType, ConvolutionMethod and their operator<<
+
+// Include fmt headers for custom formatter specialization
+#include <fmt/core.h>     // For basic formatting
+#include <fmt/ostream.h>  // Specifically for ostream_formatter
 
 // spdlog include is deferred to .cpp
 
@@ -87,6 +92,24 @@ namespace OmniDSP::Params {
   };
 
   /**
+   * @brief Overloads the << operator for easy printing/logging of
+   * Params::Convolution.
+   * @param os The output stream.
+   * @param params The Params::Convolution object to print.
+   * @return A reference to the output stream.
+   */
+  inline std::ostream& operator<<(std::ostream& os, const Convolution& params)
+  {
+    os << "Params::Convolution(MaxInputLen: " << params.max_input_length_
+       << ", KernelLen: " << params.kernel_length_
+       << ", Type: " << params.type_  // Uses ConvolutionType::operator<<
+       << ", MethodHint: "
+       << params.method_hint_  // Uses ConvolutionMethod::operator<<
+       << ")";
+    return os;
+  }
+
+  /**
    * @brief Parameters for specifying a Correlation operation.
    *
    * Similar to Params::Convolution, this structure is used for configuring
@@ -151,6 +174,31 @@ namespace OmniDSP::Params {
     Correlation& method_hint(ConvolutionMethod val);
   };
 
+  /**
+   * @brief Overloads the << operator for easy printing/logging of
+   * Params::Correlation.
+   * @param os The output stream.
+   * @param params The Params::Correlation object to print.
+   * @return A reference to the output stream.
+   */
+  inline std::ostream& operator<<(std::ostream& os, const Correlation& params)
+  {
+    os << "Params::Correlation(MaxInputLen: " << params.max_input_length_
+       << ", TemplateLen: " << params.template_length_
+       << ", Type: " << params.type_  // Uses ConvolutionType::operator<<
+       << ", MethodHint: "
+       << params.method_hint_  // Uses ConvolutionMethod::operator<<
+       << ")";
+    return os;
+  }
+
 }  // namespace OmniDSP::Params
+
+// Specialization of fmt::formatter for OmniDSP::Params::Convolution and
+// OmniDSP::Params::Correlation
+template <>
+struct fmt::formatter<OmniDSP::Params::Convolution> : fmt::ostream_formatter {};
+template <>
+struct fmt::formatter<OmniDSP::Params::Correlation> : fmt::ostream_formatter {};
 
 #endif  // OMNIDSP_PARAMS_CONVOLUTION_HPP

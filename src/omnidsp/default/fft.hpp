@@ -5,7 +5,6 @@
 #include "../interface/backend.hpp"
 // Include public types needed (like complex types, Status)
 #include <OmniDSP/core_types.hpp>  // For Status, F32, C32, F64, C64 etc.
-#include <OmniDSP/fft.hpp>  // For fft_direction enum (though not directly used in Impl constructor)
 #include <complex>
 #include <memory>     // For std::unique_ptr
 #include <span>       // For std::span

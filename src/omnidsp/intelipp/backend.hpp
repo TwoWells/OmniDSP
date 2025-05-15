@@ -18,11 +18,10 @@
 
 // Include necessary types referenced in method signatures
 #include <OmniDSP/core_types.hpp>
-#include <OmniDSP/fft.hpp>  // For public FFTPlan, RFFTPlan (though we return Impl)
-#include <OmniDSP/fir_filter.hpp>  // For public FIRFilterPlan, IIRFilterPlan, Coefs::SOS
-#include <OmniDSP/iir_filter.hpp>  // For public FIRFilterPlan, IIRFilterPlan, Coefs::SOS
-#include <OmniDSP/resample.hpp>  // For public ResamplePlan, Design::Resample
-#include <OmniDSP/window.hpp>    // For WindowSetup, specific window params
+// #include <OmniDSP/fir_filter.hpp>
+// #include <OmniDSP/iir_filter.hpp>
+// #include <OmniDSP/resample.hpp>
+#include <OmniDSP/window.hpp>  // For WindowSetup, specific window params
 
 // Forward declare or include Abstract Plan Impl types (needed for return types)
 // These are defined in "omnidsp/interface/backend.hpp"

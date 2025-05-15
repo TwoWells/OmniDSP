@@ -41,23 +41,29 @@ namespace OmniDSP::Dispatcher {
     }
 
     auto logger = spdlog::get("OmniDSP");
-    if (logger) {
+    if (logger
+        && logger->should_log(
+            spdlog::level::info)) {  // Check log level for info
       logger->info(
           "DispatcherBackend created. Primary backend: {}",
-          OmniDSP::get_backend_name(primary_backend_->get_backend()));
+          primary_backend_->get_backend());  // Log BackendType enum directly
       if (!overrides_.empty()) {
         logger->info("  With the following overrides:");
         for (const auto& pair : overrides_) {
           if (pair.second) {
             logger->info(
                 "    Category {} -> Backend {}",
-                OmniDSP::get_operation_category_name(pair.first),
-                OmniDSP::get_backend_name(pair.second->get_backend()));
+                pair.first,  // Log OperationCategory enum directly
+                pair.second->get_backend());  // Log BackendType enum directly
           }
           else {
-            logger->warn(
-                "    Category {} has a null override backend pointer.",
-                OmniDSP::get_operation_category_name(pair.first));
+            // Warnings are often important, consider logging without level
+            // check or ensure warn level is active
+            if (logger->should_log(spdlog::level::warn)) {
+              logger->warn(
+                  "    Category {} has a null override backend pointer.",
+                  pair.first);  // Log OperationCategory enum directly
+            }
           }
         }
       }

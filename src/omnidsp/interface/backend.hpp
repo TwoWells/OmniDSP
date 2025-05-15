@@ -246,21 +246,25 @@ namespace OmniDSP::Abstract {
         size_t, std::span<F64>) const
         = 0;
 
-    // Plan Impl / Processor Impl Factory Methods
+    // FFTPlan Factory Methods
     [[nodiscard]] virtual OmniExpected<std::unique_ptr<FFTPlanImpl<C32>>>
     create_fft_plan_impl_c32(size_t length) const = 0;
     [[nodiscard]] virtual OmniExpected<std::unique_ptr<FFTPlanImpl<C64>>>
     create_fft_plan_impl_c64(size_t length) const = 0;
+
+    // RFFTPlan Factory Methods
     [[nodiscard]] virtual OmniExpected<std::unique_ptr<RFFTPlanImpl<F32>>>
     create_rfft_plan_impl_f32(size_t length) const = 0;
     [[nodiscard]] virtual OmniExpected<std::unique_ptr<RFFTPlanImpl<F64>>>
     create_rfft_plan_impl_f64(size_t length) const = 0;
 
+    // CQTProcessor Factory Methods
     [[nodiscard]] virtual OmniExpected<std::unique_ptr<CQTProcessorImpl<F32>>>
     create_cqt_processor_impl_f32(const Design::CQT& design) const = 0;
     [[nodiscard]] virtual OmniExpected<std::unique_ptr<CQTProcessorImpl<F64>>>
     create_cqt_processor_impl_f64(const Design::CQT& design) const = 0;
 
+    // ResampleProcessor Factory Methods
     [[nodiscard]] virtual OmniExpected<
         std::unique_ptr<ResampleProcessorImpl<F32>>>
     create_resample_processor_impl_f32(const Design::Resample& design) const
@@ -270,36 +274,33 @@ namespace OmniDSP::Abstract {
     create_resample_processor_impl_f64(const Design::Resample& design) const
         = 0;
 
+    // ConvolutionPlan Factory Methods
     [[nodiscard]] virtual OmniExpected<
         std::unique_ptr<ConvolutionPlanImpl<F32>>>
     create_convolution_plan_impl_f32(
-        const Params::Convolution&
-            params,  // Changed to use Params::Convolution
-        std::span<const F32> kernel_coeffs) const  // Changed to span and name
+        const Params::Convolution& params,
+        std::span<const F32> kernel_coeffs) const
         = 0;
     [[nodiscard]] virtual OmniExpected<
         std::unique_ptr<ConvolutionPlanImpl<F64>>>
     create_convolution_plan_impl_f64(
-        const Params::Convolution&
-            params,  // Changed to use Params::Convolution
-        std::span<const F64> kernel_coeffs) const  // Changed to span and name
+        const Params::Convolution& params,
+        std::span<const F64> kernel_coeffs) const
         = 0;
     [[nodiscard]] virtual OmniExpected<
         std::unique_ptr<ConvolutionPlanImpl<C32>>>
     create_convolution_plan_impl_c32(
-        const Params::Convolution&
-            params,  // Changed to use Params::Convolution
-        std::span<const C32> kernel_coeffs) const  // Changed to span and name
+        const Params::Convolution& params,
+        std::span<const C32> kernel_coeffs) const
         = 0;
     [[nodiscard]] virtual OmniExpected<
         std::unique_ptr<ConvolutionPlanImpl<C64>>>
     create_convolution_plan_impl_c64(
-        const Params::Convolution&
-            params,  // Changed to use Params::Convolution
-        std::span<const C64> kernel_coeffs) const  // Changed to span and name
+        const Params::Convolution& params,
+        std::span<const C64> kernel_coeffs) const
         = 0;
 
-    // Updated create_correlation_plan_impl signatures
+    // CorrelationPlan Factory Methods
     [[nodiscard]] virtual OmniExpected<
         std::unique_ptr<CorrelationPlanImpl<F32>>>
     create_correlation_plan_impl_f32(
@@ -325,11 +326,12 @@ namespace OmniDSP::Abstract {
         std::span<const C64> template_coeffs) const
         = 0;
 
+    // FIRFilterProcessor Factory Methods
     [[nodiscard]] virtual OmniExpected<
         std::unique_ptr<FIRFilterProcessorImpl<F32>>>
     create_fir_filter_processor_impl_f32(
         const Coefs::FIRFilter<F32>& coefficients) const
-        = 0;  // Assuming Coefs::FIRFilter<T> holds std::vector<T> or similar
+        = 0;
     [[nodiscard]] virtual OmniExpected<
         std::unique_ptr<FIRFilterProcessorImpl<F64>>>
     create_fir_filter_processor_impl_f64(
@@ -346,6 +348,7 @@ namespace OmniDSP::Abstract {
         const Coefs::FIRFilter<C64>& coefficients) const
         = 0;
 
+    // IIRFilterProcessor Factory Methods
     [[nodiscard]] virtual OmniExpected<
         std::unique_ptr<IIRFilterProcessorImpl<F32>>>
     create_iir_filter_processor_impl_f32(

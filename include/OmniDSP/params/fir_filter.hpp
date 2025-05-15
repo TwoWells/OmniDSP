@@ -6,13 +6,20 @@
 #ifndef OMNIDSP_PARAMS_FIR_FILTER_HPP
 #define OMNIDSP_PARAMS_FIR_FILTER_HPP
 
-#include <OmniDSP/core_types.hpp>    // For OMNIDSP_EXPORT
-#include <OmniDSP/types/filter.hpp>  // For FilterType, FIRFilterDesignMethod
-#include <OmniDSP/window.hpp>        // For WindowSetup
-#include <optional>                  // For std::optional
-#include <string>   // For std::string (used by constructor for exceptions)
-#include <utility>  // For std::move
-#include <vector>   // Not directly used, but common in DSP contexts
+#include <optional>  // For std::optional
+#include <ostream>   // For std::ostream
+#include <sstream>   // For std::ostringstream (used in operator<< for optional)
+#include <string>    // For std::string (used by constructor for exceptions)
+#include <utility>   // For std::move
+#include <vector>    // Not directly used, but common in DSP contexts
+
+#include "OmniDSP/core_types.hpp"  // For OMNIDSP_EXPORT
+#include "OmniDSP/types/filter.hpp"  // For FilterType, FIRFilterDesignMethod and their operator<<
+#include "OmniDSP/window.hpp"  // For WindowSetup, and its operator<<
+
+// Include fmt headers for custom formatter specialization
+#include <fmt/core.h>     // For basic formatting
+#include <fmt/ostream.h>  // Specifically for ostream_formatter
 
 // spdlog include is deferred to .cpp as definitions are moved there.
 
@@ -22,7 +29,7 @@ namespace OmniDSP::Params {
    * @brief Parameters for designing a Finite Impulse Response (FIR) filter.
    *
    * This structure is typically used as input to a utility function (e.g.,
-   * `OmniDSP::Utils::create_spec`) which then calculates a full
+   * `OmniDSP::Utils::create_design`) which then calculates a full
    * `OmniDSP::Design::FIRFilter`.
    *
    * Construction of this object validates the provided parameters.
@@ -60,9 +67,9 @@ namespace OmniDSP::Params {
         window_setup_;  ///< Windowing function setup to be used for design
                         ///< methods like WindowSinc. The `length` field of this
                         ///< `WindowSetup` object is typically ignored by the
-                        ///< `Utils::create_spec` function, as the filter design
-                        ///< process determines the required number of taps
-                        ///< (order + 1) and uses that for the window
+                        ///< `Utils::create_design` function, as the filter
+                        ///< design process determines the required number of
+                        ///< taps (order + 1) and uses that for the window
                         ///< generation. The user should specify window type and
                         ///< its parameters (e.g. beta for Kaiser).
 
@@ -81,7 +88,7 @@ namespace OmniDSP::Params {
         std::optional<size_t> p_order = std::nullopt,
         std::optional<double> p_transition_width = std::nullopt,
         std::optional<double> p_stopband_attenuation_db = std::nullopt,
-        WindowSetup p_window_setup = WindowSetup{WindowType::Hann, 0},
+        WindowSetup p_window_setup = WindowSetup{Type::Window::Hann, 0},
         FIRFilterDesignMethod p_design_method
         = FIRFilterDesignMethod::WindowSinc);
 
@@ -104,6 +111,54 @@ namespace OmniDSP::Params {
     FIRFilter& design_method(FIRFilterDesignMethod val);
   };
 
+  /**
+   * @brief Overloads the << operator for easy printing/logging of
+   * Params::FIRFilter.
+   * @param os The output stream.
+   * @param params The Params::FIRFilter object to print.
+   * @return A reference to the output stream.
+   */
+  inline std::ostream& operator<<(std::ostream& os, const FIRFilter& params)
+  {
+    os << "Params::FIRFilter(Type: "
+       << params.filter_type_  // Uses FilterType::operator<<
+       << ", SR: " << params.sample_rate_ << ", Cutoff1: " << params.cutoff1_;
+    if (params.cutoff2_) {
+      os << ", Cutoff2: " << params.cutoff2_.value();
+    }
+    else {
+      os << ", Cutoff2: None";
+    }
+    if (params.transition_width_) {
+      os << ", TW: " << params.transition_width_.value();
+    }
+    else {
+      os << ", TW: None";
+    }
+    if (params.stopband_attenuation_db_) {
+      os << ", StopAtten: " << params.stopband_attenuation_db_.value() << "dB";
+    }
+    else {
+      os << ", StopAtten: None";
+    }
+    if (params.order_) {
+      os << ", Order: " << params.order_.value();
+    }
+    else {
+      os << ", Order: None (estimate)";
+    }
+    os << ", Window: "
+       << params.window_setup_  // Relies on WindowSetup's operator<<
+       << ", Method: "
+       << params.design_method_  // Uses FIRFilterDesignMethod::operator<<
+       << ")";
+    return os;
+  }
+
 }  // namespace OmniDSP::Params
+
+// Specialization of fmt::formatter for OmniDSP::Params::FIRFilter
+template <>
+struct fmt::formatter<OmniDSP::Params::FIRFilter> : fmt::ostream_formatter {};
 
 #endif  // OMNIDSP_PARAMS_FIR_FILTER_HPP

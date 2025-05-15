@@ -6,11 +6,17 @@
 #ifndef OMNIDSP_PARAMS_IIR_FILTER_HPP
 #define OMNIDSP_PARAMS_IIR_FILTER_HPP
 
-#include <OmniDSP/core_types.hpp>    // For OMNIDSP_EXPORT
-#include <OmniDSP/types/filter.hpp>  // For FilterType, IIRFilterFormat
+#include <OmniDSP/core_types.hpp>  // For OMNIDSP_EXPORT
+#include <OmniDSP/types/filter.hpp>  // For FilterType, IIRFilterFormat and their operator<<
 #include <optional>                  // For std::optional
+#include <ostream>                   // For std::ostream
+#include <sstream>  // For std::ostringstream (used in operator<< for optional)
 #include <string>   // For std::string (used by constructor for exceptions)
 #include <utility>  // For std::move
+
+// Include fmt headers for custom formatter specialization
+#include <fmt/core.h>     // For basic formatting
+#include <fmt/ostream.h>  // Specifically for ostream_formatter
 
 // spdlog include is deferred to .cpp
 
@@ -20,7 +26,7 @@ namespace OmniDSP::Params {
    * @brief Parameters for designing an Infinite Impulse Response (IIR) filter.
    *
    * This structure is typically used as input to a utility function (e.g.,
-   * `OmniDSP::Utils::create_spec`) which then calculates a full
+   * `OmniDSP::Utils::create_design`) which then calculates a full
    * `OmniDSP::Design::IIRFilter`.
    *
    * Construction of this object validates the provided parameters.
@@ -84,6 +90,47 @@ namespace OmniDSP::Params {
     IIRFilter& output_format(IIRFilterFormat val);
   };
 
+  /**
+   * @brief Overloads the << operator for easy printing/logging of
+   * Params::IIRFilter.
+   * @param os The output stream.
+   * @param params The Params::IIRFilter object to print.
+   * @return A reference to the output stream.
+   */
+  inline std::ostream& operator<<(std::ostream& os, const IIRFilter& params)
+  {
+    os << "Params::IIRFilter(Type: "
+       << params.filter_type_  // Uses FilterType::operator<<
+       << ", SR: " << params.sample_rate_ << ", Order: " << params.order_
+       << ", Cutoff1: " << params.cutoff1_;
+    if (params.cutoff2_) {
+      os << ", Cutoff2: " << params.cutoff2_.value();
+    }
+    else {
+      os << ", Cutoff2: None";
+    }
+    if (params.passband_ripple_db_) {
+      os << ", RippleDB: " << params.passband_ripple_db_.value();
+    }
+    else {
+      os << ", RippleDB: None";
+    }
+    if (params.stopband_attenuation_db_) {
+      os << ", StopAttenDB: " << params.stopband_attenuation_db_.value();
+    }
+    else {
+      os << ", StopAttenDB: None";
+    }
+    os << ", Format: "
+       << params.output_format_  // Uses IIRFilterFormat::operator<<
+       << ")";
+    return os;
+  }
+
 }  // namespace OmniDSP::Params
+
+// Specialization of fmt::formatter for OmniDSP::Params::IIRFilter
+template <>
+struct fmt::formatter<OmniDSP::Params::IIRFilter> : fmt::ostream_formatter {};
 
 #endif  // OMNIDSP_PARAMS_IIR_FILTER_HPP

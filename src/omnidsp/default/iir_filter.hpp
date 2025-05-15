@@ -7,8 +7,9 @@
 #ifndef OMNIDSP_DEFAULT_IIR_FILTER_HPP
 #define OMNIDSP_DEFAULT_IIR_FILTER_HPP
 
+#include <OmniDSP/coefs/iir_filter.hpp>  // For Design::IIRFilter, Coefs::SOS (public specs)
 #include <OmniDSP/core_types.hpp>  // Status, F32, F64, OmniExpected
-#include <OmniDSP/iir_filter.hpp>  // For Design::IIRFilter, Coefs::SOS (public specs)
+#include <OmniDSP/design/iir_filter.hpp>  // For Design::IIRFilter, Coefs::SOS (public specs)
 #include <complex>
 #include <cstddef>  // For size_t
 #include <span>     // For std::span

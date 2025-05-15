@@ -8,9 +8,14 @@
 #ifndef OMNIDSP_TYPES_CONVOLUTION_HPP
 #define OMNIDSP_TYPES_CONVOLUTION_HPP
 
-#include <string_view>  // For std::string_view
+#include <ostream>  // For std::ostream
+#include <string_view>  // For std::string_view (can be removed if not used elsewhere)
 
 #include "OmniDSP/omnidsp_export.hpp"  // For OMNIDSP_EXPORT if enums need it
+
+// Include fmt headers for custom formatter specialization
+#include <fmt/core.h>     // For basic formatting
+#include <fmt/ostream.h>  // Specifically for ostream_formatter
 
 namespace OmniDSP {
 
@@ -29,6 +34,32 @@ namespace OmniDSP {
   };
 
   /**
+   * @brief Overloads the << operator for easy printing/logging of
+   * ConvolutionType.
+   * @param os The output stream.
+   * @param type The ConvolutionType enum value to print.
+   * @return A reference to the output stream.
+   */
+  inline std::ostream& operator<<(std::ostream& os, ConvolutionType type)
+  {
+    switch (type) {
+      case ConvolutionType::Full:
+        os << "Full";
+        break;
+      case ConvolutionType::Same:
+        os << "Same";
+        break;
+      case ConvolutionType::Valid:
+        os << "Valid";
+        break;
+      default:
+        os << "Unknown ConvolutionType";
+        break;
+    }
+    return os;
+  }
+
+  /**
    * @brief Specifies the underlying algorithm to use for
    * convolution/correlation.
    */
@@ -37,6 +68,32 @@ namespace OmniDSP {
     Direct,  ///< Use direct, time-domain computation.
     FFT      ///< Use FFT-based computation in the frequency domain.
   };
+
+  /**
+   * @brief Overloads the << operator for easy printing/logging of
+   * ConvolutionMethod.
+   * @param os The output stream.
+   * @param method The ConvolutionMethod enum value to print.
+   * @return A reference to the output stream.
+   */
+  inline std::ostream& operator<<(std::ostream& os, ConvolutionMethod method)
+  {
+    switch (method) {
+      case ConvolutionMethod::Auto:
+        os << "Auto";
+        break;
+      case ConvolutionMethod::Direct:
+        os << "Direct";
+        break;
+      case ConvolutionMethod::FFT:
+        os << "FFT";
+        break;
+      default:
+        os << "Unknown ConvolutionMethod";
+        break;
+    }
+    return os;
+  }
 
   /**
    * @brief Specifies how to pad signals, typically before operations like
@@ -60,68 +117,49 @@ namespace OmniDSP {
   };
 
   /**
-   * @brief Gets the string name corresponding to a ConvolutionType.
-   * @param type The convolution type.
-   * @return A string_view representing the name of the convolution type.
+   * @brief Overloads the << operator for easy printing/logging of PaddingMode.
+   * @param os The output stream.
+   * @param mode The PaddingMode enum value to print.
+   * @return A reference to the output stream.
    */
-  inline std::string_view get_convolution_type_name(
-      ConvolutionType type) noexcept
-  {
-    switch (type) {
-      case ConvolutionType::Full:
-        return "Full";
-      case ConvolutionType::Same:
-        return "Same";
-      case ConvolutionType::Valid:
-        return "Valid";
-      default:
-        return "Unknown ConvolutionType";
-    }
-  }
-
-  /**
-   * @brief Gets the string name corresponding to a ConvolutionMethod.
-   * @param method The convolution method.
-   * @return A string_view representing the name of the convolution method.
-   */
-  inline std::string_view get_convolution_method_name(
-      ConvolutionMethod method) noexcept
-  {
-    switch (method) {
-      case ConvolutionMethod::Auto:
-        return "Auto";
-      case ConvolutionMethod::Direct:
-        return "Direct";
-      case ConvolutionMethod::FFT:
-        return "FFT";
-      default:
-        return "Unknown ConvolutionMethod";
-    }
-  }
-
-  /**
-   * @brief Gets the string name corresponding to a PaddingMode.
-   * @param mode The padding mode.
-   * @return A string_view representing the name of the padding mode.
-   */
-  inline std::string_view get_padding_mode_name(PaddingMode mode) noexcept
+  inline std::ostream& operator<<(std::ostream& os, PaddingMode mode)
   {
     switch (mode) {
       case PaddingMode::Zeros:
-        return "Zeros";
+        os << "Zeros";
+        break;
       case PaddingMode::Constant:
-        return "Constant";
+        os << "Constant";
+        break;
       case PaddingMode::Reflect:
-        return "Reflect";
+        os << "Reflect";
+        break;
       case PaddingMode::Symmetric:
-        return "Symmetric";
+        os << "Symmetric";
+        break;
       case PaddingMode::Wrap:
-        return "Wrap";
+        os << "Wrap";
+        break;
       default:
-        return "Unknown PaddingMode";
+        os << "Unknown PaddingMode";
+        break;
     }
+    return os;
   }
 
+  // Removed old get_..._name functions:
+  // get_convolution_type_name(ConvolutionType type)
+  // get_convolution_method_name(ConvolutionMethod method)
+  // get_padding_mode_name(PaddingMode mode)
+
 }  // namespace OmniDSP
+
+// fmt::formatter specializations for direct logging with spdlog using {}
+template <>
+struct fmt::formatter<OmniDSP::ConvolutionType> : fmt::ostream_formatter {};
+template <>
+struct fmt::formatter<OmniDSP::ConvolutionMethod> : fmt::ostream_formatter {};
+template <>
+struct fmt::formatter<OmniDSP::PaddingMode> : fmt::ostream_formatter {};
 
 #endif  // OMNIDSP_TYPES_CONVOLUTION_HPP

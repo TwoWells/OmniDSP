@@ -7,11 +7,11 @@
 #define OMNIDSP_DEFAULT_CQT_HPP
 
 #include <OmniDSP/core_types.hpp>
-#include <OmniDSP/cqt.hpp>       // For Abstract::CQTPlanImpl and Design::CQT
-#include <OmniDSP/fft.hpp>       // For RFFTPlan (used internally)
-#include <OmniDSP/resample.hpp>  // For ResamplePlan (used internally)
-#include <OmniDSP/window.hpp>    // For WindowSetup
-#include <memory>                // For std::unique_ptr
+#include <OmniDSP/design/cqt.hpp>
+#include <OmniDSP/plan/fft.hpp>
+#include <OmniDSP/processor/resample.hpp>
+#include <OmniDSP/window.hpp>  // For WindowSetup
+#include <memory>              // For std::unique_ptr
 #include <span>
 #include <vector>
 
@@ -65,10 +65,10 @@ namespace OmniDSP::Default {
     // Internal structure to hold processed data for each octave
     struct ProcessedCQTOctave {
       double octave_sample_rate;
-      std::unique_ptr<ResampleProcessor<T>>
+      std::unique_ptr<Processor::Resample<T>>
           resampler;  // Plan to resample to this octave's rate (nullable if
                       // original SR)
-      std::unique_ptr<RFFTPlan<T>> rfft_plan;  // FFT plan for this octave
+      std::unique_ptr<Plan::RFFT<T>> rfft_plan;  // FFT plan for this octave
       std::vector<std::vector<Complex>>
           sparse_kernels_fft;  // Pre-computed FFTs of CQT analysis kernels for
                                // this octave
@@ -81,8 +81,8 @@ namespace OmniDSP::Default {
       // Constructor for ProcessedCQTOctave
       ProcessedCQTOctave(
           double osr,
-          std::unique_ptr<ResampleProcessor<T>> rs_processor,
-          std::unique_ptr<RFFTPlan<T>> rf_plan,
+          std::unique_ptr<Processor::Resample<T>> rs_processor,
+          std::unique_ptr<Plan::RFFT<T>> rf_plan,
           std::vector<std::vector<Complex>> sk_fft,
           size_t fl,
           std::vector<double> bf)

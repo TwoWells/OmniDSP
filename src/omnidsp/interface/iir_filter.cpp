@@ -5,7 +5,7 @@
  * TODO: Rename to IIRFilterProcessor if these become stateful.
  */
 
-#include "OmniDSP/iir_filter.hpp"  // Corresponding header for IIRFilterPlan
+#include "OmniDSP/processor/iir_filter.hpp"  // Corresponding header for IIRFilterPlan
 
 // Include the backend interface definition which declares the Impl classes
 #include <memory>     // For std::unique_ptr
@@ -18,25 +18,23 @@
 // TODO: This should become Abstract::IIRFilterProcessorImpl
 #include "OmniDSP/core_types.hpp"  // For F32, F64
 
-namespace OmniDSP {
+namespace OmniDSP::Processor {
 
   //--------------------------------------------------------------------------
-  // IIRFilterProcessor Method Definitions
-  // TODO: Rename to IIRFilterProcessor if stateful
+  // Processor::IIRFilter Method Definitions
   //--------------------------------------------------------------------------
 
   /**
    * @brief Private constructor used by OmniDSP factory methods.
    */
   template <typename T>
-  IIRFilterProcessor<T>::IIRFilterProcessor(  // Or IIRFilterProcessor
-      std::unique_ptr<Abstract::IIRFilterProcessorImpl<T>>
-          pimpl)  // Adjust Impl type
+  IIRFilter<T>::IIRFilter(std::unique_ptr<Abstract::IIRFilterProcessorImpl<T>>
+                              pimpl)  // Adjust Impl type
       : pimpl_(std::move(pimpl))
   {
     if (!pimpl_) {
       throw std::runtime_error(
-          "IIRFilterProcessor/Processor cannot be created with a null "
+          "Processor::IIRFilter cannot be created with a null "
           "implementation pointer.");
     }
   }
@@ -45,33 +43,27 @@ namespace OmniDSP {
    * @brief Destructor.
    */
   template <typename T>
-  IIRFilterProcessor<T>::~IIRFilterProcessor()
-      = default;  // Or IIRFilterProcessor
+  IIRFilter<T>::~IIRFilter() = default;
 
   /**
    * @brief Move constructor.
    */
   template <typename T>
-  IIRFilterProcessor<T>::IIRFilterProcessor(IIRFilterProcessor&& other) noexcept
-      = default;  // Or IIRFilterProcessor
+  IIRFilter<T>::IIRFilter(IIRFilter&& other) noexcept = default;
 
   /**
    * @brief Move assignment operator.
    */
   template <typename T>
-  IIRFilterProcessor<T>& IIRFilterProcessor<T>::operator=(
-      IIRFilterProcessor&& other) noexcept
-      = default;  // Or IIRFilterProcessor
+  IIRFilter<T>& IIRFilter<T>::operator=(IIRFilter&& other) noexcept = default;
 
   /**
    * @brief Applies the IIR filter (cascade of SOS) to an input signal.
    */
   template <typename T>
-  [[nodiscard]] OmniStatus
-  IIRFilterProcessor<T>::execute(  // Or IIRFilterProcessor
-      std::span<const T> input,
-      std::span<T> output)
-  {  // Potentially non-const if Processor
+  [[nodiscard]] OmniStatus IIRFilter<T>::execute(
+      std::span<const T> input, std::span<T> output)
+  {
     if (!pimpl_) {
       return OmniStatus::InvalidOperation;
     }
@@ -82,8 +74,8 @@ namespace OmniDSP {
    * @brief Resets the internal state of the filter (delay elements).
    */
   template <typename T>
-  OmniStatus IIRFilterProcessor<T>::reset()
-  {  // Or IIRFilterProcessor
+  OmniStatus IIRFilter<T>::reset()
+  {
     if (!pimpl_) {
       return OmniStatus::InvalidOperation;
     }
@@ -94,11 +86,11 @@ namespace OmniDSP {
    * @brief Gets the order of the IIR filter.
    */
   template <typename T>
-  size_t IIRFilterProcessor<T>::get_order() const
-  {  // Or IIRFilterProcessor
+  size_t IIRFilter<T>::get_order() const
+  {
     if (!pimpl_) {
       throw std::runtime_error(
-          "Invalid IIRFilterProcessor/Processor instance: Implementation "
+          "Invalid Processor::IIRFilter instance: Implementation "
           "pointer is "
           "null in get_order.");
     }
@@ -109,11 +101,11 @@ namespace OmniDSP {
    * @brief Gets the number of second-order sections used in the filter.
    */
   template <typename T>
-  size_t IIRFilterProcessor<T>::get_num_sections() const
-  {  // Or IIRFilterProcessor
+  size_t IIRFilter<T>::get_num_sections() const
+  {
     if (!pimpl_) {
       throw std::runtime_error(
-          "Invalid IIRFilterProcessor/Processor instance: Implementation "
+          "Invalid Processor::IIRFilter instance: Implementation "
           "pointer is "
           "null in get_num_sections.");
     }
@@ -121,14 +113,13 @@ namespace OmniDSP {
   }
 
   //--------------------------------------------------------------------------
-  // Explicit Template Instantiations for IIRFilterProcessor
+  // Explicit Template Instantiations for Processor::IIRFilter
   //--------------------------------------------------------------------------
-  // IIRFilterProcessor (Typically Real)
-  // TODO: Rename to IIRFilterProcessor if stateful
-  template class OMNIDSP_EXPORT IIRFilterProcessor<F32>;
-  template class OMNIDSP_EXPORT IIRFilterProcessor<F64>;
+
+  template class OMNIDSP_EXPORT IIRFilter<F32>;
+  template class OMNIDSP_EXPORT IIRFilter<F64>;
 
   // The static create_from_impl method is defined inline in the header,
   // so it does not need separate explicit instantiation here.
 
-}  // namespace OmniDSP
+}  // namespace OmniDSP::Processor

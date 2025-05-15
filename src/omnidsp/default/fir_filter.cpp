@@ -6,11 +6,14 @@
 
 #include "fir_filter.hpp"  // Corresponding header
 
-#include <OmniDSP/core_types.hpp>  // Core types, Status, OmniExpected, C32Vec, C64Vec
-#include <OmniDSP/fir_filter.hpp>  // Public Design::FIRFilter, FIRCoefs
-#include <OmniDSP/iir_filter.hpp>  // Public Design::FIRFilter (Likely a typo, should be fir_filter.hpp or not needed here)
-#include <OmniDSP/types/filter.hpp>  // For FilterType enum
-#include <OmniDSP/window.hpp>        // For OmniDSP::generate_window
+#include "OmniDSP/coefs/fir_filter.hpp"  // Public Design::FIRFilter, FIRCoefs
+#include "OmniDSP/coefs/iir_filter.hpp"  // Public Design::FIRFilter (Likely a typo, should be fir_filter.hpp or not needed here)
+#include "OmniDSP/core_types.hpp"  // Core types, Status, OmniExpected, C32Vec, C64Vec
+#include "OmniDSP/design/fir_filter.hpp"  // Public Design::FIRFilter, FIRCoefs
+#include "OmniDSP/design/iir_filter.hpp"  // Public Design::FIRFilter (Likely a typo, should be fir_filter.hpp or not needed here)
+#include "OmniDSP/types/filter.hpp"       // For FilterType enum
+#include "OmniDSP/window.hpp"             // For OmniDSP::generate_window
+                                          //
 #include <algorithm>  // For std::copy, std::fill, std::min, std::max
 #include <cmath>  // For std::sin, std::cos, std::abs, std::log10, std::pow, std::sqrt
 #include <complex>  // For std::complex, std::real, std::imag

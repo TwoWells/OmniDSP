@@ -8,26 +8,51 @@
 
 #include <cstddef>  // For size_t
 #include <optional>
+#include <ostream>  // For std::ostream
+#include <sstream>  // For std::ostringstream (for optional)
 #include <vector>
 
-#include "OmniDSP/core_types.hpp"    // For OMNIDSP_EXPORT
-#include "OmniDSP/types/filter.hpp"  // For FilterType, IIRFilterFormat
+#include "OmniDSP/core_types.hpp"  // For OMNIDSP_EXPORT
+#include "OmniDSP/types/filter.hpp"  // For FilterType, IIRFilterFormat and their operator<<
+
+// Include fmt headers for custom formatter specialization
+#include <fmt/core.h>     // For basic formatting
+#include <fmt/ostream.h>  // Specifically for ostream_formatter
 
 namespace OmniDSP::Design {
 
   /**
    * @brief Design specification for an IIR filter.
+   * @details This structure holds all the necessary parameters that define a
+   * specific IIR filter design, typically after being resolved from
+   * Params::IIRFilter.
    */
   struct OMNIDSP_EXPORT IIRFilter {
-    FilterType type = FilterType::Lowpass;
-    size_t order = 4;
-    double sample_rate = 1.0;
-    double cutoff1 = 0.1;
-    std::optional<double> cutoff2 = std::nullopt;
-    std::optional<double> passband_ripple_db = std::nullopt;
-    std::optional<double> stopband_attenuation_db = std::nullopt;
-    IIRFilterFormat output_format = IIRFilterFormat::SOS;
+    FilterType type;     ///< Type of filter (e.g., Lowpass, Highpass).
+    size_t order;        ///< Filter order.
+    double sample_rate;  ///< Sample rate of the signal in Hz.
+    double cutoff1;      ///< Primary cutoff frequency in Hz.
+    std::optional<double> cutoff2;  ///< Optional secondary cutoff frequency in
+                                    ///< Hz (for Bandpass/Bandstop).
+    std::optional<double>
+        passband_ripple_db;  ///< Optional passband ripple in positive dB.
+    std::optional<double>
+        stopband_attenuation_db;  ///< Optional stopband attenuation in positive
+                                  ///< dB.
+    IIRFilterFormat output_format;  ///< Desired output format for coefficients
+                                    ///< (SOS or TransferFunction).
 
+    /**
+     * @brief Explicit constructor for an IIRFilter design specification.
+     * @param p_type Type of the filter.
+     * @param p_order Filter order.
+     * @param p_sample_rate Sample rate in Hz.
+     * @param p_cutoff1 Primary cutoff frequency in Hz.
+     * @param p_cutoff2 Optional secondary cutoff frequency in Hz.
+     * @param p_passband_ripple_db Optional passband ripple in dB.
+     * @param p_stopband_attenuation_db Optional stopband attenuation in dB.
+     * @param p_output_format Desired coefficient output format.
+     */
     explicit IIRFilter(
         FilterType p_type,
         size_t p_order,
@@ -47,6 +72,10 @@ namespace OmniDSP::Design {
           output_format(p_output_format)
     {}
 
+    /**
+     * @brief Validates the consistency of the IIR filter design parameters.
+     * @return True if the parameters are consistent, false otherwise.
+     */
     [[nodiscard]] bool validate_consistency() const
     {
       if (order == 0) return false;
@@ -71,6 +100,47 @@ namespace OmniDSP::Design {
     }
   };
 
+  /**
+   * @brief Overloads the << operator for easy printing/logging of
+   * Design::IIRFilter.
+   * @param os The output stream.
+   * @param spec The Design::IIRFilter object to print.
+   * @return A reference to the output stream.
+   */
+  inline std::ostream& operator<<(std::ostream& os, const IIRFilter& spec)
+  {
+    os << "Design::IIRFilter(Type: "
+       << spec.type  // Uses FilterType::operator<<
+       << ", Order: " << spec.order << ", SR: " << spec.sample_rate
+       << ", Cutoff1: " << spec.cutoff1;
+    if (spec.cutoff2) {
+      os << ", Cutoff2: " << spec.cutoff2.value();
+    }
+    else {
+      os << ", Cutoff2: None";
+    }
+    if (spec.passband_ripple_db) {
+      os << ", RippleDB: " << spec.passband_ripple_db.value();
+    }
+    else {
+      os << ", RippleDB: None";
+    }
+    if (spec.stopband_attenuation_db) {
+      os << ", StopAttenDB: " << spec.stopband_attenuation_db.value();
+    }
+    else {
+      os << ", StopAttenDB: None";
+    }
+    os << ", Format: "
+       << spec.output_format  // Uses IIRFilterFormat::operator<<
+       << ")";
+    return os;
+  }
+
 }  // namespace OmniDSP::Design
+
+// Specialization of fmt::formatter for OmniDSP::Design::IIRFilter
+template <>
+struct fmt::formatter<OmniDSP::Design::IIRFilter> : fmt::ostream_formatter {};
 
 #endif  // OMNIDSP_DESIGN_IIR_FILTER_HPP

@@ -45,16 +45,18 @@ set(OMNIDSP_BACKEND_INTELIPP_ENABLED 0)
 # --- Define Core Library Sources ---
 
 set(OMNIDSP_CORE_HEADERS
-    "${CMAKE_SOURCE_DIR}/include/OmniDSP/convolution.hpp"
     "${CMAKE_SOURCE_DIR}/include/OmniDSP/core_types.hpp"
-    "${CMAKE_SOURCE_DIR}/include/OmniDSP/cqt.hpp"
-    "${CMAKE_SOURCE_DIR}/include/OmniDSP/fft.hpp"
-    "${CMAKE_SOURCE_DIR}/include/OmniDSP/fir_filter.hpp"
-    "${CMAKE_SOURCE_DIR}/include/OmniDSP/iir_filter.hpp"
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/design.hpp"
     "${CMAKE_SOURCE_DIR}/include/OmniDSP/omnidsp.hpp"
-    "${CMAKE_SOURCE_DIR}/include/OmniDSP/resample.hpp"
-    "${CMAKE_SOURCE_DIR}/include/OmniDSP/utils.hpp"
     "${CMAKE_SOURCE_DIR}/include/OmniDSP/window.hpp"
+    # include/OmniDSP/plan
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/plan/fft.hpp"
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/plan/convolution.hpp"
+    # include/OmniDSP/processor
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/processor/cqt.hpp"
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/processor/fir_filter.hpp"
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/processor/iir_filter.hpp"
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/processor/resample.hpp"
     # include/OmniDSP/params
     "${CMAKE_SOURCE_DIR}/include/OmniDSP/params/convolution.hpp"
     "${CMAKE_SOURCE_DIR}/include/OmniDSP/params/cqt.hpp"
@@ -65,20 +67,19 @@ set(OMNIDSP_CORE_HEADERS
     # include/OmniDSP/types
     "${CMAKE_SOURCE_DIR}/include/OmniDSP/types/convolution.hpp"
     "${CMAKE_SOURCE_DIR}/include/OmniDSP/types/filter.hpp"
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/types/window.hpp"
     # include/OmniDSP/coefs
     "${CMAKE_SOURCE_DIR}/include/OmniDSP/coefs/fir_filter.hpp"
     "${CMAKE_SOURCE_DIR}/include/OmniDSP/coefs/iir_filter.hpp"
     # include/OmniDSP/design
-    "${CMAKE_SOURCE_DIR}/include/OmniDSP/design/cqt.hpp"
     "${CMAKE_SOURCE_DIR}/include/OmniDSP/design/fir_filter.hpp"
-    "${CMAKE_SOURCE_DIR}/include/OmniDSP/design/iir_filter.hpp"
     "${CMAKE_SOURCE_DIR}/include/OmniDSP/design/resample.hpp"
 )
 
 set(OMNIDSP_CORE_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/omnidsp.cpp" # Main class implementation
     # Params implementations (constructors)
-    "${CMAKE_CURRENT_SOURCE_DIR}/params/convolution.cpp" # Added this line
+    "${CMAKE_CURRENT_SOURCE_DIR}/params/convolution.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/params/cqt.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/params/fft.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/params/fir_filter.cpp"
@@ -92,11 +93,10 @@ set(OMNIDSP_CORE_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/interface/iir_filter.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/interface/resample.cpp"
     # Utils implementations
-    "${CMAKE_CURRENT_SOURCE_DIR}/utils/cqt_design.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/utils/filter_design.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/utils/iir_filter_design.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/utils/resample_design.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/utils/resample.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/design/cqt.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/design/fir_filter.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/design/iir_filter.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/design/resample.cpp"
     # Dispatcher
     "${CMAKE_CURRENT_SOURCE_DIR}/dispatcher/backend.cpp"
 )

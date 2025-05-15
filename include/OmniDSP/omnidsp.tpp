@@ -8,15 +8,15 @@
 #define OMNIDSP_TPP
 
 #include "OmniDSP/omnidsp.hpp" // Primary header
-#include "OmniDSP/utils.hpp"   // For Utils::create_spec
+#include "OmniDSP/design.hpp"
 
 // Include public Plan and Processor headers
-#include "OmniDSP/fft.hpp"
-#include "OmniDSP/convolution.hpp"
-#include "OmniDSP/cqt.hpp"
-#include "OmniDSP/resample.hpp"
-#include "OmniDSP/fir_filter.hpp"
-#include "OmniDSP/iir_filter.hpp"
+#include "OmniDSP/plan/fft.hpp"
+#include "OmniDSP/plan/convolution.hpp"
+#include "OmniDSP/processor/cqt.hpp"
+#include "OmniDSP/processor/fir_filter.hpp"
+#include "OmniDSP/processor/iir_filter.hpp"
+#include "OmniDSP/processor/resample.hpp"
 
 // Include Params headers for use in create_processor/create_plan
 #include "OmniDSP/params/fft.hpp"
@@ -222,36 +222,36 @@ OmniExpected<std::vector<T>> OmniDSP::generate_window(const WindowSetup& setup) 
 
     if constexpr (std::is_same_v<T, F32>) {
         switch (setup.type) {
-            case WindowType::Bartlett:    status = pimpl_->bartlett_window_f32(coeffs.size(), coeffs); break;
-            case WindowType::Blackman:    status = pimpl_->blackman_window_f32(coeffs.size(), coeffs); break;
-            case WindowType::Flattop:     status = pimpl_->flattop_window_f32(coeffs.size(), coeffs); break;
-            case WindowType::Gaussian:
+            case Type::Window::Bartlett:    status = pimpl_->bartlett_window_f32(coeffs.size(), coeffs); break;
+            case Type::Window::Blackman:    status = pimpl_->blackman_window_f32(coeffs.size(), coeffs); break;
+            case Type::Window::Flattop:     status = pimpl_->flattop_window_f32(coeffs.size(), coeffs); break;
+            case Type::Window::Gaussian:
                 status = pimpl_->gaussian_window_f32(coeffs.size(), setup.params.has_value() && setup.params.value().count("sigma") ? setup.params.value().at("sigma") : 0.25, coeffs);
                 break;
-            case WindowType::Hamming:     status = pimpl_->hamming_window_f32(coeffs.size(), coeffs); break;
-            case WindowType::Hann:        status = pimpl_->hann_window_f32(coeffs.size(), coeffs); break;
-            case WindowType::Kaiser:
+            case Type::Window::Hamming:     status = pimpl_->hamming_window_f32(coeffs.size(), coeffs); break;
+            case Type::Window::Hann:        status = pimpl_->hann_window_f32(coeffs.size(), coeffs); break;
+            case Type::Window::Kaiser:
                 status = pimpl_->kaiser_window_f32(coeffs.size(), setup.params.has_value() && setup.params.value().count("beta") ? setup.params.value().at("beta") : 0.0, coeffs);
                 break;
-            case WindowType::Rectangular: status = pimpl_->rectangular_window_f32(coeffs.size(), coeffs); break;
-            case WindowType::Triangular:  status = pimpl_->triangular_window_f32(coeffs.size(), coeffs); break;
+            case Type::Window::Rectangular: status = pimpl_->rectangular_window_f32(coeffs.size(), coeffs); break;
+            case Type::Window::Triangular:  status = pimpl_->triangular_window_f32(coeffs.size(), coeffs); break;
             default:                      status = OmniStatus::UnsupportedFeature; break;
         }
     } else if constexpr (std::is_same_v<T, F64>) {
          switch (setup.type) {
-            case WindowType::Bartlett:    status = pimpl_->bartlett_window_f64(coeffs.size(), coeffs); break;
-            case WindowType::Blackman:    status = pimpl_->blackman_window_f64(coeffs.size(), coeffs); break;
-            case WindowType::Flattop:     status = pimpl_->flattop_window_f64(coeffs.size(), coeffs); break;
-            case WindowType::Gaussian:
+            case Type::Window::Bartlett:    status = pimpl_->bartlett_window_f64(coeffs.size(), coeffs); break;
+            case Type::Window::Blackman:    status = pimpl_->blackman_window_f64(coeffs.size(), coeffs); break;
+            case Type::Window::Flattop:     status = pimpl_->flattop_window_f64(coeffs.size(), coeffs); break;
+            case Type::Window::Gaussian:
                 status = pimpl_->gaussian_window_f64(coeffs.size(), setup.params.has_value() && setup.params.value().count("sigma") ? setup.params.value().at("sigma") : 0.25, coeffs);
                 break;
-            case WindowType::Hamming:     status = pimpl_->hamming_window_f64(coeffs.size(), coeffs); break;
-            case WindowType::Hann:        status = pimpl_->hann_window_f64(coeffs.size(), coeffs); break;
-            case WindowType::Kaiser:
+            case Type::Window::Hamming:     status = pimpl_->hamming_window_f64(coeffs.size(), coeffs); break;
+            case Type::Window::Hann:        status = pimpl_->hann_window_f64(coeffs.size(), coeffs); break;
+            case Type::Window::Kaiser:
                 status = pimpl_->kaiser_window_f64(coeffs.size(), setup.params.has_value() && setup.params.value().count("beta") ? setup.params.value().at("beta") : 0.0, coeffs);
                 break;
-            case WindowType::Rectangular: status = pimpl_->rectangular_window_f64(coeffs.size(), coeffs); break;
-            case WindowType::Triangular:  status = pimpl_->triangular_window_f64(coeffs.size(), coeffs); break;
+            case Type::Window::Rectangular: status = pimpl_->rectangular_window_f64(coeffs.size(), coeffs); break;
+            case Type::Window::Triangular:  status = pimpl_->triangular_window_f64(coeffs.size(), coeffs); break;
             default:                      status = OmniStatus::UnsupportedFeature; break;
         }
     } else {
@@ -268,15 +268,15 @@ OmniExpected<std::vector<T>> OmniDSP::generate_window(const WindowSetup& setup) 
 }
 
 // Deprecated window functions
-template <typename T> OmniExpected<std::vector<T>> OmniDSP::bartlett_window(size_t length) const { return generate_window<T>(WindowSetup(WindowType::Bartlett, static_cast<int>(length))); }
-template <typename T> OmniExpected<std::vector<T>> OmniDSP::blackman_window(size_t length) const { return generate_window<T>(WindowSetup(WindowType::Blackman, static_cast<int>(length))); }
-template <typename T> OmniExpected<std::vector<T>> OmniDSP::flattop_window(size_t length) const { return generate_window<T>(WindowSetup(WindowType::Flattop, static_cast<int>(length))); }
-template <typename T> OmniExpected<std::vector<T>> OmniDSP::gaussian_window(size_t length, double stddev) const { return generate_window<T>(WindowSetup(WindowType::Gaussian, static_cast<int>(length), WindowParams{{"sigma", stddev}})); }
-template <typename T> OmniExpected<std::vector<T>> OmniDSP::hamming_window(size_t length) const { return generate_window<T>(WindowSetup(WindowType::Hamming, static_cast<int>(length))); }
-template <typename T> OmniExpected<std::vector<T>> OmniDSP::hann_window(size_t length) const { return generate_window<T>(WindowSetup(WindowType::Hann, static_cast<int>(length))); }
-template <typename T> OmniExpected<std::vector<T>> OmniDSP::kaiser_window(size_t length, double beta) const { return generate_window<T>(WindowSetup(WindowType::Kaiser, static_cast<int>(length), WindowParams{{"beta", beta}})); }
-template <typename T> OmniExpected<std::vector<T>> OmniDSP::rectangular_window(size_t length) const { return generate_window<T>(WindowSetup(WindowType::Rectangular, static_cast<int>(length))); }
-template <typename T> OmniExpected<std::vector<T>> OmniDSP::triangular_window(size_t length) const { return generate_window<T>(WindowSetup(WindowType::Triangular, static_cast<int>(length))); }
+template <typename T> OmniExpected<std::vector<T>> OmniDSP::bartlett_window(size_t length) const { return generate_window<T>(WindowSetup(Type::Window::Bartlett, static_cast<int>(length))); }
+template <typename T> OmniExpected<std::vector<T>> OmniDSP::blackman_window(size_t length) const { return generate_window<T>(WindowSetup(Type::Window::Blackman, static_cast<int>(length))); }
+template <typename T> OmniExpected<std::vector<T>> OmniDSP::flattop_window(size_t length) const { return generate_window<T>(WindowSetup(Type::Window::Flattop, static_cast<int>(length))); }
+template <typename T> OmniExpected<std::vector<T>> OmniDSP::gaussian_window(size_t length, double stddev) const { return generate_window<T>(WindowSetup(Type::Window::Gaussian, static_cast<int>(length), WindowParams{{"sigma", stddev}})); }
+template <typename T> OmniExpected<std::vector<T>> OmniDSP::hamming_window(size_t length) const { return generate_window<T>(WindowSetup(Type::Window::Hamming, static_cast<int>(length))); }
+template <typename T> OmniExpected<std::vector<T>> OmniDSP::hann_window(size_t length) const { return generate_window<T>(WindowSetup(Type::Window::Hann, static_cast<int>(length))); }
+template <typename T> OmniExpected<std::vector<T>> OmniDSP::kaiser_window(size_t length, double beta) const { return generate_window<T>(WindowSetup(Type::Window::Kaiser, static_cast<int>(length), WindowParams{{"beta", beta}})); }
+template <typename T> OmniExpected<std::vector<T>> OmniDSP::rectangular_window(size_t length) const { return generate_window<T>(WindowSetup(Type::Window::Rectangular, static_cast<int>(length))); }
+template <typename T> OmniExpected<std::vector<T>> OmniDSP::triangular_window(size_t length) const { return generate_window<T>(WindowSetup(Type::Window::Triangular, static_cast<int>(length))); }
 
 
 //--------------------------------------------------------------------------
@@ -284,9 +284,9 @@ template <typename T> OmniExpected<std::vector<T>> OmniDSP::triangular_window(si
 //--------------------------------------------------------------------------
 
 template <typename T_Complex>
-OmniExpected<std::unique_ptr<FFTPlan<T_Complex>>>
+OmniExpected<std::unique_ptr<Plan::FFT<T_Complex>>>
 OmniDSP::create_plan(const Params::FFT& params) const {
-    static_assert(Utils::IsComplex_v<T_Complex>, "FFTPlan requires a complex type.");
+    static_assert(Utils::IsComplex_v<T_Complex>, "Plan::FFT requires a complex type.");
     if (!pimpl_) {
         // spdlog::get("OmniDSP")->error("OmniDSP::create_plan (Params::FFT): pimpl_ is null.");
         return std::unexpected(OmniStatus::NotInitialized);
@@ -299,7 +299,7 @@ OmniDSP::create_plan(const Params::FFT& params) const {
         plan_impl_expected = pimpl_->create_fft_plan_impl_c64(params.length_);
     } else {
         // spdlog::get("OmniDSP")->error("OmniDSP::create_plan (Params::FFT): Unsupported complex type.");
-        static_assert(always_false<T_Complex>::value, "Unsupported complex type for FFTPlan");
+        static_assert(always_false<T_Complex>::value, "Unsupported complex type for Plan::FFT");
         return std::unexpected(OmniStatus::UnsupportedFeature);
     }
 
@@ -308,19 +308,19 @@ OmniDSP::create_plan(const Params::FFT& params) const {
         return std::unexpected(plan_impl_expected.error());
     }
 
-    auto plan = FFTPlan<T_Complex>::create_from_impl(std::move(plan_impl_expected.value()));
+    auto plan = Plan::FFT<T_Complex>::create_from_impl(std::move(plan_impl_expected.value()));
     if (!plan) {
         // spdlog::get("OmniDSP")->error("OmniDSP::create_plan (Params::FFT): Failed to wrap FFTPlanImpl.");
         return std::unexpected(OmniStatus::Failure);
     }
-    // spdlog::get("OmniDSP")->debug("Successfully created FFTPlan from Params::FFT.");
+    // spdlog::get("OmniDSP")->debug("Successfully created Plan::FFT from Params::FFT.");
     return plan;
 }
 
 template <typename T_Real>
-OmniExpected<std::unique_ptr<RFFTPlan<T_Real>>>
+OmniExpected<std::unique_ptr<Plan::RFFT<T_Real>>>
 OmniDSP::create_plan(const Params::RFFT& params) const {
-    static_assert(!Utils::IsComplex_v<T_Real>, "RFFTPlan requires a real type.");
+    static_assert(!Utils::IsComplex_v<T_Real>, "Plan::RFFT requires a real type.");
     if (!pimpl_) {
         // spdlog::get("OmniDSP")->error("OmniDSP::create_plan (Params::RFFT): pimpl_ is null.");
         return std::unexpected(OmniStatus::NotInitialized);
@@ -333,7 +333,7 @@ OmniDSP::create_plan(const Params::RFFT& params) const {
         plan_impl_expected = pimpl_->create_rfft_plan_impl_f64(params.length_);
     } else {
         // spdlog::get("OmniDSP")->error("OmniDSP::create_plan (Params::RFFT): Unsupported real type.");
-        static_assert(always_false<T_Real>::value, "Unsupported real type for RFFTPlan");
+        static_assert(always_false<T_Real>::value, "Unsupported real type for Plan::RFFT");
         return std::unexpected(OmniStatus::UnsupportedFeature);
     }
 
@@ -342,18 +342,18 @@ OmniDSP::create_plan(const Params::RFFT& params) const {
         return std::unexpected(plan_impl_expected.error());
     }
 
-    auto plan = RFFTPlan<T_Real>::create_from_impl(std::move(plan_impl_expected.value()));
+    auto plan = Plan::RFFT<T_Real>::create_from_impl(std::move(plan_impl_expected.value()));
     if (!plan) {
         // spdlog::get("OmniDSP")->error("OmniDSP::create_plan (Params::RFFT): Failed to wrap RFFTPlanImpl.");
         return std::unexpected(OmniStatus::Failure);
     }
-    // spdlog::get("OmniDSP")->debug("Successfully created RFFTPlan from Params::RFFT.");
+    // spdlog::get("OmniDSP")->debug("Successfully created Plan::RFFT from Params::RFFT.");
     return plan;
 }
 
-// ConvolutionPlan Factory - Updated
+// Plan::Convolution Factory - Updated
 template <typename T> // T is F32, F64, C32, or C64
-[[nodiscard]] OmniExpected<std::unique_ptr<ConvolutionPlan<T>>> OmniDSP::create_plan(
+[[nodiscard]] OmniExpected<std::unique_ptr<Plan::Convolution<T>>> OmniDSP::create_plan(
     const Params::Convolution& params,
     const std::vector<T>& kernel_coeffs) const
 {
@@ -370,24 +370,24 @@ template <typename T> // T is F32, F64, C32, or C64
     } else if constexpr (std::is_same_v<T, C64>) {
         pimpl_expected = pimpl_->create_convolution_plan_impl_c64(params, kernel_coeffs_span);
     } else {
-        static_assert(always_false<T>::value, "Unsupported type for ConvolutionPlan.");
+        static_assert(always_false<T>::value, "Unsupported type for Plan::Convolution.");
         return std::unexpected(OmniStatus::UnsupportedFeature);
     }
 
     if (!pimpl_expected) {
         return std::unexpected(pimpl_expected.error());
     }
-    auto plan = ConvolutionPlan<T>::create_from_impl(std::move(pimpl_expected.value()));
+    auto plan = Plan::Convolution<T>::create_from_impl(std::move(pimpl_expected.value()));
     if (!plan) {
-        spdlog::get("OmniDSP")->error("OmniDSP::create_plan (ConvolutionPlan): Failed to create public plan from impl.");
+        spdlog::get("OmniDSP")->error("OmniDSP::create_plan (Plan::Convolution): Failed to create public plan from impl.");
         return std::unexpected(OmniStatus::Failure);
     }
     return plan;
 }
 
-// CorrelationPlan Factory - Updated
+// Plan::Correlation Factory - Updated
 template <typename T> // T is F32, F64, C32, or C64
-[[nodiscard]] OmniExpected<std::unique_ptr<CorrelationPlan<T>>> OmniDSP::create_plan(
+[[nodiscard]] OmniExpected<std::unique_ptr<Plan::Correlation<T>>> OmniDSP::create_plan(
     const Params::Correlation& params,
     const std::vector<T>& template_coeffs) const // Renamed kernel_coeffs to template_coeffs for clarity
 {
@@ -404,16 +404,16 @@ template <typename T> // T is F32, F64, C32, or C64
     } else if constexpr (std::is_same_v<T, C64>) {
         pimpl_expected = pimpl_->create_correlation_plan_impl_c64(params, template_coeffs_span);
     } else {
-        static_assert(always_false<T>::value, "Unsupported type for CorrelationPlan.");
+        static_assert(always_false<T>::value, "Unsupported type for Plan::Correlation.");
         return std::unexpected(OmniStatus::UnsupportedFeature);
     }
 
     if (!pimpl_expected) {
         return std::unexpected(pimpl_expected.error());
     }
-    auto plan = CorrelationPlan<T>::create_from_impl(std::move(pimpl_expected.value()));
+    auto plan = Plan::Correlation<T>::create_from_impl(std::move(pimpl_expected.value()));
      if (!plan) {
-        spdlog::get("OmniDSP")->error("OmniDSP::create_plan (CorrelationPlan): Failed to create public plan from impl.");
+        spdlog::get("OmniDSP")->error("OmniDSP::create_plan (Plan::Correlation): Failed to create public plan from impl.");
         return std::unexpected(OmniStatus::Failure);
     }
     return plan;
@@ -428,29 +428,29 @@ template <typename T> // T is F32, F64, C32, or C64
 
 // --- FIRFilterProcessor ---
 template <typename T>
-OmniExpected<std::unique_ptr<FIRFilterProcessor<T>>>
+OmniExpected<std::unique_ptr<Processor::FIRFilter<T>>>
 OmniDSP::create_processor(const Params::FIRFilter& params) const {
     if (!pimpl_) {
         // spdlog::get("OmniDSP")->error("OmniDSP::create_processor (Params::FIRFilter): pimpl_ is null.");
         return std::unexpected(OmniStatus::NotInitialized);
     }
 
-    auto spec_expected = Utils::create_spec(params);
-    if (!spec_expected) {
-        // spdlog::get("OmniDSP")->error("OmniDSP::create_processor (Params::FIRFilter): Failed to create spec from params. OmniStatus: {}", static_cast<int>(spec_expected.error()));
-        return std::unexpected(spec_expected.error());
+    auto design_expected = Design::create(params);
+    if (!design_expected) {
+        // spdlog::get("OmniDSP")->error("OmniDSP::create_processor (Params::FIRFilter): Failed to create design from params. OmniStatus: {}", static_cast<int>(design_expected.error()));
+        return std::unexpected(design_expected.error());
     }
-    const auto& spec = spec_expected.value();
+    const auto& design = design_expected.value();
 
     OmniExpected<Coefs::FIRFilter<T>> coeffs_expected;
     if constexpr (std::is_same_v<T, F32>) {
-        coeffs_expected = pimpl_->design_fir_filter_f32(spec);
+        coeffs_expected = pimpl_->design_fir_filter_f32(design);
     } else if constexpr (std::is_same_v<T, F64>) {
-        coeffs_expected = pimpl_->design_fir_filter_f64(spec);
+        coeffs_expected = pimpl_->design_fir_filter_f64(design);
     } else if constexpr (std::is_same_v<T, C32>) {
-         coeffs_expected = pimpl_->design_fir_filter_c32(spec);
+         coeffs_expected = pimpl_->design_fir_filter_c32(design);
     } else if constexpr (std::is_same_v<T, C64>) {
-         coeffs_expected = pimpl_->design_fir_filter_c64(spec);
+         coeffs_expected = pimpl_->design_fir_filter_c64(design);
     } else {
         // spdlog::get("OmniDSP")->error("OmniDSP::create_processor (Params::FIRFilter): Unsupported data type for design.");
         static_assert(always_false<T>::value, "Unsupported type for FIRFilter design");
@@ -467,7 +467,7 @@ OmniDSP::create_processor(const Params::FIRFilter& params) const {
 }
 
 template <typename T>
-OmniExpected<std::unique_ptr<FIRFilterProcessor<T>>>
+OmniExpected<std::unique_ptr<Processor::FIRFilter<T>>>
 OmniDSP::create_processor(const Coefs::FIRFilter<T>& coeffs) const {
     if (!pimpl_) {
         // spdlog::get("OmniDSP")->error("OmniDSP::create_processor (Coefs::FIRFilter): pimpl_ is null.");
@@ -485,7 +485,7 @@ OmniDSP::create_processor(const Coefs::FIRFilter<T>& coeffs) const {
         processor_impl_expected = pimpl_->create_fir_filter_processor_impl_c64(coeffs);
     } else {
         // spdlog::get("OmniDSP")->error("OmniDSP::create_processor (Coefs::FIRFilter): Unsupported data type.");
-        static_assert(always_false<T>::value, "Unsupported type for FIRFilterProcessor");
+        static_assert(always_false<T>::value, "Unsupported type for Processor::FIRFilter");
         return std::unexpected(OmniStatus::UnsupportedFeature);
     }
 
@@ -494,37 +494,37 @@ OmniDSP::create_processor(const Coefs::FIRFilter<T>& coeffs) const {
         return std::unexpected(processor_impl_expected.error());
     }
 
-    auto processor = FIRFilterProcessor<T>::create_from_impl(std::move(processor_impl_expected.value()));
+    auto processor = Processor::FIRFilter<T>::create_from_impl(std::move(processor_impl_expected.value()));
     if (!processor) {
         // spdlog::get("OmniDSP")->error("OmniDSP::create_processor (Coefs::FIRFilter): Failed to wrap FIRFilterProcessorImpl.");
         return std::unexpected(OmniStatus::Failure);
     }
-    // spdlog::get("OmniDSP")->debug("Successfully created FIRFilterProcessor from Coefs::FIRFilter.");
+    // spdlog::get("OmniDSP")->debug("Successfully created Processor::FIRFilter from Coefs::FIRFilter.");
     return processor;
 }
 
-// --- IIRFilterProcessor ---
+// --- Processor::IIRFilter ---
 template <typename T_Real>
-OmniExpected<std::unique_ptr<IIRFilterProcessor<T_Real>>>
+OmniExpected<std::unique_ptr<Processor::IIRFilter<T_Real>>>
 OmniDSP::create_processor(const Params::IIRFilter& params) const {
-    static_assert(!Utils::IsComplex_v<T_Real>, "IIRFilterProcessor requires a real type.");
+    static_assert(!Utils::IsComplex_v<T_Real>, "Processor::IIRFilter requires a real type.");
     if (!pimpl_) {
         // spdlog::get("OmniDSP")->error("OmniDSP::create_processor (Params::IIRFilter): pimpl_ is null.");
         return std::unexpected(OmniStatus::NotInitialized);
     }
 
-    auto spec_expected = Utils::create_spec(params);
-    if (!spec_expected) {
-        // spdlog::get("OmniDSP")->error("OmniDSP::create_processor (Params::IIRFilter): Failed to create spec from params. OmniStatus: {}", static_cast<int>(spec_expected.error()));
-        return std::unexpected(spec_expected.error());
+    auto design_expected = Design::create(params);
+    if (!design_expected) {
+        // spdlog::get("OmniDSP")->error("OmniDSP::create_processor (Params::IIRFilter): Failed to create design from params. OmniStatus: {}", static_cast<int>(design_expected.error()));
+        return std::unexpected(design_expected.error());
     }
-    const auto& spec = spec_expected.value();
+    const auto& design = design_expected.value();
 
     OmniExpected<Coefs::IIRFilterSOS> sos_coeffs_expected;
     if constexpr (std::is_same_v<T_Real, F32>) {
-        sos_coeffs_expected = pimpl_->design_iir_filter_f32(spec);
+        sos_coeffs_expected = pimpl_->design_iir_filter_f32(design);
     } else if constexpr (std::is_same_v<T_Real, F64>) {
-        sos_coeffs_expected = pimpl_->design_iir_filter_f64(spec);
+        sos_coeffs_expected = pimpl_->design_iir_filter_f64(design);
     } else {
         // spdlog::get("OmniDSP")->error("OmniDSP::create_processor (Params::IIRFilter): Unsupported data type for design.");
         static_assert(always_false<T_Real>::value, "Unsupported real type for IIRFilter design");
@@ -541,9 +541,9 @@ OmniDSP::create_processor(const Params::IIRFilter& params) const {
 }
 
 template <typename T_Real>
-OmniExpected<std::unique_ptr<IIRFilterProcessor<T_Real>>>
+OmniExpected<std::unique_ptr<Processor::IIRFilter<T_Real>>>
 OmniDSP::create_processor(const Coefs::IIRFilterSOS& sos_coeffs) const {
-    static_assert(!Utils::IsComplex_v<T_Real>, "IIRFilterProcessor requires a real type.");
+    static_assert(!Utils::IsComplex_v<T_Real>, "Processor::IIRFilter requires a real type.");
     if (!pimpl_) {
         // spdlog::get("OmniDSP")->error("OmniDSP::create_processor (Coefs::SOS): pimpl_ is null.");
         return std::unexpected(OmniStatus::NotInitialized);
@@ -556,7 +556,7 @@ OmniDSP::create_processor(const Coefs::IIRFilterSOS& sos_coeffs) const {
         processor_impl_expected = pimpl_->create_iir_filter_processor_impl_f64(sos_coeffs);
     } else {
         // spdlog::get("OmniDSP")->error("OmniDSP::create_processor (Coefs::SOS): Unsupported data type.");
-        static_assert(always_false<T_Real>::value, "Unsupported real type for IIRFilterProcessor");
+        static_assert(always_false<T_Real>::value, "Unsupported real type for Processor::IIRFilter");
         return std::unexpected(OmniStatus::UnsupportedFeature);
     }
 
@@ -565,48 +565,48 @@ OmniDSP::create_processor(const Coefs::IIRFilterSOS& sos_coeffs) const {
         return std::unexpected(processor_impl_expected.error());
     }
 
-    auto processor = IIRFilterProcessor<T_Real>::create_from_impl(std::move(processor_impl_expected.value()));
+    auto processor = Processor::IIRFilter<T_Real>::create_from_impl(std::move(processor_impl_expected.value()));
     if (!processor) {
         // spdlog::get("OmniDSP")->error("OmniDSP::create_processor (Coefs::SOS): Failed to wrap IIRFilterProcessorImpl.");
         return std::unexpected(OmniStatus::Failure);
     }
-    // spdlog::get("OmniDSP")->debug("Successfully created IIRFilterProcessor from Coefs::SOS.");
+    // spdlog::get("OmniDSP")->debug("Successfully created Processor::IIRFilter from Coefs::SOS.");
     return processor;
 }
 
-// --- ResampleProcessor ---
+// --- Processor::Resample ---
 template <typename T_Real>
-OmniExpected<std::unique_ptr<ResampleProcessor<T_Real>>>
+OmniExpected<std::unique_ptr<Processor::Resample<T_Real>>>
 OmniDSP::create_processor(const Params::Resample& params) const {
-    static_assert(!Utils::IsComplex_v<T_Real>, "ResampleProcessor requires a real type.");
+    static_assert(!Utils::IsComplex_v<T_Real>, "Processor::Resample requires a real type.");
     if (!pimpl_) {
         // spdlog::get("OmniDSP")->error("OmniDSP::create_processor (Params::Resample): pimpl_ is null.");
         return std::unexpected(OmniStatus::NotInitialized);
     }
-    auto spec_expected = Utils::create_spec(params);
-    if (!spec_expected) {
-        // spdlog::get("OmniDSP")->error("OmniDSP::create_processor (Params::Resample): Failed to create spec from params. OmniStatus: {}", static_cast<int>(spec_expected.error()));
-        return std::unexpected(spec_expected.error());
+    auto design_expected = Design::create(params);
+    if (!design_expected) {
+        // spdlog::get("OmniDSP")->error("OmniDSP::create_processor (Params::Resample): Failed to create design from params. OmniStatus: {}", static_cast<int>(design_expected.error()));
+        return std::unexpected(design_expected.error());
     }
-    return create_processor<T_Real>(spec_expected.value()); // Delegate
+    return create_processor<T_Real>(design_expected.value()); // Delegate
 }
 
 template <typename T_Real>
-OmniExpected<std::unique_ptr<ResampleProcessor<T_Real>>>
-OmniDSP::create_processor(const Design::Resample& spec) const {
-    static_assert(!Utils::IsComplex_v<T_Real>, "ResampleProcessor requires a real type.");
+OmniExpected<std::unique_ptr<Processor::Resample<T_Real>>>
+OmniDSP::create_processor(const Design::Resample& design) const {
+    static_assert(!Utils::IsComplex_v<T_Real>, "Processor::Resample requires a real type.");
     if (!pimpl_) {
         // spdlog::get("OmniDSP")->error("OmniDSP::create_processor (Design::Resample): pimpl_ is null.");
         return std::unexpected(OmniStatus::NotInitialized);
     }
     OmniExpected<std::unique_ptr<Abstract::ResampleProcessorImpl<T_Real>>> processor_impl_expected;
     if constexpr (std::is_same_v<T_Real, F32>) {
-        processor_impl_expected = pimpl_->create_resample_processor_impl_f32(spec);
+        processor_impl_expected = pimpl_->create_resample_processor_impl_f32(design);
     } else if constexpr (std::is_same_v<T_Real, F64>) {
-        processor_impl_expected = pimpl_->create_resample_processor_impl_f64(spec);
+        processor_impl_expected = pimpl_->create_resample_processor_impl_f64(design);
     } else {
         // spdlog::get("OmniDSP")->error("OmniDSP::create_processor (Design::Resample): Unsupported data type.");
-        static_assert(always_false<T_Real>::value, "Unsupported real type for ResampleProcessor");
+        static_assert(always_false<T_Real>::value, "Unsupported real type for Processor::Resample");
         return std::unexpected(OmniStatus::UnsupportedFeature);
     }
 
@@ -614,48 +614,48 @@ OmniDSP::create_processor(const Design::Resample& spec) const {
         // spdlog::get("OmniDSP")->error("OmniDSP::create_processor (Design::Resample): Failed to create ResampleProcessorImpl. OmniStatus: {}", static_cast<int>(processor_impl_expected.error()));
         return std::unexpected(processor_impl_expected.error());
     }
-    auto processor = ResampleProcessor<T_Real>::create_from_impl(std::move(processor_impl_expected.value()));
+    auto processor = Processor::Resample<T_Real>::create_from_impl(std::move(processor_impl_expected.value()));
     if (!processor) {
         // spdlog::get("OmniDSP")->error("OmniDSP::create_processor (Design::Resample): Failed to wrap ResampleProcessorImpl.");
         return std::unexpected(OmniStatus::Failure);
     }
-    // spdlog::get("OmniDSP")->debug("Successfully created ResampleProcessor from Design::Resample.");
+    // spdlog::get("OmniDSP")->debug("Successfully created Processor::Resample from Design::Resample.");
     return processor;
 }
 
-// --- CQTProcessor ---
+// --- Processor::CQT ---
 template <typename T_Real>
-OmniExpected<std::unique_ptr<CQTProcessor<T_Real>>>
+OmniExpected<std::unique_ptr<Processor::CQT<T_Real>>>
 OmniDSP::create_processor(const Params::CQT& params) const {
-    static_assert(!Utils::IsComplex_v<T_Real>, "CQTProcessor requires a real type.");
+    static_assert(!Utils::IsComplex_v<T_Real>, "Processor::CQT requires a real type.");
     if (!pimpl_) {
         // spdlog::get("OmniDSP")->error("OmniDSP::create_processor (Params::CQT): pimpl_ is null.");
         return std::unexpected(OmniStatus::NotInitialized);
     }
-    auto spec_expected = Utils::create_spec(params);
-    if (!spec_expected) {
-        // spdlog::get("OmniDSP")->error("OmniDSP::create_processor (Params::CQT): Failed to create spec from params. OmniStatus: {}", static_cast<int>(spec_expected.error()));
-        return std::unexpected(spec_expected.error());
+    auto design_expected = Design::create(params);
+    if (!design_expected) {
+        // spdlog::get("OmniDSP")->error("OmniDSP::create_processor (Params::CQT): Failed to create design from params. OmniStatus: {}", static_cast<int>(design_expected.error()));
+        return std::unexpected(design_expected.error());
     }
-    return create_processor<T_Real>(spec_expected.value()); // Delegate
+    return create_processor<T_Real>(design_expected.value()); // Delegate
 }
 
 template <typename T_Real>
-OmniExpected<std::unique_ptr<CQTProcessor<T_Real>>>
-OmniDSP::create_processor(const Design::CQT& spec) const {
-    static_assert(!Utils::IsComplex_v<T_Real>, "CQTProcessor requires a real type.");
+OmniExpected<std::unique_ptr<Processor::CQT<T_Real>>>
+OmniDSP::create_processor(const Design::CQT& design) const {
+    static_assert(!Utils::IsComplex_v<T_Real>, "Processor::CQT requires a real type.");
     if (!pimpl_) {
         // spdlog::get("OmniDSP")->error("OmniDSP::create_processor (Design::CQT): pimpl_ is null.");
         return std::unexpected(OmniStatus::NotInitialized);
     }
     OmniExpected<std::unique_ptr<Abstract::CQTProcessorImpl<T_Real>>> processor_impl_expected;
     if constexpr (std::is_same_v<T_Real, F32>) {
-        processor_impl_expected = pimpl_->create_cqt_processor_impl_f32(spec);
+        processor_impl_expected = pimpl_->create_cqt_processor_impl_f32(design);
     } else if constexpr (std::is_same_v<T_Real, F64>) {
-        processor_impl_expected = pimpl_->create_cqt_processor_impl_f64(spec);
+        processor_impl_expected = pimpl_->create_cqt_processor_impl_f64(design);
     } else {
         // spdlog::get("OmniDSP")->error("OmniDSP::create_processor (Design::CQT): Unsupported data type.");
-        static_assert(always_false<T_Real>::value, "Unsupported real type for CQTProcessor");
+        static_assert(always_false<T_Real>::value, "Unsupported real type for Processor::CQT");
         return std::unexpected(OmniStatus::UnsupportedFeature);
     }
 
@@ -663,12 +663,12 @@ OmniDSP::create_processor(const Design::CQT& spec) const {
         // spdlog::get("OmniDSP")->error("OmniDSP::create_processor (Design::CQT): Failed to create CQTProcessorImpl. OmniStatus: {}", static_cast<int>(processor_impl_expected.error()));
         return std::unexpected(processor_impl_expected.error());
     }
-    auto processor = CQTProcessor<T_Real>::create_from_impl(std::move(processor_impl_expected.value()));
+    auto processor = Processor::CQT<T_Real>::create_from_impl(std::move(processor_impl_expected.value()));
     if (!processor) {
         // spdlog::get("OmniDSP")->error("OmniDSP::create_processor (Design::CQT): Failed to wrap CQTProcessorImpl.");
         return std::unexpected(OmniStatus::Failure);
     }
-    // spdlog::get("OmniDSP")->debug("Successfully created CQTProcessor from Design::CQT.");
+    // spdlog::get("OmniDSP")->debug("Successfully created Processor::CQT from Design::CQT.");
     return processor;
 }
 
@@ -682,21 +682,21 @@ OmniExpected<Coefs::FIRFilter<T>> OmniDSP::design_fir_filter(const Params::FIRFi
         // spdlog::get("OmniDSP")->error("OmniDSP::design_fir_filter: pimpl_ is null.");
         return std::unexpected(OmniStatus::NotInitialized);
     }
-    auto spec_expected = Utils::create_spec(params);
-    if (!spec_expected) {
-        // spdlog::get("OmniDSP")->error("OmniDSP::design_fir_filter: Failed to create spec from params. OmniStatus: {}", static_cast<int>(spec_expected.error()));
-        return std::unexpected(spec_expected.error());
+    auto design_expected = Design::create(params);
+    if (!design_expected) {
+        // spdlog::get("OmniDSP")->error("OmniDSP::design_fir_filter: Failed to create design from params. OmniStatus: {}", static_cast<int>(design_expected.error()));
+        return std::unexpected(design_expected.error());
     }
-    const auto& spec = spec_expected.value();
+    const auto& design = design_expected.value();
 
     if constexpr (std::is_same_v<T, F32>) {
-        return pimpl_->design_fir_filter_f32(spec);
+        return pimpl_->design_fir_filter_f32(design);
     } else if constexpr (std::is_same_v<T, F64>) {
-        return pimpl_->design_fir_filter_f64(spec);
+        return pimpl_->design_fir_filter_f64(design);
     } else if constexpr (std::is_same_v<T, C32>) {
-         return pimpl_->design_fir_filter_c32(spec);
+         return pimpl_->design_fir_filter_c32(design);
     } else if constexpr (std::is_same_v<T, C64>) {
-         return pimpl_->design_fir_filter_c64(spec);
+         return pimpl_->design_fir_filter_c64(design);
     } else {
         // spdlog::get("OmniDSP")->error("OmniDSP::design_fir_filter: Unsupported data type.");
         static_assert(always_false<T>::value, "Unsupported type for design_fir_filter");
@@ -711,24 +711,23 @@ OmniExpected<Coefs::IIRFilterSOS> OmniDSP::design_iir_filter(const Params::IIRFi
         // spdlog::get("OmniDSP")->error("OmniDSP::design_iir_filter: pimpl_ is null.");
         return std::unexpected(OmniStatus::NotInitialized);
     }
-    auto spec_expected = Utils::create_spec(params);
-    if (!spec_expected) {
-        // spdlog::get("OmniDSP")->error("OmniDSP::design_iir_filter: Failed to create spec from params. OmniStatus: {}", static_cast<int>(spec_expected.error()));
-        return std::unexpected(spec_expected.error());
+    auto design_expected = Design::create(params);
+    if (!design_expected) {
+        // spdlog::get("OmniDSP")->error("OmniDSP::design_iir_filter: Failed to create design from params. OmniStatus: {}", static_cast<int>(design_expected.error()));
+        return std::unexpected(design_expected.error());
     }
-    const auto& spec = spec_expected.value();
+    const auto& design = design_expected.value();
 
     if constexpr (std::is_same_v<T_Real, F32>) {
-        return pimpl_->design_iir_filter_f32(spec);
+        return pimpl_->design_iir_filter_f32(design);
     } else if constexpr (std::is_same_v<T_Real, F64>) {
-        return pimpl_->design_iir_filter_f64(spec);
+        return pimpl_->design_iir_filter_f64(design);
     } else {
         // spdlog::get("OmniDSP")->error("OmniDSP::design_iir_filter: Unsupported data type.");
         static_assert(always_false<T_Real>::value, "Unsupported real type for design_iir_filter");
         return std::unexpected(OmniStatus::UnsupportedFeature);
     }
 }
-
 
 } // namespace OmniDSP
 

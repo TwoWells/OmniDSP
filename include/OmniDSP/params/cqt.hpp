@@ -7,17 +7,22 @@
 #define OMNIDSP_PARAMS_CQT_HPP
 
 #include <OmniDSP/core_types.hpp>  // For OMNIDSP_EXPORT
-#include <OmniDSP/window.hpp>      // For WindowSetup, WindowType
-#include <optional>                // For potential future optional parameters
-#include <string>                  // For std::string in validation messages
-#include <utility>                 // For std::move
+#include <OmniDSP/window.hpp>  // For WindowSetup, Type::Window, and its operator<<
+#include <optional>            // For potential future optional parameters
+#include <ostream>             // For std::ostream
+#include <string>              // For std::string in validation messages
+#include <utility>             // For std::move
+
+// Include fmt headers for custom formatter specialization
+#include <fmt/core.h>     // For basic formatting
+#include <fmt/ostream.h>  // Specifically for ostream_formatter
 
 namespace OmniDSP::Params {
 
   /**
    * @brief Parameters for specifying a Constant-Q Transform (CQT).
    *
-   * This structure is used as input to `OmniDSP::Utils::create_spec` to
+   * This structure is used as input to `OmniDSP::Utils::create_design` to
    * generate a full `OmniDSP::CQTSpec`. It holds the primary user-configurable
    * parameters for the CQT.
    *
@@ -35,7 +40,7 @@ namespace OmniDSP::Params {
     WindowSetup
         window_setup_;  ///< Windowing function setup for the CQT analysis
                         ///< windows. The `length` field of this `WindowSetup`
-                        ///< is typically ignored by `Utils::create_spec`, as
+                        ///< is typically ignored by `Utils::create_design`, as
                         ///< CQT kernel lengths are frequency-dependent and
                         ///< determined internally. The user should specify the
                         ///< window type and its parameters (e.g., beta for
@@ -57,7 +62,7 @@ namespace OmniDSP::Params {
         double p_min_freq,
         double p_max_freq,
         int p_bins_per_octave,
-        WindowSetup p_window_setup = WindowSetup{WindowType::Hann, 0});
+        WindowSetup p_window_setup = WindowSetup{Type::Window::Hann, 0});
 
     // --- Fluent Setters (Declarations Only) ---
 
@@ -104,6 +109,26 @@ namespace OmniDSP::Params {
     CQT& window_setup(WindowSetup val);
   };
 
+  /**
+   * @brief Overloads the << operator for easy printing/logging of Params::CQT.
+   * @param os The output stream.
+   * @param params The Params::CQT object to print.
+   * @return A reference to the output stream.
+   */
+  inline std::ostream& operator<<(std::ostream& os, const CQT& params)
+  {
+    os << "Params::CQT(SR: " << params.sample_rate_
+       << ", MinFreq: " << params.min_freq_ << ", MaxFreq: " << params.max_freq_
+       << ", BinsPerOct: " << params.bins_per_octave_
+       << ", Window: " << params.window_setup_  // Uses WindowSetup::operator<<
+       << ")";
+    return os;
+  }
+
 }  // namespace OmniDSP::Params
+
+// Specialization of fmt::formatter for OmniDSP::Params::CQT
+template <>
+struct fmt::formatter<OmniDSP::Params::CQT> : fmt::ostream_formatter {};
 
 #endif  // OMNIDSP_PARAMS_CQT_HPP

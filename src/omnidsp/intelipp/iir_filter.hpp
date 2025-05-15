@@ -8,8 +8,6 @@
 
 #include <ipp.h>  // Main IPP header including ipps.h
 
-#include <OmniDSP/coefs/iir_filter.hpp>  // For Coefs::SOS definition
-#include <OmniDSP/core_types.hpp>  // For F32, C32, F64, C64, Status, OmniException, Utils::* etc.
 #include <complex>
 #include <memory>       // For std::unique_ptr
 #include <span>         // For std::span in method signatures
@@ -17,6 +15,8 @@
 #include <type_traits>  // For std::is_same_v
 #include <vector>
 
+#include "OmniDSP/coefs/iir_filter.hpp"  // For Coefs::SOS definition
+#include "OmniDSP/core_types.hpp"  // For F32, C32, F64, C64, Status, OmniException, Utils::* etc.
 #include "details.hpp"  // For IPP type helpers (utils::GetIPPType etc.) and macros
 #include "interface/backend.hpp"  // Defines abstract::IIRFilterPlanImpl
 

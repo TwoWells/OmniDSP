@@ -8,7 +8,7 @@
 #define OMNIDSP_DEFAULT_FIR_FILTER_HPP
 
 #include <OmniDSP/core_types.hpp>  // Status, F32, F64, C32, C64, OmniExpected, FIRCoefs, C32Vec, C64Vec
-#include <OmniDSP/fir_filter.hpp>  // For Design::FIRFilter (public spec)
+#include <OmniDSP/design/fir_filter.hpp>  // For Design::FIRFilter (public spec)
 #include <complex>
 #include <cstddef>  // For size_t
 #include <span>     // For std::span

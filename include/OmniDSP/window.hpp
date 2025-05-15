@@ -1,7 +1,8 @@
 /**
  * @file window.hpp
- * @brief Defines windowing function types, the WindowSetup struct for
- * configuration, and window generation utilities.
+ * @brief Defines the WindowSetup struct for window configuration and
+ * window generation utilities. The Window enum itself is now in
+ * types/window.hpp.
  */
 
 #ifndef OMNIDSP_WINDOW_HPP
@@ -15,14 +16,17 @@
 #include <map>        // For std::map (used in WindowParams)
 #include <numbers>    // For std::numbers constants
 #include <optional>   // For std::optional (used in WindowSetup)
+#include <ostream>    // For std::ostream (needed for operator<<)
 #include <span>       // For std::span
+#include <sstream>    // For std::ostringstream (to format WindowParams map)
 #include <stdexcept>  // For std::invalid_argument (used in constructors)
 #include <string>  // For std::string (used in WindowParams key and exceptions)
-#include <string_view>  // For get_window_type_name
-#include <utility>      // For std::move
-#include <vector>  // Potentially for future generate_window returning vector
+#include <string_view>
+#include <utility>  // For std::move
+#include <vector>   // Potentially for future generate_window returning vector
 
 #include "OmniDSP/omnidsp_export.hpp"  // For OMNIDSP_EXPORT
+#include "OmniDSP/types/window.hpp"  // For OmniDSP::Type::Window and its operator<<
 #include "core_types.hpp"  // For Status, F32, F64, OmniExpected, OmniException etc.
 
 // Include Boost header for Bessel functions
@@ -31,53 +35,15 @@
 // Include spdlog for logging
 #include "spdlog/spdlog.h"
 
+// Include fmt headers for custom formatter specialization
+#include <fmt/core.h>     // For basic formatting
+#include <fmt/ostream.h>  // Specifically for ostream_formatter
+
 namespace OmniDSP {
 
-  /**
-   * @brief Enumeration of standard window function types supported by OmniDSP.
-   */
-  enum class WindowType {
-    Rectangular,
-    Bartlett,
-    Hann,  // Also known as Hanning
-    Hamming,
-    Blackman,
-    Flattop,
-    Gaussian,   // Requires "sigma" > 0 in params
-    Kaiser,     // Requires "beta" >= 0 in params
-    Triangular  // Similar to Bartlett
-  };
-
-  /**
-   * @brief Gets the string name corresponding to a WindowType enum value.
-   * @param type The window type.
-   * @return A string_view representing the name of the window type.
-   */
-  inline std::string_view get_window_type_name(WindowType type) noexcept
-  {
-    switch (type) {
-      case WindowType::Rectangular:
-        return "Rectangular";
-      case WindowType::Bartlett:
-        return "Bartlett";
-      case WindowType::Hann:
-        return "Hann";
-      case WindowType::Hamming:
-        return "Hamming";
-      case WindowType::Blackman:
-        return "Blackman";
-      case WindowType::Flattop:
-        return "Flattop";
-      case WindowType::Gaussian:
-        return "Gaussian";
-      case WindowType::Kaiser:
-        return "Kaiser";
-      case WindowType::Triangular:
-        return "Triangular";
-      default:
-        return "Unknown Window";
-    }
-  }
+  // OmniDSP::WindowType enum has been moved to OmniDSP::Type::Window in
+  // types/window.hpp The get_window_type_name function has been moved and
+  // renamed to OmniDSP::Type::get_window_name
 
   /**
    * @brief Type alias for window-specific parameters.
@@ -94,28 +60,17 @@ namespace OmniDSP {
    *
    * This structure is used to specify the configuration of a window function.
    * Validation of parameters is performed upon construction.
-   *
-   * Example:
-   * @code
-   * try {
-   * OmniDSP::WindowSetup kaiser_setup(OmniDSP::WindowType::Kaiser, 128,
-   * OmniDSP::WindowParams{{"beta", 4.0}});
-   * OmniDSP::WindowSetup hann_setup(OmniDSP::WindowType::Hann, 64); // No
-   * params needed } catch (const std::invalid_argument& e) {
-   * // Handle construction failure (e.g., missing/invalid params)
-   * spdlog::error("Failed to create WindowSetup: {}", e.what());
-   * }
-   * @endcode
    */
   struct OMNIDSP_EXPORT WindowSetup {
-    WindowType type;  ///< The type of the window.
-    int length;       ///< Desired length of the window. Must be non-negative.
+    Type::Window
+        type;    ///< The type of the window (from OmniDSP::Type::Window).
+    int length;  ///< Desired length of the window. Must be non-negative.
     std::optional<WindowParams>
         params;  ///< Optional parameters specific to the window type.
 
     /**
      * @brief Constructor for WindowSetup.
-     * @param win_type The type of the window.
+     * @param win_type The type of the window (OmniDSP::Type::Window).
      * @param win_length Desired length of the window. Must be non-negative.
      * @param win_params Optional parameters specific to the window type.
      * Required for types like Kaiser ("beta") and Gaussian ("sigma").
@@ -123,7 +78,7 @@ namespace OmniDSP {
      * params for the specified window type are missing or invalid.
      */
     explicit WindowSetup(
-        WindowType win_type,
+        Type::Window win_type,  // Updated to use OmniDSP::Type::Window
         int win_length,
         std::optional<WindowParams> win_params = std::nullopt)
         : type(win_type), length(win_length), params(std::move(win_params))
@@ -141,7 +96,7 @@ namespace OmniDSP {
       }
 
       switch (type) {
-        case WindowType::Kaiser:
+        case Type::Window::Kaiser:  // Updated to use OmniDSP::Type::Window
           if (!params) {
             std::string msg
                 = "WindowSetup construction (Kaiser): Missing 'params' field.";
@@ -166,7 +121,7 @@ namespace OmniDSP {
             }
           }
           break;
-        case WindowType::Gaussian:
+        case Type::Window::Gaussian:  // Updated to use OmniDSP::Type::Window
           if (!params) {
             std::string msg
                 = "WindowSetup construction (Gaussian): Missing 'params' "
@@ -193,25 +148,26 @@ namespace OmniDSP {
             }
           }
           break;
-        case WindowType::Rectangular:
-        case WindowType::Bartlett:
-        case WindowType::Hann:
-        case WindowType::Hamming:
-        case WindowType::Blackman:
-        case WindowType::Flattop:
-        case WindowType::Triangular:
+        case Type::Window::Rectangular:  // Updated
+        case Type::Window::Bartlett:     // Updated
+        case Type::Window::Hann:         // Updated
+        case Type::Window::Hamming:      // Updated
+        case Type::Window::Blackman:     // Updated
+        case Type::Window::Flattop:      // Updated
+        case Type::Window::Triangular:   // Updated
           if (params && !params->empty()) {
-            // It's not strictly an error to provide params to a window that
-            // doesn't use them, but it might indicate a user misunderstanding.
-            // A debug log is appropriate.
             logger->debug(
                 "WindowSetup construction ({}): 'params' provided but not used "
                 "by this window type.",
-                get_window_type_name(type));
+                Type::get_window_name(
+                    type));  // Updated to use Type::get_window_name
           }
           break;
         default:
-          if (get_window_type_name(type) == "Unknown Window") {
+          // This should ideally not be reached if Type::Window is comprehensive
+          // and Type::get_window_name handles all cases.
+          // However, as a safeguard:
+          if (Type::get_window_name(type) == "Unknown Window") {
             std::string msg
                 = "WindowSetup construction: Unknown window type specified: "
                   + std::to_string(static_cast<int>(type));
@@ -220,16 +176,35 @@ namespace OmniDSP {
           }
           break;
       }
-      // If we reach here, construction is successful.
-      // logger->trace("WindowSetup constructed successfully: type={},
-      // length={}", get_window_type_name(type), length);
     }
-
-    // To allow for easy creation of windows without params,
-    // we can add an overload or make the params parameter in the main
-    // constructor default to std::nullopt (which is already done). Example:
-    // WindowSetup(WindowType::Hann, 64) would use the main constructor.
   };
+
+  /**
+   * @brief Overloads the << operator for easy printing/logging of WindowSetup.
+   * @param os The output stream.
+   * @param setup The WindowSetup object to print.
+   * @return A reference to the output stream.
+   */
+  inline std::ostream& operator<<(std::ostream& os, const WindowSetup& setup)
+  {
+    os << "WindowSetup(Type: "
+       << setup.type  // Uses OmniDSP::Type::Window::operator<<
+       << ", Length: " << setup.length;
+    if (setup.params) {
+      os << ", Params: {";
+      bool first = true;
+      for (const auto& pair : setup.params.value()) {
+        if (!first) {
+          os << ", ";
+        }
+        os << "\"" << pair.first << "\": " << pair.second;
+        first = false;
+      }
+      os << "}";
+    }
+    os << ")";
+    return os;
+  }
 
   /**
    * @brief Generates window coefficients based on the WindowSetup structure.
@@ -241,26 +216,19 @@ namespace OmniDSP {
    * @param output The span to write the window coefficients into. Must have
    * size `setup.length`.
    * @return OmniExpected<void> indicating success or an error OmniStatus.
-   * - On success: An empty expected value.
-   * - On failure: An unexpected value containing a OmniStatus code (e.g.,
-   * SizeMismatch).
    */
-  template <typename T>
+  template <typename T_Data>  // Renamed T to T_Data for clarity
   OmniExpected<void> generate_window(
-      const WindowSetup& setup, std::span<T> output)
+      const WindowSetup& setup, std::span<T_Data> output)
   {
     auto logger = spdlog::get("OmniDSP");
     if (!logger) {
       logger = spdlog::default_logger();
     }
 
-    // WindowSetup object is assumed to be valid by this point due to
-    // constructor validation. Length non-negativity and required params
-    // (Kaiser/Gaussian) are already checked.
-
     if (static_cast<size_t>(setup.length) == 0) {
       if (output.empty()) {
-        return {};  // Success, nothing to do for zero length and empty output
+        return {};
       }
       else {
         logger->warn(
@@ -279,24 +247,19 @@ namespace OmniDSP {
       return std::unexpected(OmniStatus::SizeMismatch);
     }
 
-    // Extract parameters (safe to assume params exist if type requires them,
-    // due to constructor validation)
     double kaiser_beta = 0.0;
-    if (setup.type == WindowType::Kaiser) {
-      // params and "beta" key are guaranteed to exist and be valid by
-      // constructor.
+    if (setup.type == Type::Window::Kaiser) {  // Updated
       kaiser_beta = setup.params->at("beta");
     }
 
     double gaussian_sigma = 0.0;
-    if (setup.type == WindowType::Gaussian) {
-      // params and "sigma" key are guaranteed to exist and be valid by
-      // constructor.
+    if (setup.type == Type::Window::Gaussian) {  // Updated
       gaussian_sigma = setup.params->at("sigma");
     }
 
-    const double N = static_cast<double>(setup.length);
-    const double N_minus_1 = (N > 0) ? (N - 1.0) : 0.0;
+    const double N_double = static_cast<double>(
+        setup.length);  // Renamed N to N_double for clarity
+    const double N_minus_1 = (N_double > 0) ? (N_double - 1.0) : 0.0;
 
     constexpr double pi = std::numbers::pi_v<double>;
     const double two_pi = 2.0 * pi;
@@ -305,54 +268,55 @@ namespace OmniDSP {
     const double eight_pi = 8.0 * pi;
 
     for (int i = 0; i < setup.length; ++i) {
-      double n_double = static_cast<double>(i);
-      T val = T{0.0};
+      double n_val_double
+          = static_cast<double>(i);  // Renamed n_double to n_val_double
+      T_Data val = T_Data{0.0};      // Use T_Data
 
       switch (setup.type) {
-        case WindowType::Rectangular:
-          val = T{1.0};
-          break;
-        case WindowType::Bartlett:
-        case WindowType::Triangular:
+        case Type::Window::Rectangular:
+          val = T_Data{1.0};
+          break;                        // Updated
+        case Type::Window::Bartlett:    // Updated
+        case Type::Window::Triangular:  // Updated
           if (setup.length == 1) {
-            val = T{1.0};
+            val = T_Data{1.0};
           }
           else {
             double M = N_minus_1 / 2.0;
-            val = static_cast<T>(1.0 - std::abs(n_double - M) / M);
+            val = static_cast<T_Data>(1.0 - std::abs(n_val_double - M) / M);
           }
           break;
-        case WindowType::Hann:
+        case Type::Window::Hann:  // Updated
           if (setup.length == 1) {
-            val = T{1.0};
+            val = T_Data{1.0};
           }
           else {
-            val = static_cast<T>(
-                0.5 * (1.0 - std::cos(two_pi * n_double / N_minus_1)));
+            val = static_cast<T_Data>(
+                0.5 * (1.0 - std::cos(two_pi * n_val_double / N_minus_1)));
           }
           break;
-        case WindowType::Hamming:
+        case Type::Window::Hamming:  // Updated
           if (setup.length == 1) {
-            val = T{1.0};
+            val = T_Data{1.0};
           }
           else {
-            val = static_cast<T>(
-                0.54 - 0.46 * std::cos(two_pi * n_double / N_minus_1));
+            val = static_cast<T_Data>(
+                0.54 - 0.46 * std::cos(two_pi * n_val_double / N_minus_1));
           }
           break;
-        case WindowType::Blackman:
+        case Type::Window::Blackman:  // Updated
           if (setup.length == 1) {
-            val = T{1.0};
+            val = T_Data{1.0};
           }
           else {
-            val = static_cast<T>(
-                0.42 - 0.50 * std::cos(two_pi * n_double / N_minus_1)
-                + 0.08 * std::cos(four_pi * n_double / N_minus_1));
+            val = static_cast<T_Data>(
+                0.42 - 0.50 * std::cos(two_pi * n_val_double / N_minus_1)
+                + 0.08 * std::cos(four_pi * n_val_double / N_minus_1));
           }
           break;
-        case WindowType::Flattop:
+        case Type::Window::Flattop:  // Updated
           if (setup.length == 1) {
-            val = T{1.0};
+            val = T_Data{1.0};
           }
           else {
             const double a0 = 0.21557895;
@@ -360,57 +324,62 @@ namespace OmniDSP {
             const double a2 = 0.277263158;
             const double a3 = 0.083578947;
             const double a4 = 0.006947368;
-            val = static_cast<T>(
-                a0 - a1 * std::cos(two_pi * n_double / N_minus_1)
-                + a2 * std::cos(four_pi * n_double / N_minus_1)
-                - a3 * std::cos(six_pi * n_double / N_minus_1)
-                + a4 * std::cos(eight_pi * n_double / N_minus_1));
+            val = static_cast<T_Data>(
+                a0 - a1 * std::cos(two_pi * n_val_double / N_minus_1)
+                + a2 * std::cos(four_pi * n_val_double / N_minus_1)
+                - a3 * std::cos(six_pi * n_val_double / N_minus_1)
+                + a4 * std::cos(eight_pi * n_val_double / N_minus_1));
           }
           break;
-        case WindowType::Kaiser: {
+        case Type::Window::Kaiser: {  // Updated
           if (setup.length == 1) {
-            val = T{1.0};
+            val = T_Data{1.0};
           }
           else {
-            double term_sq = std::pow((2.0 * n_double / N_minus_1 - 1.0), 2.0);
+            double term_sq
+                = std::pow((2.0 * n_val_double / N_minus_1 - 1.0), 2.0);
             double sqrt_arg = std::max(0.0, 1.0 - term_sq);
             double kaiser_arg = kaiser_beta * std::sqrt(sqrt_arg);
             double i0_beta = boost::math::cyl_bessel_i(0, kaiser_beta);
             val = (i0_beta > std::numeric_limits<double>::epsilon())
-                      ? static_cast<T>(
+                      ? static_cast<T_Data>(
                             boost::math::cyl_bessel_i(0, kaiser_arg) / i0_beta)
-                      : T{0.0};
+                      : T_Data{0.0};
           }
           break;
         }
-        case WindowType::Gaussian: {
+        case Type::Window::Gaussian: {  // Updated
           if (setup.length == 1) {
-            val = T{1.0};
+            val = T_Data{1.0};
           }
           else {
             double center = N_minus_1 / 2.0;
             double denom = gaussian_sigma * center;
             double term = (denom > std::numeric_limits<double>::epsilon())
-                              ? (n_double - center) / denom
+                              ? (n_val_double - center) / denom
                               : 0.0;
-            val = static_cast<T>(std::exp(-0.5 * term * term));
+            val = static_cast<T_Data>(std::exp(-0.5 * term * term));
           }
           break;
         }
         default:
-          // This should not happen if constructor validated the type.
           logger->error(
-              "generate_window: Reached default case in main switch with "
-              "unknown or unvalidated window type: {}",
-              static_cast<int>(setup.type));
-          return std::unexpected(
-              OmniStatus::InvalidArgument);  // Should be caught by constructor
+              "generate_window: Reached default case with unhandled window "
+              "type: {}",
+              Type::get_window_name(setup.type));  // Updated
+          return std::unexpected(OmniStatus::InvalidArgument);
       }
       output[static_cast<size_t>(i)] = val;
     }
-    return {};  // Success
+    return {};
   }
 
 }  // namespace OmniDSP
+
+// fmt::formatter specialization for OmniDSP::WindowSetup
+// This is still needed here if WindowSetup itself is to be logged directly with
+// fmt {}
+template <>
+struct fmt::formatter<OmniDSP::WindowSetup> : fmt::ostream_formatter {};
 
 #endif  // OMNIDSP_WINDOW_HPP

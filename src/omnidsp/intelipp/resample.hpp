@@ -9,13 +9,15 @@
 
 #include <ipps.h>  // IPP Signal Processing header
 
-#include <OmniDSP/core_types.hpp>  // For Status, F32, F64, Utils::IsComplex_v
-#include <OmniDSP/resample.hpp>    // For Design::Resample definition
-#include <OmniDSP/window.hpp>      // For WindowSetup
-#include <cstddef>                 // For size_t
-#include <memory>                  // For std::unique_ptr
+#include <cstddef>  // For size_t
+#include <memory>   // For std::unique_ptr
 #include <span>
 #include <vector>
+
+#include "OmniDSP/core_types.hpp"  // For Status, F32, F64, Utils::IsComplex_v
+#include "OmniDSP/design/resample.hpp"  // For Design::Resample definition
+#include "OmniDSP/window.hpp"           // For WindowSetup
+#include "interface/backend.hpp"
 
 // Forward declaration for Abstract::Backend if used as pointer/reference
 namespace OmniDSP::Abstract {

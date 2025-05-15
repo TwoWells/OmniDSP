@@ -3,19 +3,52 @@
  * @brief Implements the constructor and fluent setters for FIRFilterParams.
  */
 
+#include "OmniDSP/params/fir_filter.hpp"  // Corresponding header
+
+#include <spdlog/fmt/ostr.h>  // Include for custom ostream operator support with spdlog
 #include <spdlog/spdlog.h>  // Include spdlog for logging
 
-#include <OmniDSP/params/fir_filter.hpp>  // Corresponding header
-#include <OmniDSP/types/filter.hpp>  // For FilterType, FIRFilterDesignMethod
-#include <OmniDSP/window.hpp>        // For WindowSetup related to default args
-#include <optional>                  // For std::optional
-#include <stdexcept>                 // For std::invalid_argument
-#include <string>                    // For std::to_string, string concatenation
-#include <utility>                   // For std::move
+#include <optional>   // For std::optional
+#include <stdexcept>  // For std::invalid_argument
+#include <string>     // For std::to_string, string concatenation
+#include <utility>    // For std::move
 
+#include "OmniDSP/types/filter.hpp"  // For FilterType, FIRFilterDesignMethod
+#include "OmniDSP/window.hpp"        // For WindowSetup related to default args
+
+/**
+ * @namespace OmniDSP::Params
+ * @brief Contains structures for specifying parameters for various DSP
+ * operations before full design.
+ */
 namespace OmniDSP::Params {
 
-  // Constructor (with spdlog integration)
+  /**
+   * @brief Constructor for FIRFilter parameters.
+   * @details Initializes and validates the parameters for designing an FIR
+   * filter. At least the filter order or sufficient characteristics (transition
+   * width and stopband attenuation) must be provided to determine the filter
+   * order.
+   * @param p_type Type of the filter (e.g., Lowpass, Highpass).
+   * @param p_sample_rate Sample rate of the signal in Hz. Must be positive.
+   * @param p_cutoff1 Primary cutoff frequency in Hz. Must be positive and less
+   * than Nyquist.
+   * @param p_cutoff2 Optional secondary cutoff frequency in Hz. Required for
+   * Bandpass/Bandstop. Must be positive, less than Nyquist, and greater than
+   * p_cutoff1.
+   * @param p_order Optional desired filter order (number of taps - 1).
+   * @param p_transition_width Optional desired transition width in Hz. Used for
+   * order estimation if p_order is not set. Must be positive if specified.
+   * @param p_stopband_attenuation_db Optional desired stopband attenuation in
+   * positive dB. Used for order estimation if p_order is not set. Must be
+   * positive if specified.
+   * @param p_window_setup Windowing function setup. The `length` field is
+   * typically determined internally.
+   * @param p_design_method Method to be used for designing the filter.
+   * @throws std::invalid_argument if essential parameters are invalid (e.g.,
+   * non-positive sample rate, invalid cutoffs, insufficient information for
+   * order determination, invalid transition width/attenuation).
+   */
   FIRFilter::FIRFilter(
       FilterType p_type,
       double p_sample_rate,
@@ -128,10 +161,17 @@ namespace OmniDSP::Params {
       throw std::invalid_argument(msg);
     }
     // WindowSetup is validated by its own constructor.
-    if (logger) logger->trace("Params::FIRFilter constructed successfully.");
+    if (logger && logger->should_log(spdlog::level::trace)) {
+      logger->trace("Params::FIRFilter constructed: {}", *this);
+    }
   }
 
-  // Definition for num_taps
+  /**
+   * @brief Calculates the number of taps for the FIR filter if the order is
+   * specified.
+   * @return An std::optional<size_t> containing the number of taps (order + 1)
+   * if order_ is set, otherwise std::nullopt.
+   */
   std::optional<size_t> FIRFilter::num_taps() const
   {
     if (order_.has_value()) {
@@ -142,21 +182,27 @@ namespace OmniDSP::Params {
 
   // --- Fluent Setter Definitions ---
 
+  /**
+   * @brief Sets the filter type.
+   * @param val The new filter type (e.g., Lowpass, Highpass).
+   * @return A reference to this Params::FIRFilter object for chaining.
+   */
   FIRFilter& FIRFilter::filter_type(FilterType val)
   {
     filter_type_ = val;
     auto logger = spdlog::get("OmniDSP");
-    if (!logger) {
-      logger = spdlog::default_logger();
+    if (logger && logger->should_log(spdlog::level::trace)) {
+      logger->trace("Params::FIRFilter::filter_type updated: {}", *this);
     }
-    if (logger)
-      logger->trace(
-          "Params::FIRFilter::filter_type to {}", static_cast<int>(val));
-    // Add validation if type change invalidates cutoff2, or defer to a final
-    // validate() call
     return *this;
   }
 
+  /**
+   * @brief Sets the sample rate.
+   * @param val The new sample rate in Hz. Must be positive.
+   * @return A reference to this Params::FIRFilter object for chaining.
+   * @throws std::invalid_argument if val is not positive.
+   */
   FIRFilter& FIRFilter::sample_rate(double val)
   {
     auto logger = spdlog::get("OmniDSP");
@@ -170,10 +216,20 @@ namespace OmniDSP::Params {
       throw std::invalid_argument(msg);
     }
     sample_rate_ = val;
-    if (logger) logger->trace("Params::FIRFilter::sample_rate to {}", val);
+    if (logger && logger->should_log(spdlog::level::trace)) {
+      logger->trace("Params::FIRFilter::sample_rate updated: {}", *this);
+    }
     return *this;
   }
 
+  /**
+   * @brief Sets the primary cutoff frequency.
+   * @param val The new primary cutoff frequency in Hz. Must be positive and
+   * less than Nyquist.
+   * @return A reference to this Params::FIRFilter object for chaining.
+   * @throws std::invalid_argument if val is not positive or is >= Nyquist
+   * frequency.
+   */
   FIRFilter& FIRFilter::cutoff1(double val)
   {
     auto logger = spdlog::get("OmniDSP");
@@ -195,10 +251,20 @@ namespace OmniDSP::Params {
       throw std::invalid_argument(msg);
     }
     cutoff1_ = val;
-    if (logger) logger->trace("Params::FIRFilter::cutoff1 to {}", val);
+    if (logger && logger->should_log(spdlog::level::trace)) {
+      logger->trace("Params::FIRFilter::cutoff1 updated: {}", *this);
+    }
     return *this;
   }
 
+  /**
+   * @brief Sets the secondary cutoff frequency (for Bandpass/Bandstop filters).
+   * @param val An std::optional<double> containing the new secondary cutoff
+   * frequency in Hz. If specified, must be positive and less than Nyquist.
+   * @return A reference to this Params::FIRFilter object for chaining.
+   * @throws std::invalid_argument if val has a value that is not positive or is
+   * >= Nyquist frequency.
+   */
   FIRFilter& FIRFilter::cutoff2(std::optional<double> val)
   {
     auto logger = spdlog::get("OmniDSP");
@@ -222,20 +288,21 @@ namespace OmniDSP::Params {
         if (logger) logger->error(msg);
         throw std::invalid_argument(msg);
       }
-      // Further validation based on type and cutoff1 could be added here or
-      // deferred. Example: if (type == FilterType::Bandpass && val.value() <=
-      // cutoff1) { ... }
     }
     cutoff2_ = val;
-    if (logger) {
-      if (val.has_value())
-        logger->trace("Params::FIRFilter::cutoff2 to {}", val.value());
-      else
-        logger->trace("Params::FIRFilter::cutoff2 to nullopt");
+    if (logger && logger->should_log(spdlog::level::trace)) {
+      logger->trace("Params::FIRFilter::cutoff2 updated: {}", *this);
     }
     return *this;
   }
 
+  /**
+   * @brief Sets the desired transition width for filter order estimation.
+   * @param val An std::optional<double> containing the new transition width in
+   * Hz. Must be positive if specified.
+   * @return A reference to this Params::FIRFilter object for chaining.
+   * @throws std::invalid_argument if val has a value that is not positive.
+   */
   FIRFilter& FIRFilter::transition_width(std::optional<double> val)
   {
     auto logger = spdlog::get("OmniDSP");
@@ -250,19 +317,19 @@ namespace OmniDSP::Params {
       throw std::invalid_argument(msg);
     }
     transition_width_ = val;
-    if (logger) {
-      if (val.has_value())
-        logger->trace("Params::FIRFilter::transition_width to {}", val.value());
-      else
-        logger->trace("Params::FIRFilter::transition_width to nullopt");
+    if (logger && logger->should_log(spdlog::level::trace)) {
+      logger->trace("Params::FIRFilter::transition_width updated: {}", *this);
     }
-    // If setting this, and order is also set, it might lead to ambiguity.
-    // The constructor handles the logic that one or the other (or
-    // characteristics) must be set. If order becomes set, this might become
-    // irrelevant for order estimation.
     return *this;
   }
 
+  /**
+   * @brief Sets the desired stopband attenuation for filter order estimation.
+   * @param val An std::optional<double> containing the new stopband attenuation
+   * in positive dB. Must be positive if specified.
+   * @return A reference to this Params::FIRFilter object for chaining.
+   * @throws std::invalid_argument if val has a value that is not positive.
+   */
   FIRFilter& FIRFilter::stopband_attenuation_db(std::optional<double> val)
   {
     auto logger = spdlog::get("OmniDSP");
@@ -277,16 +344,19 @@ namespace OmniDSP::Params {
       throw std::invalid_argument(msg);
     }
     stopband_attenuation_db_ = val;
-    if (logger) {
-      if (val.has_value())
-        logger->trace(
-            "Params::FIRFilter::stopband_attenuation_db to {}", val.value());
-      else
-        logger->trace("Params::FIRFilter::stopband_attenuation_db to nullopt");
+    if (logger && logger->should_log(spdlog::level::trace)) {
+      logger->trace(
+          "Params::FIRFilter::stopband_attenuation_db updated: {}", *this);
     }
     return *this;
   }
 
+  /**
+   * @brief Sets the filter order directly.
+   * @param val An std::optional<size_t> containing the new filter order (number
+   * of taps - 1).
+   * @return A reference to this Params::FIRFilter object for chaining.
+   */
   FIRFilter& FIRFilter::order(std::optional<size_t> val)
   {
     order_ = val;
@@ -294,42 +364,42 @@ namespace OmniDSP::Params {
     if (!logger) {
       logger = spdlog::default_logger();
     }
-    if (logger) {
-      if (val.has_value())
-        logger->trace("Params::FIRFilter::order to {}", val.value());
-      else
-        logger->trace("Params::FIRFilter::order to nullopt");
+    if (logger && logger->should_log(spdlog::level::trace)) {
+      logger->trace("Params::FIRFilter::order updated: {}", *this);
     }
-    // If order is set, transition_width and stopband_attenuation_db might
-    // become irrelevant for order estimation.
     return *this;
   }
 
+  /**
+   * @brief Sets the windowing function setup.
+   * @details The `length` field of the WindowSetup is typically determined
+   * internally by the design process.
+   * @param val The new WindowSetup object. Its constructor handles its own
+   * validation.
+   * @return A reference to this Params::FIRFilter object for chaining.
+   */
   FIRFilter& FIRFilter::window_setup(WindowSetup val)
   {
-    // WindowSetup's constructor handles its own validation and logging.
     window_setup_ = std::move(val);
     auto logger = spdlog::get("OmniDSP");
-    if (!logger) {
-      logger = spdlog::default_logger();
+    if (logger && logger->should_log(spdlog::level::trace)) {
+      logger->trace("Params::FIRFilter::window_setup updated: {}", *this);
     }
-    if (logger)
-      logger->trace(
-          "Params::FIRFilter::window_setup to type {}",
-          static_cast<int>(window_setup_.type));
     return *this;
   }
 
+  /**
+   * @brief Sets the FIR filter design method.
+   * @param val The new FIRFilterDesignMethod.
+   * @return A reference to this Params::FIRFilter object for chaining.
+   */
   FIRFilter& FIRFilter::design_method(FIRFilterDesignMethod val)
   {
     design_method_ = val;
     auto logger = spdlog::get("OmniDSP");
-    if (!logger) {
-      logger = spdlog::default_logger();
+    if (logger && logger->should_log(spdlog::level::trace)) {
+      logger->trace("Params::FIRFilter::design_method updated: {}", *this);
     }
-    if (logger)
-      logger->trace(
-          "Params::FIRFilter::design_method to {}", static_cast<int>(val));
     return *this;
   }
 
