@@ -19,7 +19,7 @@
 #include <OmniDSP/window.hpp>  // For WindowSetup (used in implementations)
 #include <span>                // For std::span
 
-#include "../interface/backend.hpp"  // Abstract::Backend
+#include "interface/backend.hpp"  // Abstract::Backend
 
 namespace OmniDSP::Default {
 

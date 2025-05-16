@@ -15,7 +15,7 @@
 #include <span>     // For std::span
 #include <vector>
 
-#include "../interface/backend.hpp"  // Base PlanImpl interfaces (Abstract::IIRFilterPlanImpl)
+#include "interface/backend.hpp"  // Base PlanImpl interfaces (Abstract::IIRFilterPlanImpl)
 
 namespace OmniDSP::Default {
 

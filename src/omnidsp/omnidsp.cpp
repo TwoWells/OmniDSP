@@ -8,20 +8,20 @@
 #include "OmniDSP/omnidsp.hpp"  // Main header, now includes omnidsp.tpp for template definitions
 
 // Specific backend factory function headers (needed for create_xyz_backend())
-#include "default/backend.hpp"     // For Abstract::create_default_backend()
-#include "dispatcher/backend.hpp"  // For Dispatcher::Backend
+#include "backend/default/backend.hpp"  // For Abstract::create_default_backend()
+#include "backend/dispatcher/backend.hpp"  // For Dispatcher::Backend
 
 // Conditionally include other backend headers for their factory functions
 #include "OmniDSP/omnidsp_config.hpp"  // For OMNIDSP_BACKEND_*_ENABLED macros
 
 #if OMNIDSP_BACKEND_ACCELERATE_ENABLED
-#include "accelerate/backend.hpp"  // For Abstract::create_accelerate_backend()
+#include "backend/accelerate/backend.hpp"  // For Abstract::create_accelerate_backend()
 #endif
 #if OMNIDSP_BACKEND_ONEMKL_ENABLED
-#include "onemkl/backend.hpp"  // For Abstract::create_onemkl_backend()
+#include "backend/onemkl/backend.hpp"  // For Abstract::create_onemkl_backend()
 #endif
 #if OMNIDSP_BACKEND_INTELIPP_ENABLED
-#include "intelipp/backend.hpp"  // For Abstract::create_intelipp_backend()
+#include "backend/intelipp/backend.hpp"  // For Abstract::create_intelipp_backend()
 #endif
 
 // Standard Library Includes

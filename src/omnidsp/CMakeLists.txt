@@ -37,6 +37,8 @@ cmake_dependent_option(
 )
 
 # --- Initialize Backend Status Variables ---
+# These are set with PARENT_SCOPE by the individual backend CMakeLists.txt files
+# and checked here after they've been processed.
 set(OMNIDSP_BACKEND_DEFAULT_ENABLED 0)
 set(OMNIDSP_BACKEND_ACCELERATE_ENABLED 0)
 set(OMNIDSP_BACKEND_ONEMKL_ENABLED 0)
@@ -71,62 +73,60 @@ set(OMNIDSP_CORE_HEADERS
     # include/OmniDSP/coefs
     "${CMAKE_SOURCE_DIR}/include/OmniDSP/coefs/fir_filter.hpp"
     "${CMAKE_SOURCE_DIR}/include/OmniDSP/coefs/iir_filter.hpp"
+    # include/OmniDSP/specs
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/specs/window.hpp"
+    "${CMAKE_SOURCE_DIR}/include/OmniDSP/specs/transform.hpp"
     # include/OmniDSP/design
     "${CMAKE_SOURCE_DIR}/include/OmniDSP/design/fir_filter.hpp"
     "${CMAKE_SOURCE_DIR}/include/OmniDSP/design/resample.hpp"
+    # ... other public headers ...
 )
 
 set(OMNIDSP_CORE_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/omnidsp.cpp" # Main class implementation
-    # Params implementations (constructors)
+    # Params implementations (.cpp)
     "${CMAKE_CURRENT_SOURCE_DIR}/params/convolution.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/params/cqt.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/params/fft.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/params/fir_filter.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/params/iir_filter.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/params/resample.cpp"
-    # Interface implementations (Pimpl wrappers)
-    "${CMAKE_CURRENT_SOURCE_DIR}/interface/convolution.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/interface/cqt.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/interface/fft.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/interface/fir_filter.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/interface/iir_filter.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/interface/resample.cpp"
-    # Utils implementations
+    # Specs implementations (.cpp)
+    "${CMAKE_CURRENT_SOURCE_DIR}/specs/window.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/specs/transform.cpp"
+    # Interface implementations (Pimpl wrappers for public API classes)
+    #   plan
+    "${CMAKE_CURRENT_SOURCE_DIR}/interface/plan/convolution.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/interface/plan/fft.cpp"
+    #   processor
+    "${CMAKE_CURRENT_SOURCE_DIR}/interface/processor/cqt.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/interface/processor/fir_filter.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/interface/processor/iir_filter.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/interface/processor/resample.cpp"
+    # Design algorithm implementations (.cpp)
     "${CMAKE_CURRENT_SOURCE_DIR}/design/cqt.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/design/fir_filter.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/design/iir_filter.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/design/resample.cpp"
-    # Dispatcher
-    "${CMAKE_CURRENT_SOURCE_DIR}/dispatcher/backend.cpp"
+    # Utils implementations (if any at this level)
+    # "${CMAKE_CURRENT_SOURCE_DIR}/utils/some_util.cpp"
 )
 
 # --- Create the Main 'OmniDSP' Library Target ---
-add_library(OmniDSP ${OMNIDSP_LIBRARY_TYPE} "")
+add_library(OmniDSP ${OMNIDSP_LIBRARY_TYPE} "") # OMNIDSP_LIBRARY_TYPE is set in the root CMakeLists.txt
 target_sources(OmniDSP PRIVATE ${OMNIDSP_CORE_SOURCES})
-
-# --- DIAGNOSTICS: Check actual target type ---
-if(TARGET OmniDSP)
-    get_target_property(OMNIDSP_ACTUAL_TARGET_TYPE OmniDSP TYPE)
-    message(STATUS "DEBUG: After add_library(OmniDSP): Actual target type = ${OMNIDSP_ACTUAL_TARGET_TYPE}")
-else()
-    message(FATAL_ERROR "DEBUG: Target OmniDSP was NOT created by add_library!")
-endif()
 
 # --- Public and Private Include Directories for 'OmniDSP' library ---
 target_include_directories(OmniDSP
     PUBLIC
         $<INSTALL_INTERFACE:include>
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
-        # This ensures the compiler can find headers in PROJECT_BINARY_DIR/include
         $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>
     PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR} # For internal includes like "interface/backend.hpp" from "omnidsp.cpp"
-                                    # or "utils/internal_helper.hpp" from "utils/some_util.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
 # --- Common Dependencies ---
-# Link against Google Highway (found in cmake/depend.cmake)
 if(TARGET hwy::hwy)
     target_link_libraries(OmniDSP PRIVATE hwy::hwy)
     message(STATUS "Linking OmniDSP with hwy::hwy")
@@ -134,7 +134,6 @@ else()
    message(WARNING "hwy::hwy target not found after find_package. Linking might fail.")
 endif()
 
-# Link against spdlog (found in cmake/depend.cmake)
 if(TARGET spdlog::spdlog)
    target_link_libraries(OmniDSP PRIVATE spdlog::spdlog)
    message(STATUS "Linking OmniDSP with spdlog::spdlog")
@@ -143,48 +142,34 @@ else()
 endif()
 
 # --- Include Backend Configurations ---
-add_subdirectory(default)
-add_subdirectory(accelerate)
+# This single call will process OmniDSP/src/omnidsp/backends/CMakeLists.txt,
+# which in turn includes the individual backend configurations.
+add_subdirectory(backend)
 
-# oneMKL Backend
-if(OPTION_OMNIDSP_ENABLE_ONEMKL)
-    message(STATUS "Attempting to configure oneMKL backend (OPTION_OMNIDSP_ENABLE_ONEMKL=ON)...")
-    add_subdirectory(onemkl)
-else()
-    message(STATUS "oneMKL backend disabled by option.")
-endif()
-
-# Intel IPP Backend
-if(OPTION_OMNIDSP_ENABLE_INTELIPP)
-    message(STATUS "Attempting to configure Intel IPP backend (OPTION_OMNIDSP_ENABLE_INTELIPP=ON)...")
-    add_subdirectory(intelipp)
-else()
-    message(STATUS "Intel IPP backend disabled by option.")
-endif()
 
 # --- Post Backend Configuration: Linking Interface Targets ---
-if(OMNIDSP_BACKEND_ACCELERATE_ENABLED AND TARGET OmniDSP::Accelerate)
-    target_link_libraries(OmniDSP PRIVATE OmniDSP::Accelerate)
-    message(STATUS "Linking OmniDSP with OmniDSP::Accelerate")
-endif()
-if(OMNIDSP_BACKEND_ONEMKL_ENABLED AND TARGET OmniDSP::OneMKL)
-    target_link_libraries(OmniDSP PRIVATE OmniDSP::OneMKL)
-    message(STATUS "Linking OmniDSP with OmniDSP::OneMKL")
-endif()
-if(OMNIDSP_BACKEND_INTELIPP_ENABLED AND TARGET OmniDSP::IntelIPP)
-    target_link_libraries(OmniDSP PRIVATE OmniDSP::IntelIPP)
-    message(STATUS "Linking OmniDSP with OmniDSP::IntelIPP")
-endif()
+# This section is now REMOVED as linking is handled by individual backend CMakeLists.txt files.
+# if(OMNIDSP_BACKEND_ACCELERATE_ENABLED AND TARGET OmniDSP::Accelerate)
+#     target_link_libraries(OmniDSP PRIVATE OmniDSP::Accelerate)
+#     message(STATUS "Linking OmniDSP with OmniDSP::Accelerate")
+# endif()
+# if(OMNIDSP_BACKEND_ONEMKL_ENABLED AND TARGET OmniDSP::OneMKL)
+#     target_link_libraries(OmniDSP PRIVATE OmniDSP::OneMKL)
+#     message(STATUS "Linking OmniDSP with OmniDSP::OneMKL")
+# endif()
+# if(OMNIDSP_BACKEND_INTELIPP_ENABLED AND TARGET OmniDSP::IntelIPP)
+#     target_link_libraries(OmniDSP PRIVATE OmniDSP::IntelIPP)
+#     message(STATUS "Linking OmniDSP with OmniDSP::IntelIPP")
+# endif()
 
 # --- Generate Export Header for 'OmniDSP' library ---
 set(EXPORT_HEADER_ABSOLUTE_PATH "${PROJECT_BINARY_DIR}/include/OmniDSP/omnidsp_export.hpp")
 generate_export_header(OmniDSP
     BASE_NAME OMNIDSP
-    EXPORT_FILE_NAME "${EXPORT_HEADER_ABSOLUTE_PATH}" # Use absolute path
+    EXPORT_FILE_NAME "${EXPORT_HEADER_ABSOLUTE_PATH}"
 )
 
 # --- Configure omnidsp_config.h ---
-# Reflecting .hpp extension as seen in user's CMake log
 set(OMNIDSP_CONFIG_HPP_IN "${CMAKE_SOURCE_DIR}/include/OmniDSP/omnidsp_config.hpp.in")
 set(OMNIDSP_CONFIG_HPP_OUT "${PROJECT_BINARY_DIR}/include/OmniDSP/omnidsp_config.hpp")
 
@@ -196,13 +181,15 @@ if(EXISTS "${OMNIDSP_CONFIG_HPP_IN}")
     )
 else()
     message(WARNING "omnidsp_config.hpp.in not found at ${OMNIDSP_CONFIG_HPP_IN}. Please ensure this template file exists.")
-    # If you intend to use .h extension, revert the names above and ensure your template is .h.in
 endif()
 
 # --- Target Compile Definitions for 'OmniDSP' library ---
+# These definitions are for omnidsp_config.hpp and allow C++ code to check
+# which backends were reported as enabled by their respective CMakeLists.txt files.
+# The OMNIDSP_INTERNAL_USE_* definitions are now set by individual backend CMake files.
 target_compile_definitions(OmniDSP
     PRIVATE
-        ${OMNIDSP_COMPILE_DEFINITIONS} # Common definitions
+        ${OMNIDSP_COMPILE_DEFINITIONS}
 
         $<$<STREQUAL:${OMNIDSP_BACKEND_DEFAULT_ENABLED},1>:OMNIDSP_BACKEND_DEFAULT_ENABLED=1>
         $<$<STREQUAL:${OMNIDSP_BACKEND_ACCELERATE_ENABLED},1>:OMNIDSP_BACKEND_ACCELERATE_ENABLED=1>

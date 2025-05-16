@@ -15,7 +15,7 @@
 #include <span>     // For std::span
 #include <vector>   // For std::vector (used internally)
 
-#include "../interface/backend.hpp"  // Base PlanImpl interfaces
+#include "interface/backend.hpp"  // Base PlanImpl interfaces
 
 namespace OmniDSP::OneMKL {
 

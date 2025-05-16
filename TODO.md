@@ -6,7 +6,7 @@ This document outlines the development tasks for the OmniDSP project.
 
 ### **A. Windowing System Refactor (Window as Plan - Overloaded Backend Factory)**
 
-- **`[ ] Define lightweight window specification classes/structs in `OmniDSP::Window` namespace (non-hierarchical).`**
+- **`[x] Define lightweight window specification classes/structs in `OmniDSP::Window` namespace (non-hierarchical).`**
   - **Details:** E.g., `Window::Hann {}`, `Window::Kaiser { double beta; }`. These act as type tags and parameter holders.
   - **Enhancements:**
     - Each specification class/struct should overload `operator<<` for easy logging (e.g., with `std::ostream` and compatible with `spdlog`).
@@ -27,7 +27,7 @@ This document outlines the development tasks for the OmniDSP project.
 
 ### **B. Transform API Refactor (Transform as Plan - Overloaded Backend Factory)**
 
-- **`[ ] Define lightweight transform specification structs in `OmniDSP::Transform`namespace (e.g.,`Transform::FFT{size_t length}`, `Transform::RFFT{size_t real_length}`, `Transform::DFT{size_t length}`).`**
+- **`[x] Define lightweight transform specification structs in `OmniDSP::Transform`namespace (e.g.,`Transform::FFT{size_t length}`, `Transform::RFFT{size_t real_length}`, `Transform::DFT{size_t length}`).`**
   - **Details:** Include constructors with validation and `operator<<` for logging.
   - **Location:** `OmniDSP/include/OmniDSP/transform/specs.hpp` (or individual files).
 - **`[ ] Define `template<typename T_In, typename T_Out> OmniDSP::Abstract::Plan::TransformImpl` as the PIMPL interface for transform plans.`**
@@ -89,7 +89,7 @@ This document outlines the development tasks for the OmniDSP project.
 
 ### **B. STFT Module** (Likely `Plan::Transform` specialization or new `Plan::STFT`)
 
-- **`[ ] Design `Transform::STFT`spec (or`Params::STFT`) including window, hop size, FFT length, padding mode.`**
+- **`[x] Design `Transform::STFT`spec (or`Params::STFT`) including window, hop size, FFT length, padding mode.`**
 - **`[ ] Implement `Plan::Transform`(or`Plan::STFT`) for STFT. `forward`would produce spectrogram,`inverse` (ISTFT) would reconstruct time-domain signal.`**
   - Will internally use `Plan::Window` and `Plan::Transform` (for RFFT/FFT).
 - **`[ ] Add `create_transform_plan_impl`(or`create_stft_plan_impl`) to `Abstract::Backend`. This might be complex as STFT itself is a composite operation.`**
@@ -98,7 +98,7 @@ This document outlines the development tasks for the OmniDSP project.
 
 ### **C. DCT/DST Module** (Likely `Plan::Transform` specializations)
 
-- **`[ ] Design `Transform::DCT`/`Transform::DST` specs, including transform type (I, II, III, IV) and normalization options.`**
+- **`[x] Design `Transform::DCT`/`Transform::DST` specs, including transform type (I, II, III, IV) and normalization options.`**
 - **`[ ] Implement `Plan::Transform`for DCT/DST.`forward`and`inverse` methods.`**
 - **`[ ] Add `create_transform_plan_impl`overloads to`Abstract::Backend`for`Transform::DCT`and`Transform::DST`.`**
 - **`[ ] Implement in `Default::Backend` (e.g., using FFT-based algorithms if direct DCT/DST not available).`**
@@ -107,7 +107,7 @@ This document outlines the development tasks for the OmniDSP project.
 
 ### **D. DWT/DHT Module** (Likely `Plan::Transform` specializations)
 
-- **`[ ] Design `Transform::DWT`/`Transform::DHT` specs. For DWT, include wavelet type, levels, mode.`**
+- **`[x] Design `Transform::DWT`/`Transform::DHT` specs. For DWT, include wavelet type, levels, mode.`**
 - **`[ ] Implement `Plan::Transform`for DWT/DHT.`forward`and`inverse` methods.`**
 - **`[ ] Add `create_transform_plan_impl`overloads to`Abstract::Backend`.`**
 - **`[ ] Implement in `Default::Backend`.`**

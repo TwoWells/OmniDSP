@@ -3,7 +3,7 @@
  * @brief Implements the Dispatcher::Backend class methods.
  */
 
-#include "dispatcher/backend.hpp"  // Corresponding header
+#include "backend.hpp"  // Corresponding header
 
 #include <stdexcept>  // For std::invalid_argument
 

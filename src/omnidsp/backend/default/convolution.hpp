@@ -10,7 +10,7 @@
 #include <variant>    // Include for std::variant
 #include <vector>
 
-#include "../interface/backend.hpp"  // Defines Abstract::ConvolutionPlanImpl/CorrelationPlanImpl
+#include "interface/backend.hpp"
 
 // Forward declare FFT plan impl BASE classes used internally
 // These are defined in interface/backend.hpp

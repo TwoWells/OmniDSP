@@ -16,7 +16,7 @@
 #include <span>                // For std::span
 #include <vector>
 
-#include "../interface/backend.hpp"  // For Abstract::ResamplePlanImpl base class
+#include "interface/backend.hpp"  // For Abstract::ResamplePlanImpl base class
 // and Abstract::Backend (for owner_backend_ pointer)
 
 namespace OmniDSP::Default {

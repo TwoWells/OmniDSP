@@ -17,8 +17,8 @@
 #include <type_traits>  // For std::is_same_v
 #include <vector>
 
-#include "../interface/backend.hpp"  // Defines abstract::FIRFilterPlanImpl
 #include "details.hpp"
+#include "interface/backend.hpp"  // Defines abstract::FIRFilterPlanImpl
 
 namespace OmniDSP::IntelIPP {
 

@@ -20,7 +20,7 @@
 #include <OmniDSP/core_types.hpp>  // For Status, F32, C32, etc., Utils::*
 #include <OmniDSP/params/convolution.hpp>  // For Params::Convolution, Params::Correlation
 
-#include "../interface/backend.hpp"  // For AbstractBackend and FFTPlanImpl base classes
+#include "interface/backend.hpp"  // For AbstractBackend and FFTPlanImpl base classes
 
 namespace OmniDSP::Default {
 

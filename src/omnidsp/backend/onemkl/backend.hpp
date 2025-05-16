@@ -13,7 +13,7 @@
 
 // Inherit from Default::Backend to get default implementations for
 // non-overridden functions.
-#include "default/backend.hpp"
+#include "backend/default/backend.hpp"
 
 // Include necessary types referenced in method signatures from the public API
 #include <OmniDSP/core_types.hpp>  // For Status, OmniExpected, F32, C32, C64 etc.

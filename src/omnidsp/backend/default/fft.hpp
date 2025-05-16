@@ -1,8 +1,6 @@
 #ifndef OMNIDSP_DEFAULT_FFT_HPP
 #define OMNIDSP_DEFAULT_FFT_HPP
 
-// Include the internal backend interface which defines FFTPlanImpl/RFFTPlanImpl
-#include "../interface/backend.hpp"
 // Include public types needed (like complex types, Status)
 #include <OmniDSP/core_types.hpp>  // For Status, F32, C32, F64, C64 etc.
 #include <complex>
@@ -10,8 +8,9 @@
 #include <span>       // For std::span
 #include <stdexcept>  // For std::logic_error
 #include <vector>
-// Removed Highway includes for standard C++ version
-// #include <hwy/aligned_allocator.h>
+
+// Include the internal backend interface which defines FFTPlanImpl/RFFTPlanImpl
+#include "interface/backend.hpp"
 
 namespace OmniDSP::Default {
 
