@@ -2,7 +2,11 @@
 
 OmniDSP is a C++ library designed for high-performance Digital Signal Processing tasks, with Python bindings provided via pybind11. It aims to offer efficient implementations of common DSP algorithms by abstracting optimized backend libraries like Intel oneMKL (including IPP) and Apple Accelerate.
 
-**Core Design Philosophy:** OmniDSP centralizes backend management. Users create an `OmniDSP` object using `OmniDSP::create(BackendType)`, which selects and initializes the appropriate backend (e.g., `Default::Backend`, `OneMKL::Backend`). This instance serves as the primary interface for all DSP functionalities. Users configure operations using `[Type]Params` objects and then call distinct factory methods: `create_plan(...)` for stateless operations (returning a `[Type]Plan`) or `create_processor(...)` for stateful operations (returning a `[Type]Processor`). `Processor` objects manage their internal state. Advanced configurations allow dispatching operations to different backends per category using a `Dispatcher::Backend`.
+**Core Design Philosophy:** OmniDSP centralizes backend management. Users create an `OmniDSP` object, which selects and initializes the appropriate backend (e.g., `Default::Backend`, `OneMKL::Backend`). This instance serves as the primary interface for all DSP functionalities. Users configure operations using `Params::[Type]` objects (or provide pre-calculated `Coefs::[Type]`) and then call distinct factory methods on the `OmniDSP` instance:
+
+- `create_plan(...)` for stateless operations (e.g., FFT, Convolution, Windowing), returning a `Plan::[Type]`.
+- `create_processor(...)` for stateful operations (e.g., Filters, CQT, Resampling), returning a `Processor::[Type]`.
+  `Processor` objects manage their internal state and provide a `reset()` method. Advanced configurations allow dispatching operations to different backends per category using a `Dispatcher::Backend`.
 
 ## Table of Contents
 
@@ -21,17 +25,20 @@ OmniDSP is a C++ library designed for high-performance Digital Signal Processing
 
 ## Features
 
-- **Flexible Backend Management:** The `OmniDSP` class, created via `OmniDSP::create()`, handles backend selection.
+- **Flexible Backend Management:** The `OmniDSP` class handles backend selection and initialization.
   - Supports single backend mode (e.g., `IntelIPP::Backend`, `Accelerate::Backend`, `Default::Backend`).
   - Supports `Dispatcher::Backend` mode for per-operation-category backend overrides.
 - **Distinct Execution Objects:**
-  - **`[Type]Plan` (Stateless):** For operations like FFT. Created via `OmniDSP::create_plan(...)`. Thread-safe for concurrent `execute` if backend is reentrant.
-  - **`[Type]Processor` (Stateful):** For operations like Filters, Resampling. Created via `OmniDSP::create_processor(...)`. Manages internal state, modified by `execute`. Provides `reset()` method. **Not thread-safe** for concurrent `execute` on the same instance.
+  - **`Plan::[Type]` (Stateless):** For operations like FFT, Convolution, Correlation, and Windowing. Created via `OmniDSP::create_plan(...)` (or `OmniDSP::create_window_plan(...)` for windows). Thread-safe for concurrent `execute` if the backend's implementation is reentrant.
+  - **`Processor::[Type]` (Stateful):** For operations like Filters (FIR, IIR), CQT, and Resampling. Created via `OmniDSP::create_processor(...)`. Manages internal state, which is modified by `execute`. Provides a `reset()` method to re-initialize state. **Not thread-safe** for concurrent `execute` on the same instance.
 - **Unified Configuration:**
-  - **`[Type]Params` Structs:** Fluent interface for user configuration (in `include/OmniDSP/params/`).
-  - **`[Type]Coefs` Structs:** For providing pre-calculated coefficients/kernels.
-- **Internal Representations:** Uses intermediate `[Type]Setup` and `[Type]Spec` objects internally for backend communication.
-- **Core Operations:** FFT (`FFTPlan`), Filtering (`FIRFilterProcessor`, `IIRFilterProcessor`, `filtfilt`), CQT (`CQTProcessor`?), Resampling (`ResampleProcessor`), Convolution/Correlation (`ConvolutionPlan`?), Windowing.
+  - **`Params::[Type]` Structs:** Fluent interface for user configuration (in `include/OmniDSP/params/`).
+  - **`Window::[SpecType]` Structs:** Lightweight specifications for creating `Plan::Window` objects (e.g., `Window::Hann`, `Window::Kaiser`).
+  - **`Coefs::[Type]` Structs:** For providing pre-calculated coefficients/kernels, bypassing design steps.
+- **Internal Representations:** Uses intermediate `Design::[Type]` objects (converted from `Params::[Type]` via `OmniDSP::Design::create`) internally for backend communication for design-based operations.
+- **Core Operations:**
+  - **Stateless (Plans):** FFT (`Plan::FFT`, `Plan::RFFT`), Convolution (`Plan::Convolution`), Correlation (`Plan::Correlation`), Windowing (`Plan::Window`).
+  - **Stateful (Processors):** FIR Filtering (`Processor::FIRFilter`), IIR Filtering (`Processor::IIRFilter`), CQT (`Processor::CQT`), Resampling (`Processor::Resample`).
 - **Optimized Backends:** Leverages MKL/IPP, Accelerate/vDSP. Includes a portable `Default::Backend`.
 - **PIMPL Idiom:** Hides implementation details, ensures ABI stability.
 - **Python Bindings:** Easy-to-use Python API via pybind11.
@@ -45,22 +52,30 @@ OmniDSP is a C++ library designed for high-performance Digital Signal Processing
 
 ## Project Status
 
-- **Major Refactoring Ongoing:** Implementing `Dispatcher::Backend`, `Plan`/`Processor` distinction, `create_plan`/`create_processor` methods, internal state management (`reset()`), `[Type]Coefs` paths, IIR filters, `filtfilt`.
+- **Active Development:** Focus on refining the new Windowing system (`Plan::Window`), standardizing backend PIMPL naming, and comprehensive testing of the `Plan`/`Processor` architecture.
 - See `TODO.md` for detailed current tasks.
 
 ## Project Structure
 
 - `include/OmniDSP/`: Public API headers.
-- `include/OmniDSP/params/`: `[Type]Params` structs.
-- `include/OmniDSP/types/`: Domain-specific enums (e.g., `OperationCategory`).
+  - `omnidsp.hpp`: Main `OmniDSP` class.
+  - `fft.hpp`, `convolution.hpp`, `correlation.hpp`: Headers for `Plan` types.
+  - `fir_filter.hpp`, `iir_filter.hpp`, `cqt.hpp`, `resample.hpp`: Headers for `Processor` types.
+  - `window/`: Headers related to `Plan::Window` and window specifications (`specs.hpp`).
+  - `params/`: `Params::[Type]` structs for operation configuration.
+  - `design/`: `Design::[Type]` structs (internal representations).
+  - `coefs/`: `Coefs::[Type]` structs for pre-calculated coefficients.
+  - `core_types.hpp`, `status.hpp`, `expected.hpp`: Core utilities.
+  - `types/`: Domain-specific enums (e.g., `OperationCategory`).
 - `src/omnidsp/`: Core C++ implementation.
-  - `interface/`: `Abstract::Backend`, `Abstract::*PlanImpl`, `Abstract::*ProcessorImpl` interfaces, public `Plan`/`Processor` wrappers.
-  - `default/`: `Default::Backend`, `Default::*PlanImpl`, `Default::*ProcessorImpl`. **Base for optimized backends.**
+  - `interface/`: `Abstract::Backend`, `Abstract::[Type]PlanImpl`, `Abstract::[Type]ProcessorImpl` interfaces. Public `Plan`/`Processor` wrappers are in the public include headers.
+  - `default/`: `Default::Backend` implementation. Implementations of `OmniDSP::Default::Plan::[Type]Impl` and `OmniDSP::Default::Processor::[Type]Impl` are in subdirectories like `plan/` and `processor/`. **Base for optimized backends.**
   - `dispatcher/`: `Dispatcher::Backend` implementation.
-  - `accelerate/`, `onemkl/`, `intelipp/`: Optimized backends (e.g., `Accelerate::Backend`).
-  - `params/`: `Params` constructors.
-  - `utils/`: `Utils::create_spec` implementations.
-  - `omnidsp.cpp`: `OmniDSP` class implementation.
+  - `accelerate/`, `onemkl/`, `intelipp/`: Optimized backend implementations. These contain implementations like `OmniDSP::[BackendName]::Plan::[Type]Impl` and `OmniDSP::[BackendName]::Processor::[Type]Impl`.
+  - `params/`: `Params` constructors and validation logic.
+  - `design/`: `OmniDSP::Design::create` implementations (conversion from `Params` to `Design`).
+  - `window/`: Implementation details for windowing, including internal formulas in `OmniDSP::Internal::WindowFormulas`.
+  - `omnidsp.cpp`: `OmniDSP` class implementation (factory methods).
 - `src/omnidsp_py/`: Python bindings.
 - `tests/`, `examples/`, `cmake/`, `docs/`.
 
@@ -69,12 +84,10 @@ OmniDSP is a C++ library designed for high-performance Digital Signal Processing
 Using OmniDSP requires **Conda** to manage dependencies, especially for the C++ toolchain and optional backend libraries like Intel oneMKL/IPP.
 
 1.  **Clone the Repository:**
-
     ```bash
     git clone <repository-url>
     cd OmniDSP
     ```
-
 2.  **Set up Conda Environment:**
     We provide environment lock files for reproducible environments. Choose the file matching your platform (e.g., `linux-64`, `osx-arm64`, `win-64`). Using lock files is recommended.
 
@@ -122,10 +135,12 @@ Now you should be able to import and use the `omnidsp_py` module in Python scrip
 
 ```python
 import numpy as np
-import omnidsp_py as omni
+import omnidsp_py as omni # Assuming omnidsp_py is the Python module name
 
-# 1. Create an OmniDSP instance
+# 1. Create an OmniDSP instance (selects a backend, e.g., Default)
 try:
+    # For simplicity, using Default backend.
+    # Other options: omni.BackendType.OneMKL, omni.BackendType.Accelerate, etc.
     dsp = omni.OmniDSP.create(omni.BackendType.Default)
 except RuntimeError as e:
     print(f"Error creating OmniDSP instance: {e}")
@@ -133,14 +148,19 @@ except RuntimeError as e:
 
 # --- FFT Example (Stateless Plan) ---
 fs = 1000
-signal_in_real = np.random.randn(fs).astype(np.float32)
+signal_duration = 1.0
+n_samples = int(fs * signal_duration)
+signal_in_real = np.random.randn(n_samples).astype(np.float32)
 
 try:
-    # Configure using Params
-    fft_params = omni.Params::FFT(length=len(signal_in_real))
-    # Create a stateless Plan
-    rfft_plan_e = dsp.create_plan(fft_params) # Use create_plan
-    if not rfft_plan_e: raise RuntimeError(f"RFFT plan error: {rfft_plan_e.error()}")
+    # Configure FFT using Params::FFT
+    fft_params = omni.Params.FFT(length=len(signal_in_real)) # Corrected Params access
+
+    # Create a stateless RFFT Plan
+    # For plans like FFT, Convolution, Correlation, use dsp.create_plan()
+    rfft_plan_e = dsp.create_plan(fft_params)
+    if not rfft_plan_e:
+        raise RuntimeError(f"RFFT plan creation error: {rfft_plan_e.error()}")
     rfft_plan = rfft_plan_e.value()
 
     # Execute the plan
@@ -153,30 +173,64 @@ except Exception as e:
 
 # --- FIR Filter Example (Stateful Processor) ---
 try:
-    # Configure using Params
-    fir_params = omni.FIRFilterParams(
-        filter_type=omni.FilterType.Lowpass, order=100,
-        cutoff_freq_low=100.0, sample_rate=float(fs),
-        window_setup=omni.WindowSetup(omni.WindowType.Hann, 101)
+    # Configure FIR Filter using Params::FIRFilter
+    fir_params = omni.Params.FIRFilter( # Corrected Params access
+        filter_type=omni.FilterType.Lowpass,
+        order=100,
+        cutoff_freq_low=100.0,
+        sample_rate=float(fs),
+        window_spec=omni.Window.Hann() # Example using new window spec
     )
-    # Create a stateful Processor
-    fir_processor_e = dsp.create_processor(fir_params) # Use create_processor
-    if not fir_processor_e: raise RuntimeError(f"FIR processor error: {fir_processor_e.error()}")
+
+    # Create a stateful FIR Filter Processor
+    fir_processor_e = dsp.create_processor(fir_params)
+    if not fir_processor_e:
+        raise RuntimeError(f"FIR processor creation error: {fir_processor_e.error()}")
     fir_processor = fir_processor_e.value()
 
     # Execute the processor (modifies internal state)
-    filtered_signal_chunk1 = fir_processor.execute(signal_in_real[:fs//2])
-    filtered_signal_chunk2 = fir_processor.execute(signal_in_real[fs//2:])
+    chunk_size = n_samples // 2
+    filtered_signal_chunk1 = fir_processor.execute(signal_in_real[:chunk_size])
+    filtered_signal_chunk2 = fir_processor.execute(signal_in_real[chunk_size:])
+
+    filtered_signal = np.concatenate((filtered_signal_chunk1, filtered_signal_chunk2))
     print(f"Filtered signal chunk1 shape: {filtered_signal_chunk1.shape}")
     print(f"Filtered signal chunk2 shape: {filtered_signal_chunk2.shape}")
+    print(f"Total filtered signal shape: {filtered_signal.shape}")
 
-    # Reset the processor's internal state to process a new stream
     fir_processor.reset()
     print("FIR Processor reset.")
-    # filtered_signal_new_stream = fir_processor.execute(another_signal)
 
 except Exception as e:
     print(f"FIR Filter Error: {e}")
+
+# --- Windowing Example (Stateless Plan) ---
+try:
+    window_length = 128
+    kaiser_spec = omni.Window.Kaiser(beta=5.0)
+
+    # Create a window plan using dsp.create_window_plan_<type>()
+    # Or a generic dsp.create_window_plan() if T_Data is templated/inferred
+    window_plan_e = dsp.create_window_plan_float(kaiser_spec, window_length)
+    if not window_plan_e:
+        raise RuntimeError(f"Window plan creation error: {window_plan_e.error()}")
+    window_plan = window_plan_e.value()
+
+    data_to_window = np.ones(window_length, dtype=np.float32)
+    windowed_data = np.empty_like(data_to_window)
+
+    window_plan.execute(data_to_window, windowed_data) # out-of-place
+    # window_plan.execute_inplace(data_to_window) # for in-place
+    print(f"Windowed data (Kaiser beta=5.0, length={window_length}): {windowed_data[:10]}...")
+
+    kaiser_coeffs_e = dsp.generate_window_coefficients_float(kaiser_spec, window_length)
+    if not kaiser_coeffs_e:
+        raise RuntimeError(f"Window coeffs generation error: {kaiser_coeffs_e.error()}")
+    kaiser_coeffs = kaiser_coeffs_e.value()
+    print(f"Generated Kaiser coefficients (beta=5.0, length={window_length}): {kaiser_coeffs[:10]}...")
+
+except Exception as e:
+    print(f"Windowing Error: {e}")
 
 ```
 
@@ -184,75 +238,119 @@ except Exception as e:
 
 ```cpp
 #include <OmniDSP/omnidsp.hpp>
-#include <OmniDSP/fft.hpp> // For FFTPlan, Params::FFT
-#include <OmniDSP/filter.hpp> // For FIRFilterProcessor
-#include <OmniDSP/window.hpp>
-#include <OmniDSP/params/fft.hpp> // For Params::FFT
-#include <OmniDSP/params/fir_filter.hpp> // For FIRFilterParams
-#include <OmniDSP/utils.hpp>
+#include <OmniDSP/fft.hpp>         // For Plan::FFT, Plan::RFFT
+#include <OmniDSP/fir_filter.hpp>  // For Processor::FIRFilter
+#include <OmniDSP/iir_filter.hpp> // For Processor::IIRFilter (if used)
+#include <OmniDSP/window/specs.hpp> // For Window::Hann, Window::Kaiser etc.
+#include <OmniDSP/window.hpp>       // For Plan::Window
+#include <OmniDSP/params/fft.hpp>
+#include <OmniDSP/params/fir_filter.hpp>
 #include <OmniDSP/core_types.hpp>
-#include <OmniDSP/types/operation.hpp>
+#include <OmniDSP/status.hpp>
+#include <OmniDSP/expected.hpp>
 
 #include <vector>
 #include <complex>
 #include <iostream>
-#include <map>
+#include <numeric> // For std::iota if needed for dummy data
 
-// Helper to check std::expected results (same as before)
-template <typename T>
-T check_expected(OmniExpected<T>& expected_val, const std::string& error_msg) {
+// Helper to check std::expected results
+template <typename T_Val, typename T_Err = OmniDSP::Status>
+T_Val check_expected(OmniDSP::OmniExpected<T_Val, T_Err>& expected_val, const std::string& error_msg_prefix) {
     if (!expected_val) {
-        throw std::runtime_error(error_msg + ": Status " + std::to_string(static_cast<int>(expected_val.error())));
+        std::string error_detail = "Error code: " + std::to_string(static_cast<int>(expected_val.error()));
+        throw std::runtime_error(error_msg_prefix + ": " + error_detail);
     }
     return std::move(expected_val.value());
 }
 
+
 int main() {
     try {
-        // 1. Create an OmniDSP instance
         auto dsp_e = OmniDSP::OmniDSP::create(OmniDSP::BackendType::Default);
         auto dsp = check_expected(dsp_e, "Failed to create OmniDSP (Default)");
 
         // --- Example: FFT (Stateless Plan) ---
-        std::vector<float> real_signal(1024); // Example data
-        std::vector<std::complex<float>> spectrum;
+        size_t num_samples_fft = 1024;
+        std::vector<float> real_signal_fft(num_samples_fft);
+        for(size_t i = 0; i < num_samples_fft; ++i) real_signal_fft[i] = static_cast<float>(i % 100);
+        std::vector<std::complex<float>> spectrum_fft;
 
-        OmniDSP::Params::FFT fft_params; // Assuming default constructor + setters or direct init
-        fft_params.length = static_cast<int>(real_signal.size());
-        // Or: auto fft_params = OmniDSP::Params::FFT().length(1024);
+        OmniDSP::Params::FFT fft_params;
+        fft_params.length = static_cast<int>(real_signal_fft.size());
 
-        // Create stateless Plan
-        auto rfft_plan_e = dsp->create_plan(fft_params); // Use create_plan
-        auto rfft_plan = check_expected(rfft_plan_e, "RFFT plan");
+        // For plans like FFT, Convolution, Correlation, use dsp->create_plan()
+        auto rfft_plan_e = dsp->create_plan(fft_params);
+        auto rfft_plan = check_expected(rfft_plan_e, "RFFT plan creation failed");
 
-        auto status = rfft_plan->execute(real_signal, spectrum);
-        if (status != OmniDSP::Status::Success) throw std::runtime_error("RFFT exec");
-        std::cout << "Spectrum size: " << spectrum.size() << std::endl;
+        auto status_fft = rfft_plan->execute(real_signal_fft, spectrum_fft);
+        if (status_fft != OmniDSP::Status::Success) {
+            throw std::runtime_error("RFFT execution failed");
+        }
+        std::cout << "FFT: Spectrum size: " << spectrum_fft.size() << std::endl;
 
         // --- Example: FIR Filter (Stateful Processor) ---
-        float sample_rate = 1000.0f;
-        int filter_order = 100;
-        std::vector<float> filtered_signal;
+        float sample_rate_fir = 1000.0f;
+        int filter_order_fir = 100;
+        size_t num_samples_fir = 512;
+        std::vector<float> signal_fir(num_samples_fir);
+        for(size_t i = 0; i < num_samples_fir; ++i) signal_fir[i] = static_cast<float>(i % 50);
+        std::vector<float> filtered_signal_fir;
 
-        OmniDSP::FIRFilterParams fir_params( // Using constructor directly here
-            OmniDSP::FilterType::Lowpass, filter_order, 100.0, 0.0, sample_rate,
-            OmniDSP::WindowSetup(OmniDSP::WindowType::Hann, filter_order + 1)
+        OmniDSP::Window::Hann hann_spec;
+        OmniDSP::Params::FIRFilter fir_params(
+            OmniDSP::FilterType::Lowpass, filter_order_fir, 100.0f, 0.0f, sample_rate_fir, hann_spec
         );
-        // Or: auto fir_params = OmniDSP::FIRFilterParams().filter_type(...).order(...)...;
 
-        // Create stateful Processor
-        auto fir_processor_e = dsp->create_processor(fir_params); // Use create_processor
-        auto fir_processor = check_expected(fir_processor_e, "FIR processor");
+        auto fir_processor_e = dsp->create_processor(fir_params);
+        auto fir_processor = check_expected(fir_processor_e, "FIR processor creation failed");
 
-        // Execute (modifies internal state)
-        status = fir_processor->execute(real_signal, filtered_signal);
-        if (status != OmniDSP::Status::Success) throw std::runtime_error("FIR exec");
-        std::cout << "Filtered signal size: " << filtered_signal.size() << std::endl;
+        auto status_fir = fir_processor->execute(signal_fir, filtered_signal_fir);
+         if (status_fir != OmniDSP::Status::Success) {
+            throw std::runtime_error("FIR execution failed");
+        }
+        std::cout << "FIR Filter: Filtered signal size: " << filtered_signal_fir.size() << std::endl;
 
-        // Reset internal state
         fir_processor->reset();
         std::cout << "FIR Processor reset." << std::endl;
 
+        // --- Example: Windowing (Stateless Plan) ---
+        size_t window_len = 64;
+        OmniDSP::Window::Kaiser kaiser_spec(5.0);
+
+        // Create a window plan using dsp->create_window_plan<T_Data>()
+        auto window_plan_e = dsp->create_window_plan<float>(kaiser_spec, window_len);
+        auto window_plan = check_expected(window_plan_e, "Window plan creation failed");
+
+        std::vector<float> ones_signal(window_len, 1.0f);
+        std::vector<float> windowed_output(window_len);
+
+        // Execute plan (out-of-place)
+        // Note: Plan::Window::execute takes raw pointers and length
+        auto status_win_oop = window_plan->execute(ones_signal.data(), windowed_output.data(), window_len);
+        if (status_win_oop != OmniDSP::Status::Success) {
+             throw std::runtime_error("Window plan (out-of-place) execution failed");
+        }
+        std::cout << "Windowing (OOP): First 5 Kaiser (beta=5.0) values: ";
+        for(size_t i=0; i < 5 && i < windowed_output.size(); ++i) std::cout << windowed_output[i] << " ";
+        std::cout << std::endl;
+
+        // Execute plan (in-place)
+        std::vector<float> inplace_signal(window_len, 2.0f); // Different data for in-place example
+        auto status_win_ip = window_plan->execute_inplace(inplace_signal.data(), window_len);
+        if (status_win_ip != OmniDSP::Status::Success) {
+             throw std::runtime_error("Window plan (in-place) execution failed");
+        }
+        std::cout << "Windowing (IP): First 5 Kaiser (beta=5.0) values: ";
+        for(size_t i=0; i < 5 && i < inplace_signal.size(); ++i) std::cout << inplace_signal[i] << " ";
+        std::cout << std::endl;
+
+
+        auto coeffs_e = dsp->generate_window_coefficients<float>(kaiser_spec, window_len);
+        auto coeffs_vec = check_expected(coeffs_e, "Window coefficients generation failed");
+        std::cout << "Windowing: First 5 generated Kaiser (beta=5.0) coefficients: ";
+        for(size_t i=0; i < 5 && i < coeffs_vec.size(); ++i) std::cout << coeffs_vec[i] << " ";
+        std::cout << std::endl;
 
     } catch (const std::exception& e) {
         std::cerr << "OmniDSP Error: " << e.what() << std::endl;
