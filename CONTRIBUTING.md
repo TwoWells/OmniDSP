@@ -98,31 +98,71 @@ You generally don't need to interact directly with `conda-lock`. Simply use the 
 
 **If you ARE changing runtime dependencies in `environment.yml`:**
 
-1.  **Ensure `conda-lock` is Available:** The `conda-lock` tool is included in the `omnidsp-dev` environment. Ensure this environment is active.
-2.  **Modify `environment.yml`:** Add, remove, or update _runtime_ packages. Also, make the same changes to `environment-dev.yml`.
-3.  **Regenerate Lock Files:** Run `conda-lock lock -f environment.yml --kind explicit`.
-4.  **Commit Changes:** Commit updated `environment.yml`, `environment-dev.yml`, and all regenerated `conda-*.lock` files.
+1.  **Ensure `conda-lock` is Available:** The `conda-lock` tool is included in the `omnidsp-dev` environment defined by `environment-dev.yml`. Ensure this environment is active (`conda activate omnidsp-dev`).
+2.  **Modify `environment.yml`:** Add, remove, or update _runtime_ packages or target platforms in `environment.yml` as needed. Remember to use platform selectors (e.g., `# [win]`, `# [linux]`) if a dependency is platform-specific. **Crucially, also make the same additions/removals/updates to the corresponding runtime dependency section in `environment-dev.yml` to keep the development environment consistent.**
+3.  **Regenerate Lock Files:** After modifying `environment.yml`, you **MUST** regenerate the explicit lock files for all supported platforms. From the project root directory (with the `omnidsp-dev` environment activated), run:
+
+    ```
+    # Reads platforms from environment.yml, generates explicit lock files for the 'omnidsp' env
+    conda-lock lock -f environment.yml --kind explicit
+    ```
+
+    _(This command generates files like `conda-osx-arm64.lock`, `conda-linux-64.lock`, etc.)_
+
+4.  **Commit Changes:** Commit **both** the updated `environment.yml` file AND all the regenerated `conda-*.lock` files in the same commit. This keeps the source definition and the resolved dependencies in sync. Remember to also commit the changes made to `environment-dev.yml`.
 
 ## Developer Tools and Workflow
 
-(This section remains largely unchanged but is important for context)
+The `omnidsp-dev` Conda environment (created from `environment-dev.yml`) provides essential tools like `pytest`, `ruff`, `pre-commit`, and `conda-lock`. Other tools used for code quality are managed directly by `pre-commit`:
 
-The `omnidsp-dev` Conda environment provides `pytest`, `ruff`, `pre-commit`, `conda-lock`. Other tools are managed by `pre-commit` itself:
-
-- `clang-format` (for C++)
-- `prettier` (for Markdown, YAML, TOML)
-- `conventional-pre-commit` (for commit message validation)
-- `nbstripout` (for Jupyter Notebooks)
+- `pytest`: For running the Python test suite (provided by Conda env).
+- `ruff`: A fast Python linter and formatter (provided by Conda env, used via `pre-commit`).
+- `clang-format`: A C++ code formatter (installed automatically by the `pre-commit` hook `mirrors-clang-format`).
+- `prettier`: An opinionated code formatter (installed automatically by the `pre-commit` hook `mirrors-prettier`) for Markdown (`.md`), YAML (`.yaml`/`.yml`), and TOML (`.toml`) files.
+- `pre-commit`: A framework for managing Git hooks (provided by Conda env).
+- `conventional-pre-commit`: A hook (used via `pre-commit`) to validate commit messages against the Conventional Commits standard.
+- `conda-lock`: For regenerating runtime dependency lock files (provided by Conda env).
+- `nbstripout`: Removes output cells from Jupyter Notebooks (installed automatically by its `pre-commit` hook).
 
 ### Using `pre-commit` for Code Quality
 
-1.  **Initial Setup:** `pre-commit install --hook-type commit-msg --hook-type pre-commit` (once per clone).
-2.  **Workflow:** Hooks run automatically on `git commit`. If they fail (e.g., formatting changes), `git add` the modified files and commit again.
+To maintain consistent code style, catch potential issues early, and ensure informative commit messages, this project uses `pre-commit` hooks defined in `.pre-commit-config.yaml`. These hooks automatically run tools like `ruff`, `clang-format`, and `prettier` (using versions managed internally by `pre-commit` itself) on changed files or the commit message itself before you make a commit.
+
+1.  **Initial Setup:** After creating and activating the `omnidsp-dev` environment, run `pre-commit install --hook-type commit-msg --hook-type pre-commit` once per clone (as described in "Setting up the Development Environment"). This installs hooks for both pre-commit (formatting/linting) and commit-msg (message validation) stages.
+2.  **Workflow:**
+    - Stage your changes (`git add ...`).
+    - Run `git commit`.
+    - **Commit Message Validation:** The `commit-msg` hook (`conventional-pre-commit`) runs first. If your commit message doesn't follow the Conventional Commits format, the commit will be aborted with an error message. Edit your commit message and try again.
+    - **Formatting/Linting:** If the message is valid, the `pre-commit` hooks (formatters, linters) run on the staged files.
+    - **If hooks pass:** Your commit proceeds as usual.
+    - **If hooks fail (e.g., a formatter modified files):** The commit will be aborted. `pre-commit` will output messages indicating which files were changed. Note that `pre-commit` modifies your files in place but **does not automatically stage** these changes. You must manually run `git add` on the files listed in the output before attempting the commit again. The second attempt should pass if the only issues were formatting changes fixed by the hooks.
 
 ### Updating Development Tools
 
-- **Conda Environment Tools:** Modify `environment-dev.yml`, commit, and developers update via `conda env update --name omnidsp-dev --file environment-dev.yml --prune`.
-- **`pre-commit` Hooks:** Modify `.pre-commit-config.yaml`, commit. `pre-commit` auto-updates on the next run.
+The tools used for development might occasionally need updates or additions.
+
+- **Adding/Updating a Tool in the Conda Environment:**
+
+  1.  Modify the `dependencies:` list within `environment-dev.yml` to add, remove, or change the version constraint of a Conda package (e.g., updating `pytest` or `ruff`). Remember this file contains both runtime and dev dependencies, so modify the appropriate section.
+  2.  Commit the changes to `environment-dev.yml`.
+  3.  Existing developers will need to update their local `omnidsp-dev` environment by running:
+
+      ```
+      # Ensure no environment is active or activate a different one first
+      # conda deactivate
+      conda env update --name omnidsp-dev --file environment-dev.yml --prune
+      conda activate omnidsp-dev
+      ```
+
+      The `--prune` option removes packages that are no longer listed in the file.
+
+- **Adding/Updating a `pre-commit` Hook:**
+  1.  Modify the `.pre-commit-config.yaml` file to add a new hook, update the `rev:` of an existing hook repository (e.g., updating the version of `clang-format` used by `mirrors-clang-format`), or change hook arguments.
+  2.  Commit the changes to `.pre-commit-config.yaml`.
+  3.  **No extra steps are usually required by developers.** The `pre-commit` framework automatically detects changes to `.pre-commit-config.yaml`. The next time you run `git commit` (or manually run `pre-commit run ...`), it will download and install any new tools or updated versions specified in the configuration into its internal cache. You generally **do not** need to re-run `pre-commit install` or run commands like `pre-commit clean`.
+  4.  If a hook fails unexpectedly after an update (e.g., after pulling changes that modified `.pre-commit-config.yaml`), you can try running `pre-commit run <hook_id> --all-files` (replace `<hook_id>` with the specific hook ID) to see more detailed output or potentially force a refresh of that hook's environment. In rare cases, `pre-commit clean` followed by a hook run might be needed for troubleshooting, but avoid it unless necessary.
+
+**Always commit changes to configuration files (`environment.yml`, `environment-dev.yml`, `conda-*.lock`, `.pre-commit-config.yaml`) so that all contributors stay synchronized.**
 
 ## Building for Development
 
@@ -134,9 +174,12 @@ This is the standard way to build if you intend to use or test the Python bindin
 
 1.  **Activate Conda Environment:** `conda activate omnidsp-dev`
 2.  **Editable Install:** From the project root directory (containing `pyproject.toml`), run:
+
     ```
     pip install -e . -v
     ```
+
+    The `-e` flag installs the package in "editable" mode. Changes to C++ code require rebuilding (which `pip install -e .` triggers if needed). The `-v` flag provides verbose output.
 
 ### C++ Library Only
 
@@ -295,20 +338,32 @@ Run `python tests/cpp/data.py` (or with `--force` or specific suites). Regenerat
 
 ## Commit Message Format (Conventional Commits)
 
-(This section remains unchanged)
 Format: `<type>[optional scope]: <description>`. Hook `conventional-pre-commit` validates. See [conventionalcommits.org](https://www.conventionalcommits.org/).
 
 ## Submitting Contributions
 
-(This section remains largely unchanged, but steps should reflect new architecture if adding features/tests)
+We appreciate contributions! Please follow this general workflow:
 
-1. Fork, clone, branch.
-2. Make changes.
-3. **Add Tests:** Cover new `Plan`/`Processor` logic, windowing features, backend fallbacks, etc.
-4. Update dependencies if needed (regenerate `conda-*.lock` files).
-5. **Update Documentation:** Reflect API changes for `Plan`/`Processor`, windowing, etc.
-6. Commit (Conventional Commits).
-7. Push to fork, open PR.
+1.  **Fork the Repository:** Create your own fork of the OmniDSP repository on GitHub.
+2.  **Clone your fork locally.**
+3.  **Create a Branch:** Create a new branch in your fork for your feature or bug fix (e.g., `git checkout -b feature/add-stft` or `bugfix/fix-cqt-scaling`).
+4.  **Make Changes:** Implement your feature or fix the bug.
+5.  **Add Tests:** Add appropriate unit tests (C++ and/or Python) to cover your changes. Ensure all tests pass (`pytest tests/python` and `ctest` in build dir).
+6.  **Update Dependencies (if needed):**
+    - If you changed _runtime_ dependencies in `environment.yml`, regenerate and commit the explicit `conda-*.lock` files **and ensure `environment-dev.yml` is also updated** (see Dependency Management section).
+    - If you changed _developer_ tools in `environment-dev.yml` or hooks in `.pre-commit-config.yaml`, commit those files.
+7.  **Update Documentation:** If you add new features or change existing ones, update the README, docstrings, and potentially other documentation files (like this one!).
+8.  **Commit Changes:** Commit your changes with clear and concise commit messages adhering to the **Conventional Commits** format. `pre-commit` hooks will run automatically to validate formatting and the commit message.
+9.  **Push to Your Fork:** Push your branch to your GitHub fork.
+10. **Open a Pull Request:** Create a Pull Request (PR) from your branch to the main OmniDSP repository's `main` (or appropriate development) branch. Provide a clear description of your changes in the PR. Link to any relevant issues.
+
+### Pull Request Workflow
+
+- Ensure your code builds successfully on relevant platforms (if possible).
+- Ensure all tests (C++ and Python) pass.
+- Ensure commit messages follow the Conventional Commits standard.
+- Address any feedback from reviewers.
+- Once approved, your PR will be merged.
 
 ## Reporting Bugs and Suggesting Features
 
