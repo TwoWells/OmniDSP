@@ -1,0 +1,16 @@
+[package]
+name = "omnidsp"
+version = "0.1.0"
+edition = "2021"
+description = "A modular, high-performance, cross-platform signal processing library."
+authors = ["Mark Wells"]
+
+[dependencies]
+num-complex = "0.4"
+thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
+log = "0.4"
+
+# Optional dependencies for backends (will be added later as features)
+# intel-ipp = { version = "...", optional = true }

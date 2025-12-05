@@ -1,6 +1,6 @@
 # OmniDSP Configuration Specification
 
-This document defines how the `OmniConfig` is structured, loaded, and resolved.
+This document defines how the `Config` is structured, loaded, and resolved.
 
 ## 1. Philosophy
 *   **Explicit over Implicit:** No "magic" auto-selection. Users define an explicit preference order.
@@ -33,26 +33,26 @@ use_high_precision = true
 
 ## 3. Creation Logic
 
-The user creates the config using one of these methods. All paths ultimately produce an `OmniConfig` struct.
+The user creates the config using one of these methods. All paths ultimately produce a `Config` struct.
 
 ```rust
 // 1. Programmatic (Builder Pattern)
-let conf = OmniConfig::new()
+let conf = Config::new()
     .default_providers(vec!["ipp", "omni"])
     .provider_setting("ipp", "num_threads", 4)
     .build();
 
 // 2. JSON String (Direct)
 let json = r#"{ "default_providers": ["omni"] }"#;
-let conf = OmniConfig::from_json(json)?;
+let conf = Config::from_json(json)?;
 
 // 3. Load from Default File (omnidsp.toml)
-let conf = OmniConfig::load(ConfigSource::Default)?;
+let conf = Config::load(ConfigSource::Default)?;
 
 // 4. Load from Named File
 // "custom" -> searches for "custom.toml" in paths.
 // "/abs/path/to/custom.toml" -> loads directly.
-let conf = OmniConfig::load(ConfigSource::Named("custom"))?;
+let conf = Config::load(ConfigSource::Named("custom"))?;
 ```
 
 ### 3.1. File Search Paths (Resolution Order)
@@ -73,7 +73,7 @@ The library searches the following locations in order. **The first file found is
 ## 4. The In-Memory Structure
 
 ```rust
-pub struct OmniConfig {
+pub struct Config {
     pub default_providers: Vec<String>,
     pub module_overrides: HashMap<String, Vec<String>>,
     pub provider_settings: HashMap<String, toml::Table>,
@@ -82,4 +82,4 @@ pub struct OmniConfig {
 
 ## 5. Validation
 *   The `Config` struct itself is just data. It does not validate if "ipp" is actually installed.
-*   Validation happens when the `OmniBackend` attempts to initialize the providers based on this config.
+*   Validation happens when the `Backend` attempts to initialize the providers based on this config.

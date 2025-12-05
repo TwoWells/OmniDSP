@@ -3,30 +3,39 @@
 This document defines the core vocabulary and architectural components of the OmniDSP library. Adherence to these definitions ensures consistency across all language bindings (Rust, Python, C++).
 
 ## 1. The Core Architecture
-The library is built on a modular "Manager-Provider" architecture. The lifecycle is: **Config → Backend → Provider → Spec → Operator**.
+The library is built on a modular "Manager-Provider" architecture. The lifecycle is: **Config → Backend → Implementation → Spec → Operator**.
 
-### 1.1. Config (`OmniConfig`)
-*   **Definition:** Pure data describing the *desired* environment.
-*   **Responsibilities:** User preferences, hardware constraints, and strategy overrides.
+### 1.1. Config (`Config`)
+*   **Definition:** Pure data describing the *desired* environment and performance tuning.
+*   **Role:** **Tuning & Strategy**.
+*   **Scope:** Settings that affect *performance* or *resource usage* but **MUST NOT** change the mathematical result.
+    *   *Examples:* "Prefer IPP", "Thread Limit = 4", "Use AVX-512 hint".
 *   **Lifecycle:** Transient. Used solely to build the `Backend`.
 
-### 1.2. Backend (`OmniBackend`)
+### 1.2. Backend (`Backend`)
 *   **Definition:** The **Manager** (Concrete Struct).
-*   **Role:** A lightweight **Router**. It holds the `Config` and the active **Providers**.
+*   **Role:** A lightweight **Router**. It holds the `Config` and the active **Implementations**.
 *   **Responsibilities:**
-    *   Lazy Initialization of Providers.
-    *   Routing requests (e.g., delegating `create_dft` to `self.dft_provider`).
+    *   Lazy Initialization of Implementations.
+    *   Routing requests (e.g., delegating `create_dft` to `self.dft`).
 *   **Lifecycle:** Created from a `Config`.
 
-### 1.3. Implementations (`OmniDft`, `IppDft`)
+### 1.3. Implementations (Modules)
 *   **Definition:** Concrete structs that implement the Capability Traits (e.g., `Dft`, `Fir`).
 *   **Role:** The "Factories". They hold global state (library handles) and know how to manufacture Plans.
 *   **Pattern:** **Composition**. The Backend holds a collection of these trait objects (`Box<dyn Dft>`).
-*   **Naming:** `OmniDft` (Pure Rust), `AccelerateDft` (MacOS), `IppDft` (Intel).
-*   **Benefit:** Separation of concerns. `AccelerateDft` only implements what it supports; it doesn't need to stub out missing features.
+*   **Naming:** We use **Modules** instead of prefixes.
+    *   `backend::omni::Dft` (Pure Rust)
+    *   `backend::accelerate::Dft` (MacOS)
+    *   `backend::ipp::Dft` (Intel)
+*   **Benefit:** Separation of concerns and cleaner namespaces.
 
 ### 1.4. Spec (`Specification`)
-*   **Definition:** Backend-agnostic data describing *what* operation to perform.
+*   **Definition:** Backend-agnostic data describing the **Mathematical Operation**.
+*   **Role:** **Behavior Definition**.
+*   **Scope:** Parameters that determine the numerical output.
+    *   *Examples:* "FFT Length = 1024", "Normalization = Unitary", "Filter Cutoff = 0.5".
+*   **Contract:** All backends MUST produce the same numerical output (within floating-point tolerance) for a given Spec.
 *   **Role:** Passed to the Implementation (via the Backend) to create an Operator.
 
 ### 1.5. Execution Objects (The Workers)
@@ -52,8 +61,7 @@ Users never instantiate a Plan or Processor directly. They ask the Backend.
 
 ```rust
 // Conceptual Rust Signature
-let context = OmniContext::new(config);
-let backend = context.backend();
+let backend = Backend::new(config);
 
 // 1. Create Spec
 let spec = DftSpec::new(1024, Direction::Forward);
@@ -74,3 +82,10 @@ plan.process(input, output);
 *   **Real:** `f32` (default), `f64`.
 *   **Complex:** `Complex<f32>` (Interleaved: Real, Imag).
 *   **Buffers:** Input buffers are `&[T]`, Output buffers are `&mut [T]`.
+
+### 2.4. Direct Access (Bypassing the Manager)
+While `OmniBackend` is the primary entry point for portable code, the library exposes the concrete Implementations publicly. A user can instantiate `IppDft` directly.
+
+*   **Use Case:** "Power Users" requiring backend-specific features (e.g., an IPP-specific flag, a CUDA stream ID) that are not representable in the generic `Spec`.
+*   **Trade-off:** This code becomes **non-portable**. Using `IppDft` directly means the code will fail to compile on ARM/MacOS.
+*   **Philosophy:** The "Omni" spirit provides a unified baseline, but we do not prevent users from reaching the metal if they accept the portability cost.

@@ -47,14 +47,14 @@ For each category (e.g., DFT), the system resolves the active implementation usi
     *   **Intel:** Try IPP/MKL.
     *   **Fallback:** Use Omni (Rust Pure Implementation).
 
-### 3.2. The Composite Backend (`OmniBackend`)
-The `OmniBackend` acts as the **Manager**. It holds specific **Implementations** for each capability.
+### 3.2. The Composite Backend (`Backend`)
+The `Backend` acts as the **Manager**. It holds specific **Implementations** for each capability.
 
 ```rust
-pub struct OmniBackend {
+pub struct Backend {
     // These fields are populated (lazily or eagerly) based on Config
-    dft: Box<dyn Dft>,     // Points to IppDft or OmniDft
-    fir: Box<dyn Fir>,     // Points to OmniFir
+    dft: Box<dyn Dft>,     // Points to ipp::Dft or omni::Dft
+    fir: Box<dyn Fir>,     // Points to omni::Fir
     // ...
 }
 ```
@@ -65,6 +65,6 @@ When the user calls `backend.create_dft()`, it simply delegates:
 This ensures **zero runtime dispatch overhead** during the factory call. The decision was made once, at Backend creation.
 
 ## 4. Runtime "Upgrades"
-While the `OmniBackend` is immutable, users can create a *new* backend if they need to switch strategies mid-execution.
+While the `Backend` is immutable, users can create a *new* backend if they need to switch strategies mid-execution.
 
-*   *Example:* An app starts in "Low Power Mode" (Omni Backend). User toggles "High Performance". App creates new `OmniBackend` (preferring IPP) and regenerates plans.
+*   *Example:* An app starts in "Low Power Mode" (Omni Backend). User toggles "High Performance". App creates new `Backend` (preferring IPP) and regenerates plans.
