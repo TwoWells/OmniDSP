@@ -6,27 +6,27 @@ This document defines how the `Config` is structured, loaded, and resolved.
 *   **Explicit over Implicit:** No "magic" auto-selection. Users define an explicit preference order.
 *   **Single Point of Truth:** We do **NOT** cascade or merge configurations. The library loads exactly one configuration source.
 *   **Programmatic First:** The filesystem is just one way to get a config. Applications can provide a JSON string or build the struct directly in code.
-*   **Provider-Specific Tuning:** The config allows passing arbitrary keys/values (JSON/TOML Tables) to specific backends.
+*   **Backend-Specific Tuning:** The config allows passing arbitrary keys/values (JSON/TOML Tables) to specific backends.
 
 ## 2. The Configuration File Format (TOML/JSON)
 We support TOML for files (readability) and JSON for programmatic interchange.
 
 ```toml
 # omnidsp.toml
-default_providers = ["ipp", "omni"]
+default_backends = ["ipp", "omni"]
 
 [modules]
 dft = ["accelerate", "omni"]
 
-[providers.ipp]
+[backends.ipp]
 num_threads = 4
 
-[providers.ipp.firsr]
+[backends.ipp.firsr]
 # We pass raw keys directly to the IPP provider. 
 # No standardization attempted here.
 algType = "direct" 
 
-[providers.accelerate]
+[backends.accelerate]
 # MacOS specific tuning
 use_high_precision = true
 ```
@@ -38,12 +38,12 @@ The user creates the config using one of these methods. All paths ultimately pro
 ```rust
 // 1. Programmatic (Builder Pattern)
 let conf = Config::new()
-    .default_providers(vec!["ipp", "omni"])
-    .provider_setting("ipp", "num_threads", 4)
+    .default_backends(vec!["ipp", "omni"])
+    .backend_setting("ipp", "num_threads", 4)
     .build();
 
 // 2. JSON String (Direct)
-let json = r#"{ "default_providers": ["omni"] }"#;
+let json = r#"{ "default_backends": ["omni"] }"#;
 let conf = Config::from_json(json)?;
 
 // 3. Load from Default File (omnidsp.toml)
@@ -68,18 +68,18 @@ The library searches the following locations in order. **The first file found is
 
 ### 3.2. No Cascading & Defaults
 *   **Single Point of Truth:** If a named config (e.g., `custom.toml`) is loaded, `omnidsp.toml` is **ignored**.
-*   **Hardcoded Fallbacks:** If the loaded config is missing fields (e.g., defines `dft` but not `fir`), the library falls back to **internal defaults** (OmniProvider), NOT to values in `omnidsp.toml`.
+*   **Hardcoded Fallbacks:** If the loaded config is missing fields (e.g., defines `dft` but not `fir`), the library falls back to **internal defaults** (OmniBackend), NOT to values in `omnidsp.toml`.
 
 ## 4. The In-Memory Structure
 
 ```rust
 pub struct Config {
-    pub default_providers: Vec<String>,
+    pub default_backends: Vec<String>,
     pub module_overrides: HashMap<String, Vec<String>>,
-    pub provider_settings: HashMap<String, toml::Table>,
+    pub backend_settings: HashMap<String, toml::Table>,
 }
 ```
 
 ## 5. Validation
 *   The `Config` struct itself is just data. It does not validate if "ipp" is actually installed.
-*   Validation happens when the `Backend` attempts to initialize the providers based on this config.
+*   Validation happens when the `Context` attempts to initialize the backends based on this config.

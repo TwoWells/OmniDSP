@@ -4,27 +4,27 @@ use crate::core::error::{OmniError, Result};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
-    pub default_providers: Vec<String>,
+    pub default_backends: Vec<String>,
     pub module_overrides: HashMap<String, Vec<String>>,
-    pub provider_settings: HashMap<String, toml::Table>,
+    pub backend_settings: HashMap<String, toml::Table>,
 }
 
 impl Config {
     pub fn new() -> Self {
         Self {
-            default_providers: vec!["omni".to_string()],
+            default_backends: vec!["omni".to_string()],
             module_overrides: HashMap::new(),
-            provider_settings: HashMap::new(),
+            backend_settings: HashMap::new(),
         }
     }
 
-    /// Returns the list of preferred providers for a specific module (e.g., "dft", "fir").
+    /// Returns the list of preferred backends for a specific module (e.g., "dft", "fir").
     /// Resolves overrides first, then falls back to global defaults.
-    pub fn get_preferred_providers(&self, module: &str) -> &Vec<String> {
+    pub fn get_preferred_backends(&self, module: &str) -> &Vec<String> {
         if let Some(overrides) = self.module_overrides.get(module) {
             overrides
         } else {
-            &self.default_providers
+            &self.default_backends
         }
     }
     

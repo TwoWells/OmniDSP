@@ -11,6 +11,9 @@ pub enum OmniError {
     #[error("Backend unavailable: {0}")]
     BackendUnavailable(String),
 
+    #[error("No available backend found for module: {0}")]
+    NoBackendAvailable(String),
+
     #[error("Backend initialization failed: {0}")]
     BackendInitFailed(String),
 

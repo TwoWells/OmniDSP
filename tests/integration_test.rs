@@ -1,4 +1,4 @@
-use omnidsp::{Backend, Config};
+use omnidsp::{Context, Config};
 use omnidsp::traits::dft::{Dft, DftDirection, DftSpec};
 use num_complex::Complex;
 
@@ -8,9 +8,10 @@ fn test_end_to_end_dft_architecture() {
     // "I want a default setup"
     let config = Config::new();
 
-    // 2. Create Backend
+    // 2. Create Context (Manager)
     // "Give me the manager"
-    let backend = Backend::new(config);
+    // Note: Context::new now returns Result
+    let context = Context::new(config).expect("Failed to create context");
 
     // 3. Create Spec
     // "I want a Forward DFT of size 4"
@@ -21,8 +22,8 @@ fn test_end_to_end_dft_architecture() {
 
     // 4. Create Plan
     // "Manager, find the best way to do this"
-    // We verify that Backend implements Dft<Complex<f32>>
-    let plan = backend
+    // We verify that Context implements Dft<Complex<f32>>
+    let plan = context
         .create_plan(spec)
         .expect("Failed to create plan");
 
