@@ -26,12 +26,12 @@ fn test_end_to_end_dft_architecture() {
         .create_plan(spec)
         .expect("Failed to create plan");
 
-    // 5. Prepare Data
+    // 5. Prepare Data (DC Signal)
     let input = vec![
         Complex::new(1.0f32, 0.0),
-        Complex::new(2.0, 0.0),
-        Complex::new(3.0, 0.0),
-        Complex::new(4.0, 0.0),
+        Complex::new(1.0, 0.0),
+        Complex::new(1.0, 0.0),
+        Complex::new(1.0, 0.0),
     ];
     let mut output = vec![Complex::new(0.0, 0.0); 4];
 
@@ -40,9 +40,15 @@ fn test_end_to_end_dft_architecture() {
     plan.process(&input, &mut output).expect("Execution failed");
 
     // 7. Verify
-    // The current Dummy Omni implementation just copies input to output.
-    // This confirms the pipeline is connected.
-    assert_eq!(input, output);
+    // RustFFT is unnormalized. Forward DFT of [1,1,1,1] is [4,0,0,0].
+    let expected = vec![
+        Complex::new(4.0f32, 0.0),
+        Complex::new(0.0, 0.0),
+        Complex::new(0.0, 0.0),
+        Complex::new(0.0, 0.0),
+    ];
     
-    println!("Success: Input {:?} copied to Output {:?}", input, output);
+    assert_eq!(output, expected);
+    
+    println!("Success: DC Input {:?} transformed to {:?} (Correct)", input, output);
 }
