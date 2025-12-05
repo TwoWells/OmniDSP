@@ -20,6 +20,9 @@ pub trait DftPlan<T>: Send + Sync {
     /// Process the input and write to output.
     /// Input and Output must be the same length as specified in the Spec.
     fn process(&self, input: &[T], output: &mut [T]) -> Result<()>;
+
+    /// Returns the specification used to create this plan.
+    fn get_spec(&self) -> DftSpec;
 }
 
 /// The Factory: Creates Plans.

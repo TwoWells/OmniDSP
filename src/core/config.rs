@@ -17,6 +17,16 @@ impl Config {
             provider_settings: HashMap::new(),
         }
     }
+
+    /// Returns the list of preferred providers for a specific module (e.g., "dft", "fir").
+    /// Resolves overrides first, then falls back to global defaults.
+    pub fn get_preferred_providers(&self, module: &str) -> &Vec<String> {
+        if let Some(overrides) = self.module_overrides.get(module) {
+            overrides
+        } else {
+            &self.default_providers
+        }
+    }
     
     // TODO: Add load methods (from file, string, etc.)
 }

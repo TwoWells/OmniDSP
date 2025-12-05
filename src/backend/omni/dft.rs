@@ -29,6 +29,10 @@ where T: Copy + Send + Sync
         output.copy_from_slice(input);
         Ok(())
     }
+
+    fn get_spec(&self) -> DftSpec {
+        self.spec
+    }
 }
 
 impl<T> Dft<T> for OmniDft 
