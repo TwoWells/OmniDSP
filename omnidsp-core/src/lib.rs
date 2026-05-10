@@ -2,3 +2,6 @@
 // Copyright (C) 2026 Two Wells <contact@twowells.dev>
 
 //! `OmniDSP` core library.
+
+pub mod error;
+pub mod types;
