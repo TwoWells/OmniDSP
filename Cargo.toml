@@ -1,19 +1,46 @@
-[package]
-name = "omnidsp"
-version = "0.1.0"
-edition = "2021"
-license = "AGPL-3.0-or-later"
-description = "A modular, high-performance, cross-platform signal processing library."
-authors = ["Mark Wells"]
+[workspace]
+resolver = "3"
+members = ["omnidsp-core"]
 
-[dependencies]
-num-complex = "0.4"
-thiserror = "1.0"
-serde = { version = "1.0", features = ["derive"] }
-toml = "0.8"
-log = "0.4"
-rustfft = "6.2"
-libc = "0.2.178"
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
 
-# Optional dependencies for backends (will be added later as features)
-# intel-ipp = { version = "...", optional = true }
+[workspace.lints.clippy]
+# Lint groups
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+
+# Hard denials — no agent should produce these
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+dbg_macro = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+wildcard_imports = "deny"
+missing_assert_message = "deny"
+
+# Force agents to justify exceptions
+allow_attributes_without_reason = "deny"
+
+# Dependencies
+multiple_crate_versions = "allow"
+
+# Publishing metadata — not a code quality concern
+cargo_common_metadata = "allow"
+
+# Documentation
+missing_errors_doc = "warn"
+missing_panics_doc = "warn"
+missing_safety_doc = "warn"
+
+[profile.release]
+panic = "abort"
+lto = true
+codegen-units = 1
+opt-level = 3
+strip = "symbols"

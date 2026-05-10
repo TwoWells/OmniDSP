@@ -1,0 +1,20 @@
+[package]
+name = "omnidsp-core"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Core library for OmniDSP — traits, types, and pure-Rust implementations."
+authors = ["Mark Wells"]
+repository = "https://github.com/TwoWells/OmniDSP"
+
+[lints]
+workspace = true
+
+[dependencies]
+num-complex = "0.4"
+thiserror = "2"
+rustfft = "6.2"
+
+# TODO: Remove once these deps are used in subsequent tickets.
+[package.metadata.cargo-machete]
+ignored = ["num-complex", "thiserror", "rustfft"]
