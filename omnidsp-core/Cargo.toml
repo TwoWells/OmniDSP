@@ -13,8 +13,3 @@ workspace = true
 [dependencies]
 num-complex = "0.4"
 thiserror = "2"
-rustfft = "6.2"
-
-# TODO: Remove once rustfft is used in subsequent tickets.
-[package.metadata.cargo-machete]
-ignored = ["rustfft"]
