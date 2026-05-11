@@ -39,11 +39,14 @@ pub trait Window<T> {
     /// The concrete plan type returned by this factory.
     type Plan: WindowPlan<T>;
 
-    /// Create a plan for a window of the given `length` and `window_type`.
+    /// Create a plan for the given window specification.
+    ///
+    /// The [`WindowType`] carries both the window shape and its length (or, for
+    /// [`Custom`](WindowType::Custom), the coefficients themselves).
     ///
     /// # Errors
     ///
-    /// Returns an error if the length is zero or otherwise unsupported by the
-    /// implementation.
-    fn create_plan(&self, length: usize, window_type: WindowType) -> Result<Self::Plan>;
+    /// Returns an error if the window length is zero or otherwise unsupported
+    /// by the implementation.
+    fn create_plan(&self, window_type: WindowType<T>) -> Result<Self::Plan>;
 }
