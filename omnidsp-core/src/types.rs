@@ -13,3 +13,14 @@ pub enum Direction {
     /// Inverse transform.
     Inverse,
 }
+
+/// Window function type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WindowType {
+    /// Hann (raised cosine) window.
+    Hann,
+    /// Hamming window.
+    Hamming,
+    /// Blackman window.
+    Blackman,
+}

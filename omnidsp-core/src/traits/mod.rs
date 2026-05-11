@@ -1,0 +1,14 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Two Wells <contact@twowells.dev>
+
+//! Primitive trait definitions (Layer 1).
+//!
+//! Each primitive follows the factory+plan pattern: a factory trait creates
+//! configured plan objects, and plans are the execution objects.  See the
+//! [architecture docs](https://github.com/TwoWells/OmniDSP) for details.
+
+pub mod conv;
+pub mod dft;
+pub mod fir;
+pub mod iir;
+pub mod window;
