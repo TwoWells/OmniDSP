@@ -8,6 +8,7 @@
 //! across calls and take `&mut self`.
 
 use crate::error::Result;
+use crate::types::BiquadSection;
 
 /// Execution object for a configured IIR filter (biquad cascade).
 ///
@@ -39,14 +40,13 @@ pub trait Iir<T> {
     /// The concrete plan type returned by this factory.
     type Plan: IirPlan<T>;
 
-    /// Create a plan for an IIR filter with the given `coefficients`.
+    /// Create a plan for an IIR filter with the given biquad `sections`.
     ///
-    /// The coefficient layout (SOS matrix as a flat array, grouped biquad
-    /// sections, etc.) is defined by the implementor.
+    /// The filter is a cascade of second-order sections applied in order.
     ///
     /// # Errors
     ///
-    /// Returns an error if the coefficients are empty or malformed for the
-    /// expected layout.
-    fn create_plan(&self, coefficients: &[T]) -> Result<Self::Plan>;
+    /// Returns an error if `sections` is empty or otherwise unsupported by
+    /// the implementation.
+    fn create_plan(&self, sections: &[BiquadSection<T>]) -> Result<Self::Plan>;
 }

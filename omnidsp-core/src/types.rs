@@ -92,3 +92,27 @@ pub enum WindowType<T> {
         alpha: T,
     },
 }
+
+/// A single second-order section (biquad) with normalized coefficients.
+///
+/// Transfer function:
+/// `H(z) = (b0 + b1·z⁻¹ + b2·z⁻²) / (1 + a1·z⁻¹ + a2·z⁻²)`
+///
+/// `a0` is assumed to be 1 (normalized).  If your source coefficients have a
+/// non-unity `a0`, divide all coefficients by `a0` before constructing this
+/// type.
+///
+/// First-order sections can be represented with `b2 = 0` and `a2 = 0`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BiquadSection<T> {
+    /// Numerator coefficient b0.
+    pub b0: T,
+    /// Numerator coefficient b1.
+    pub b1: T,
+    /// Numerator coefficient b2.
+    pub b2: T,
+    /// Denominator coefficient a1.
+    pub a1: T,
+    /// Denominator coefficient a2.
+    pub a2: T,
+}
