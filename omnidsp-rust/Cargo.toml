@@ -1,0 +1,16 @@
+[package]
+name = "omnidsp-rust"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Pure Rust implementations of OmniDSP primitives (DFT via RustFFT, scalar VecOps)."
+authors = ["Mark Wells"]
+repository = "https://github.com/TwoWells/OmniDSP"
+
+[lints]
+workspace = true
+
+[dependencies]
+omnidsp-core = { path = "../omnidsp-core" }
+num-complex = "0.4"
+rustfft = "6"
