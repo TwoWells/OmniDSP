@@ -15,7 +15,7 @@ use crate::error::Result;
 /// A plan is created by a [`Conv`] factory and holds any preallocated state
 /// (FFT plans, scratch buffers, etc.) needed to execute the convolution
 /// efficiently.  Plans are immutable and take `&self`.
-pub trait ConvPlan<T> {
+pub trait ConvPlan<T>: Send + Sync {
     /// Convolve inputs `a` and `b`, writing the result to `output`.
     ///
     /// `a` and `b` must have the lengths the plan was created for.  `output`

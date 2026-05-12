@@ -17,7 +17,7 @@ use crate::types::Direction;
 /// A plan is created by a [`Dft`] factory and holds any precomputed state
 /// (twiddle factors, scratch buffers, etc.) needed to execute the transform
 /// efficiently.  Plans are immutable and take `&self`.
-pub trait DftPlan<T> {
+pub trait DftPlan<T>: Send + Sync {
     /// Execute the DFT on `input`, writing the result to `output`.
     ///
     /// Both buffers must have the length the plan was created for.

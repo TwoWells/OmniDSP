@@ -13,7 +13,7 @@ use crate::types::WindowType;
 ///
 /// A plan is created by a [`Window`] factory and holds the precomputed window
 /// coefficients.  Plans are immutable and take `&self`.
-pub trait WindowPlan<T> {
+pub trait WindowPlan<T>: Send + Sync {
     /// Apply the window to `data` in-place (element-wise multiply).
     ///
     /// `data` must have the length the plan was created for.
