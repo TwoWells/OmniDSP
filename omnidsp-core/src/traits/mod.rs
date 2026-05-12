@@ -4,11 +4,14 @@
 //! Primitive trait definitions (Layer 1).
 //!
 //! Each primitive follows the factory+plan pattern: a factory trait creates
-//! configured plan objects, and plans are the execution objects.  See the
-//! [architecture docs](https://github.com/TwoWells/OmniDSP) for details.
+//! configured plan objects, and plans are the execution objects.  [`VecOps`](vecops::VecOps)
+//! is the exception — it is stateless and uses direct methods instead.
+//!
+//! See the [architecture docs](https://github.com/TwoWells/OmniDSP) for details.
 
 pub mod conv;
 pub mod dft;
 pub mod fir;
 pub mod iir;
+pub mod vecops;
 pub mod window;
