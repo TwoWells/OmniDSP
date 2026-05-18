@@ -78,6 +78,7 @@ check: setup-tools
 	 done
 	@cargo machete --skip-target-dir
 	@cargo nextest run --workspace --no-fail-fast --no-tests=pass --status-level fail --final-status-level fail --cargo-quiet --show-progress only
+	@cargo test --workspace --doc --quiet
 
 deny:
 	@cargo deny --log-level error check
