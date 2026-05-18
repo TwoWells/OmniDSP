@@ -60,36 +60,40 @@ pub fn design<T: Float>(
     let c1 = to_f64(cutoff1)?;
     let c2 = cutoff2.map(to_f64).transpose()?;
 
-    validate(filter_type, order, sr, c1, c2)?;
-
-    let num_taps = order + 1;
-    let fn1 = c1 / sr; // normalized cutoff1
+    let spec = validate(filter_type, order, sr, c1, c2)?;
 
     // Compute ideal impulse response
-    let ideal = match filter_type {
-        FilterType::Lowpass => ideal_lowpass(num_taps, fn1),
-        FilterType::Highpass => ideal_highpass(num_taps, fn1),
-        FilterType::Bandpass => {
-            // validate() ensures c2 is present for bandpass
-            let fn2 = c2.unwrap_or(0.0) / sr;
-            ideal_bandpass(num_taps, fn1, fn2)
-        }
-        FilterType::Bandstop => {
-            let fn2 = c2.unwrap_or(0.0) / sr;
-            ideal_bandstop(num_taps, fn1, fn2)
-        }
+    let ideal = match spec.cutoffs {
+        NormalizedCutoffs::Single(fn1) => match filter_type {
+            FilterType::Lowpass => ideal_lowpass(spec.num_taps, fn1),
+            FilterType::Highpass => ideal_highpass(spec.num_taps, fn1),
+            FilterType::Bandpass | FilterType::Bandstop => {
+                return Err(Error::Internal(
+                    "bandpass/bandstop requires two cutoffs".into(),
+                ));
+            }
+        },
+        NormalizedCutoffs::Dual(fn1, fn2) => match filter_type {
+            FilterType::Bandpass => ideal_bandpass(spec.num_taps, fn1, fn2),
+            FilterType::Bandstop => ideal_bandstop(spec.num_taps, fn1, fn2),
+            FilterType::Lowpass | FilterType::Highpass => {
+                return Err(Error::Internal(
+                    "lowpass/highpass requires one cutoff".into(),
+                ));
+            }
+        },
     };
 
     // Generate and apply window
-    let window = Window::from_fn(window_fn, num_taps)?;
-    let windowed: Vec<f64> = ideal
+    let window = Window::from_fn(window_fn, spec.num_taps)?;
+    let windowed: Result<Vec<f64>> = ideal
         .iter()
         .zip(window.coefficients())
-        .map(|(h, w)| *h * to_f64(*w).unwrap_or(0.0))
+        .map(|(h, w)| to_f64(*w).map(|wf| *h * wf))
         .collect();
 
     // Normalize gain
-    let normalized = normalize(filter_type, &windowed, fn1, c2.map(|c| c / sr));
+    let normalized = normalize(filter_type, &windowed?, &spec.cutoffs);
 
     // Convert to target type
     normalized.iter().map(|&v| from_f64(v)).collect()
@@ -131,7 +135,21 @@ pub fn estimate_order(transition_width: f64, stopband_attenuation_db: f64) -> us
     }
 }
 
-// ─── Validation ───────────────────────────────────────────────────────
+// ─── Validated spec ───────────────────────────────────────────────────
+
+/// Normalized cutoff frequencies (divided by sample rate).
+enum NormalizedCutoffs {
+    /// Single cutoff for lowpass/highpass.
+    Single(f64),
+    /// Two cutoffs for bandpass/bandstop (fn1 < fn2).
+    Dual(f64, f64),
+}
+
+/// Validated and normalized parameters, ready for computation.
+struct ValidatedSpec {
+    num_taps: usize,
+    cutoffs: NormalizedCutoffs,
+}
 
 fn validate(
     filter_type: FilterType,
@@ -139,7 +157,7 @@ fn validate(
     sr: f64,
     c1: f64,
     c2: Option<f64>,
-) -> Result<()> {
+) -> Result<ValidatedSpec> {
     if order == 0 {
         return Err(Error::InvalidSpec("FIR order must be non-zero".into()));
     }
@@ -153,13 +171,16 @@ fn validate(
         )));
     }
 
-    match filter_type {
+    let fn1 = c1 / sr;
+
+    let cutoffs = match filter_type {
         FilterType::Lowpass | FilterType::Highpass => {
             if c2.is_some() {
                 return Err(Error::InvalidSpec(
                     "cutoff2 must not be specified for lowpass/highpass".into(),
                 ));
             }
+            NormalizedCutoffs::Single(fn1)
         }
         FilterType::Bandpass | FilterType::Bandstop => {
             let Some(c2_val) = c2 else {
@@ -177,9 +198,14 @@ fn validate(
                     "cutoff2 ({c2_val}) must be greater than cutoff1 ({c1})"
                 )));
             }
+            NormalizedCutoffs::Dual(fn1, c2_val / sr)
         }
-    }
-    Ok(())
+    };
+
+    Ok(ValidatedSpec {
+        num_taps: order + 1,
+        cutoffs,
+    })
 }
 
 // ─── Conversion helpers ───────────────────────────────────────────────
@@ -248,7 +274,7 @@ fn ideal_bandstop(num_taps: usize, fc1: f64, fc2: f64) -> Vec<f64> {
 // ─── Gain normalization ───────────────────────────────────────────────
 
 /// Normalize filter taps so that the gain at the reference frequency is unity.
-fn normalize(filter_type: FilterType, taps: &[f64], fn1: f64, fn2: Option<f64>) -> Vec<f64> {
+fn normalize(filter_type: FilterType, taps: &[f64], cutoffs: &NormalizedCutoffs) -> Vec<f64> {
     let gain = match filter_type {
         // DC gain (ω = 0): sum of all taps.
         FilterType::Lowpass | FilterType::Bandstop => taps.iter().sum::<f64>(),
@@ -260,8 +286,10 @@ fn normalize(filter_type: FilterType, taps: &[f64], fn1: f64, fn2: Option<f64>) 
             .sum::<f64>(),
         // Gain at band center.
         FilterType::Bandpass => {
-            let fc = f64::midpoint(fn1, fn2.unwrap_or(fn1));
-            eval_gain(taps, fc)
+            let &NormalizedCutoffs::Dual(fn1, fn2) = cutoffs else {
+                return taps.to_vec();
+            };
+            eval_gain(taps, f64::midpoint(fn1, fn2))
         }
     };
 
