@@ -11,7 +11,8 @@ use omnidsp_core::traits::vecops::VecOps;
 /// Pure Rust element-wise vector operations.
 ///
 /// Scalar loop implementations that LLVM auto-vectorizes.  Stateless unit
-/// struct — trivially `Send + Sync`.
+/// struct — trivially `Send + Sync + Copy`.
+#[derive(Debug, Clone, Copy)]
 pub struct RustVecOps;
 
 #[allow(

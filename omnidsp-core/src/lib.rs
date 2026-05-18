@@ -17,5 +17,9 @@ macro_rules! testdata {
 
 pub mod design;
 pub mod error;
+pub mod modules;
 pub mod traits;
 pub mod types;
+
+#[cfg(test)]
+pub(crate) mod test_utils;

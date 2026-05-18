@@ -22,7 +22,9 @@ use crate::error::Result;
 /// `impl VecOps<f32>` and `impl VecOps<f64>` are independent capabilities.
 ///
 /// Implementations are stateless and must be safely shareable across threads.
-pub trait VecOps<T>: Send + Sync {
+/// `Clone` is required because composite modules store their own `VecOps`
+/// handle in each plan — for stateless unit structs this is zero-cost `Copy`.
+pub trait VecOps<T>: Send + Sync + Clone {
     /// Element-wise multiply: `out[i] = a[i] * b[i]`.
     ///
     /// All three slices must have the same length.
