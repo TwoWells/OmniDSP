@@ -3,7 +3,11 @@
 
 //! Core type aliases and enums.
 
+use num_traits::Float;
+
 pub use num_complex::{Complex32, Complex64};
+
+use crate::error::{Error, Result};
 
 /// Transform direction for DFT and related operations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -14,83 +18,133 @@ pub enum Direction {
     Inverse,
 }
 
-/// Window function specification.
+/// Frequency response shape for filter design.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FilterType {
+    /// Passes frequencies below the cutoff.
+    Lowpass,
+    /// Passes frequencies above the cutoff.
+    Highpass,
+    /// Passes frequencies between two cutoffs.
+    Bandpass,
+    /// Rejects frequencies between two cutoffs.
+    Bandstop,
+}
+
+/// Window function description.
 ///
-/// Each variant is a complete specification: the window shape, its length, and
-/// any shape parameters.  `length` is part of the window — a Hann window of
-/// length 512 is a different thing from a Hann window of length 1024.
+/// Describes the shape and any shape parameters of a window function, without
+/// specifying a length.  Length is provided at the point of use — when
+/// constructing a [`Window<T>`] via [`Window::from_fn`].
 ///
 /// Generic over `T` so that shape parameters (e.g. Kaiser `beta`, Gaussian
-/// `sigma`) match the data type.  `WindowType<f32>` carries `f32` parameters
-/// and produces `f32` coefficients.
+/// `sigma`) match the data type.
 ///
-/// The [`Custom`](WindowType::Custom) variant carries user-supplied
-/// coefficients.  Its length is the length of the `Vec`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum WindowType<T> {
+/// For user-supplied coefficients (custom windows), skip `WindowFn` entirely
+/// and construct a [`Window<T>`] directly via [`Window::new`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WindowFn<T> {
     /// Bartlett (triangular with zero endpoints) window.
-    Bartlett {
-        /// Window length in samples.
-        length: usize,
-    },
+    Bartlett,
     /// Blackman window.
-    Blackman {
-        /// Window length in samples.
-        length: usize,
-    },
-    /// User-supplied window coefficients.
-    ///
-    /// The factory wraps these in a plan, giving the custom path the same
-    /// accelerated [`apply()`](crate::traits::window::WindowPlan::apply) as
-    /// named windows.
-    Custom(Vec<T>),
+    Blackman,
     /// Flat-top window (used for amplitude calibration).
-    FlatTop {
-        /// Window length in samples.
-        length: usize,
-    },
+    FlatTop,
     /// Gaussian window.
     Gaussian {
-        /// Window length in samples.
-        length: usize,
         /// Standard deviation parameter (relative to half the window length).
         sigma: T,
     },
     /// Hamming window.
-    Hamming {
-        /// Window length in samples.
-        length: usize,
-    },
+    Hamming,
     /// Hann (raised cosine) window.
-    Hann {
-        /// Window length in samples.
-        length: usize,
-    },
+    Hann,
     /// Kaiser window.
     Kaiser {
-        /// Window length in samples.
-        length: usize,
         /// Shape parameter controlling the trade-off between main-lobe width
         /// and side-lobe level.
         beta: T,
     },
     /// Rectangular (all ones) window.
-    Rectangular {
-        /// Window length in samples.
-        length: usize,
-    },
+    Rectangular,
     /// Triangular (non-zero endpoints) window.
-    Triangular {
-        /// Window length in samples.
-        length: usize,
-    },
+    Triangular,
     /// Tukey (tapered cosine) window.
     Tukey {
-        /// Window length in samples.
-        length: usize,
         /// Taper fraction (`0.0` = rectangular, `1.0` = Hann).
         alpha: T,
     },
+}
+
+/// Computed window coefficients.
+///
+/// A `Window<T>` holds a vector of precomputed coefficients ready to be applied
+/// to a signal via element-wise multiply ([`VecOps::mul_inplace`]).
+///
+/// Construct from a [`WindowFn<T>`] and a length, or directly from raw
+/// coefficients:
+///
+/// ```
+/// use omnidsp_core::types::Window;
+///
+/// let w = Window::new(&[0.5_f64, 1.0, 0.5]);
+/// assert_eq!(w.coefficients().len(), 3);
+/// assert_eq!(w.len(), 3);
+/// ```
+///
+/// [`VecOps::mul_inplace`]: crate::traits::vecops::VecOps::mul_inplace
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Window<T> {
+    coefficients: Vec<T>,
+}
+
+impl<T: Float> Window<T> {
+    /// Create a window from raw coefficients.
+    ///
+    /// Use this for custom windows where the coefficients are already known.
+    /// The coefficients are copied from the slice.
+    #[must_use]
+    pub fn new(coefficients: &[T]) -> Self {
+        Self {
+            coefficients: coefficients.to_vec(),
+        }
+    }
+
+    /// Create a window by evaluating a [`WindowFn`] at the given `length`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidSpec`] if `length` is zero or if the window
+    /// function parameters are invalid (e.g. Kaiser `beta < 0`, Gaussian
+    /// `sigma <= 0`, Tukey `alpha` outside `[0, 1]`).
+    pub fn from_fn(_winfn: &WindowFn<T>, length: usize) -> Result<Self> {
+        if length == 0 {
+            return Err(Error::InvalidSpec("window length must be non-zero".into()));
+        }
+
+        // Stub — ticket 01 fills in the actual formulas.
+        Err(Error::Internal(
+            "window coefficient generation not yet implemented".into(),
+        ))
+    }
+
+    /// Access the precomputed window coefficients.
+    #[must_use]
+    pub fn coefficients(&self) -> &[T] {
+        &self.coefficients
+    }
+
+    /// Return the number of coefficients (window length).
+    #[must_use]
+    pub const fn len(&self) -> usize {
+        self.coefficients.len()
+    }
+
+    /// Returns `true` if the window has zero coefficients.
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.coefficients.is_empty()
+    }
 }
 
 /// A single second-order section (biquad) with normalized coefficients.
