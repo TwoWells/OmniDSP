@@ -7,7 +7,7 @@ use num_traits::Float;
 
 pub use num_complex::{Complex32, Complex64};
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 
 /// Transform direction for DFT and related operations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -85,10 +85,14 @@ pub enum WindowFn<T> {
 /// coefficients:
 ///
 /// ```
-/// use omnidsp_core::types::Window;
+/// use omnidsp_core::types::{Window, WindowFn};
 ///
+/// // From a window function
+/// let w = Window::from_fn(&WindowFn::<f64>::Hann, 512).unwrap();
+/// assert_eq!(w.len(), 512);
+///
+/// // From raw coefficients (custom window)
 /// let w = Window::new(&[0.5_f64, 1.0, 0.5]);
-/// assert_eq!(w.coefficients().len(), 3);
 /// assert_eq!(w.len(), 3);
 /// ```
 ///
@@ -117,15 +121,9 @@ impl<T: Float> Window<T> {
     /// Returns [`Error::InvalidSpec`] if `length` is zero or if the window
     /// function parameters are invalid (e.g. Kaiser `beta < 0`, Gaussian
     /// `sigma <= 0`, Tukey `alpha` outside `[0, 1]`).
-    pub fn from_fn(_winfn: &WindowFn<T>, length: usize) -> Result<Self> {
-        if length == 0 {
-            return Err(Error::InvalidSpec("window length must be non-zero".into()));
-        }
-
-        // Stub — ticket 01 fills in the actual formulas.
-        Err(Error::Internal(
-            "window coefficient generation not yet implemented".into(),
-        ))
+    pub fn from_fn(winfn: &WindowFn<T>, length: usize) -> Result<Self> {
+        let coefficients = crate::design::window::compute(winfn, length)?;
+        Ok(Self { coefficients })
     }
 
     /// Access the precomputed window coefficients.
