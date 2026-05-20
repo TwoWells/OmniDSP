@@ -315,13 +315,20 @@ fn normalize(filter_type: FilterType, taps: &[f64], cutoffs: &NormalizedCutoffs)
     taps.iter().map(|&h| h / gain).collect()
 }
 
-/// Evaluate the filter gain at normalized frequency `f` (0..0.5).
+/// Evaluate the filter magnitude at normalized frequency `f` (0..0.5).
 fn eval_gain(taps: &[f64], f: f64) -> f64 {
     let omega = 2.0 * PI * f;
-    taps.iter()
+    let re: f64 = taps
+        .iter()
         .enumerate()
         .map(|(n, &h)| h * (omega * n as f64).cos())
-        .sum()
+        .sum();
+    let im: f64 = taps
+        .iter()
+        .enumerate()
+        .map(|(n, &h)| h * (omega * n as f64).sin())
+        .sum();
+    re.hypot(im)
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────
