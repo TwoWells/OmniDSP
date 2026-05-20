@@ -9,7 +9,9 @@
 //! or any implementation crate.  All computation is plain arithmetic on
 //! `f32`/`f64` values, suitable for use at plan-creation time.
 
+pub mod conv;
 pub mod cqt;
+pub mod dft;
 pub mod fir;
 pub mod iir;
 pub mod resample;
