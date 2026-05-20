@@ -7,7 +7,7 @@
 #   make release-major   # 0.1.0 -> 1.0.0
 #   make release V=0.2.0 # explicit version
 
-.PHONY: bench build-release check deny machete mutants setup setup-hooks setup-tools test release release-patch release-minor release-major publish tag-current
+.PHONY: bench build-release check deny gen-iir-reference machete mutants setup setup-hooks setup-tools test release release-patch release-minor release-major publish tag-current
 
 # Get current version from Cargo.toml
 CURRENT_VERSION := $(shell grep '^version = ' omnidsp-core/Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
@@ -82,6 +82,12 @@ check: setup-tools
 
 deny:
 	@cargo deny --log-level error check
+
+# --- Reference data ---
+
+gen-iir-reference:
+	@python3 scripts/gen_iir_reference.py > omnidsp-core/testdata/iir_scipy.rs
+	@echo "Generated omnidsp-core/testdata/iir_scipy.rs"
 
 machete:
 	@cargo machete --skip-target-dir
