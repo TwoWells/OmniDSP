@@ -37,43 +37,157 @@ use num_traits::Float;
 use crate::error::{Error, Result};
 use crate::types::{BiquadSection, FilterType};
 
-// ─── Public API ───────────────────────────────────────────────────────
+// ─── Spec ────────────────────────────────────────────────────────────
 
-/// Design a Butterworth IIR filter as cascaded biquad sections.
+/// IIR filter family (analog prototype shape).
+///
+/// Each family produces a different analog prototype in the s-plane.
+/// The rest of the design pipeline (frequency transform, bilinear
+/// transform, SOS formation) is shared.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FilterFamily {
+    /// Maximally flat passband.  Poles on the unit circle, no finite zeros.
+    Butterworth,
+}
+
+/// IIR filter design specification.
+///
+/// Bundles and validates all parameters needed to design an IIR filter.
+/// The resulting biquad sections are the universal representation — any
+/// IIR implementation can consume them.
+///
+/// # Examples
+///
+/// ```
+/// use omnidsp_core::design::iir::{IirSpec, FilterFamily, design};
+/// use omnidsp_core::types::FilterType;
+///
+/// let spec = IirSpec::new(
+///     FilterFamily::Butterworth,
+///     FilterType::Lowpass,
+///     4,
+///     44100.0,
+///     1000.0,
+///     None,
+/// ).unwrap();
+/// let sections = design(&spec).unwrap();
+/// assert_eq!(sections.len(), 2);
+/// ```
+#[derive(Debug, Clone)]
+pub struct IirSpec<T> {
+    family: FilterFamily,
+    filter_type: FilterType,
+    order: usize,
+    sample_rate: T,
+    cutoff1: T,
+    cutoff2: Option<T>,
+}
+
+impl<T: Float> IirSpec<T> {
+    /// Create a new IIR filter specification.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidSpec`] if:
+    /// - `order` is zero
+    /// - `sample_rate` is not positive
+    /// - cutoff frequencies are outside `(0, sample_rate / 2)`
+    /// - bandpass/bandstop is missing `cutoff2` or has `cutoff2 <= cutoff1`
+    /// - lowpass/highpass has `cutoff2` present
+    pub fn new(
+        family: FilterFamily,
+        filter_type: FilterType,
+        order: usize,
+        sample_rate: T,
+        cutoff1: T,
+        cutoff2: Option<T>,
+    ) -> Result<Self> {
+        let sr = to_f64(sample_rate)?;
+        let c1 = to_f64(cutoff1)?;
+        let c2 = cutoff2.map(to_f64).transpose()?;
+        validate(filter_type, order, sr, c1, c2)?;
+        Ok(Self {
+            family,
+            filter_type,
+            order,
+            sample_rate,
+            cutoff1,
+            cutoff2,
+        })
+    }
+
+    /// Analog prototype family.
+    #[must_use]
+    pub const fn family(&self) -> FilterFamily {
+        self.family
+    }
+
+    /// Frequency response shape.
+    #[must_use]
+    pub const fn filter_type(&self) -> FilterType {
+        self.filter_type
+    }
+
+    /// Filter order.
+    #[must_use]
+    pub const fn order(&self) -> usize {
+        self.order
+    }
+
+    /// Sampling frequency (Hz).
+    #[must_use]
+    pub const fn sample_rate(&self) -> T {
+        self.sample_rate
+    }
+
+    /// Primary cutoff frequency (Hz).
+    #[must_use]
+    pub const fn cutoff1(&self) -> T {
+        self.cutoff1
+    }
+
+    /// Secondary cutoff frequency (Hz), present for bandpass/bandstop.
+    #[must_use]
+    pub const fn cutoff2(&self) -> Option<T> {
+        self.cutoff2
+    }
+}
+
+// ─── Design ──────────────────────────────────────────────────────────
+
+/// Design an IIR filter from an [`IirSpec`] as cascaded biquad sections.
 ///
 /// Returns `Vec<BiquadSection<T>>` with normalized coefficients (`a0 = 1`).
 /// The number of sections is `⌈order / 2⌉` for lowpass/highpass and
 /// `order` for bandpass/bandstop.
 ///
-/// # Arguments
+/// # Errors
 ///
-/// * `filter_type` — frequency response shape.
-/// * `order` — filter order.
-/// * `sample_rate` — sampling frequency (Hz).
-/// * `cutoff1` — primary cutoff frequency (Hz).
-/// * `cutoff2` — secondary cutoff (Hz), required for bandpass/bandstop.
+/// Returns an error if the internal computation fails (should not happen
+/// for a valid spec).
+pub fn design<T: Float>(spec: &IirSpec<T>) -> Result<Vec<BiquadSection<T>>> {
+    let sr = to_f64(spec.sample_rate)?;
+    let c1 = to_f64(spec.cutoff1)?;
+    let c2 = spec.cutoff2.map(to_f64).transpose()?;
+
+    let validated = validate(spec.filter_type, spec.order, sr, c1, c2)?;
+
+    let prototype = match spec.family {
+        FilterFamily::Butterworth => AnalogPrototype::butterworth(spec.order),
+    };
+
+    let sections = design_from_prototype(prototype, &validated, sr);
+    sections.iter().map(biquad_to_t).collect()
+}
+
+/// Design a Butterworth IIR filter as cascaded biquad sections.
+///
+/// Convenience wrapper around [`IirSpec`] + [`design`] for the common
+/// Butterworth case.
 ///
 /// # Errors
 ///
-/// Returns [`Error::InvalidSpec`] if:
-/// - `order` is zero
-/// - `sample_rate` is not positive
-/// - cutoff frequencies are outside `(0, sample_rate / 2)`
-/// - bandpass/bandstop is missing `cutoff2` or has `cutoff2 <= cutoff1`
-/// - lowpass/highpass has `cutoff2` present
-///
-/// # Examples
-///
-/// ```
-/// use omnidsp_core::design::iir::design_butterworth;
-/// use omnidsp_core::types::FilterType;
-///
-/// // Order-4 Butterworth lowpass at 1 kHz, sampled at 44.1 kHz
-/// let sections = design_butterworth::<f64>(
-///     FilterType::Lowpass, 4, 44100.0, 1000.0, None,
-/// ).unwrap();
-/// assert_eq!(sections.len(), 2);
-/// ```
+/// Returns [`Error::InvalidSpec`] if parameters are invalid (see [`IirSpec::new`]).
 pub fn design_butterworth<T: Float>(
     filter_type: FilterType,
     order: usize,
@@ -81,27 +195,31 @@ pub fn design_butterworth<T: Float>(
     cutoff1: T,
     cutoff2: Option<T>,
 ) -> Result<Vec<BiquadSection<T>>> {
-    let sr = to_f64(sample_rate)?;
-    let c1 = to_f64(cutoff1)?;
-    let c2 = cutoff2.map(to_f64).transpose()?;
+    let spec = IirSpec::new(
+        FilterFamily::Butterworth,
+        filter_type,
+        order,
+        sample_rate,
+        cutoff1,
+        cutoff2,
+    )?;
+    design(&spec)
+}
 
-    let spec = validate(filter_type, order, sr, c1, c2)?;
-
-    let (mut sections, ref_omega) = match spec {
+fn design_from_prototype(
+    prototype: AnalogPrototype,
+    spec: &ValidatedSpec,
+    sr: f64,
+) -> Vec<BiquadSection<f64>> {
+    let (mut sections, ref_omega) = match *spec {
         ValidatedSpec::Lowpass { fc } => {
             let wc = prewarp(fc, sr);
-            let sections = AnalogPrototype::butterworth(order)
-                .into_lowpass(wc)
-                .into_digital(sr)
-                .into_sos();
+            let sections = prototype.into_lowpass(wc).into_digital(sr).into_sos();
             (sections, 0.0)
         }
         ValidatedSpec::Highpass { fc } => {
             let wc = prewarp(fc, sr);
-            let sections = AnalogPrototype::butterworth(order)
-                .into_highpass(wc)
-                .into_digital(sr)
-                .into_sos();
+            let sections = prototype.into_highpass(wc).into_digital(sr).into_sos();
             (sections, PI)
         }
         ValidatedSpec::Bandpass { fc1, fc2 } => {
@@ -110,10 +228,7 @@ pub fn design_butterworth<T: Float>(
             let w0 = (wc1 * wc2).sqrt();
             let bw = wc2 - wc1;
             let w_center = 2.0 * (w0 / (2.0 * sr)).atan();
-            let sections = AnalogPrototype::butterworth(order)
-                .into_bandpass(w0, bw)
-                .into_digital(sr)
-                .into_sos();
+            let sections = prototype.into_bandpass(w0, bw).into_digital(sr).into_sos();
             (sections, w_center)
         }
         ValidatedSpec::Bandstop { fc1, fc2 } => {
@@ -121,17 +236,14 @@ pub fn design_butterworth<T: Float>(
             let wc2 = prewarp(fc2, sr);
             let w0 = (wc1 * wc2).sqrt();
             let bw = wc2 - wc1;
-            let sections = AnalogPrototype::butterworth(order)
-                .into_bandstop(w0, bw)
-                .into_digital(sr)
-                .into_sos();
+            let sections = prototype.into_bandstop(w0, bw).into_digital(sr).into_sos();
             (sections, 0.0)
         }
     };
 
     normalize_gain(&mut sections, ref_omega);
 
-    sections.iter().map(biquad_to_t).collect()
+    sections
 }
 
 // ─── Validated spec ───────────────────────────────────────────────────
