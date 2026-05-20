@@ -3,11 +3,49 @@
 
 //! FIR (Finite Impulse Response) filter primitive traits.
 //!
-//! The [`Fir`] factory creates [`FirPlan`] execution objects that hold filter
-//! coefficients and a delay line.  Plans are mutable — they maintain state
-//! across calls and take `&mut self`.
+//! The [`Fir`] factory creates [`FirPlan`] execution objects configured from
+//! a [`FirPlanSpec`].  Plans are mutable — they maintain state across calls
+//! and take `&mut self`.
 
 use crate::error::Result;
+
+// ─── Spec ────────────────────────────────────────────────────────────
+
+/// FIR filter implementation strategy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FirStrategy {
+    /// Backend decides based on filter length.
+    Auto,
+    /// Time-domain direct convolution (MAC loop).
+    Direct,
+    /// Frequency-domain overlap-save.
+    OverlapSave,
+}
+
+/// FIR filter plan specification.
+///
+/// Describes the filter coefficients and preferred implementation strategy.
+/// Any backend can consume this spec.
+#[derive(Debug, Clone, Copy)]
+pub struct FirPlanSpec<'a, T> {
+    /// Filter tap coefficients.
+    pub coefficients: &'a [T],
+    /// Preferred implementation strategy.
+    pub strategy: FirStrategy,
+}
+
+impl<'a, T> FirPlanSpec<'a, T> {
+    /// Create a new FIR plan spec with the given coefficients and strategy.
+    #[must_use]
+    pub const fn new(coefficients: &'a [T], strategy: FirStrategy) -> Self {
+        Self {
+            coefficients,
+            strategy,
+        }
+    }
+}
+
+// ─── Traits ──────────────────────────────────────────────────────────
 
 /// Execution object for a configured FIR filter.
 ///
@@ -35,19 +73,15 @@ pub trait FirPlan<T> {
 /// `T` is a type parameter on the factory trait so that capability is expressed
 /// in the type system.  The associated [`Plan`](Fir::Plan) type lets each
 /// implementor return a concrete plan — no `Box<dyn>`.
-///
-/// The factory decides the implementation strategy — direct MAC for short
-/// filters, FFT-based overlap-save for long filters.  The consumer does not
-/// know or care which strategy is used.
 pub trait Fir<T> {
     /// The concrete plan type returned by this factory.
     type Plan: FirPlan<T>;
 
-    /// Create a plan for a FIR filter with the given `coefficients` (tap values).
+    /// Create a plan for a FIR filter described by `spec`.
     ///
     /// # Errors
     ///
     /// Returns an error if the coefficients slice is empty or otherwise
     /// unsupported by the implementation.
-    fn create_plan(&self, coefficients: &[T]) -> Result<Self::Plan>;
+    fn create_plan(&self, spec: &FirPlanSpec<'_, T>) -> Result<Self::Plan>;
 }
