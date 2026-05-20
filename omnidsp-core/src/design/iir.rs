@@ -180,32 +180,6 @@ pub fn design<T: Float>(spec: &IirSpec<T>) -> Result<Vec<BiquadSection<T>>> {
     sections.iter().map(biquad_to_t).collect()
 }
 
-/// Design a Butterworth IIR filter as cascaded biquad sections.
-///
-/// Convenience wrapper around [`IirSpec`] + [`design`] for the common
-/// Butterworth case.
-///
-/// # Errors
-///
-/// Returns [`Error::InvalidSpec`] if parameters are invalid (see [`IirSpec::new`]).
-pub fn design_butterworth<T: Float>(
-    filter_type: FilterType,
-    order: usize,
-    sample_rate: T,
-    cutoff1: T,
-    cutoff2: Option<T>,
-) -> Result<Vec<BiquadSection<T>>> {
-    let spec = IirSpec::new(
-        FilterFamily::Butterworth,
-        filter_type,
-        order,
-        sample_rate,
-        cutoff1,
-        cutoff2,
-    )?;
-    design(&spec)
-}
-
 fn design_from_prototype(
     prototype: AnalogPrototype,
     spec: &ValidatedSpec,
@@ -692,6 +666,28 @@ mod tests {
     const TOL: f64 = 1e-10;
     const MINUS_3DB: f64 = std::f64::consts::FRAC_1_SQRT_2;
 
+    fn butter(
+        ft: FilterType,
+        order: usize,
+        sr: f64,
+        c1: f64,
+        c2: Option<f64>,
+    ) -> Result<Vec<BiquadSection<f64>>> {
+        let spec = IirSpec::new(FilterFamily::Butterworth, ft, order, sr, c1, c2)?;
+        design(&spec)
+    }
+
+    fn butter_f32(
+        ft: FilterType,
+        order: usize,
+        sr: f32,
+        c1: f32,
+        c2: Option<f32>,
+    ) -> Result<Vec<BiquadSection<f32>>> {
+        let spec = IirSpec::new(FilterFamily::Butterworth, ft, order, sr, c1, c2)?;
+        design(&spec)
+    }
+
     /// Evaluate the SOS cascade magnitude at a given frequency in Hz.
     fn gain_at(sections: &[BiquadSection<f64>], freq_hz: f64, fs: f64) -> f64 {
         eval_sos_magnitude(sections, 2.0 * PI * freq_hz / fs)
@@ -701,43 +697,37 @@ mod tests {
 
     #[test]
     fn lowpass_order1_one_section() {
-        let s = design_butterworth::<f64>(FilterType::Lowpass, 1, 44100.0, 1000.0, None)
-            .expect("LP order 1");
+        let s = butter(FilterType::Lowpass, 1, 44100.0, 1000.0, None).expect("LP order 1");
         assert_eq!(s.len(), 1, "ceil(1/2) = 1 section");
     }
 
     #[test]
     fn lowpass_order2_one_section() {
-        let s = design_butterworth::<f64>(FilterType::Lowpass, 2, 44100.0, 1000.0, None)
-            .expect("LP order 2");
+        let s = butter(FilterType::Lowpass, 2, 44100.0, 1000.0, None).expect("LP order 2");
         assert_eq!(s.len(), 1, "ceil(2/2) = 1 section");
     }
 
     #[test]
     fn lowpass_order4_two_sections() {
-        let s = design_butterworth::<f64>(FilterType::Lowpass, 4, 44100.0, 1000.0, None)
-            .expect("LP order 4");
+        let s = butter(FilterType::Lowpass, 4, 44100.0, 1000.0, None).expect("LP order 4");
         assert_eq!(s.len(), 2, "ceil(4/2) = 2 sections");
     }
 
     #[test]
     fn lowpass_order8_four_sections() {
-        let s = design_butterworth::<f64>(FilterType::Lowpass, 8, 44100.0, 1000.0, None)
-            .expect("LP order 8");
+        let s = butter(FilterType::Lowpass, 8, 44100.0, 1000.0, None).expect("LP order 8");
         assert_eq!(s.len(), 4, "ceil(8/2) = 4 sections");
     }
 
     #[test]
     fn bandpass_order2_two_sections() {
-        let s = design_butterworth::<f64>(FilterType::Bandpass, 2, 44100.0, 1000.0, Some(5000.0))
-            .expect("BP order 2");
+        let s = butter(FilterType::Bandpass, 2, 44100.0, 1000.0, Some(5000.0)).expect("BP order 2");
         assert_eq!(s.len(), 2, "BP order 2 → 2 sections");
     }
 
     #[test]
     fn bandstop_order2_two_sections() {
-        let s = design_butterworth::<f64>(FilterType::Bandstop, 2, 44100.0, 1000.0, Some(5000.0))
-            .expect("BS order 2");
+        let s = butter(FilterType::Bandstop, 2, 44100.0, 1000.0, Some(5000.0)).expect("BS order 2");
         assert_eq!(s.len(), 2, "BS order 2 → 2 sections");
     }
 
@@ -745,16 +735,14 @@ mod tests {
 
     #[test]
     fn order1_lowpass_is_first_order() {
-        let s = design_butterworth::<f64>(FilterType::Lowpass, 1, 44100.0, 1000.0, None)
-            .expect("LP order 1");
+        let s = butter(FilterType::Lowpass, 1, 44100.0, 1000.0, None).expect("LP order 1");
         assert!(s[0].b2.abs() < TOL, "b2 should be 0 for first-order");
         assert!(s[0].a2.abs() < TOL, "a2 should be 0 for first-order");
     }
 
     #[test]
     fn order1_highpass_is_first_order() {
-        let s = design_butterworth::<f64>(FilterType::Highpass, 1, 44100.0, 10000.0, None)
-            .expect("HP order 1");
+        let s = butter(FilterType::Highpass, 1, 44100.0, 10000.0, None).expect("HP order 1");
         assert!(s[0].b2.abs() < TOL, "b2 should be 0 for first-order");
         assert!(s[0].a2.abs() < TOL, "a2 should be 0 for first-order");
     }
@@ -764,8 +752,7 @@ mod tests {
     #[test]
     fn lowpass_dc_gain_is_unity() {
         for order in [1, 2, 3, 4, 6, 8] {
-            let s = design_butterworth::<f64>(FilterType::Lowpass, order, 44100.0, 1000.0, None)
-                .expect("LP design");
+            let s = butter(FilterType::Lowpass, order, 44100.0, 1000.0, None).expect("LP design");
             let dc = gain_at(&s, 0.0, 44100.0);
             assert!(
                 (dc - 1.0).abs() < TOL,
@@ -776,8 +763,7 @@ mod tests {
 
     #[test]
     fn bandstop_dc_gain_is_unity() {
-        let s = design_butterworth::<f64>(FilterType::Bandstop, 2, 44100.0, 1000.0, Some(5000.0))
-            .expect("BS order 2");
+        let s = butter(FilterType::Bandstop, 2, 44100.0, 1000.0, Some(5000.0)).expect("BS order 2");
         let dc = gain_at(&s, 0.0, 44100.0);
         assert!((dc - 1.0).abs() < TOL, "BS DC gain should be 1.0, got {dc}");
     }
@@ -787,8 +773,7 @@ mod tests {
     #[test]
     fn highpass_nyquist_gain_is_unity() {
         for order in [1, 2, 3, 4, 6] {
-            let s = design_butterworth::<f64>(FilterType::Highpass, order, 44100.0, 10000.0, None)
-                .expect("HP design");
+            let s = butter(FilterType::Highpass, order, 44100.0, 10000.0, None).expect("HP design");
             let nyq = eval_sos_magnitude(&s, PI);
             assert!(
                 (nyq - 1.0).abs() < TOL,
@@ -804,8 +789,7 @@ mod tests {
         let fc = 1000.0;
         let fs = 44100.0;
         for order in [1, 2, 4, 6, 8] {
-            let s = design_butterworth::<f64>(FilterType::Lowpass, order, fs, fc, None)
-                .expect("LP design");
+            let s = butter(FilterType::Lowpass, order, fs, fc, None).expect("LP design");
             let g = gain_at(&s, fc, fs);
             assert!(
                 (g - MINUS_3DB).abs() < 1e-6,
@@ -819,8 +803,7 @@ mod tests {
         let fc = 10000.0;
         let fs = 44100.0;
         for order in [1, 2, 4, 6] {
-            let s = design_butterworth::<f64>(FilterType::Highpass, order, fs, fc, None)
-                .expect("HP design");
+            let s = butter(FilterType::Highpass, order, fs, fc, None).expect("HP design");
             let g = gain_at(&s, fc, fs);
             assert!(
                 (g - MINUS_3DB).abs() < 1e-6,
@@ -834,8 +817,7 @@ mod tests {
         let fc1 = 1000.0;
         let fc2 = 5000.0;
         let fs = 44100.0;
-        let s = design_butterworth::<f64>(FilterType::Bandpass, 2, fs, fc1, Some(fc2))
-            .expect("BP order 2");
+        let s = butter(FilterType::Bandpass, 2, fs, fc1, Some(fc2)).expect("BP order 2");
         let g1 = gain_at(&s, fc1, fs);
         let g2 = gain_at(&s, fc2, fs);
         assert!(
@@ -853,8 +835,7 @@ mod tests {
         let fc1 = 1000.0;
         let fc2 = 5000.0;
         let fs = 44100.0;
-        let s = design_butterworth::<f64>(FilterType::Bandstop, 2, fs, fc1, Some(fc2))
-            .expect("BS order 2");
+        let s = butter(FilterType::Bandstop, 2, fs, fc1, Some(fc2)).expect("BS order 2");
         let g1 = gain_at(&s, fc1, fs);
         let g2 = gain_at(&s, fc2, fs);
         assert!(
@@ -874,8 +855,7 @@ mod tests {
         let fc1 = 1000.0;
         let fc2 = 5000.0;
         let fs = 44100.0;
-        let s = design_butterworth::<f64>(FilterType::Bandpass, 2, fs, fc1, Some(fc2))
-            .expect("BP order 2");
+        let s = butter(FilterType::Bandpass, 2, fs, fc1, Some(fc2)).expect("BP order 2");
         let wc1 = prewarp(fc1, fs);
         let wc2 = prewarp(fc2, fs);
         let w0 = (wc1 * wc2).sqrt();
@@ -889,8 +869,7 @@ mod tests {
 
     #[test]
     fn bandpass_dc_gain_near_zero() {
-        let s = design_butterworth::<f64>(FilterType::Bandpass, 2, 44100.0, 1000.0, Some(5000.0))
-            .expect("BP order 2");
+        let s = butter(FilterType::Bandpass, 2, 44100.0, 1000.0, Some(5000.0)).expect("BP order 2");
         let dc = gain_at(&s, 0.0, 44100.0);
         assert!(dc < 0.01, "BP DC gain should be near 0, got {dc}");
     }
@@ -900,8 +879,7 @@ mod tests {
         let fc1 = 1000.0;
         let fc2 = 5000.0;
         let fs = 44100.0;
-        let s = design_butterworth::<f64>(FilterType::Bandstop, 2, fs, fc1, Some(fc2))
-            .expect("BS order 2");
+        let s = butter(FilterType::Bandstop, 2, fs, fc1, Some(fc2)).expect("BS order 2");
         let wc1 = prewarp(fc1, fs);
         let wc2 = prewarp(fc2, fs);
         let w0 = (wc1 * wc2).sqrt();
@@ -914,8 +892,7 @@ mod tests {
 
     #[test]
     fn lowpass_monotonically_decreasing() {
-        let s = design_butterworth::<f64>(FilterType::Lowpass, 4, 44100.0, 1000.0, None)
-            .expect("LP order 4");
+        let s = butter(FilterType::Lowpass, 4, 44100.0, 1000.0, None).expect("LP order 4");
         let mut prev = gain_at(&s, 0.0, 44100.0);
         for f in (500..20000).step_by(500) {
             let g = gain_at(&s, f64::from(f), 44100.0);
@@ -929,10 +906,14 @@ mod tests {
 
     // ── Validation ──────────────────────────────────────────────
 
+    fn bw(ft: FilterType, order: usize, sr: f64, c1: f64, c2: Option<f64>) -> Result<IirSpec<f64>> {
+        IirSpec::new(FilterFamily::Butterworth, ft, order, sr, c1, c2)
+    }
+
     #[test]
     fn order_zero_is_error() {
         assert!(
-            design_butterworth::<f64>(FilterType::Lowpass, 0, 44100.0, 1000.0, None).is_err(),
+            bw(FilterType::Lowpass, 0, 44100.0, 1000.0, None).is_err(),
             "order 0 should be rejected"
         );
     }
@@ -940,7 +921,7 @@ mod tests {
     #[test]
     fn negative_sample_rate_is_error() {
         assert!(
-            design_butterworth::<f64>(FilterType::Lowpass, 2, -1.0, 0.25, None).is_err(),
+            bw(FilterType::Lowpass, 2, -1.0, 0.25, None).is_err(),
             "negative sample rate should be rejected"
         );
     }
@@ -948,7 +929,7 @@ mod tests {
     #[test]
     fn cutoff_at_nyquist_is_error() {
         assert!(
-            design_butterworth::<f64>(FilterType::Lowpass, 2, 44100.0, 22050.0, None).is_err(),
+            bw(FilterType::Lowpass, 2, 44100.0, 22050.0, None).is_err(),
             "cutoff at Nyquist should be rejected"
         );
     }
@@ -956,7 +937,7 @@ mod tests {
     #[test]
     fn cutoff_above_nyquist_is_error() {
         assert!(
-            design_butterworth::<f64>(FilterType::Lowpass, 2, 44100.0, 30000.0, None).is_err(),
+            bw(FilterType::Lowpass, 2, 44100.0, 30000.0, None).is_err(),
             "cutoff above Nyquist should be rejected"
         );
     }
@@ -964,7 +945,7 @@ mod tests {
     #[test]
     fn bandpass_missing_cutoff2_is_error() {
         assert!(
-            design_butterworth::<f64>(FilterType::Bandpass, 2, 44100.0, 1000.0, None).is_err(),
+            bw(FilterType::Bandpass, 2, 44100.0, 1000.0, None).is_err(),
             "bandpass without cutoff2 should be rejected"
         );
     }
@@ -972,8 +953,7 @@ mod tests {
     #[test]
     fn bandpass_cutoff2_le_cutoff1_is_error() {
         assert!(
-            design_butterworth::<f64>(FilterType::Bandpass, 2, 44100.0, 5000.0, Some(1000.0),)
-                .is_err(),
+            bw(FilterType::Bandpass, 2, 44100.0, 5000.0, Some(1000.0)).is_err(),
             "cutoff2 <= cutoff1 should be rejected"
         );
     }
@@ -981,8 +961,7 @@ mod tests {
     #[test]
     fn lowpass_with_cutoff2_is_error() {
         assert!(
-            design_butterworth::<f64>(FilterType::Lowpass, 2, 44100.0, 1000.0, Some(5000.0),)
-                .is_err(),
+            bw(FilterType::Lowpass, 2, 44100.0, 1000.0, Some(5000.0)).is_err(),
             "lowpass with cutoff2 should be rejected"
         );
     }
@@ -991,7 +970,7 @@ mod tests {
 
     #[test]
     fn f32_lowpass_works() {
-        let s = design_butterworth::<f32>(FilterType::Lowpass, 4, 44100.0_f32, 1000.0_f32, None)
+        let s = butter_f32(FilterType::Lowpass, 4, 44100.0_f32, 1000.0_f32, None)
             .expect("f32 LP order 4");
         assert_eq!(s.len(), 2, "should have 2 sections");
         let dc: f64 = s
@@ -1045,84 +1024,70 @@ mod tests {
 
     #[test]
     fn scipy_lowpass_order1() {
-        let ours =
-            design_butterworth::<f64>(FilterType::Lowpass, 1, 44100.0, 1000.0, None).expect("LP1");
+        let ours = butter(FilterType::Lowpass, 1, 44100.0, 1000.0, None).expect("LP1");
         let scipy = scipy_to_sos(LP_ORDER1);
         assert_response_match(&ours, &scipy, 44100.0, 1e-12, "LP1");
     }
 
     #[test]
     fn scipy_lowpass_order2() {
-        let ours =
-            design_butterworth::<f64>(FilterType::Lowpass, 2, 44100.0, 1000.0, None).expect("LP2");
+        let ours = butter(FilterType::Lowpass, 2, 44100.0, 1000.0, None).expect("LP2");
         let scipy = scipy_to_sos(LP_ORDER2);
         assert_response_match(&ours, &scipy, 44100.0, 1e-12, "LP2");
     }
 
     #[test]
     fn scipy_lowpass_order4() {
-        let ours =
-            design_butterworth::<f64>(FilterType::Lowpass, 4, 44100.0, 1000.0, None).expect("LP4");
+        let ours = butter(FilterType::Lowpass, 4, 44100.0, 1000.0, None).expect("LP4");
         let scipy = scipy_to_sos(LP_ORDER4);
         assert_response_match(&ours, &scipy, 44100.0, 1e-12, "LP4");
     }
 
     #[test]
     fn scipy_lowpass_order8() {
-        let ours =
-            design_butterworth::<f64>(FilterType::Lowpass, 8, 44100.0, 1000.0, None).expect("LP8");
+        let ours = butter(FilterType::Lowpass, 8, 44100.0, 1000.0, None).expect("LP8");
         let scipy = scipy_to_sos(LP_ORDER8);
         assert_response_match(&ours, &scipy, 44100.0, 1e-10, "LP8");
     }
 
     #[test]
     fn scipy_highpass_order2() {
-        let ours = design_butterworth::<f64>(FilterType::Highpass, 2, 44100.0, 10000.0, None)
-            .expect("HP2");
+        let ours = butter(FilterType::Highpass, 2, 44100.0, 10000.0, None).expect("HP2");
         let scipy = scipy_to_sos(HP_ORDER2);
         assert_response_match(&ours, &scipy, 44100.0, 1e-12, "HP2");
     }
 
     #[test]
     fn scipy_highpass_order4() {
-        let ours = design_butterworth::<f64>(FilterType::Highpass, 4, 44100.0, 10000.0, None)
-            .expect("HP4");
+        let ours = butter(FilterType::Highpass, 4, 44100.0, 10000.0, None).expect("HP4");
         let scipy = scipy_to_sos(HP_ORDER4);
         assert_response_match(&ours, &scipy, 44100.0, 1e-12, "HP4");
     }
 
     #[test]
     fn scipy_bandpass_order2() {
-        let ours =
-            design_butterworth::<f64>(FilterType::Bandpass, 2, 44100.0, 1000.0, Some(5000.0))
-                .expect("BP2");
+        let ours = butter(FilterType::Bandpass, 2, 44100.0, 1000.0, Some(5000.0)).expect("BP2");
         let scipy = scipy_to_sos(BP_ORDER2);
         assert_response_match(&ours, &scipy, 44100.0, 1e-12, "BP2");
     }
 
     #[test]
     fn scipy_bandpass_order4() {
-        let ours =
-            design_butterworth::<f64>(FilterType::Bandpass, 4, 44100.0, 1000.0, Some(5000.0))
-                .expect("BP4");
+        let ours = butter(FilterType::Bandpass, 4, 44100.0, 1000.0, Some(5000.0)).expect("BP4");
         let scipy = scipy_to_sos(BP_ORDER4);
         assert_response_match(&ours, &scipy, 44100.0, 1e-10, "BP4");
     }
 
     #[test]
     fn scipy_bandstop_order2() {
-        let ours =
-            design_butterworth::<f64>(FilterType::Bandstop, 2, 44100.0, 1000.0, Some(5000.0))
-                .expect("BS2");
+        let ours = butter(FilterType::Bandstop, 2, 44100.0, 1000.0, Some(5000.0)).expect("BS2");
         let scipy = scipy_to_sos(BS_ORDER2);
         assert_response_match(&ours, &scipy, 44100.0, 1e-12, "BS2");
     }
 
     #[test]
     fn scipy_bandstop_order4() {
-        let ours =
-            design_butterworth::<f64>(FilterType::Bandstop, 4, 44100.0, 1000.0, Some(5000.0))
-                .expect("BS4");
+        let ours = butter(FilterType::Bandstop, 4, 44100.0, 1000.0, Some(5000.0)).expect("BS4");
         let scipy = scipy_to_sos(BS_ORDER4);
         assert_response_match(&ours, &scipy, 44100.0, 1e-10, "BS4");
     }
