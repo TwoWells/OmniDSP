@@ -37,7 +37,7 @@ use num_traits::Float;
 use crate::error::{Error, Result};
 use crate::types::{BiquadSection, FilterType};
 
-// ─── Spec ────────────────────────────────────────────────────────────
+// ─── Public API ──────────────────────────────────────────────────────
 
 /// IIR filter family (analog prototype shape).
 ///
@@ -50,112 +50,7 @@ pub enum FilterFamily {
     Butterworth,
 }
 
-/// IIR filter design specification.
-///
-/// Bundles and validates all parameters needed to design an IIR filter.
-/// The resulting biquad sections are the universal representation — any
-/// IIR implementation can consume them.
-///
-/// # Examples
-///
-/// ```
-/// use omnidsp_core::design::iir::{IirSpec, FilterFamily, design};
-/// use omnidsp_core::types::FilterType;
-///
-/// let spec = IirSpec::new(
-///     FilterFamily::Butterworth,
-///     FilterType::Lowpass,
-///     4,
-///     44100.0,
-///     1000.0,
-///     None,
-/// ).unwrap();
-/// let sections = design(&spec).unwrap();
-/// assert_eq!(sections.len(), 2);
-/// ```
-#[derive(Debug, Clone)]
-pub struct IirSpec<T> {
-    family: FilterFamily,
-    filter_type: FilterType,
-    order: usize,
-    sample_rate: T,
-    cutoff1: T,
-    cutoff2: Option<T>,
-}
-
-impl<T: Float> IirSpec<T> {
-    /// Create a new IIR filter specification.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`Error::InvalidSpec`] if:
-    /// - `order` is zero
-    /// - `sample_rate` is not positive
-    /// - cutoff frequencies are outside `(0, sample_rate / 2)`
-    /// - bandpass/bandstop is missing `cutoff2` or has `cutoff2 <= cutoff1`
-    /// - lowpass/highpass has `cutoff2` present
-    pub fn new(
-        family: FilterFamily,
-        filter_type: FilterType,
-        order: usize,
-        sample_rate: T,
-        cutoff1: T,
-        cutoff2: Option<T>,
-    ) -> Result<Self> {
-        let sr = to_f64(sample_rate)?;
-        let c1 = to_f64(cutoff1)?;
-        let c2 = cutoff2.map(to_f64).transpose()?;
-        validate(filter_type, order, sr, c1, c2)?;
-        Ok(Self {
-            family,
-            filter_type,
-            order,
-            sample_rate,
-            cutoff1,
-            cutoff2,
-        })
-    }
-
-    /// Analog prototype family.
-    #[must_use]
-    pub const fn family(&self) -> FilterFamily {
-        self.family
-    }
-
-    /// Frequency response shape.
-    #[must_use]
-    pub const fn filter_type(&self) -> FilterType {
-        self.filter_type
-    }
-
-    /// Filter order.
-    #[must_use]
-    pub const fn order(&self) -> usize {
-        self.order
-    }
-
-    /// Sampling frequency (Hz).
-    #[must_use]
-    pub const fn sample_rate(&self) -> T {
-        self.sample_rate
-    }
-
-    /// Primary cutoff frequency (Hz).
-    #[must_use]
-    pub const fn cutoff1(&self) -> T {
-        self.cutoff1
-    }
-
-    /// Secondary cutoff frequency (Hz), present for bandpass/bandstop.
-    #[must_use]
-    pub const fn cutoff2(&self) -> Option<T> {
-        self.cutoff2
-    }
-}
-
-// ─── Design ──────────────────────────────────────────────────────────
-
-/// Design an IIR filter from an [`IirSpec`] as cascaded biquad sections.
+/// Design an IIR filter as cascaded biquad sections.
 ///
 /// Returns `Vec<BiquadSection<T>>` with normalized coefficients (`a0 = 1`).
 /// The number of sections is `⌈order / 2⌉` for lowpass/highpass and
@@ -163,17 +58,41 @@ impl<T: Float> IirSpec<T> {
 ///
 /// # Errors
 ///
-/// Returns an error if the internal computation fails (should not happen
-/// for a valid spec).
-pub fn design<T: Float>(spec: &IirSpec<T>) -> Result<Vec<BiquadSection<T>>> {
-    let sr = to_f64(spec.sample_rate)?;
-    let c1 = to_f64(spec.cutoff1)?;
-    let c2 = spec.cutoff2.map(to_f64).transpose()?;
+/// Returns [`Error::InvalidSpec`] if:
+/// - `order` is zero
+/// - `sample_rate` is not positive
+/// - cutoff frequencies are outside `(0, sample_rate / 2)`
+/// - bandpass/bandstop is missing `cutoff2` or has `cutoff2 <= cutoff1`
+/// - lowpass/highpass has `cutoff2` present
+///
+/// # Examples
+///
+/// ```
+/// use omnidsp_core::design::iir::{FilterFamily, design};
+/// use omnidsp_core::types::FilterType;
+///
+/// let sections = design::<f64>(
+///     FilterFamily::Butterworth,
+///     FilterType::Lowpass, 4, 44100.0, 1000.0, None,
+/// ).unwrap();
+/// assert_eq!(sections.len(), 2);
+/// ```
+pub fn design<T: Float>(
+    family: FilterFamily,
+    filter_type: FilterType,
+    order: usize,
+    sample_rate: T,
+    cutoff1: T,
+    cutoff2: Option<T>,
+) -> Result<Vec<BiquadSection<T>>> {
+    let sr = to_f64(sample_rate)?;
+    let c1 = to_f64(cutoff1)?;
+    let c2 = cutoff2.map(to_f64).transpose()?;
 
-    let validated = validate(spec.filter_type, spec.order, sr, c1, c2)?;
+    let validated = validate(filter_type, order, sr, c1, c2)?;
 
-    let prototype = match spec.family {
-        FilterFamily::Butterworth => AnalogPrototype::butterworth(spec.order),
+    let prototype = match family {
+        FilterFamily::Butterworth => AnalogPrototype::butterworth(order),
     };
 
     let sections = design_from_prototype(prototype, &validated, sr);
@@ -673,8 +592,7 @@ mod tests {
         c1: f64,
         c2: Option<f64>,
     ) -> Result<Vec<BiquadSection<f64>>> {
-        let spec = IirSpec::new(FilterFamily::Butterworth, ft, order, sr, c1, c2)?;
-        design(&spec)
+        design(FilterFamily::Butterworth, ft, order, sr, c1, c2)
     }
 
     fn butter_f32(
@@ -684,8 +602,7 @@ mod tests {
         c1: f32,
         c2: Option<f32>,
     ) -> Result<Vec<BiquadSection<f32>>> {
-        let spec = IirSpec::new(FilterFamily::Butterworth, ft, order, sr, c1, c2)?;
-        design(&spec)
+        design(FilterFamily::Butterworth, ft, order, sr, c1, c2)
     }
 
     /// Evaluate the SOS cascade magnitude at a given frequency in Hz.
@@ -906,14 +823,10 @@ mod tests {
 
     // ── Validation ──────────────────────────────────────────────
 
-    fn bw(ft: FilterType, order: usize, sr: f64, c1: f64, c2: Option<f64>) -> Result<IirSpec<f64>> {
-        IirSpec::new(FilterFamily::Butterworth, ft, order, sr, c1, c2)
-    }
-
     #[test]
     fn order_zero_is_error() {
         assert!(
-            bw(FilterType::Lowpass, 0, 44100.0, 1000.0, None).is_err(),
+            butter(FilterType::Lowpass, 0, 44100.0, 1000.0, None).is_err(),
             "order 0 should be rejected"
         );
     }
@@ -921,7 +834,7 @@ mod tests {
     #[test]
     fn negative_sample_rate_is_error() {
         assert!(
-            bw(FilterType::Lowpass, 2, -1.0, 0.25, None).is_err(),
+            butter(FilterType::Lowpass, 2, -1.0, 0.25, None).is_err(),
             "negative sample rate should be rejected"
         );
     }
@@ -929,7 +842,7 @@ mod tests {
     #[test]
     fn cutoff_at_nyquist_is_error() {
         assert!(
-            bw(FilterType::Lowpass, 2, 44100.0, 22050.0, None).is_err(),
+            butter(FilterType::Lowpass, 2, 44100.0, 22050.0, None).is_err(),
             "cutoff at Nyquist should be rejected"
         );
     }
@@ -937,7 +850,7 @@ mod tests {
     #[test]
     fn cutoff_above_nyquist_is_error() {
         assert!(
-            bw(FilterType::Lowpass, 2, 44100.0, 30000.0, None).is_err(),
+            butter(FilterType::Lowpass, 2, 44100.0, 30000.0, None).is_err(),
             "cutoff above Nyquist should be rejected"
         );
     }
@@ -945,7 +858,7 @@ mod tests {
     #[test]
     fn bandpass_missing_cutoff2_is_error() {
         assert!(
-            bw(FilterType::Bandpass, 2, 44100.0, 1000.0, None).is_err(),
+            butter(FilterType::Bandpass, 2, 44100.0, 1000.0, None).is_err(),
             "bandpass without cutoff2 should be rejected"
         );
     }
@@ -953,7 +866,7 @@ mod tests {
     #[test]
     fn bandpass_cutoff2_le_cutoff1_is_error() {
         assert!(
-            bw(FilterType::Bandpass, 2, 44100.0, 5000.0, Some(1000.0)).is_err(),
+            butter(FilterType::Bandpass, 2, 44100.0, 5000.0, Some(1000.0)).is_err(),
             "cutoff2 <= cutoff1 should be rejected"
         );
     }
@@ -961,7 +874,7 @@ mod tests {
     #[test]
     fn lowpass_with_cutoff2_is_error() {
         assert!(
-            bw(FilterType::Lowpass, 2, 44100.0, 1000.0, Some(5000.0)).is_err(),
+            butter(FilterType::Lowpass, 2, 44100.0, 1000.0, Some(5000.0)).is_err(),
             "lowpass with cutoff2 should be rejected"
         );
     }

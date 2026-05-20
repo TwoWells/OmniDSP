@@ -20,141 +20,65 @@ use std::f64::consts::PI;
 use num_traits::Float;
 
 use crate::error::{Error, Result};
+use crate::traits::fir::FirSpec;
 use crate::types::{FilterType, Window, WindowFn};
 
-// ─── Spec ────────────────────────────────────────────────────────────
+// ─── Public API ──────────────────────────────────────────────────────
 
-/// FIR filter design specification.
+/// Design a FIR filter using the windowed-sinc method.
 ///
-/// Bundles and validates all parameters needed to design a FIR filter.
-/// Any FIR implementation can consume this spec — the resulting tap
-/// coefficients are the universal representation.
+/// Returns a [`FirSpec`] containing `order + 1` tap coefficients with
+/// [`FirStrategy::Auto`](crate::traits::fir::FirStrategy::Auto).  The taps
+/// are gain-normalized: lowpass filters have unity DC gain, highpass filters
+/// have unity gain at Nyquist, and bandpass/bandstop filters have unity gain
+/// at the band center or at DC respectively.
+///
+/// # Arguments
+///
+/// * `filter_type` — frequency response shape.
+/// * `order` — filter order (number of taps is `order + 1`).
+/// * `sample_rate` — sampling frequency (Hz).
+/// * `cutoff1` — primary cutoff frequency (Hz).
+/// * `cutoff2` — secondary cutoff (Hz), required for bandpass/bandstop.
+/// * `window_fn` — window function to apply to the ideal impulse response.
+///
+/// # Errors
+///
+/// Returns [`Error::InvalidSpec`] if:
+/// - `order` is zero
+/// - `sample_rate` is not positive
+/// - cutoff frequencies are outside `(0, sample_rate / 2)`
+/// - bandpass/bandstop is missing `cutoff2` or has `cutoff2 <= cutoff1`
+/// - lowpass/highpass has `cutoff2` present
 ///
 /// # Examples
 ///
 /// ```
-/// use omnidsp_core::design::fir::{FirSpec, design};
+/// use omnidsp_core::design::fir::design;
 /// use omnidsp_core::types::{FilterType, WindowFn};
 ///
-/// let spec = FirSpec::new(
-///     FilterType::Lowpass, 30, 44100.0, 1000.0, None, WindowFn::Hamming,
+/// let spec = design(
+///     FilterType::Lowpass, 30, 44100.0, 1000.0, None, &WindowFn::Hamming,
 /// ).unwrap();
-/// let taps = design(&spec).unwrap();
-/// assert_eq!(taps.len(), 31);
+/// assert_eq!(spec.coefficients.len(), 31);
 /// ```
-#[derive(Debug, Clone)]
-pub struct FirSpec<T> {
+pub fn design<T: Float>(
     filter_type: FilterType,
     order: usize,
     sample_rate: T,
     cutoff1: T,
     cutoff2: Option<T>,
-    window_fn: WindowFn<T>,
-}
+    window_fn: &WindowFn<T>,
+) -> Result<FirSpec<T>> {
+    let sr = to_f64(sample_rate)?;
+    let c1 = to_f64(cutoff1)?;
+    let c2 = cutoff2.map(to_f64).transpose()?;
 
-impl<T: Float> FirSpec<T> {
-    /// Create a new FIR filter specification.
-    ///
-    /// # Arguments
-    ///
-    /// * `filter_type` — frequency response shape.
-    /// * `order` — filter order (number of taps is `order + 1`).
-    /// * `sample_rate` — sampling frequency (Hz).
-    /// * `cutoff1` — primary cutoff frequency (Hz).
-    /// * `cutoff2` — secondary cutoff (Hz), required for bandpass/bandstop.
-    /// * `window_fn` — window function to apply to the ideal impulse response.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`Error::InvalidSpec`] if:
-    /// - `order` is zero
-    /// - `sample_rate` is not positive
-    /// - cutoff frequencies are outside `(0, sample_rate / 2)`
-    /// - bandpass/bandstop is missing `cutoff2` or has `cutoff2 <= cutoff1`
-    /// - lowpass/highpass has `cutoff2` present
-    pub fn new(
-        filter_type: FilterType,
-        order: usize,
-        sample_rate: T,
-        cutoff1: T,
-        cutoff2: Option<T>,
-        window_fn: WindowFn<T>,
-    ) -> Result<Self> {
-        let sr = to_f64(sample_rate)?;
-        let c1 = to_f64(cutoff1)?;
-        let c2 = cutoff2.map(to_f64).transpose()?;
-        // Run validation to catch errors at construction time.
-        validate(filter_type, order, sr, c1, c2)?;
-        Ok(Self {
-            filter_type,
-            order,
-            sample_rate,
-            cutoff1,
-            cutoff2,
-            window_fn,
-        })
-    }
-
-    /// Frequency response shape.
-    #[must_use]
-    pub const fn filter_type(&self) -> FilterType {
-        self.filter_type
-    }
-
-    /// Filter order (number of taps is `order + 1`).
-    #[must_use]
-    pub const fn order(&self) -> usize {
-        self.order
-    }
-
-    /// Sampling frequency (Hz).
-    #[must_use]
-    pub const fn sample_rate(&self) -> T {
-        self.sample_rate
-    }
-
-    /// Primary cutoff frequency (Hz).
-    #[must_use]
-    pub const fn cutoff1(&self) -> T {
-        self.cutoff1
-    }
-
-    /// Secondary cutoff frequency (Hz), present for bandpass/bandstop.
-    #[must_use]
-    pub const fn cutoff2(&self) -> Option<T> {
-        self.cutoff2
-    }
-
-    /// Window function.
-    #[must_use]
-    pub const fn window_fn(&self) -> &WindowFn<T> {
-        &self.window_fn
-    }
-}
-
-// ─── Design ──────────────────────────────────────────────────────────
-
-/// Design a FIR filter from a [`FirSpec`] using the windowed-sinc method.
-///
-/// Returns `order + 1` tap coefficients.  The taps are gain-normalized:
-/// lowpass filters have unity DC gain, highpass filters have unity gain at
-/// Nyquist, and bandpass/bandstop filters have unity gain at the band center
-/// or at DC respectively.
-///
-/// # Errors
-///
-/// Returns an error if the internal computation fails (should not happen
-/// for a valid spec).
-pub fn design<T: Float>(spec: &FirSpec<T>) -> Result<Vec<T>> {
-    let sr = to_f64(spec.sample_rate)?;
-    let c1 = to_f64(spec.cutoff1)?;
-    let c2 = spec.cutoff2.map(to_f64).transpose()?;
-
-    let validated = validate(spec.filter_type, spec.order, sr, c1, c2)?;
+    let validated = validate(filter_type, order, sr, c1, c2)?;
 
     // Compute ideal impulse response
     let ideal = match validated.cutoffs {
-        NormalizedCutoffs::Single(fn1) => match spec.filter_type {
+        NormalizedCutoffs::Single(fn1) => match filter_type {
             FilterType::Lowpass => ideal_lowpass(validated.num_taps, fn1),
             FilterType::Highpass => ideal_highpass(validated.num_taps, fn1),
             FilterType::Bandpass | FilterType::Bandstop => {
@@ -163,7 +87,7 @@ pub fn design<T: Float>(spec: &FirSpec<T>) -> Result<Vec<T>> {
                 ));
             }
         },
-        NormalizedCutoffs::Dual(fn1, fn2) => match spec.filter_type {
+        NormalizedCutoffs::Dual(fn1, fn2) => match filter_type {
             FilterType::Bandpass => ideal_bandpass(validated.num_taps, fn1, fn2),
             FilterType::Bandstop => ideal_bandstop(validated.num_taps, fn1, fn2),
             FilterType::Lowpass | FilterType::Highpass => {
@@ -175,7 +99,7 @@ pub fn design<T: Float>(spec: &FirSpec<T>) -> Result<Vec<T>> {
     };
 
     // Generate and apply window
-    let window = Window::from_fn(&spec.window_fn, validated.num_taps)?;
+    let window = Window::from_fn(window_fn, validated.num_taps)?;
     let windowed: Result<Vec<f64>> = ideal
         .iter()
         .zip(window.coefficients())
@@ -183,10 +107,12 @@ pub fn design<T: Float>(spec: &FirSpec<T>) -> Result<Vec<T>> {
         .collect();
 
     // Normalize gain
-    let normalized = normalize(spec.filter_type, &windowed?, &validated.cutoffs);
+    let normalized = normalize(filter_type, &windowed?, &validated.cutoffs);
 
     // Convert to target type
-    normalized.iter().map(|&v| from_f64(v)).collect()
+    let coefficients: Result<Vec<T>> = normalized.iter().map(|&v| from_f64(v)).collect();
+
+    Ok(FirSpec::new(coefficients?))
 }
 
 /// Estimate FIR filter order using Kaiser's formula.
@@ -407,59 +333,63 @@ mod tests {
 
     const TOL: f64 = 1e-8;
 
-    fn lp(order: usize, fc: f64) -> FirSpec<f64> {
-        FirSpec::new(
+    fn lp(order: usize, fc: f64) -> Vec<f64> {
+        design(
             FilterType::Lowpass,
             order,
             44100.0,
             fc,
             None,
-            WindowFn::Hamming,
+            &WindowFn::Hamming,
         )
-        .expect("valid LP spec")
+        .expect("LP design")
+        .coefficients
     }
 
-    fn hp(order: usize, fc: f64) -> FirSpec<f64> {
-        FirSpec::new(
+    fn hp(order: usize, fc: f64) -> Vec<f64> {
+        design(
             FilterType::Highpass,
             order,
             44100.0,
             fc,
             None,
-            WindowFn::Hamming,
+            &WindowFn::Hamming,
         )
-        .expect("valid HP spec")
+        .expect("HP design")
+        .coefficients
     }
 
-    fn bp(order: usize, fc1: f64, fc2: f64) -> FirSpec<f64> {
-        FirSpec::new(
+    fn bp(order: usize, fc1: f64, fc2: f64) -> Vec<f64> {
+        design(
             FilterType::Bandpass,
             order,
             44100.0,
             fc1,
             Some(fc2),
-            WindowFn::Hamming,
+            &WindowFn::Hamming,
         )
-        .expect("valid BP spec")
+        .expect("BP design")
+        .coefficients
     }
 
-    fn bs(order: usize, fc1: f64, fc2: f64) -> FirSpec<f64> {
-        FirSpec::new(
+    fn bs(order: usize, fc1: f64, fc2: f64) -> Vec<f64> {
+        design(
             FilterType::Bandstop,
             order,
             44100.0,
             fc1,
             Some(fc2),
-            WindowFn::Hamming,
+            &WindowFn::Hamming,
         )
-        .expect("valid BS spec")
+        .expect("BS design")
+        .coefficients
     }
 
     // ── Lowpass ──────────────────────────────────────────────────
 
     #[test]
     fn lowpass_dc_gain_is_unity() {
-        let taps = design(&lp(30, 1000.0)).expect("lowpass design should succeed");
+        let taps = lp(30, 1000.0);
         let dc_gain: f64 = taps.iter().sum();
         assert!(
             (dc_gain - 1.0).abs() < TOL,
@@ -470,22 +400,22 @@ mod tests {
     #[test]
     fn lowpass_correct_length() {
         let order = 64;
-        let s = FirSpec::new(
+        let taps = design(
             FilterType::Lowpass,
             order,
             44100.0,
             1000.0,
             None,
-            WindowFn::Hann,
+            &WindowFn::Hann,
         )
-        .expect("valid spec");
-        let taps = design(&s).expect("lowpass design should succeed");
+        .expect("lowpass design")
+        .coefficients;
         assert_eq!(taps.len(), order + 1, "should have order+1 taps");
     }
 
     #[test]
     fn lowpass_symmetric() {
-        let taps = design(&lp(30, 1000.0)).expect("lowpass design should succeed");
+        let taps = lp(30, 1000.0);
         let n = taps.len();
         for i in 0..n / 2 {
             assert!(
@@ -497,17 +427,16 @@ mod tests {
 
     #[test]
     fn lowpass_rectangular_is_pure_sinc() {
-        // With a rectangular window, the taps are the ideal sinc (normalized).
-        let s = FirSpec::new(
+        let taps = design(
             FilterType::Lowpass,
             4,
             2.0, // fs=2 → Nyquist=1, fc=0.25 means quarter-band
             0.25,
             None,
-            WindowFn::Rectangular,
+            &WindowFn::Rectangular,
         )
-        .expect("valid spec");
-        let taps = design(&s).expect("lowpass design should succeed");
+        .expect("lowpass design")
+        .coefficients;
 
         assert_eq!(taps.len(), 5, "should have 5 taps");
         assert!(
@@ -530,7 +459,7 @@ mod tests {
 
     #[test]
     fn highpass_nyquist_gain_is_unity() {
-        let taps = design(&hp(30, 10000.0)).expect("highpass design should succeed");
+        let taps = hp(30, 10000.0);
         let nyquist_gain: f64 = taps
             .iter()
             .enumerate()
@@ -544,7 +473,7 @@ mod tests {
 
     #[test]
     fn highpass_dc_gain_near_zero() {
-        let taps = design(&hp(30, 10000.0)).expect("highpass design should succeed");
+        let taps = hp(30, 10000.0);
         let dc_gain: f64 = taps.iter().sum();
         assert!(
             dc_gain.abs() < 0.01,
@@ -556,7 +485,7 @@ mod tests {
 
     #[test]
     fn bandpass_gain_at_center() {
-        let taps = design(&bp(60, 1000.0, 5000.0)).expect("bandpass design should succeed");
+        let taps = bp(60, 1000.0, 5000.0);
         let fc = 3000.0 / 44100.0;
         let gain = eval_gain(&taps, fc);
         assert!(
@@ -567,7 +496,7 @@ mod tests {
 
     #[test]
     fn bandpass_dc_gain_near_zero() {
-        let taps = design(&bp(60, 1000.0, 5000.0)).expect("bandpass design should succeed");
+        let taps = bp(60, 1000.0, 5000.0);
         let dc_gain: f64 = taps.iter().sum();
         assert!(
             dc_gain.abs() < 0.1,
@@ -579,7 +508,7 @@ mod tests {
 
     #[test]
     fn bandstop_dc_gain_is_unity() {
-        let taps = design(&bs(60, 1000.0, 5000.0)).expect("bandstop design should succeed");
+        let taps = bs(60, 1000.0, 5000.0);
         let dc_gain: f64 = taps.iter().sum();
         assert!(
             (dc_gain - 1.0).abs() < TOL,
@@ -589,7 +518,7 @@ mod tests {
 
     #[test]
     fn bandstop_rejection_at_center() {
-        let taps = design(&bs(60, 1000.0, 5000.0)).expect("bandstop design should succeed");
+        let taps = bs(60, 1000.0, 5000.0);
         let fc = 3000.0 / 44100.0;
         let gain = eval_gain(&taps, fc);
         assert!(
@@ -603,13 +532,13 @@ mod tests {
     #[test]
     fn order_zero_is_error() {
         assert!(
-            FirSpec::new(
+            design::<f64>(
                 FilterType::Lowpass,
                 0,
                 44100.0,
                 1000.0,
                 None,
-                WindowFn::<f64>::Hann
+                &WindowFn::Hann
             )
             .is_err(),
             "order 0 should be rejected"
@@ -619,15 +548,7 @@ mod tests {
     #[test]
     fn negative_sample_rate_is_error() {
         assert!(
-            FirSpec::new(
-                FilterType::Lowpass,
-                10,
-                -1.0,
-                0.25,
-                None,
-                WindowFn::<f64>::Hann
-            )
-            .is_err(),
+            design::<f64>(FilterType::Lowpass, 10, -1.0, 0.25, None, &WindowFn::Hann).is_err(),
             "negative sample rate should be rejected"
         );
     }
@@ -635,13 +556,13 @@ mod tests {
     #[test]
     fn cutoff_at_nyquist_is_error() {
         assert!(
-            FirSpec::new(
+            design::<f64>(
                 FilterType::Lowpass,
                 10,
                 44100.0,
                 22050.0,
                 None,
-                WindowFn::<f64>::Hann
+                &WindowFn::Hann
             )
             .is_err(),
             "cutoff at Nyquist should be rejected"
@@ -651,13 +572,13 @@ mod tests {
     #[test]
     fn cutoff_above_nyquist_is_error() {
         assert!(
-            FirSpec::new(
+            design::<f64>(
                 FilterType::Lowpass,
                 10,
                 44100.0,
                 30000.0,
                 None,
-                WindowFn::<f64>::Hann
+                &WindowFn::Hann
             )
             .is_err(),
             "cutoff above Nyquist should be rejected"
@@ -667,13 +588,13 @@ mod tests {
     #[test]
     fn bandpass_missing_cutoff2_is_error() {
         assert!(
-            FirSpec::new(
+            design::<f64>(
                 FilterType::Bandpass,
                 10,
                 44100.0,
                 1000.0,
                 None,
-                WindowFn::<f64>::Hann
+                &WindowFn::Hann
             )
             .is_err(),
             "bandpass without cutoff2 should be rejected"
@@ -683,13 +604,13 @@ mod tests {
     #[test]
     fn bandpass_cutoff2_le_cutoff1_is_error() {
         assert!(
-            FirSpec::new(
+            design::<f64>(
                 FilterType::Bandpass,
                 10,
                 44100.0,
                 5000.0,
                 Some(1000.0),
-                WindowFn::<f64>::Hann,
+                &WindowFn::Hann,
             )
             .is_err(),
             "cutoff2 <= cutoff1 should be rejected"
@@ -699,13 +620,13 @@ mod tests {
     #[test]
     fn lowpass_with_cutoff2_is_error() {
         assert!(
-            FirSpec::new(
+            design::<f64>(
                 FilterType::Lowpass,
                 10,
                 44100.0,
                 1000.0,
                 Some(5000.0),
-                WindowFn::<f64>::Hann,
+                &WindowFn::Hann,
             )
             .is_err(),
             "lowpass with cutoff2 should be rejected"
@@ -751,18 +672,17 @@ mod tests {
 
     #[test]
     fn f32_lowpass_works() {
-        let s = FirSpec::new(
+        let spec = design(
             FilterType::Lowpass,
             30,
             44100.0_f32,
             1000.0_f32,
             None,
-            WindowFn::Hamming,
+            &WindowFn::Hamming,
         )
-        .expect("valid f32 spec");
-        let taps = design(&s).expect("f32 lowpass should succeed");
-        assert_eq!(taps.len(), 31, "should have 31 taps");
-        let dc: f32 = taps.iter().sum();
+        .expect("f32 lowpass");
+        assert_eq!(spec.coefficients.len(), 31, "should have 31 taps");
+        let dc: f32 = spec.coefficients.iter().sum();
         assert!(
             (dc - 1.0).abs() < 1e-5,
             "f32 lowpass DC gain should be ≈1.0, got {dc}"

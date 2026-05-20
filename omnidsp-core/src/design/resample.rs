@@ -251,20 +251,19 @@ pub fn design<T: Float>(spec: &ResampleSpec<T>) -> Result<ResampleDesign<T>> {
     let upsampled_rate = (up as f64) * sr_in;
     let cutoff_hz = cutoff_normalized * upsampled_rate;
 
-    let fir_spec = super::fir::FirSpec::new(
+    let fir_result = super::fir::design(
         crate::types::FilterType::Lowpass,
         order,
         from_f64(upsampled_rate)?,
         from_f64(cutoff_hz)?,
         None,
-        spec.window_fn,
+        &spec.window_fn,
     )?;
-    let prototype = super::fir::design(&fir_spec)?;
 
     Ok(ResampleDesign {
         up_factor: up as usize,
         down_factor: down as usize,
-        prototype_filter: prototype,
+        prototype_filter: fir_result.coefficients,
     })
 }
 

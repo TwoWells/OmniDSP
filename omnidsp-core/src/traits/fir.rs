@@ -4,7 +4,7 @@
 //! FIR (Finite Impulse Response) filter primitive traits.
 //!
 //! The [`Fir`] factory creates [`FirPlan`] execution objects configured from
-//! a [`FirPlanSpec`].  Plans are mutable — they maintain state across calls
+//! a [`FirSpec`].  Plans are mutable — they maintain state across calls
 //! and take `&mut self`.
 
 use crate::error::Result;
@@ -22,26 +22,34 @@ pub enum FirStrategy {
     OverlapSave,
 }
 
-/// FIR filter plan specification.
+/// FIR filter specification.
 ///
 /// Describes the filter coefficients and preferred implementation strategy.
-/// Any backend can consume this spec.
-#[derive(Debug, Clone, Copy)]
-pub struct FirPlanSpec<'a, T> {
+/// This is the contract between the design layer (which computes
+/// coefficients) and any backend (which executes the filter).
+#[derive(Debug, Clone)]
+pub struct FirSpec<T> {
     /// Filter tap coefficients.
-    pub coefficients: &'a [T],
+    pub coefficients: Vec<T>,
     /// Preferred implementation strategy.
     pub strategy: FirStrategy,
 }
 
-impl<'a, T> FirPlanSpec<'a, T> {
-    /// Create a new FIR plan spec with the given coefficients and strategy.
+impl<T> FirSpec<T> {
+    /// Create a new FIR spec with the given coefficients and [`FirStrategy::Auto`].
     #[must_use]
-    pub const fn new(coefficients: &'a [T], strategy: FirStrategy) -> Self {
+    pub const fn new(coefficients: Vec<T>) -> Self {
         Self {
             coefficients,
-            strategy,
+            strategy: FirStrategy::Auto,
         }
+    }
+
+    /// Override the implementation strategy.
+    #[must_use]
+    pub const fn with_strategy(mut self, strategy: FirStrategy) -> Self {
+        self.strategy = strategy;
+        self
     }
 }
 
@@ -81,7 +89,7 @@ pub trait Fir<T> {
     ///
     /// # Errors
     ///
-    /// Returns an error if the coefficients slice is empty or otherwise
+    /// Returns an error if the coefficients are empty or otherwise
     /// unsupported by the implementation.
-    fn create_plan(&self, spec: &FirPlanSpec<'_, T>) -> Result<Self::Plan>;
+    fn create_plan(&self, spec: &FirSpec<T>) -> Result<Self::Plan>;
 }
