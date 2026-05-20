@@ -11,4 +11,5 @@
 
 pub mod fir;
 pub mod iir;
+pub mod resample;
 pub(crate) mod window;
