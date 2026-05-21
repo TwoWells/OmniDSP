@@ -10,7 +10,7 @@ use std::f64::consts::TAU;
 use num_complex::Complex;
 
 use crate::error::{Error, Result};
-use crate::traits::dft::{Dft, DftPlan};
+use crate::traits::dft::{Dft, DftNorm, DftPlan, DftSpec};
 use crate::traits::vecops::VecOps;
 use crate::types::Direction;
 
@@ -19,10 +19,14 @@ use crate::types::Direction;
 pub struct TestDft;
 
 /// Naive O(N²) DFT plan for tests.
+///
+/// Respects [`DftNorm`] so that module tests exercising different
+/// normalization conventions get correct (or correctly wrong) results.
 #[derive(Debug)]
 pub struct TestDftPlan {
     length: usize,
     direction: Direction,
+    norm: DftNorm,
 }
 
 #[allow(
@@ -59,9 +63,8 @@ impl DftPlan<f64> for TestDftPlan {
             *out = sum;
         }
 
-        // Apply 1/N scaling for inverse transforms.
-        if self.direction == Direction::Inverse {
-            let scale = 1.0 / n as f64;
+        // Apply normalization based on the spec.
+        if let Some(scale) = self.compute_scale() {
             for c in output.iter_mut() {
                 *c = Complex::new(c.re * scale, c.im * scale);
             }
@@ -71,14 +74,37 @@ impl DftPlan<f64> for TestDftPlan {
     }
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "test DFT operates on small sizes where usize→f64 is exact"
+)]
+impl TestDftPlan {
+    /// Compute the scaling factor for the configured normalization.
+    fn compute_scale(&self) -> Option<f64> {
+        let n = self.length as f64;
+        match self.norm {
+            DftNorm::None => None,
+            DftNorm::Inverse => match self.direction {
+                Direction::Inverse => Some(1.0 / n),
+                Direction::Forward => None,
+            },
+            DftNorm::Ortho => Some(1.0 / n.sqrt()),
+        }
+    }
+}
+
 impl Dft<f64> for TestDft {
     type Plan = TestDftPlan;
 
-    fn create_plan(&self, length: usize, direction: Direction) -> Result<Self::Plan> {
-        if length == 0 {
+    fn create_plan(&self, spec: &DftSpec) -> Result<Self::Plan> {
+        if spec.length == 0 {
             return Err(Error::InvalidSpec("DFT length must be non-zero".to_owned()));
         }
-        Ok(TestDftPlan { length, direction })
+        Ok(TestDftPlan {
+            length: spec.length,
+            direction: spec.direction,
+            norm: spec.norm,
+        })
     }
 }
 
