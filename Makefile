@@ -7,7 +7,7 @@
 #   make release-major   # 0.1.0 -> 1.0.0
 #   make release V=0.2.0 # explicit version
 
-.PHONY: bench build-release check deny gen-cqt-reference gen-fir-reference gen-iir-reference gen-resample-reference machete mutants setup setup-hooks setup-tools test release release-patch release-minor release-major publish tag-current
+.PHONY: bench build-release check deny gen-cqt-reference gen-fir-reference gen-fir-lfilter-reference gen-iir-reference gen-resample-reference machete mutants setup setup-hooks setup-tools test release release-patch release-minor release-major publish tag-current
 
 # Get current version from Cargo.toml
 CURRENT_VERSION := $(shell grep '^version = ' omnidsp-core/Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
@@ -88,6 +88,10 @@ deny:
 gen-fir-reference:
 	@python3 scripts/gen_fir_reference.py > omnidsp-core/testdata/fir_scipy.rs
 	@echo "Generated omnidsp-core/testdata/fir_scipy.rs"
+
+gen-fir-lfilter-reference:
+	@python3 scripts/gen_fir_lfilter_reference.py > omnidsp-core/testdata/fir_lfilter_scipy.rs
+	@echo "Generated omnidsp-core/testdata/fir_lfilter_scipy.rs"
 
 gen-cqt-reference:
 	@python3 scripts/gen_cqt_reference.py > omnidsp-core/testdata/cqt_numpy.rs
