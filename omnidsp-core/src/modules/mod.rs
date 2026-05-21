@@ -10,4 +10,5 @@
 pub mod conv;
 pub mod fir;
 pub mod iir;
+pub mod resample;
 pub mod window;

@@ -121,7 +121,11 @@ enum PlanInner<T, P, V> {
 struct DirectState<T, V> {
     /// Filter coefficients (reversed for correlation-style MAC).
     coeffs: Vec<T>,
-    /// Circular delay buffer of length `num_taps`.
+    /// Doubled delay buffer, length = `2 * num_taps`.
+    ///
+    /// Each sample is written at both `write_pos` and `write_pos + num_taps`
+    /// so that `delay[write_pos..write_pos + num_taps]` is always a
+    /// contiguous oldest-first view — no two-segment dot product needed.
     delay: Vec<T>,
     /// Write pointer into the delay buffer.
     write_pos: usize,
@@ -208,37 +212,23 @@ where
     P: DftPlan<T>,
     V: VecOps<T>,
 {
-    /// Direct (time-domain) FIR: circular buffer + two-segment dot product.
+    /// Direct (time-domain) FIR: doubled buffer + single dot product.
     fn process_direct(state: &mut DirectState<T, V>, input: &[T], output: &mut [T]) -> Result<()> {
         let num_taps = state.coeffs.len();
 
         for (out, &sample) in output.iter_mut().zip(input) {
-            // Write new sample into circular delay buffer.
+            // Write to both halves of the doubled buffer.
             state.delay[state.write_pos] = sample;
+            state.delay[state.write_pos + num_taps] = sample;
             state.write_pos = (state.write_pos + 1) % num_taps;
 
-            // The delay buffer read starts at write_pos (oldest sample).
             // Coefficients are stored reversed, so coeffs[0] corresponds to
-            // the oldest sample and coeffs[N-1] to the newest.
-            // y = dot(coeffs, delay_from_oldest)
-            //
-            // The delay buffer from write_pos wraps around:
-            //   segment1: delay[write_pos..num_taps]  (oldest samples)
-            //   segment2: delay[0..write_pos]          (newest samples)
-
+            // the oldest sample and coeffs[N-1] to the newest.  The doubled
+            // buffer guarantees a contiguous oldest-first window.
             let pos = state.write_pos;
-            if pos == 0 {
-                *out = state.vecops.dot(&state.coeffs, &state.delay)?;
-            } else {
-                let seg1_len = num_taps - pos;
-                let dot1 = state
-                    .vecops
-                    .dot(&state.coeffs[..seg1_len], &state.delay[pos..])?;
-                let dot2 = state
-                    .vecops
-                    .dot(&state.coeffs[seg1_len..], &state.delay[..pos])?;
-                *out = dot1 + dot2;
-            }
+            *out = state
+                .vecops
+                .dot(&state.coeffs, &state.delay[pos..pos + num_taps])?;
         }
 
         Ok(())
@@ -340,7 +330,7 @@ where
 
                 PlanInner::Direct {
                     state: DirectState {
-                        delay: vec![T::zero(); num_taps],
+                        delay: vec![T::zero(); 2 * num_taps],
                         write_pos: 0,
                         coeffs,
                         vecops: self.vecops.clone(),

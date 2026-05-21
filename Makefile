@@ -7,7 +7,7 @@
 #   make release-major   # 0.1.0 -> 1.0.0
 #   make release V=0.2.0 # explicit version
 
-.PHONY: bench build-release check deny gen-cqt-reference gen-fir-reference gen-fir-lfilter-reference gen-iir-reference gen-iir-sosfilt-reference gen-resample-reference machete mutants setup setup-hooks setup-tools test release release-patch release-minor release-major publish tag-current
+.PHONY: bench build-release check deny gen-cqt-reference gen-fir-reference gen-fir-lfilter-reference gen-iir-reference gen-iir-sosfilt-reference gen-resample-reference gen-resample-poly-reference machete mutants setup setup-hooks setup-tools test release release-patch release-minor release-major publish tag-current
 
 # Get current version from Cargo.toml
 CURRENT_VERSION := $(shell grep '^version = ' omnidsp-core/Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
@@ -108,6 +108,10 @@ gen-iir-sosfilt-reference:
 gen-resample-reference:
 	@python3 scripts/gen_resample_reference.py > omnidsp-core/testdata/resample_scipy.rs
 	@echo "Generated omnidsp-core/testdata/resample_scipy.rs"
+
+gen-resample-poly-reference:
+	@python3 scripts/gen_resample_poly_reference.py > omnidsp-core/testdata/resample_poly_scipy.rs
+	@echo "Generated omnidsp-core/testdata/resample_poly_scipy.rs"
 
 machete:
 	@cargo machete --skip-target-dir

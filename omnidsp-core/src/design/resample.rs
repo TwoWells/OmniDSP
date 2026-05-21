@@ -29,6 +29,38 @@ use crate::types::WindowFn;
 
 // ─── Spec (backend-agnostic) ─────────────────────────────────────────
 
+/// Processing mode for resampling — controls output length semantics.
+///
+/// The two modes produce identical sample values for the overlapping
+/// range; they differ only in how many output samples are emitted.
+///
+/// Which mode produces more output depends on the filter length `H`
+/// relative to the upsampling factor `L`:
+/// - `H < L` (typical for high L): **Streaming** produces more
+///   (the phase accumulator emits outputs beyond the filter's support).
+/// - `H > L` (long filter, small L): **Batch** produces more
+///   (includes the filter's ring-down tail past the last input).
+/// - `H = L`: both produce the same count.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResampleMode {
+    /// Streaming: `⌈N × L / M⌉` outputs per call.
+    ///
+    /// The phase accumulator drives output count, independent of the
+    /// filter length.  Internal state carries across calls for continuous
+    /// block-by-block processing.  This is the right choice for real-time
+    /// audio and any pipeline where data arrives in chunks.
+    Streaming,
+
+    /// Batch: `⌈((N − 1) × L + filter_len) / M⌉` outputs.
+    ///
+    /// Matches scipy's `upfirdn` / finite convolution model.  The output
+    /// length accounts for the prototype filter's support, so a single
+    /// call produces the complete resampled signal including the filter's
+    /// group delay transient.  Use this for one-shot processing of
+    /// complete signals.
+    Batch,
+}
+
 /// Validated resampling quality parameter.
 ///
 /// Wraps a `u8` in the range `0..=10`.  Higher values produce longer
@@ -94,6 +126,7 @@ pub struct ResampleSpec<T> {
     quality: ResampleQuality,
     window_fn: WindowFn<T>,
     max_phases: usize,
+    mode: ResampleMode,
 }
 
 /// Default maximum number of polyphase phases.
@@ -157,6 +190,7 @@ impl<T: Float> ResampleSpec<T> {
             quality,
             window_fn,
             max_phases: max_phases.clamp(1, MAX_PHASES_LIMIT),
+            mode: ResampleMode::Streaming,
         })
     }
 
@@ -188,6 +222,19 @@ impl<T: Float> ResampleSpec<T> {
     #[must_use]
     pub const fn max_phases(&self) -> usize {
         self.max_phases
+    }
+
+    /// Processing mode ([`Streaming`](ResampleMode::Streaming) by default).
+    #[must_use]
+    pub const fn mode(&self) -> ResampleMode {
+        self.mode
+    }
+
+    /// Override the processing mode.
+    #[must_use]
+    pub const fn with_mode(mut self, mode: ResampleMode) -> Self {
+        self.mode = mode;
+        self
     }
 }
 
