@@ -1,58 +1,58 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Two Wells <contact@twowells.dev>
 
-//! IIR filter module — streaming biquad cascade using Direct Form II Transposed.
+//! [`RustIir`] — pure Rust IIR filter (scalar DF2T biquad cascade).
 //!
-//! [`OmniIir`] implements the [`Iir`](crate::traits::iir::Iir) trait generically
-//! over any [`VecOps`] implementation.  The inner loop is scalar (DF2T is a
-//! sequential recurrence), but [`VecOps`] is taken for API consistency with every
-//! other module factory.
+//! The inner loop is a sequential recurrence that cannot be vectorized, so this
+//! implementation is scalar.  It is the baseline for all platforms; a
+//! SIMD-accelerated multi-channel variant (`HwyIir`) may live in
+//! `omnidsp-highway` in the future.
 //!
 //! Plans are **mutable** — they hold biquad delay states that persist across
 //! calls so successive `process` calls form a continuous stream.
 
 use num_traits::Float;
 
-use crate::error::{Error, Result};
-use crate::traits::iir::{Iir, IirPlan};
-use crate::traits::vecops::VecOps;
-use crate::types::BiquadSection;
+use omnidsp_core::error::{Error, Result};
+use omnidsp_core::traits::iir::{Iir, IirPlan, IirSpec};
+use omnidsp_core::types::BiquadSection;
 
 // ─── Public types ──────────────────────────────────────────────────────
 
-/// Generic IIR filter factory backed by a [`VecOps`] implementation.
+/// Pure Rust IIR filter factory (scalar DF2T biquad cascade).
 ///
-/// Creates [`OmniIirPlan`]s for biquad cascade specifications.  The factory
-/// owns the `VecOps` instance; plans own a clone of it (unused by the current
-/// scalar DF2T implementation, but held for API consistency and future use).
-#[derive(Debug, Clone)]
-pub struct OmniIir<V> {
-    vecops: V,
-}
+/// Creates [`RustIirPlan`]s for biquad cascade specifications.  This is a
+/// zero-sized type — all state lives in the plan.
+#[derive(Debug, Clone, Copy)]
+pub struct RustIir;
 
-impl<V> OmniIir<V> {
+impl RustIir {
     /// Create a new IIR filter factory.
     #[must_use]
-    pub const fn new(vecops: V) -> Self {
-        Self { vecops }
+    pub const fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for RustIir {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 /// Execution plan for a streaming IIR filter (biquad cascade).
 ///
-/// Created by [`OmniIir::create_plan`](Iir::create_plan).  Mutable — holds
+/// Created by [`RustIir::create_plan`](Iir::create_plan).  Mutable — holds
 /// biquad delay states that persist across calls.
-pub struct OmniIirPlan<T, V> {
+pub struct RustIirPlan<T> {
     sections: Vec<BiquadSection<T>>,
     /// Delay state per section: `[s1, s2]` for DF2T.
     state: Vec<[T; 2]>,
-    /// Held for API consistency; unused by the scalar DF2T inner loop.
-    _vecops: V,
 }
 
-impl<T: std::fmt::Debug, V> std::fmt::Debug for OmniIirPlan<T, V> {
+impl<T: std::fmt::Debug> std::fmt::Debug for RustIirPlan<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("OmniIirPlan")
+        f.debug_struct("RustIirPlan")
             .field("num_sections", &self.sections.len())
             .field("state", &self.state)
             .finish_non_exhaustive()
@@ -61,10 +61,9 @@ impl<T: std::fmt::Debug, V> std::fmt::Debug for OmniIirPlan<T, V> {
 
 // ─── Trait implementations ────────────────────────────────────────────
 
-impl<T, V> IirPlan<T> for OmniIirPlan<T, V>
+impl<T> IirPlan<T> for RustIirPlan<T>
 where
     T: Float + Send + Sync,
-    V: VecOps<T>,
 {
     fn process(&mut self, input: &[T], output: &mut [T]) -> Result<()> {
         if input.len() != output.len() {
@@ -98,26 +97,24 @@ where
     }
 }
 
-impl<T, V> Iir<T> for OmniIir<V>
+impl<T> Iir<T> for RustIir
 where
     T: Float + Send + Sync,
-    V: VecOps<T>,
 {
-    type Plan = OmniIirPlan<T, V>;
+    type Plan = RustIirPlan<T>;
 
-    fn create_plan(&self, sections: &[BiquadSection<T>]) -> Result<Self::Plan> {
-        if sections.is_empty() {
+    fn create_plan(&self, spec: &IirSpec<T>) -> Result<Self::Plan> {
+        if spec.sections.is_empty() {
             return Err(Error::InvalidSpec(
                 "IIR filter requires at least one biquad section".to_owned(),
             ));
         }
 
-        let state = vec![[T::zero(); 2]; sections.len()];
+        let state = vec![[T::zero(); 2]; spec.sections.len()];
 
-        Ok(OmniIirPlan {
-            sections: sections.to_vec(),
+        Ok(RustIirPlan {
+            sections: spec.sections.clone(),
             state,
-            _vecops: self.vecops.clone(),
         })
     }
 }
@@ -128,13 +125,16 @@ where
 #[allow(clippy::expect_used, reason = "tests use expect for clarity")]
 mod tests {
     use super::*;
-    use crate::test_utils::TestVecOps;
-    use crate::traits::iir::{Iir, IirPlan};
+    use omnidsp_core::traits::iir::{Iir, IirPlan, IirSpec};
 
     const EPSILON: f64 = 1e-12;
 
-    fn make_factory() -> OmniIir<TestVecOps> {
-        OmniIir::new(TestVecOps)
+    fn make_factory() -> RustIir {
+        RustIir::new()
+    }
+
+    fn spec(sections: Vec<BiquadSection<f64>>) -> IirSpec<f64> {
+        IirSpec::new(sections)
     }
 
     fn assert_approx_eq(actual: &[f64], expected: &[f64], eps: f64, label: &str) {
@@ -179,8 +179,8 @@ mod tests {
     #[test]
     fn passthrough() {
         let factory = make_factory();
-        let mut plan =
-            Iir::<f64>::create_plan(&factory, &[passthrough_section()]).expect("plan creation");
+        let mut plan = Iir::<f64>::create_plan(&factory, &spec(vec![passthrough_section()]))
+            .expect("plan creation");
 
         let input = [1.0, 2.0, 3.0, 4.0, 5.0];
         let mut output = [0.0; 5];
@@ -194,8 +194,8 @@ mod tests {
     #[test]
     fn gain() {
         let factory = make_factory();
-        let mut plan =
-            Iir::<f64>::create_plan(&factory, &[gain_section(2.0)]).expect("plan creation");
+        let mut plan = Iir::<f64>::create_plan(&factory, &spec(vec![gain_section(2.0)]))
+            .expect("plan creation");
 
         let input = [1.0, 2.0, 3.0, 4.0, 5.0];
         let mut output = [0.0; 5];
@@ -219,7 +219,7 @@ mod tests {
             a1: -0.3,
             a2: 0.0,
         };
-        let mut plan = Iir::<f64>::create_plan(&factory, &[sec]).expect("plan creation");
+        let mut plan = Iir::<f64>::create_plan(&factory, &spec(vec![sec])).expect("plan creation");
 
         let input = [1.0, 0.0, 0.0, 0.0, 0.0];
         let mut output = [0.0; 5];
@@ -257,11 +257,11 @@ mod tests {
 
         // Two-section cascade.
         let mut plan_cascade =
-            Iir::<f64>::create_plan(&factory, &[sec0, sec1]).expect("cascade plan");
+            Iir::<f64>::create_plan(&factory, &spec(vec![sec0, sec1])).expect("cascade plan");
 
         // Serial application: section 0 then section 1.
-        let mut plan0 = Iir::<f64>::create_plan(&factory, &[sec0]).expect("plan0");
-        let mut plan1 = Iir::<f64>::create_plan(&factory, &[sec1]).expect("plan1");
+        let mut plan0 = Iir::<f64>::create_plan(&factory, &spec(vec![sec0])).expect("plan0");
+        let mut plan1 = Iir::<f64>::create_plan(&factory, &spec(vec![sec1])).expect("plan1");
 
         let input = [1.0, 0.5, -0.3, 0.7, 0.0, 0.0, 0.0, 0.0];
         let mut out_cascade = [0.0; 8];
@@ -295,13 +295,14 @@ mod tests {
         };
 
         // Reference: single-shot.
-        let mut plan_ref = Iir::<f64>::create_plan(&factory, &[sec]).expect("ref plan");
+        let mut plan_ref = Iir::<f64>::create_plan(&factory, &spec(vec![sec])).expect("ref plan");
         let input: Vec<f64> = (0..20).map(|i| (f64::from(i) * 0.3).sin()).collect();
         let mut out_ref = vec![0.0; 20];
         plan_ref.process(&input, &mut out_ref).expect("ref process");
 
         // Streaming: two chunks.
-        let mut plan_stream = Iir::<f64>::create_plan(&factory, &[sec]).expect("stream plan");
+        let mut plan_stream =
+            Iir::<f64>::create_plan(&factory, &spec(vec![sec])).expect("stream plan");
         let split = 7;
         let mut out_stream = vec![0.0; 20];
         plan_stream
@@ -326,7 +327,7 @@ mod tests {
             a1: -0.5,
             a2: -0.1,
         };
-        let mut plan = Iir::<f64>::create_plan(&factory, &[sec]).expect("plan creation");
+        let mut plan = Iir::<f64>::create_plan(&factory, &spec(vec![sec])).expect("plan creation");
 
         let input = [1.0, 2.0, 3.0, 4.0, 5.0];
         let mut output1 = [0.0; 5];
@@ -344,8 +345,8 @@ mod tests {
     #[test]
     fn plan_reuse() {
         let factory = make_factory();
-        let mut plan =
-            Iir::<f64>::create_plan(&factory, &[passthrough_section()]).expect("plan creation");
+        let mut plan = Iir::<f64>::create_plan(&factory, &spec(vec![passthrough_section()]))
+            .expect("plan creation");
 
         let input1 = [1.0, 2.0, 3.0];
         let mut output1 = [0.0; 3];
@@ -363,11 +364,11 @@ mod tests {
 
     #[test]
     fn lowpass_dc_converges() {
-        use crate::design::iir::{FilterFamily, design};
-        use crate::types::FilterType;
+        use omnidsp_core::design::iir::{FilterFamily, design};
+        use omnidsp_core::types::FilterType;
 
         let factory = make_factory();
-        let sections = design::<f64>(
+        let iir_spec = design::<f64>(
             FilterFamily::Butterworth,
             FilterType::Lowpass,
             4,
@@ -377,7 +378,7 @@ mod tests {
         )
         .expect("design LP4");
 
-        let mut plan = Iir::<f64>::create_plan(&factory, &sections).expect("plan creation");
+        let mut plan = Iir::<f64>::create_plan(&factory, &iir_spec).expect("plan creation");
 
         // Feed DC=1.0 for a long time — output should converge to 1.0.
         let input = vec![1.0; 4096];
@@ -397,11 +398,11 @@ mod tests {
 
     #[test]
     fn highpass_dc_decays() {
-        use crate::design::iir::{FilterFamily, design};
-        use crate::types::FilterType;
+        use omnidsp_core::design::iir::{FilterFamily, design};
+        use omnidsp_core::types::FilterType;
 
         let factory = make_factory();
-        let sections = design::<f64>(
+        let iir_spec = design::<f64>(
             FilterFamily::Butterworth,
             FilterType::Highpass,
             4,
@@ -411,7 +412,7 @@ mod tests {
         )
         .expect("design HP4");
 
-        let mut plan = Iir::<f64>::create_plan(&factory, &sections).expect("plan creation");
+        let mut plan = Iir::<f64>::create_plan(&factory, &iir_spec).expect("plan creation");
 
         let input = vec![1.0; 4096];
         let mut output = vec![0.0; 4096];
@@ -433,15 +434,15 @@ mod tests {
     #[test]
     fn empty_sections_returns_error() {
         let factory = make_factory();
-        let result = Iir::<f64>::create_plan(&factory, &[]);
+        let result = Iir::<f64>::create_plan(&factory, &spec(vec![]));
         assert!(result.is_err(), "empty sections should return error");
     }
 
     #[test]
     fn buffer_length_mismatch_returns_error() {
         let factory = make_factory();
-        let mut plan =
-            Iir::<f64>::create_plan(&factory, &[passthrough_section()]).expect("plan creation");
+        let mut plan = Iir::<f64>::create_plan(&factory, &spec(vec![passthrough_section()]))
+            .expect("plan creation");
 
         let input = [1.0, 2.0, 3.0];
         let mut output = [0.0; 2];
@@ -473,8 +474,8 @@ mod tests {
         label: &str,
     ) {
         let factory = make_factory();
-        let sections = scipy_to_sections(sos);
-        let mut plan = Iir::<f64>::create_plan(&factory, &sections).expect("plan creation");
+        let mut plan = Iir::<f64>::create_plan(&factory, &spec(scipy_to_sections(sos)))
+            .expect("plan creation");
 
         let mut output = vec![0.0; input.len()];
         plan.process(input, &mut output).expect("process");
@@ -519,8 +520,8 @@ mod tests {
     fn scipy_sosfilt_streaming() {
         // Process the long signal in chunks, compare against single-shot scipy.
         let factory = make_factory();
-        let sections = scipy_to_sections(SOSFILT_LP4_SOS);
-        let mut plan = Iir::<f64>::create_plan(&factory, &sections).expect("plan creation");
+        let mut plan = Iir::<f64>::create_plan(&factory, &spec(scipy_to_sections(SOSFILT_LP4_SOS)))
+            .expect("plan creation");
 
         let mut output = vec![0.0; SOSFILT_LONG_INPUT.len()];
 

@@ -35,6 +35,7 @@ use num_complex::Complex64;
 use num_traits::Float;
 
 use crate::error::{Error, Result};
+use crate::traits::iir::IirSpec;
 use crate::types::{BiquadSection, FilterType};
 
 // ─── Public API ──────────────────────────────────────────────────────
@@ -52,7 +53,7 @@ pub enum FilterFamily {
 
 /// Design an IIR filter as cascaded biquad sections.
 ///
-/// Returns `Vec<BiquadSection<T>>` with normalized coefficients (`a0 = 1`).
+/// Returns an [`IirSpec<T>`] with normalized coefficients (`a0 = 1`).
 /// The number of sections is `⌈order / 2⌉` for lowpass/highpass and
 /// `order` for bandpass/bandstop.
 ///
@@ -71,11 +72,11 @@ pub enum FilterFamily {
 /// use omnidsp_core::design::iir::{FilterFamily, design};
 /// use omnidsp_core::types::FilterType;
 ///
-/// let sections = design::<f64>(
+/// let spec = design::<f64>(
 ///     FilterFamily::Butterworth,
 ///     FilterType::Lowpass, 4, 44100.0, 1000.0, None,
 /// ).unwrap();
-/// assert_eq!(sections.len(), 2);
+/// assert_eq!(spec.sections.len(), 2);
 /// ```
 pub fn design<T: Float>(
     family: FilterFamily,
@@ -84,7 +85,7 @@ pub fn design<T: Float>(
     sample_rate: T,
     cutoff1: T,
     cutoff2: Option<T>,
-) -> Result<Vec<BiquadSection<T>>> {
+) -> Result<IirSpec<T>> {
     let sr = to_f64(sample_rate)?;
     let c1 = to_f64(cutoff1)?;
     let c2 = cutoff2.map(to_f64).transpose()?;
@@ -96,7 +97,8 @@ pub fn design<T: Float>(
     };
 
     let sections = design_from_prototype(prototype, &validated, sr);
-    sections.iter().map(biquad_to_t).collect()
+    let sections = sections.iter().map(biquad_to_t).collect::<Result<_>>()?;
+    Ok(IirSpec::new(sections))
 }
 
 fn design_from_prototype(
@@ -592,7 +594,7 @@ mod tests {
         c1: f64,
         c2: Option<f64>,
     ) -> Result<Vec<BiquadSection<f64>>> {
-        design(FilterFamily::Butterworth, ft, order, sr, c1, c2)
+        Ok(design(FilterFamily::Butterworth, ft, order, sr, c1, c2)?.sections)
     }
 
     fn butter_f32(
@@ -602,7 +604,7 @@ mod tests {
         c1: f32,
         c2: Option<f32>,
     ) -> Result<Vec<BiquadSection<f32>>> {
-        design(FilterFamily::Butterworth, ft, order, sr, c1, c2)
+        Ok(design(FilterFamily::Butterworth, ft, order, sr, c1, c2)?.sections)
     }
 
     /// Evaluate the SOS cascade magnitude at a given frequency in Hz.
