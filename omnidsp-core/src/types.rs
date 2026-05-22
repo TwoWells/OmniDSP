@@ -132,6 +132,12 @@ impl<T: Float> Window<T> {
         &self.coefficients
     }
 
+    /// Consume the window and return the coefficient vector.
+    #[must_use]
+    pub fn into_coefficients(self) -> Vec<T> {
+        self.coefficients
+    }
+
     /// Return the number of coefficients (window length).
     #[must_use]
     pub const fn len(&self) -> usize {

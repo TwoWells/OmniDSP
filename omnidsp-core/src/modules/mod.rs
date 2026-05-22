@@ -8,6 +8,7 @@
 //! these two primitives gets every module for free.
 
 pub mod conv;
+pub mod cqt;
 pub mod fir;
 pub mod iir;
 pub mod resample;
