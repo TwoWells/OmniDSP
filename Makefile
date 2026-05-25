@@ -7,7 +7,7 @@
 #   make release-major   # 0.1.0 -> 1.0.0
 #   make release V=0.2.0 # explicit version
 
-.PHONY: bench build-release check deny gen-cqt-reference gen-cqt-process-reference gen-fir-reference gen-fir-lfilter-reference gen-iir-reference gen-iir-sosfilt-reference gen-resample-reference gen-resample-poly-reference machete mutants setup setup-hooks setup-tools test release release-patch release-minor release-major publish tag-current
+.PHONY: bench build-release check deny shootout gen-cqt-reference gen-cqt-process-reference gen-fir-reference gen-fir-lfilter-reference gen-iir-reference gen-iir-sosfilt-reference gen-resample-reference gen-resample-poly-reference machete mutants setup setup-hooks setup-tools test release release-patch release-minor release-major publish tag-current
 
 # Get current version from Cargo.toml
 CURRENT_VERSION := $(shell grep '^version = ' omnidsp-core/Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
@@ -128,6 +128,11 @@ gen-resample-poly-reference:
 
 machete:
 	@cargo machete --skip-target-dir
+
+# --- Benchmark ---
+
+shootout:
+	@cargo nextest run --workspace --run-ignored ignored-only -E 'binary(shootout)' --no-fail-fast --status-level pass --cargo-quiet --success-output immediate
 
 # --- Test ---
 

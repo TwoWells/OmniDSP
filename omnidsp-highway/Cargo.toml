@@ -38,3 +38,6 @@ missing_safety_doc = "warn"
 omnidsp-core = { path = "../omnidsp-core" }
 highway-sys = { path = "../highway-sys" }
 num-complex = "0.4"
+
+[dev-dependencies]
+omnidsp-rust = { path = "../omnidsp-rust" }
