@@ -191,6 +191,84 @@ void CmulF64(const double* a, const double* b,
     }
 }
 
+// --- Butterfly stage (f32) ---
+// Processes one complete stage of a radix-2 Cooley-Tukey FFT.
+// `data` is interleaved [re, im] complex, length = n * 2 floats.
+// `twiddles` is interleaved [re, im], length = half_len * 2 floats.
+// `half_len` is the butterfly half-size for this stage (1, 2, 4, ...).
+// `n` is the FFT length (number of complex elements).
+void ButterflyStageF32(float* data, const float* twiddles,
+                       size_t half_len, size_t n) {
+    const hn::ScalableTag<float> d;
+    const size_t N = hn::Lanes(d);
+    const size_t full_len = half_len * 2;
+    // Number of float elements per half = half_len * 2 (interleaved re/im).
+    const size_t half_floats = half_len * 2;
+
+    for (size_t group_start = 0; group_start < n; group_start += full_len) {
+        float* even_ptr = data + group_start * 2;
+        float* odd_ptr  = even_ptr + half_floats;
+
+        // SIMD loop over the butterfly pairs in this group.
+        size_t i = 0;
+        for (; i + N <= half_floats; i += N) {
+            const auto tw  = hn::LoadU(d, twiddles + i);
+            const auto odd = hn::LoadU(d, odd_ptr + i);
+            const auto t   = hn::MulComplex(tw, odd);
+            const auto ev  = hn::LoadU(d, even_ptr + i);
+            hn::StoreU(hn::Add(ev, t), d, even_ptr + i);
+            hn::StoreU(hn::Sub(ev, t), d, odd_ptr + i);
+        }
+        // Scalar tail — process remaining complex pairs.
+        for (; i < half_floats; i += 2) {
+            const float tw_re = twiddles[i], tw_im = twiddles[i + 1];
+            const float odd_re = odd_ptr[i], odd_im = odd_ptr[i + 1];
+            const float t_re = tw_re * odd_re - tw_im * odd_im;
+            const float t_im = tw_re * odd_im + tw_im * odd_re;
+            const float e_re = even_ptr[i], e_im = even_ptr[i + 1];
+            even_ptr[i]     = e_re + t_re;
+            even_ptr[i + 1] = e_im + t_im;
+            odd_ptr[i]      = e_re - t_re;
+            odd_ptr[i + 1]  = e_im - t_im;
+        }
+    }
+}
+
+// --- Butterfly stage (f64) ---
+void ButterflyStageF64(double* data, const double* twiddles,
+                       size_t half_len, size_t n) {
+    const hn::ScalableTag<double> d;
+    const size_t N = hn::Lanes(d);
+    const size_t full_len = half_len * 2;
+    const size_t half_floats = half_len * 2;
+
+    for (size_t group_start = 0; group_start < n; group_start += full_len) {
+        double* even_ptr = data + group_start * 2;
+        double* odd_ptr  = even_ptr + half_floats;
+
+        size_t i = 0;
+        for (; i + N <= half_floats; i += N) {
+            const auto tw  = hn::LoadU(d, twiddles + i);
+            const auto odd = hn::LoadU(d, odd_ptr + i);
+            const auto t   = hn::MulComplex(tw, odd);
+            const auto ev  = hn::LoadU(d, even_ptr + i);
+            hn::StoreU(hn::Add(ev, t), d, even_ptr + i);
+            hn::StoreU(hn::Sub(ev, t), d, odd_ptr + i);
+        }
+        for (; i < half_floats; i += 2) {
+            const double tw_re = twiddles[i], tw_im = twiddles[i + 1];
+            const double odd_re = odd_ptr[i], odd_im = odd_ptr[i + 1];
+            const double t_re = tw_re * odd_re - tw_im * odd_im;
+            const double t_im = tw_re * odd_im + tw_im * odd_re;
+            const double e_re = even_ptr[i], e_im = even_ptr[i + 1];
+            even_ptr[i]     = e_re + t_re;
+            even_ptr[i + 1] = e_im + t_im;
+            odd_ptr[i]      = e_re - t_re;
+            odd_ptr[i + 1]  = e_im - t_im;
+        }
+    }
+}
+
 }  // namespace HWY_NAMESPACE
 }  // namespace omnidsp
 HWY_AFTER_NAMESPACE();
@@ -208,6 +286,8 @@ HWY_EXPORT(DotF32);
 HWY_EXPORT(DotF64);
 HWY_EXPORT(CmulF32);
 HWY_EXPORT(CmulF64);
+HWY_EXPORT(ButterflyStageF32);
+HWY_EXPORT(ButterflyStageF64);
 
 // Dispatch wrappers — HWY_DYNAMIC_DISPATCH must be called from the same
 // namespace as HWY_EXPORT.  The compiler inlines these away.
@@ -240,6 +320,12 @@ void DispatchCmulF32(const float* a, const float* b, float* out, size_t count) {
 }
 void DispatchCmulF64(const double* a, const double* b, double* out, size_t count) {
     HWY_DYNAMIC_DISPATCH(CmulF64)(a, b, out, count);
+}
+void DispatchButterflyStageF32(float* data, const float* twiddles, size_t half_len, size_t n) {
+    HWY_DYNAMIC_DISPATCH(ButterflyStageF32)(data, twiddles, half_len, n);
+}
+void DispatchButterflyStageF64(double* data, const double* twiddles, size_t half_len, size_t n) {
+    HWY_DYNAMIC_DISPATCH(ButterflyStageF64)(data, twiddles, half_len, n);
 }
 }  // namespace omnidsp
 
@@ -274,6 +360,12 @@ void omnidsp_cmul_f32(const float* a, const float* b, float* out, size_t count) 
 }
 void omnidsp_cmul_f64(const double* a, const double* b, double* out, size_t count) {
     omnidsp::DispatchCmulF64(a, b, out, count);
+}
+void omnidsp_butterfly_stage_f32(float* data, const float* twiddles, size_t half_len, size_t n) {
+    omnidsp::DispatchButterflyStageF32(data, twiddles, half_len, n);
+}
+void omnidsp_butterfly_stage_f64(double* data, const double* twiddles, size_t half_len, size_t n) {
+    omnidsp::DispatchButterflyStageF64(data, twiddles, half_len, n);
 }
 
 }  // extern "C"

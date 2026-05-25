@@ -86,6 +86,44 @@ unsafe extern "C" {
     /// - `a`, `b`, and `out` must point to at least `count * 2` doubles.
     /// - `out` may alias `a` or `b` (supports in-place operation).
     pub fn omnidsp_cmul_f64(a: *const f64, b: *const f64, out: *mut f64, count: usize);
+
+    /// One stage of a radix-2 Cooley-Tukey FFT butterfly (f32).
+    ///
+    /// Processes all butterfly groups for a stage with the given `half_len`.
+    /// `data` is interleaved `[re, im]` complex (`n * 2` floats).
+    /// `twiddles` is interleaved `[re, im]` (`half_len * 2` floats).
+    /// `n` is the FFT length (number of complex elements).
+    ///
+    /// # Safety
+    ///
+    /// - `data` must point to at least `n * 2` floats.
+    /// - `twiddles` must point to at least `half_len * 2` floats.
+    /// - `half_len` must be a power of 2 and `<= n / 2`.
+    pub fn omnidsp_butterfly_stage_f32(
+        data: *mut f32,
+        twiddles: *const f32,
+        half_len: usize,
+        n: usize,
+    );
+
+    /// One stage of a radix-2 Cooley-Tukey FFT butterfly (f64).
+    ///
+    /// Processes all butterfly groups for a stage with the given `half_len`.
+    /// `data` is interleaved `[re, im]` complex (`n * 2` doubles).
+    /// `twiddles` is interleaved `[re, im]` (`half_len * 2` doubles).
+    /// `n` is the FFT length (number of complex elements).
+    ///
+    /// # Safety
+    ///
+    /// - `data` must point to at least `n * 2` doubles.
+    /// - `twiddles` must point to at least `half_len * 2` doubles.
+    /// - `half_len` must be a power of 2 and `<= n / 2`.
+    pub fn omnidsp_butterfly_stage_f64(
+        data: *mut f64,
+        twiddles: *const f64,
+        half_len: usize,
+        n: usize,
+    );
 }
 
 #[cfg(test)]
@@ -367,5 +405,57 @@ mod tests {
             (dot - 21.0).abs() < EPSILON_F32,
             "single element dot: expected 21.0, got {dot}"
         );
+    }
+
+    // --- butterfly_stage ---
+
+    /// 4-point FFT stage 0 (`half_len=1`): twiddle is [1+0i].
+    /// After bit-reversal of [1,2,3,4] → [1,3,2,4] (as complex: [(1,0),(3,0),(2,0),(4,0)]).
+    /// Stage 0 butterflies: groups of 2, twiddle=1.
+    ///   group 0: even=(1,0) odd=(3,0) → even'=(4,0) odd'=(-2,0)
+    ///   group 1: even=(2,0) odd=(4,0) → even'=(6,0) odd'=(-2,0)
+    #[test]
+    fn butterfly_stage_f32_stage0() {
+        // Bit-reversed [1,2,3,4] as interleaved complex.
+        let mut data: Vec<f32> = vec![1.0, 0.0, 3.0, 0.0, 2.0, 0.0, 4.0, 0.0];
+        let twiddles: Vec<f32> = vec![1.0, 0.0]; // W_2^0 = 1+0i
+
+        unsafe {
+            omnidsp_butterfly_stage_f32(data.as_mut_ptr(), twiddles.as_ptr(), 1, 4);
+        }
+
+        let expected: Vec<f32> = vec![4.0, 0.0, -2.0, 0.0, 6.0, 0.0, -2.0, 0.0];
+        for (i, (&got, &exp)) in data.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (got - exp).abs() < EPSILON_F32,
+                "stage0 mismatch at {i}: got {got}, expected {exp}"
+            );
+        }
+    }
+
+    /// 4-point FFT stage 1 (`half_len=2`): twiddles are [1+0i, 0-1i] (forward).
+    /// Input from stage 0: [(4,0),(-2,0),(6,0),(-2,0)].
+    /// Stage 1: one group of 4, twiddles = [1+0i, 0-1i].
+    ///   k=0: t = (1+0i)*(6,0) = (6,0), even'=(10,0), odd'=(-2,0)
+    ///   k=1: t = (0-1i)*(-2,0) = (0,2), even'=(-2,2), odd'=(-2,-2)
+    /// Result = FFT([1,2,3,4]) = [(10,0),(-2,2),(-2,0),(-2,-2)].
+    #[test]
+    fn butterfly_stage_f64_stage1() {
+        // After stage 0.
+        let mut data: Vec<f64> = vec![4.0, 0.0, -2.0, 0.0, 6.0, 0.0, -2.0, 0.0];
+        // Forward twiddles for half_len=2: W_4^0 = 1+0i, W_4^1 = 0-1i.
+        let twiddles: Vec<f64> = vec![1.0, 0.0, 0.0, -1.0];
+
+        unsafe {
+            omnidsp_butterfly_stage_f64(data.as_mut_ptr(), twiddles.as_ptr(), 2, 4);
+        }
+
+        let expected: Vec<f64> = vec![10.0, 0.0, -2.0, 2.0, -2.0, 0.0, -2.0, -2.0];
+        for (i, (&got, &exp)) in data.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (got - exp).abs() < EPSILON_F64,
+                "stage1 mismatch at {i}: got {got}, expected {exp}"
+            );
+        }
     }
 }

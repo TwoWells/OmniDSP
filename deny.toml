@@ -32,6 +32,7 @@ exceptions = [
     { name = "omnidsp-core", allow = ["AGPL-3.0-or-later"] },
     { name = "omnidsp-rust", allow = ["AGPL-3.0-or-later"] },
     { name = "highway-sys", allow = ["AGPL-3.0-or-later"] },
+    { name = "omnidsp-highway", allow = ["AGPL-3.0-or-later"] },
 ]
 
 [licenses.private]
