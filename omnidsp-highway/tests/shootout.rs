@@ -9,6 +9,7 @@
 #![allow(clippy::expect_used, reason = "benchmark harness")]
 #![allow(clippy::print_stderr, reason = "benchmark output goes to stderr")]
 
+use std::hint::black_box;
 use std::time::Instant;
 
 use num_complex::Complex;
@@ -61,11 +62,13 @@ fn dft_shootout(n: usize) {
         hwy_plan
             .process(&input, &mut output)
             .expect("process should succeed");
+        black_box(&output);
     });
     let rust_time = bench("RustDft (RustFFT)", || {
         rust_plan
             .process(&input, &mut output)
             .expect("process should succeed");
+        black_box(&output);
     });
 
     let ratio = hwy_time.as_secs_f64() / rust_time.as_secs_f64();
@@ -117,10 +120,10 @@ fn vecops_dot_shootout(n: usize) {
     let b: Vec<f64> = a.iter().map(|x| x + 1.0).collect();
 
     bench("HwyVecOps", || {
-        let _ = VecOps::<f64>::dot(&HwyVecOps, &a, &b).expect("dot should succeed");
+        black_box(VecOps::<f64>::dot(&HwyVecOps, &a, &b).expect("dot should succeed"));
     });
     bench("RustVecOps", || {
-        let _ = VecOps::<f64>::dot(&RustVecOps, &a, &b).expect("dot should succeed");
+        black_box(VecOps::<f64>::dot(&RustVecOps, &a, &b).expect("dot should succeed"));
     });
 }
 
@@ -139,9 +142,11 @@ fn vecops_cmul_shootout(n: usize) {
 
     bench("HwyVecOps", || {
         VecOps::<f64>::cmul(&HwyVecOps, &a, &b, &mut out).expect("cmul should succeed");
+        black_box(&out);
     });
     bench("RustVecOps", || {
         VecOps::<f64>::cmul(&RustVecOps, &a, &b, &mut out).expect("cmul should succeed");
+        black_box(&out);
     });
 }
 
@@ -160,9 +165,11 @@ fn vecops_mul_shootout(n: usize) {
 
     bench("HwyVecOps", || {
         VecOps::<f64>::mul(&HwyVecOps, &a, &b, &mut out).expect("mul should succeed");
+        black_box(&out);
     });
     bench("RustVecOps", || {
         VecOps::<f64>::mul(&RustVecOps, &a, &b, &mut out).expect("mul should succeed");
+        black_box(&out);
     });
 }
 

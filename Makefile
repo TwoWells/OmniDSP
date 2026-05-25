@@ -132,7 +132,7 @@ machete:
 # --- Benchmark ---
 
 shootout:
-	@cargo nextest run --workspace --run-ignored ignored-only -E 'binary(shootout)' --no-fail-fast --status-level pass --cargo-quiet --success-output immediate
+	@cargo nextest run --workspace --run-ignored ignored-only -E 'binary(shootout)' --no-fail-fast --status-level pass --cargo-quiet --success-output immediate --cargo-profile release
 
 # --- Test ---
 
