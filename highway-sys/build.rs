@@ -32,14 +32,22 @@ fn main() {
         .compile("hwy");
 
     // Build our shim (uses foreach_target for multi-ISA compilation).
-    cc::Build::new()
-        .cpp(true)
+    let mut shim = cc::Build::new();
+    shim.cpp(true)
         .std("c++17")
         .define("HWY_STATIC_DEFINE", None)
         .include(&highway_dir)
         .include(&shim_dir)
-        .file(shim_dir.join("omnidsp_hwy.cpp"))
-        .compile("omnidsp_hwy");
+        .file(shim_dir.join("omnidsp_hwy.cpp"));
+
+    // Enable native CPU tuning — critical for ARM where generic NEON
+    // scheduling loses 2-3x vs Apple Silicon-specific code generation.
+    // On x86 this enables AVX2/AVX-512 if available.
+    shim.flag_if_supported("-mcpu=native");
+    shim.flag_if_supported("-mtune=native");
+    shim.flag_if_supported("-funroll-loops");
+
+    shim.compile("omnidsp_hwy");
 
     println!("cargo::rerun-if-changed=shim/");
     println!("cargo::rerun-if-changed=highway/hwy/");
