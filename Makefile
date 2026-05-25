@@ -18,7 +18,7 @@ CARGO_TOOLS := cargo-deny cargo-machete cargo-nextest cargo-mutants
 # --- Setup ---
 
 # One-time setup: configure hooks and check tools
-setup: setup-hooks setup-tools
+setup: setup-hooks setup-submodules setup-tools
 
 # Configure git hooks (explicit opt-in, not run by check)
 setup-hooks:
@@ -28,6 +28,15 @@ setup-hooks:
 	 else \
 	   git config core.hooksPath .githooks; \
 	   echo "hooks: configured .githooks"; \
+	 fi
+
+# Initialize git submodules (highway-sys/highway)
+setup-submodules:
+	@if [ -f .gitmodules ] && ! [ -f highway-sys/highway/hwy/highway.h ]; then \
+	   git submodule update --init; \
+	   echo "submodules: initialized"; \
+	 else \
+	   echo "submodules: ok"; \
 	 fi
 
 # Report cargo tool status

@@ -1,0 +1,371 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Two Wells <contact@twowells.dev>
+
+//! Raw FFI bindings to Highway SIMD kernels via the `OmniDSP` shim.
+//!
+//! This crate is `unsafe` by nature — it's a `-sys` crate. The safety
+//! boundary lives in `omnidsp-highway`.
+
+#![allow(unsafe_code, reason = "-sys crate: FFI declarations require unsafe")]
+
+unsafe extern "C" {
+    /// Element-wise multiply: `out[i] = a[i] * b[i]` for `i` in `0..count`.
+    ///
+    /// # Safety
+    ///
+    /// - `a`, `b`, and `out` must point to at least `count` floats.
+    /// - `out` may alias `a` or `b` (supports in-place operation).
+    pub fn omnidsp_mul_f32(a: *const f32, b: *const f32, out: *mut f32, count: usize);
+
+    /// Element-wise multiply: `out[i] = a[i] * b[i]` for `i` in `0..count`.
+    ///
+    /// # Safety
+    ///
+    /// - `a`, `b`, and `out` must point to at least `count` doubles.
+    /// - `out` may alias `a` or `b` (supports in-place operation).
+    pub fn omnidsp_mul_f64(a: *const f64, b: *const f64, out: *mut f64, count: usize);
+
+    /// Element-wise add: `out[i] = a[i] + b[i]` for `i` in `0..count`.
+    ///
+    /// # Safety
+    ///
+    /// - `a`, `b`, and `out` must point to at least `count` floats.
+    /// - `out` may alias `a` or `b` (supports in-place operation).
+    pub fn omnidsp_add_f32(a: *const f32, b: *const f32, out: *mut f32, count: usize);
+
+    /// Element-wise add: `out[i] = a[i] + b[i]` for `i` in `0..count`.
+    ///
+    /// # Safety
+    ///
+    /// - `a`, `b`, and `out` must point to at least `count` doubles.
+    /// - `out` may alias `a` or `b` (supports in-place operation).
+    pub fn omnidsp_add_f64(a: *const f64, b: *const f64, out: *mut f64, count: usize);
+
+    /// Scale in-place: `data[i] *= scalar` for `i` in `0..count`.
+    ///
+    /// # Safety
+    ///
+    /// - `data` must point to at least `count` floats.
+    pub fn omnidsp_scale_f32(data: *mut f32, scalar: f32, count: usize);
+
+    /// Scale in-place: `data[i] *= scalar` for `i` in `0..count`.
+    ///
+    /// # Safety
+    ///
+    /// - `data` must point to at least `count` doubles.
+    pub fn omnidsp_scale_f64(data: *mut f64, scalar: f64, count: usize);
+
+    /// Dot product: returns `sum(a[i] * b[i])` for `i` in `0..count`.
+    ///
+    /// # Safety
+    ///
+    /// - `a` and `b` must point to at least `count` floats.
+    pub fn omnidsp_dot_f32(a: *const f32, b: *const f32, count: usize) -> f32;
+
+    /// Dot product: returns `sum(a[i] * b[i])` for `i` in `0..count`.
+    ///
+    /// # Safety
+    ///
+    /// - `a` and `b` must point to at least `count` doubles.
+    pub fn omnidsp_dot_f64(a: *const f64, b: *const f64, count: usize) -> f64;
+
+    /// Complex element-wise multiply (interleaved `[re, im]` layout).
+    /// `count` is the number of complex elements (raw floats = `count * 2`).
+    ///
+    /// # Safety
+    ///
+    /// - `a`, `b`, and `out` must point to at least `count * 2` floats.
+    /// - `out` may alias `a` or `b` (supports in-place operation).
+    pub fn omnidsp_cmul_f32(a: *const f32, b: *const f32, out: *mut f32, count: usize);
+
+    /// Complex element-wise multiply (interleaved `[re, im]` layout).
+    /// `count` is the number of complex elements (raw floats = `count * 2`).
+    ///
+    /// # Safety
+    ///
+    /// - `a`, `b`, and `out` must point to at least `count * 2` doubles.
+    /// - `out` may alias `a` or `b` (supports in-place operation).
+    pub fn omnidsp_cmul_f64(a: *const f64, b: *const f64, out: *mut f64, count: usize);
+}
+
+#[cfg(test)]
+#[allow(clippy::float_cmp, reason = "test values are exact small integers")]
+mod tests {
+    use super::*;
+
+    const EPSILON_F32: f32 = 1e-6;
+    const EPSILON_F64: f64 = 1e-12;
+
+    // --- mul ---
+
+    #[test]
+    fn mul_f32_basic() {
+        let a: Vec<f32> = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+        let b: Vec<f32> = vec![2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0];
+        let mut out = vec![0.0_f32; 8];
+
+        unsafe {
+            omnidsp_mul_f32(a.as_ptr(), b.as_ptr(), out.as_mut_ptr(), a.len());
+        }
+
+        let expected: Vec<f32> = vec![2.0, 6.0, 12.0, 20.0, 30.0, 42.0, 56.0, 72.0];
+        assert_eq!(out, expected, "f32 element-wise multiply failed");
+    }
+
+    #[test]
+    fn mul_f64_basic() {
+        let a: Vec<f64> = vec![1.0, 2.0, 3.0, 4.0];
+        let b: Vec<f64> = vec![10.0, 20.0, 30.0, 40.0];
+        let mut out = vec![0.0_f64; 4];
+
+        unsafe {
+            omnidsp_mul_f64(a.as_ptr(), b.as_ptr(), out.as_mut_ptr(), a.len());
+        }
+
+        let expected: Vec<f64> = vec![10.0, 40.0, 90.0, 160.0];
+        assert_eq!(out, expected, "f64 element-wise multiply failed");
+    }
+
+    #[test]
+    fn mul_f32_inplace() {
+        let a: Vec<f32> = vec![2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0];
+        let mut data: Vec<f32> = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+
+        unsafe {
+            omnidsp_mul_f32(a.as_ptr(), data.as_ptr(), data.as_mut_ptr(), a.len());
+        }
+
+        let expected: Vec<f32> = vec![2.0, 6.0, 12.0, 20.0, 30.0, 42.0, 56.0, 72.0];
+        assert_eq!(data, expected, "f32 in-place multiply failed");
+    }
+
+    #[test]
+    fn mul_f32_remainder() {
+        let a: Vec<f32> = vec![1.0, 2.0, 3.0, 4.0, 5.0];
+        let b: Vec<f32> = vec![2.0, 2.0, 2.0, 2.0, 2.0];
+        let mut out = vec![0.0_f32; 5];
+
+        unsafe {
+            omnidsp_mul_f32(a.as_ptr(), b.as_ptr(), out.as_mut_ptr(), a.len());
+        }
+
+        let expected: Vec<f32> = vec![2.0, 4.0, 6.0, 8.0, 10.0];
+        assert_eq!(out, expected, "f32 remainder handling failed");
+    }
+
+    // --- add ---
+
+    #[test]
+    fn add_f32_basic() {
+        let a: Vec<f32> = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+        let b: Vec<f32> = vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0];
+        let mut out = vec![0.0_f32; 8];
+
+        unsafe {
+            omnidsp_add_f32(a.as_ptr(), b.as_ptr(), out.as_mut_ptr(), a.len());
+        }
+
+        let expected: Vec<f32> = vec![11.0, 22.0, 33.0, 44.0, 55.0, 66.0, 77.0, 88.0];
+        assert_eq!(out, expected, "f32 element-wise add failed");
+    }
+
+    #[test]
+    fn add_f64_basic() {
+        let a: Vec<f64> = vec![1.0, 2.0, 3.0, 4.0];
+        let b: Vec<f64> = vec![0.5, 0.5, 0.5, 0.5];
+        let mut out = vec![0.0_f64; 4];
+
+        unsafe {
+            omnidsp_add_f64(a.as_ptr(), b.as_ptr(), out.as_mut_ptr(), a.len());
+        }
+
+        let expected: Vec<f64> = vec![1.5, 2.5, 3.5, 4.5];
+        assert_eq!(out, expected, "f64 element-wise add failed");
+    }
+
+    #[test]
+    fn add_f32_inplace() {
+        let other: Vec<f32> = vec![10.0, 20.0, 30.0, 40.0, 50.0];
+        let mut data: Vec<f32> = vec![1.0, 2.0, 3.0, 4.0, 5.0];
+
+        unsafe {
+            omnidsp_add_f32(other.as_ptr(), data.as_ptr(), data.as_mut_ptr(), data.len());
+        }
+
+        let expected: Vec<f32> = vec![11.0, 22.0, 33.0, 44.0, 55.0];
+        assert_eq!(data, expected, "f32 in-place add failed");
+    }
+
+    // --- scale ---
+
+    #[test]
+    fn scale_f32_basic() {
+        let mut data: Vec<f32> = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+
+        unsafe {
+            omnidsp_scale_f32(data.as_mut_ptr(), 3.0, data.len());
+        }
+
+        let expected: Vec<f32> = vec![3.0, 6.0, 9.0, 12.0, 15.0, 18.0, 21.0, 24.0];
+        assert_eq!(data, expected, "f32 scale failed");
+    }
+
+    #[test]
+    fn scale_f64_basic() {
+        let mut data: Vec<f64> = vec![1.0, 2.0, 3.0, 4.0, 5.0];
+
+        unsafe {
+            omnidsp_scale_f64(data.as_mut_ptr(), 0.5, data.len());
+        }
+
+        let expected: Vec<f64> = vec![0.5, 1.0, 1.5, 2.0, 2.5];
+        assert_eq!(data, expected, "f64 scale failed");
+    }
+
+    // --- dot ---
+
+    #[test]
+    fn dot_f32_basic() {
+        let a: Vec<f32> = vec![1.0, 2.0, 3.0, 4.0];
+        let b: Vec<f32> = vec![4.0, 5.0, 6.0, 7.0];
+        // 1*4 + 2*5 + 3*6 + 4*7 = 4 + 10 + 18 + 28 = 60
+
+        let result = unsafe { omnidsp_dot_f32(a.as_ptr(), b.as_ptr(), a.len()) };
+
+        assert!(
+            (result - 60.0).abs() < EPSILON_F32,
+            "f32 dot product: expected 60.0, got {result}"
+        );
+    }
+
+    #[test]
+    fn dot_f64_basic() {
+        let a: Vec<f64> = vec![1.0, 2.0, 3.0];
+        let b: Vec<f64> = vec![4.0, 5.0, 6.0];
+        // 1*4 + 2*5 + 3*6 = 4 + 10 + 18 = 32
+
+        let result = unsafe { omnidsp_dot_f64(a.as_ptr(), b.as_ptr(), a.len()) };
+
+        assert!(
+            (result - 32.0).abs() < EPSILON_F64,
+            "f64 dot product: expected 32.0, got {result}"
+        );
+    }
+
+    #[test]
+    fn dot_f32_remainder() {
+        // 7 elements — exercises the scalar tail.
+        let a: Vec<f32> = vec![1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0];
+        let b: Vec<f32> = vec![2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0];
+
+        let result = unsafe { omnidsp_dot_f32(a.as_ptr(), b.as_ptr(), a.len()) };
+
+        assert!(
+            (result - 14.0).abs() < EPSILON_F32,
+            "f32 dot remainder: expected 14.0, got {result}"
+        );
+    }
+
+    // --- cmul ---
+
+    #[test]
+    fn cmul_f32_basic() {
+        // (1+2i)*(5+6i) = (1*5 - 2*6) + (1*6 + 2*5)i = -7 + 16i
+        // (3+4i)*(7+8i) = (3*7 - 4*8) + (3*8 + 4*7)i = -11 + 52i
+        let a: Vec<f32> = vec![1.0, 2.0, 3.0, 4.0];
+        let b: Vec<f32> = vec![5.0, 6.0, 7.0, 8.0];
+        let mut out = vec![0.0_f32; 4];
+
+        unsafe {
+            omnidsp_cmul_f32(a.as_ptr(), b.as_ptr(), out.as_mut_ptr(), 2);
+        }
+
+        assert!(
+            (out[0] - (-7.0)).abs() < EPSILON_F32 && (out[1] - 16.0).abs() < EPSILON_F32,
+            "cmul_f32[0]: expected -7+16i, got {}+{}i",
+            out[0],
+            out[1]
+        );
+        assert!(
+            (out[2] - (-11.0)).abs() < EPSILON_F32 && (out[3] - 52.0).abs() < EPSILON_F32,
+            "cmul_f32[1]: expected -11+52i, got {}+{}i",
+            out[2],
+            out[3]
+        );
+    }
+
+    #[test]
+    fn cmul_f64_basic() {
+        // (2+3i)*(4+5i) = (8-15) + (10+12)i = -7 + 22i
+        let a: Vec<f64> = vec![2.0, 3.0];
+        let b: Vec<f64> = vec![4.0, 5.0];
+        let mut out = vec![0.0_f64; 2];
+
+        unsafe {
+            omnidsp_cmul_f64(a.as_ptr(), b.as_ptr(), out.as_mut_ptr(), 1);
+        }
+
+        assert!(
+            (out[0] - (-7.0)).abs() < EPSILON_F64 && (out[1] - 22.0).abs() < EPSILON_F64,
+            "cmul_f64: expected -7+22i, got {}+{}i",
+            out[0],
+            out[1]
+        );
+    }
+
+    #[test]
+    fn cmul_f32_inplace() {
+        // (1+2i)*(3+4i) = (3-8) + (4+6)i = -5 + 10i
+        let other: Vec<f32> = vec![3.0, 4.0];
+        let mut data: Vec<f32> = vec![1.0, 2.0];
+
+        unsafe {
+            omnidsp_cmul_f32(other.as_ptr(), data.as_ptr(), data.as_mut_ptr(), 1);
+        }
+
+        assert!(
+            (data[0] - (-5.0)).abs() < EPSILON_F32 && (data[1] - 10.0).abs() < EPSILON_F32,
+            "cmul_f32 in-place: expected -5+10i, got {}+{}i",
+            data[0],
+            data[1]
+        );
+    }
+
+    // --- edge cases ---
+
+    #[test]
+    fn empty_slices() {
+        unsafe {
+            let mut out = [0.0_f32; 0];
+            omnidsp_mul_f32([].as_ptr(), [].as_ptr(), out.as_mut_ptr(), 0);
+            omnidsp_add_f32([].as_ptr(), [].as_ptr(), out.as_mut_ptr(), 0);
+            omnidsp_scale_f32(out.as_mut_ptr(), 2.0, 0);
+
+            let dot = omnidsp_dot_f32([].as_ptr(), [].as_ptr(), 0);
+            assert!(
+                dot.abs() < EPSILON_F32,
+                "empty dot should be 0.0, got {dot}"
+            );
+
+            omnidsp_cmul_f32([].as_ptr(), [].as_ptr(), out.as_mut_ptr(), 0);
+        }
+    }
+
+    #[test]
+    fn single_element() {
+        let a = [3.0_f32];
+        let b = [7.0_f32];
+        let mut out = [0.0_f32];
+
+        unsafe {
+            omnidsp_mul_f32(a.as_ptr(), b.as_ptr(), out.as_mut_ptr(), 1);
+        }
+        assert_eq!(out[0], 21.0, "single element mul failed");
+
+        let dot = unsafe { omnidsp_dot_f32(a.as_ptr(), b.as_ptr(), 1) };
+        assert!(
+            (dot - 21.0).abs() < EPSILON_F32,
+            "single element dot: expected 21.0, got {dot}"
+        );
+    }
+}

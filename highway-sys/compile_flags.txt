@@ -1,0 +1,6 @@
+-std=c++17
+-xc++
+-Ihighway
+-Ishim
+-DHWY_STATIC_DEFINE
+-D__CLANGD__
