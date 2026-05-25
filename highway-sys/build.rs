@@ -47,6 +47,7 @@ fn main() {
     shim.flag_if_supported("-mtune=native");
     shim.flag_if_supported("-funroll-loops");
 
+
     shim.compile("omnidsp_hwy");
 
     println!("cargo::rerun-if-changed=shim/");
