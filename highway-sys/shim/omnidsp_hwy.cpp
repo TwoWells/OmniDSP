@@ -177,10 +177,10 @@ OMNIDSP_FLATTEN double DotF64(const double* a, const double* b, size_t count) {
 }
 
 // --- Complex multiply (f32, interleaved re/im layout) ---
-// Plain loads + in-register deinterleave via InterleaveEven/Odd, avoiding
-// multi-cycle vld2/vst2 on ARM NEON.  On x86 both approaches compile to
-// equivalent shuffle sequences.  The within-block permutation produced by
-// InterleaveEven/Odd is self-canceling: the same ops reinterleave on output.
+// ARM A64: plain LoadU + InterleaveEven/Odd avoids multi-cycle vld2/vst2,
+// using ldp + trn1/trn2 which pipeline better on wide OoO cores.
+// x86: LoadInterleaved2/StoreInterleaved2 uses Highway's optimized shuffle
+// sequence which benchmarks faster at large N.
 // count = number of complex elements; raw floats = count * 2.
 OMNIDSP_FLATTEN void CmulF32(const float* HWY_RESTRICT a, const float* HWY_RESTRICT b,
              float* out, size_t count) {
@@ -189,6 +189,7 @@ OMNIDSP_FLATTEN void CmulF32(const float* HWY_RESTRICT a, const float* HWY_RESTR
     size_t i = 0;
     OMNIDSP_UNROLL
     for (; i + N <= count; i += N) {
+#if HWY_ARCH_ARM_A64
         const auto v0a = hn::LoadU(d, a + i * 2);
         const auto v1a = hn::LoadU(d, a + i * 2 + N);
         const auto a_re = hn::InterleaveEven(v0a, v1a);
@@ -201,6 +202,14 @@ OMNIDSP_FLATTEN void CmulF32(const float* HWY_RESTRICT a, const float* HWY_RESTR
         const auto out_im = hn::MulAdd(a_im, b_re, hn::Mul(a_re, b_im));
         hn::StoreU(hn::InterleaveEven(out_re, out_im), d, out + i * 2);
         hn::StoreU(hn::InterleaveOdd(d, out_re, out_im), d, out + i * 2 + N);
+#else
+        hn::Vec<decltype(d)> a_re, a_im, b_re, b_im;
+        hn::LoadInterleaved2(d, a + i * 2, a_re, a_im);
+        hn::LoadInterleaved2(d, b + i * 2, b_re, b_im);
+        const auto out_re = hn::NegMulAdd(a_im, b_im, hn::Mul(a_re, b_re));
+        const auto out_im = hn::MulAdd(a_im, b_re, hn::Mul(a_re, b_im));
+        hn::StoreInterleaved2(out_re, out_im, d, out + i * 2);
+#endif
     }
     // Scalar remainder — process complex pairs.
     for (; i < count; ++i) {
@@ -220,6 +229,7 @@ OMNIDSP_FLATTEN void CmulF64(const double* HWY_RESTRICT a, const double* HWY_RES
     size_t i = 0;
     OMNIDSP_UNROLL
     for (; i + N <= count; i += N) {
+#if HWY_ARCH_ARM_A64
         const auto v0a = hn::LoadU(d, a + i * 2);
         const auto v1a = hn::LoadU(d, a + i * 2 + N);
         const auto a_re = hn::InterleaveEven(v0a, v1a);
@@ -232,6 +242,14 @@ OMNIDSP_FLATTEN void CmulF64(const double* HWY_RESTRICT a, const double* HWY_RES
         const auto out_im = hn::MulAdd(a_im, b_re, hn::Mul(a_re, b_im));
         hn::StoreU(hn::InterleaveEven(out_re, out_im), d, out + i * 2);
         hn::StoreU(hn::InterleaveOdd(d, out_re, out_im), d, out + i * 2 + N);
+#else
+        hn::Vec<decltype(d)> a_re, a_im, b_re, b_im;
+        hn::LoadInterleaved2(d, a + i * 2, a_re, a_im);
+        hn::LoadInterleaved2(d, b + i * 2, b_re, b_im);
+        const auto out_re = hn::NegMulAdd(a_im, b_im, hn::Mul(a_re, b_re));
+        const auto out_im = hn::MulAdd(a_im, b_re, hn::Mul(a_re, b_im));
+        hn::StoreInterleaved2(out_re, out_im, d, out + i * 2);
+#endif
     }
     for (; i < count; ++i) {
         const size_t j = i * 2;
@@ -366,6 +384,7 @@ OMNIDSP_FLATTEN void CmulF32NoAlias(const float* HWY_RESTRICT a, const float* HW
     size_t i = 0;
     OMNIDSP_UNROLL
     for (; i + N <= count; i += N) {
+#if HWY_ARCH_ARM_A64
         const auto v0a = hn::LoadU(d, a + i * 2);
         const auto v1a = hn::LoadU(d, a + i * 2 + N);
         const auto a_re = hn::InterleaveEven(v0a, v1a);
@@ -378,6 +397,14 @@ OMNIDSP_FLATTEN void CmulF32NoAlias(const float* HWY_RESTRICT a, const float* HW
         const auto out_im = hn::MulAdd(a_im, b_re, hn::Mul(a_re, b_im));
         hn::StoreU(hn::InterleaveEven(out_re, out_im), d, out + i * 2);
         hn::StoreU(hn::InterleaveOdd(d, out_re, out_im), d, out + i * 2 + N);
+#else
+        hn::Vec<decltype(d)> a_re, a_im, b_re, b_im;
+        hn::LoadInterleaved2(d, a + i * 2, a_re, a_im);
+        hn::LoadInterleaved2(d, b + i * 2, b_re, b_im);
+        const auto out_re = hn::NegMulAdd(a_im, b_im, hn::Mul(a_re, b_re));
+        const auto out_im = hn::MulAdd(a_im, b_re, hn::Mul(a_re, b_im));
+        hn::StoreInterleaved2(out_re, out_im, d, out + i * 2);
+#endif
     }
     for (; i < count; ++i) {
         const size_t j = i * 2;
@@ -396,6 +423,7 @@ OMNIDSP_FLATTEN void CmulF64NoAlias(const double* HWY_RESTRICT a, const double* 
     size_t i = 0;
     OMNIDSP_UNROLL
     for (; i + N <= count; i += N) {
+#if HWY_ARCH_ARM_A64
         const auto v0a = hn::LoadU(d, a + i * 2);
         const auto v1a = hn::LoadU(d, a + i * 2 + N);
         const auto a_re = hn::InterleaveEven(v0a, v1a);
@@ -408,6 +436,14 @@ OMNIDSP_FLATTEN void CmulF64NoAlias(const double* HWY_RESTRICT a, const double* 
         const auto out_im = hn::MulAdd(a_im, b_re, hn::Mul(a_re, b_im));
         hn::StoreU(hn::InterleaveEven(out_re, out_im), d, out + i * 2);
         hn::StoreU(hn::InterleaveOdd(d, out_re, out_im), d, out + i * 2 + N);
+#else
+        hn::Vec<decltype(d)> a_re, a_im, b_re, b_im;
+        hn::LoadInterleaved2(d, a + i * 2, a_re, a_im);
+        hn::LoadInterleaved2(d, b + i * 2, b_re, b_im);
+        const auto out_re = hn::NegMulAdd(a_im, b_im, hn::Mul(a_re, b_re));
+        const auto out_im = hn::MulAdd(a_im, b_re, hn::Mul(a_re, b_im));
+        hn::StoreInterleaved2(out_re, out_im, d, out + i * 2);
+#endif
     }
     for (; i < count; ++i) {
         const size_t j = i * 2;
