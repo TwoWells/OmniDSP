@@ -35,7 +35,7 @@ OMNIDSP_FLATTEN void MulF32(const float* HWY_RESTRICT a, const float* HWY_RESTRI
     const hn::ScalableTag<float> d;
     const size_t N = hn::Lanes(d);
     size_t i = 0;
-    HWY_DEFAULT_UNROLL
+    HWY_UNROLL(4)
     for (; i + N <= count; i += N) {
         const auto va = hn::LoadU(d, a + i);
         const auto vb = hn::LoadU(d, b + i);
@@ -52,7 +52,7 @@ OMNIDSP_FLATTEN void MulF64(const double* HWY_RESTRICT a, const double* HWY_REST
     const hn::ScalableTag<double> d;
     const size_t N = hn::Lanes(d);
     size_t i = 0;
-    HWY_DEFAULT_UNROLL
+    HWY_UNROLL(4)
     for (; i + N <= count; i += N) {
         const auto va = hn::LoadU(d, a + i);
         const auto vb = hn::LoadU(d, b + i);
@@ -69,7 +69,7 @@ OMNIDSP_FLATTEN void AddF32(const float* HWY_RESTRICT a, const float* HWY_RESTRI
     const hn::ScalableTag<float> d;
     const size_t N = hn::Lanes(d);
     size_t i = 0;
-    HWY_DEFAULT_UNROLL
+    HWY_UNROLL(4)
     for (; i + N <= count; i += N) {
         const auto va = hn::LoadU(d, a + i);
         const auto vb = hn::LoadU(d, b + i);
@@ -86,7 +86,7 @@ OMNIDSP_FLATTEN void AddF64(const double* HWY_RESTRICT a, const double* HWY_REST
     const hn::ScalableTag<double> d;
     const size_t N = hn::Lanes(d);
     size_t i = 0;
-    HWY_DEFAULT_UNROLL
+    HWY_UNROLL(4)
     for (; i + N <= count; i += N) {
         const auto va = hn::LoadU(d, a + i);
         const auto vb = hn::LoadU(d, b + i);
@@ -103,7 +103,7 @@ OMNIDSP_FLATTEN void ScaleF32(float* data, float scalar, size_t count) {
     const size_t N = hn::Lanes(d);
     const auto vs = hn::Set(d, scalar);
     size_t i = 0;
-    HWY_DEFAULT_UNROLL
+    HWY_UNROLL(4)
     for (; i + N <= count; i += N) {
         const auto v = hn::LoadU(d, data + i);
         hn::StoreU(hn::Mul(v, vs), d, data + i);
@@ -119,7 +119,7 @@ OMNIDSP_FLATTEN void ScaleF64(double* data, double scalar, size_t count) {
     const size_t N = hn::Lanes(d);
     const auto vs = hn::Set(d, scalar);
     size_t i = 0;
-    HWY_DEFAULT_UNROLL
+    HWY_UNROLL(4)
     for (; i + N <= count; i += N) {
         const auto v = hn::LoadU(d, data + i);
         hn::StoreU(hn::Mul(v, vs), d, data + i);
@@ -135,7 +135,7 @@ OMNIDSP_FLATTEN float DotF32(const float* a, const float* b, size_t count) {
     const size_t N = hn::Lanes(d);
     auto sum = hn::Zero(d);
     size_t i = 0;
-    HWY_DEFAULT_UNROLL
+    HWY_UNROLL(4)
     for (; i + N <= count; i += N) {
         const auto va = hn::LoadU(d, a + i);
         const auto vb = hn::LoadU(d, b + i);
@@ -154,7 +154,7 @@ OMNIDSP_FLATTEN double DotF64(const double* a, const double* b, size_t count) {
     const size_t N = hn::Lanes(d);
     auto sum = hn::Zero(d);
     size_t i = 0;
-    HWY_DEFAULT_UNROLL
+    HWY_UNROLL(4)
     for (; i + N <= count; i += N) {
         const auto va = hn::LoadU(d, a + i);
         const auto vb = hn::LoadU(d, b + i);
@@ -177,7 +177,7 @@ OMNIDSP_FLATTEN void CmulF32(const float* HWY_RESTRICT a, const float* HWY_RESTR
     const hn::ScalableTag<float> d;
     const size_t N = hn::Lanes(d);
     size_t i = 0;
-    HWY_DEFAULT_UNROLL
+    HWY_UNROLL(4)
     for (; i + N <= count; i += N) {
         hn::Vec<decltype(d)> a_re, a_im, b_re, b_im;
         hn::LoadInterleaved2(d, a + i * 2, a_re, a_im);
@@ -204,7 +204,7 @@ OMNIDSP_FLATTEN void CmulF64(const double* HWY_RESTRICT a, const double* HWY_RES
     const hn::ScalableTag<double> d;
     const size_t N = hn::Lanes(d);
     size_t i = 0;
-    HWY_DEFAULT_UNROLL
+    HWY_UNROLL(4)
     for (; i + N <= count; i += N) {
         hn::Vec<decltype(d)> a_re, a_im, b_re, b_im;
         hn::LoadInterleaved2(d, a + i * 2, a_re, a_im);
@@ -242,7 +242,7 @@ OMNIDSP_FLATTEN void ButterflyStageF32(float* data, const float* twiddles,
 
         // SIMD loop over the butterfly pairs in this group.
         size_t i = 0;
-        HWY_DEFAULT_UNROLL
+        HWY_UNROLL(4)
         for (; i + N <= half_floats; i += N) {
             const auto tw  = hn::LoadU(d, twiddles + i);
             const auto odd = hn::LoadU(d, odd_ptr + i);
@@ -279,7 +279,7 @@ OMNIDSP_FLATTEN void ButterflyStageF64(double* data, const double* twiddles,
         double* odd_ptr  = even_ptr + half_floats;
 
         size_t i = 0;
-        HWY_DEFAULT_UNROLL
+        HWY_UNROLL(4)
         for (; i + N <= half_floats; i += N) {
             const auto tw  = hn::LoadU(d, twiddles + i);
             const auto odd = hn::LoadU(d, odd_ptr + i);
