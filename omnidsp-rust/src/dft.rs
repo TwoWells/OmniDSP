@@ -96,7 +96,7 @@ macro_rules! impl_dft {
         impl Dft<$t> for RustDft {
             type Plan = RustDftPlan<$t>;
 
-            fn create_plan(&self, spec: &DftSpec) -> Result<Self::Plan> {
+            fn create_plan(&self, spec: &DftSpec<$t>) -> Result<Self::Plan> {
                 if spec.length == 0 {
                     return Err(Error::InvalidSpec("DFT length must be non-zero".to_owned()));
                 }
@@ -131,11 +131,11 @@ mod tests {
     const EPSILON_F32: f32 = 1e-5;
     const EPSILON_F64: f64 = 1e-12;
 
-    fn fwd(length: usize) -> DftSpec {
+    fn fwd<T>(length: usize) -> DftSpec<T> {
         DftSpec::new(length, Direction::Forward, DftNorm::Inverse)
     }
 
-    fn inv(length: usize) -> DftSpec {
+    fn inv<T>(length: usize) -> DftSpec<T> {
         DftSpec::new(length, Direction::Inverse, DftNorm::Inverse)
     }
 

@@ -257,7 +257,7 @@ where
 {
     type Plan = OmniConvPlan<T, D::Plan, V>;
 
-    fn create_plan(&self, spec: &ConvSpec) -> Result<Self::Plan> {
+    fn create_plan(&self, spec: &ConvSpec<T>) -> Result<Self::Plan> {
         if spec.a_len == 0 {
             return Err(Error::InvalidSpec(
                 "convolution input a_len must be non-zero".to_owned(),
@@ -328,15 +328,15 @@ mod tests {
 
     const EPSILON: f64 = 1e-8;
 
-    fn spec(a_len: usize, b_len: usize) -> ConvSpec {
+    fn spec(a_len: usize, b_len: usize) -> ConvSpec<f64> {
         ConvSpec::new(a_len, b_len, ConvMethod::Auto)
     }
 
-    fn spec_direct(a_len: usize, b_len: usize) -> ConvSpec {
+    fn spec_direct(a_len: usize, b_len: usize) -> ConvSpec<f64> {
         ConvSpec::new(a_len, b_len, ConvMethod::Direct)
     }
 
-    fn spec_fft(a_len: usize, b_len: usize) -> ConvSpec {
+    fn spec_fft(a_len: usize, b_len: usize) -> ConvSpec<f64> {
         ConvSpec::new(a_len, b_len, ConvMethod::Fft)
     }
 

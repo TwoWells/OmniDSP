@@ -7,6 +7,8 @@
 //! a [`ConvSpec`].  Plans are immutable and take `&self`.  This is a one-shot
 //! (full) convolution — for streaming convolution, see the FIR filter primitive.
 
+use std::marker::PhantomData;
+
 use crate::error::Result;
 
 // ─── Spec ────────────────────────────────────────────────────────────
@@ -32,17 +34,21 @@ pub enum ConvMethod {
 ///
 /// Output length is always `a_len + b_len - 1` (full linear convolution).
 ///
+/// The type parameter `T` ties the spec to a specific float type, making
+/// specs fully self-describing for the dispatch layer's `CreatePlan<S>` trait.
+/// `T` is carried via [`PhantomData`] and hidden behind the constructor.
+///
 /// # Examples
 ///
 /// ```
 /// use omnidsp_core::traits::conv::{ConvSpec, ConvMethod};
 ///
 /// // Let the backend pick direct vs. FFT
-/// let spec = ConvSpec::new(1024, 64, ConvMethod::Auto);
+/// let spec = ConvSpec::<f64>::new(1024, 64, ConvMethod::Auto);
 /// assert_eq!(spec.a_len, 1024);
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ConvSpec {
+#[derive(Debug, Clone, Copy)]
+pub struct ConvSpec<T> {
     /// Length of the first input signal.
     pub a_len: usize,
     /// Length of the second input (often the shorter kernel).
@@ -50,9 +56,18 @@ pub struct ConvSpec {
     /// Preferred implementation method.  [`ConvMethod::Auto`] is resolved
     /// at plan creation time; the plan itself always uses a concrete method.
     pub method: ConvMethod,
+    _marker: PhantomData<T>,
 }
 
-impl ConvSpec {
+impl<T> PartialEq for ConvSpec<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.a_len == other.a_len && self.b_len == other.b_len && self.method == other.method
+    }
+}
+
+impl<T> Eq for ConvSpec<T> {}
+
+impl<T> ConvSpec<T> {
     /// Create a new convolution spec with the given input lengths and method.
     #[must_use]
     pub const fn new(a_len: usize, b_len: usize, method: ConvMethod) -> Self {
@@ -60,6 +75,7 @@ impl ConvSpec {
             a_len,
             b_len,
             method,
+            _marker: PhantomData,
         }
     }
 }
@@ -101,5 +117,5 @@ pub trait Conv<T> {
     ///
     /// Returns an error if either length is zero or otherwise unsupported by
     /// the implementation.
-    fn create_plan(&self, spec: &ConvSpec) -> Result<Self::Plan>;
+    fn create_plan(&self, spec: &ConvSpec<T>) -> Result<Self::Plan>;
 }

@@ -7,6 +7,8 @@
 //! a [`DftSpec`].  Plans are immutable — a single plan can be reused across
 //! many calls and shared between threads.
 
+use std::marker::PhantomData;
+
 use num_complex::Complex;
 
 use crate::error::Result;
@@ -36,6 +38,10 @@ pub enum DftNorm {
 /// Describes the length, direction, and normalization convention for a
 /// DFT plan.  Any backend can consume this spec.
 ///
+/// The type parameter `T` ties the spec to a specific float type, making
+/// specs fully self-describing for the dispatch layer's `CreatePlan<S>` trait.
+/// `T` is carried via [`PhantomData`] and hidden behind the constructor.
+///
 /// # Examples
 ///
 /// ```
@@ -43,11 +49,11 @@ pub enum DftNorm {
 /// use omnidsp_core::types::Direction;
 ///
 /// // 1024-point forward FFT with inverse normalization (round-trip = identity)
-/// let spec = DftSpec::new(1024, Direction::Forward, DftNorm::Inverse);
+/// let spec = DftSpec::<f64>::new(1024, Direction::Forward, DftNorm::Inverse);
 /// assert_eq!(spec.length, 1024);
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DftSpec {
+#[derive(Debug, Clone, Copy)]
+pub struct DftSpec<T> {
     /// Number of complex samples for both input and output buffers.
     ///
     /// Determines the frequency resolution: each bin spans
@@ -60,9 +66,18 @@ pub struct DftSpec {
     /// Must be consistent between a forward/inverse pair for the
     /// round-trip to produce the expected scaling.
     pub norm: DftNorm,
+    _marker: PhantomData<T>,
 }
 
-impl DftSpec {
+impl<T> PartialEq for DftSpec<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.length == other.length && self.direction == other.direction && self.norm == other.norm
+    }
+}
+
+impl<T> Eq for DftSpec<T> {}
+
+impl<T> DftSpec<T> {
     /// Create a new DFT spec with the given length, direction, and normalization.
     #[must_use]
     pub const fn new(length: usize, direction: Direction, norm: DftNorm) -> Self {
@@ -70,6 +85,7 @@ impl DftSpec {
             length,
             direction,
             norm,
+            _marker: PhantomData,
         }
     }
 }
@@ -108,5 +124,5 @@ pub trait Dft<T> {
     ///
     /// Returns an error if the length is zero or otherwise unsupported by the
     /// implementation.
-    fn create_plan(&self, spec: &DftSpec) -> Result<Self::Plan>;
+    fn create_plan(&self, spec: &DftSpec<T>) -> Result<Self::Plan>;
 }

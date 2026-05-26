@@ -97,7 +97,7 @@ impl TestDftPlan {
 impl Dft<f64> for TestDft {
     type Plan = TestDftPlan;
 
-    fn create_plan(&self, spec: &DftSpec) -> Result<Self::Plan> {
+    fn create_plan(&self, spec: &DftSpec<f64>) -> Result<Self::Plan> {
         if spec.length == 0 {
             return Err(Error::InvalidSpec("DFT length must be non-zero".to_owned()));
         }
