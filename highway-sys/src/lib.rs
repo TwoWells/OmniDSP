@@ -569,14 +569,22 @@ mod tests {
         // Expected: FFT([1..8]) = [36, -4+9.66j, -4+4j, -4+1.66j*, -4, ...]
         let s2f = std::f32::consts::SQRT_2;
         let expected: Vec<f32> = vec![
-            36.0, 0.0,
-            -4.0, 4.0f32.mul_add(s2f, 4.0),
-            -4.0, 4.0,
-            -4.0, 4.0f32.mul_add(s2f, -4.0),
-            -4.0, 0.0,
-            -4.0, 4.0f32.mul_add(-s2f, 4.0),
-            -4.0, -4.0,
-            -4.0, 4.0f32.mul_add(-s2f, -4.0),
+            36.0,
+            0.0,
+            -4.0,
+            4.0f32.mul_add(s2f, 4.0),
+            -4.0,
+            4.0,
+            -4.0,
+            4.0f32.mul_add(s2f, -4.0),
+            -4.0,
+            0.0,
+            -4.0,
+            4.0f32.mul_add(-s2f, 4.0),
+            -4.0,
+            -4.0,
+            -4.0,
+            4.0f32.mul_add(-s2f, -4.0),
         ];
         for (i, (&got, &exp)) in data.iter().zip(expected.iter()).enumerate() {
             assert!(

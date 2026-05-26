@@ -36,6 +36,51 @@ namespace omnidsp {
 namespace HWY_NAMESPACE {
 namespace hn = hwy::HWY_NAMESPACE;
 
+// ---- Shared inline helpers (ADR-003: platform specialization) ----
+
+// Portable complex multiply on deinterleaved re/im vectors.
+// Math is identical on all targets — no platform conditionals.
+template <class V>
+HWY_INLINE void CmulVec(V a_re, V a_im, V b_re, V b_im,
+                         V& out_re, V& out_im) {
+    out_re = hn::NegMulAdd(a_im, b_im, hn::Mul(a_re, b_re));
+    out_im = hn::MulAdd(a_im, b_re, hn::Mul(a_re, b_im));
+}
+
+// Load interleaved complex data into deinterleaved re/im vectors.
+// Loads N complex elements (2*N scalar values) from ptr.
+// ARM A64: LoadU + InterleaveEven/Odd (ldp + trn, proven faster).
+// Default: Highway's portable LoadInterleaved2.
+template <class D>
+HWY_INLINE void DeinterleaveLoad(D d, const hn::TFromD<D>* ptr,
+                                  hn::Vec<D>& re, hn::Vec<D>& im) {
+#if HWY_ARCH_ARM_A64
+    const size_t N = hn::Lanes(d);
+    const auto v0 = hn::LoadU(d, ptr);
+    const auto v1 = hn::LoadU(d, ptr + N);
+    re = hn::InterleaveEven(v0, v1);
+    im = hn::InterleaveOdd(d, v0, v1);
+#else
+    hn::LoadInterleaved2(d, ptr, re, im);
+#endif
+}
+
+// Store deinterleaved re/im vectors as interleaved complex data.
+// Stores N complex elements (2*N scalar values) to ptr.
+// ARM A64: InterleaveEven/Odd + StoreU (proven faster).
+// Default: Highway's portable StoreInterleaved2.
+template <class D>
+HWY_INLINE void InterleaveStore(hn::Vec<D> re, hn::Vec<D> im, D d,
+                                hn::TFromD<D>* ptr) {
+#if HWY_ARCH_ARM_A64
+    const size_t N = hn::Lanes(d);
+    hn::StoreU(hn::InterleaveEven(re, im), d, ptr);
+    hn::StoreU(hn::InterleaveOdd(d, re, im), d, ptr + N);
+#else
+    hn::StoreInterleaved2(re, im, d, ptr);
+#endif
+}
+
 // --- Element-wise multiply (f32) ---
 // HWY_RESTRICT on inputs: safe because we load before store each iteration,
 // even when out aliases an input (mul_inplace).
@@ -177,41 +222,21 @@ OMNIDSP_FLATTEN double DotF64(const double* a, const double* b, size_t count) {
 }
 
 // --- Complex multiply (f32, interleaved re/im layout) ---
-// ARM A64: plain LoadU + InterleaveEven/Odd avoids multi-cycle vld2/vst2,
-// using ldp + trn1/trn2 which pipeline better on wide OoO cores.
-// x86: LoadInterleaved2/StoreInterleaved2 uses Highway's optimized shuffle
-// sequence which benchmarks faster at large N.
 // count = number of complex elements; raw floats = count * 2.
 OMNIDSP_FLATTEN void CmulF32(const float* HWY_RESTRICT a, const float* HWY_RESTRICT b,
              float* out, size_t count) {
     const hn::ScalableTag<float> d;
+    using V = hn::Vec<decltype(d)>;
     const size_t N = hn::Lanes(d);
     size_t i = 0;
     OMNIDSP_UNROLL
     for (; i + N <= count; i += N) {
-#if HWY_ARCH_ARM_A64
-        const auto v0a = hn::LoadU(d, a + i * 2);
-        const auto v1a = hn::LoadU(d, a + i * 2 + N);
-        const auto a_re = hn::InterleaveEven(v0a, v1a);
-        const auto a_im = hn::InterleaveOdd(d, v0a, v1a);
-        const auto v0b = hn::LoadU(d, b + i * 2);
-        const auto v1b = hn::LoadU(d, b + i * 2 + N);
-        const auto b_re = hn::InterleaveEven(v0b, v1b);
-        const auto b_im = hn::InterleaveOdd(d, v0b, v1b);
-        const auto out_re = hn::NegMulAdd(a_im, b_im, hn::Mul(a_re, b_re));
-        const auto out_im = hn::MulAdd(a_im, b_re, hn::Mul(a_re, b_im));
-        hn::StoreU(hn::InterleaveEven(out_re, out_im), d, out + i * 2);
-        hn::StoreU(hn::InterleaveOdd(d, out_re, out_im), d, out + i * 2 + N);
-#else
-        hn::Vec<decltype(d)> a_re, a_im, b_re, b_im;
-        hn::LoadInterleaved2(d, a + i * 2, a_re, a_im);
-        hn::LoadInterleaved2(d, b + i * 2, b_re, b_im);
-        const auto out_re = hn::NegMulAdd(a_im, b_im, hn::Mul(a_re, b_re));
-        const auto out_im = hn::MulAdd(a_im, b_re, hn::Mul(a_re, b_im));
-        hn::StoreInterleaved2(out_re, out_im, d, out + i * 2);
-#endif
+        V a_re, a_im, b_re, b_im, out_re, out_im;
+        DeinterleaveLoad(d, a + i * 2, a_re, a_im);
+        DeinterleaveLoad(d, b + i * 2, b_re, b_im);
+        CmulVec(a_re, a_im, b_re, b_im, out_re, out_im);
+        InterleaveStore(out_re, out_im, d, out + i * 2);
     }
-    // Scalar remainder — process complex pairs.
     for (; i < count; ++i) {
         const size_t j = i * 2;
         const float are = a[j], aim = a[j + 1];
@@ -225,31 +250,16 @@ OMNIDSP_FLATTEN void CmulF32(const float* HWY_RESTRICT a, const float* HWY_RESTR
 OMNIDSP_FLATTEN void CmulF64(const double* HWY_RESTRICT a, const double* HWY_RESTRICT b,
              double* out, size_t count) {
     const hn::ScalableTag<double> d;
+    using V = hn::Vec<decltype(d)>;
     const size_t N = hn::Lanes(d);
     size_t i = 0;
     OMNIDSP_UNROLL
     for (; i + N <= count; i += N) {
-#if HWY_ARCH_ARM_A64
-        const auto v0a = hn::LoadU(d, a + i * 2);
-        const auto v1a = hn::LoadU(d, a + i * 2 + N);
-        const auto a_re = hn::InterleaveEven(v0a, v1a);
-        const auto a_im = hn::InterleaveOdd(d, v0a, v1a);
-        const auto v0b = hn::LoadU(d, b + i * 2);
-        const auto v1b = hn::LoadU(d, b + i * 2 + N);
-        const auto b_re = hn::InterleaveEven(v0b, v1b);
-        const auto b_im = hn::InterleaveOdd(d, v0b, v1b);
-        const auto out_re = hn::NegMulAdd(a_im, b_im, hn::Mul(a_re, b_re));
-        const auto out_im = hn::MulAdd(a_im, b_re, hn::Mul(a_re, b_im));
-        hn::StoreU(hn::InterleaveEven(out_re, out_im), d, out + i * 2);
-        hn::StoreU(hn::InterleaveOdd(d, out_re, out_im), d, out + i * 2 + N);
-#else
-        hn::Vec<decltype(d)> a_re, a_im, b_re, b_im;
-        hn::LoadInterleaved2(d, a + i * 2, a_re, a_im);
-        hn::LoadInterleaved2(d, b + i * 2, b_re, b_im);
-        const auto out_re = hn::NegMulAdd(a_im, b_im, hn::Mul(a_re, b_re));
-        const auto out_im = hn::MulAdd(a_im, b_re, hn::Mul(a_re, b_im));
-        hn::StoreInterleaved2(out_re, out_im, d, out + i * 2);
-#endif
+        V a_re, a_im, b_re, b_im, out_re, out_im;
+        DeinterleaveLoad(d, a + i * 2, a_re, a_im);
+        DeinterleaveLoad(d, b + i * 2, b_re, b_im);
+        CmulVec(a_re, a_im, b_re, b_im, out_re, out_im);
+        InterleaveStore(out_re, out_im, d, out + i * 2);
     }
     for (; i < count; ++i) {
         const size_t j = i * 2;
@@ -300,31 +310,16 @@ OMNIDSP_FLATTEN void MulF64NoAlias(const double* HWY_RESTRICT a, const double* H
 OMNIDSP_FLATTEN void CmulF32NoAlias(const float* HWY_RESTRICT a, const float* HWY_RESTRICT b,
              float* HWY_RESTRICT out, size_t count) {
     const hn::ScalableTag<float> d;
+    using V = hn::Vec<decltype(d)>;
     const size_t N = hn::Lanes(d);
     size_t i = 0;
     OMNIDSP_UNROLL
     for (; i + N <= count; i += N) {
-#if HWY_ARCH_ARM_A64
-        const auto v0a = hn::LoadU(d, a + i * 2);
-        const auto v1a = hn::LoadU(d, a + i * 2 + N);
-        const auto a_re = hn::InterleaveEven(v0a, v1a);
-        const auto a_im = hn::InterleaveOdd(d, v0a, v1a);
-        const auto v0b = hn::LoadU(d, b + i * 2);
-        const auto v1b = hn::LoadU(d, b + i * 2 + N);
-        const auto b_re = hn::InterleaveEven(v0b, v1b);
-        const auto b_im = hn::InterleaveOdd(d, v0b, v1b);
-        const auto out_re = hn::NegMulAdd(a_im, b_im, hn::Mul(a_re, b_re));
-        const auto out_im = hn::MulAdd(a_im, b_re, hn::Mul(a_re, b_im));
-        hn::StoreU(hn::InterleaveEven(out_re, out_im), d, out + i * 2);
-        hn::StoreU(hn::InterleaveOdd(d, out_re, out_im), d, out + i * 2 + N);
-#else
-        hn::Vec<decltype(d)> a_re, a_im, b_re, b_im;
-        hn::LoadInterleaved2(d, a + i * 2, a_re, a_im);
-        hn::LoadInterleaved2(d, b + i * 2, b_re, b_im);
-        const auto out_re = hn::NegMulAdd(a_im, b_im, hn::Mul(a_re, b_re));
-        const auto out_im = hn::MulAdd(a_im, b_re, hn::Mul(a_re, b_im));
-        hn::StoreInterleaved2(out_re, out_im, d, out + i * 2);
-#endif
+        V a_re, a_im, b_re, b_im, out_re, out_im;
+        DeinterleaveLoad(d, a + i * 2, a_re, a_im);
+        DeinterleaveLoad(d, b + i * 2, b_re, b_im);
+        CmulVec(a_re, a_im, b_re, b_im, out_re, out_im);
+        InterleaveStore(out_re, out_im, d, out + i * 2);
     }
     for (; i < count; ++i) {
         const size_t j = i * 2;
@@ -339,31 +334,16 @@ OMNIDSP_FLATTEN void CmulF32NoAlias(const float* HWY_RESTRICT a, const float* HW
 OMNIDSP_FLATTEN void CmulF64NoAlias(const double* HWY_RESTRICT a, const double* HWY_RESTRICT b,
              double* HWY_RESTRICT out, size_t count) {
     const hn::ScalableTag<double> d;
+    using V = hn::Vec<decltype(d)>;
     const size_t N = hn::Lanes(d);
     size_t i = 0;
     OMNIDSP_UNROLL
     for (; i + N <= count; i += N) {
-#if HWY_ARCH_ARM_A64
-        const auto v0a = hn::LoadU(d, a + i * 2);
-        const auto v1a = hn::LoadU(d, a + i * 2 + N);
-        const auto a_re = hn::InterleaveEven(v0a, v1a);
-        const auto a_im = hn::InterleaveOdd(d, v0a, v1a);
-        const auto v0b = hn::LoadU(d, b + i * 2);
-        const auto v1b = hn::LoadU(d, b + i * 2 + N);
-        const auto b_re = hn::InterleaveEven(v0b, v1b);
-        const auto b_im = hn::InterleaveOdd(d, v0b, v1b);
-        const auto out_re = hn::NegMulAdd(a_im, b_im, hn::Mul(a_re, b_re));
-        const auto out_im = hn::MulAdd(a_im, b_re, hn::Mul(a_re, b_im));
-        hn::StoreU(hn::InterleaveEven(out_re, out_im), d, out + i * 2);
-        hn::StoreU(hn::InterleaveOdd(d, out_re, out_im), d, out + i * 2 + N);
-#else
-        hn::Vec<decltype(d)> a_re, a_im, b_re, b_im;
-        hn::LoadInterleaved2(d, a + i * 2, a_re, a_im);
-        hn::LoadInterleaved2(d, b + i * 2, b_re, b_im);
-        const auto out_re = hn::NegMulAdd(a_im, b_im, hn::Mul(a_re, b_re));
-        const auto out_im = hn::MulAdd(a_im, b_re, hn::Mul(a_re, b_im));
-        hn::StoreInterleaved2(out_re, out_im, d, out + i * 2);
-#endif
+        V a_re, a_im, b_re, b_im, out_re, out_im;
+        DeinterleaveLoad(d, a + i * 2, a_re, a_im);
+        DeinterleaveLoad(d, b + i * 2, b_re, b_im);
+        CmulVec(a_re, a_im, b_re, b_im, out_re, out_im);
+        InterleaveStore(out_re, out_im, d, out + i * 2);
     }
     for (; i < count; ++i) {
         const size_t j = i * 2;
@@ -380,11 +360,10 @@ OMNIDSP_FLATTEN void CmulF64NoAlias(const double* HWY_RESTRICT a, const double* 
 // `twiddles` is interleaved [re, im], length = half_len * 2 floats.
 // `half_len` is the butterfly half-size for this stage (1, 2, 4, ...).
 // `n` is the FFT length (number of complex elements).
-// NOTE: Uses MulComplex for twiddle application. Ticket 11 will replace
-// this with a shared CmulVec inline helper for ARM optimization.
 OMNIDSP_FLATTEN void ButterflyStageF32(float* data, const float* twiddles,
                        size_t half_len, size_t n) {
     const hn::ScalableTag<float> d;
+    using V = hn::Vec<decltype(d)>;
     const size_t N = hn::Lanes(d);
     const size_t full_len = half_len * 2;
     const size_t half_floats = half_len * 2;
@@ -395,24 +374,28 @@ OMNIDSP_FLATTEN void ButterflyStageF32(float* data, const float* twiddles,
 
         size_t i = 0;
         OMNIDSP_UNROLL
-        for (; i + N <= half_floats; i += N) {
-            const auto tw  = hn::LoadU(d, twiddles + i);
-            const auto odd = hn::LoadU(d, odd_ptr + i);
-            const auto t   = hn::MulComplex(tw, odd);
-            const auto ev  = hn::LoadU(d, even_ptr + i);
-            hn::StoreU(hn::Add(ev, t), d, even_ptr + i);
-            hn::StoreU(hn::Sub(ev, t), d, odd_ptr + i);
+        for (; i + N <= half_len; i += N) {
+            V tw_re, tw_im, odd_re, odd_im, t_re, t_im, ev_re, ev_im;
+            DeinterleaveLoad(d, twiddles + i * 2, tw_re, tw_im);
+            DeinterleaveLoad(d, odd_ptr + i * 2, odd_re, odd_im);
+            CmulVec(tw_re, tw_im, odd_re, odd_im, t_re, t_im);
+            DeinterleaveLoad(d, even_ptr + i * 2, ev_re, ev_im);
+            InterleaveStore(hn::Add(ev_re, t_re), hn::Add(ev_im, t_im),
+                            d, even_ptr + i * 2);
+            InterleaveStore(hn::Sub(ev_re, t_re), hn::Sub(ev_im, t_im),
+                            d, odd_ptr + i * 2);
         }
-        for (; i < half_floats; i += 2) {
-            const float tw_re = twiddles[i], tw_im = twiddles[i + 1];
-            const float odd_re = odd_ptr[i], odd_im = odd_ptr[i + 1];
+        for (; i < half_len; ++i) {
+            const size_t j = i * 2;
+            const float tw_re = twiddles[j], tw_im = twiddles[j + 1];
+            const float odd_re = odd_ptr[j], odd_im = odd_ptr[j + 1];
             const float t_re = tw_re * odd_re - tw_im * odd_im;
             const float t_im = tw_re * odd_im + tw_im * odd_re;
-            const float e_re = even_ptr[i], e_im = even_ptr[i + 1];
-            even_ptr[i]     = e_re + t_re;
-            even_ptr[i + 1] = e_im + t_im;
-            odd_ptr[i]      = e_re - t_re;
-            odd_ptr[i + 1]  = e_im - t_im;
+            const float e_re = even_ptr[j], e_im = even_ptr[j + 1];
+            even_ptr[j]     = e_re + t_re;
+            even_ptr[j + 1] = e_im + t_im;
+            odd_ptr[j]      = e_re - t_re;
+            odd_ptr[j + 1]  = e_im - t_im;
         }
     }
 }
@@ -421,6 +404,7 @@ OMNIDSP_FLATTEN void ButterflyStageF32(float* data, const float* twiddles,
 OMNIDSP_FLATTEN void ButterflyStageF64(double* data, const double* twiddles,
                        size_t half_len, size_t n) {
     const hn::ScalableTag<double> d;
+    using V = hn::Vec<decltype(d)>;
     const size_t N = hn::Lanes(d);
     const size_t full_len = half_len * 2;
     const size_t half_floats = half_len * 2;
@@ -431,24 +415,28 @@ OMNIDSP_FLATTEN void ButterflyStageF64(double* data, const double* twiddles,
 
         size_t i = 0;
         OMNIDSP_UNROLL
-        for (; i + N <= half_floats; i += N) {
-            const auto tw  = hn::LoadU(d, twiddles + i);
-            const auto odd = hn::LoadU(d, odd_ptr + i);
-            const auto t   = hn::MulComplex(tw, odd);
-            const auto ev  = hn::LoadU(d, even_ptr + i);
-            hn::StoreU(hn::Add(ev, t), d, even_ptr + i);
-            hn::StoreU(hn::Sub(ev, t), d, odd_ptr + i);
+        for (; i + N <= half_len; i += N) {
+            V tw_re, tw_im, odd_re, odd_im, t_re, t_im, ev_re, ev_im;
+            DeinterleaveLoad(d, twiddles + i * 2, tw_re, tw_im);
+            DeinterleaveLoad(d, odd_ptr + i * 2, odd_re, odd_im);
+            CmulVec(tw_re, tw_im, odd_re, odd_im, t_re, t_im);
+            DeinterleaveLoad(d, even_ptr + i * 2, ev_re, ev_im);
+            InterleaveStore(hn::Add(ev_re, t_re), hn::Add(ev_im, t_im),
+                            d, even_ptr + i * 2);
+            InterleaveStore(hn::Sub(ev_re, t_re), hn::Sub(ev_im, t_im),
+                            d, odd_ptr + i * 2);
         }
-        for (; i < half_floats; i += 2) {
-            const double tw_re = twiddles[i], tw_im = twiddles[i + 1];
-            const double odd_re = odd_ptr[i], odd_im = odd_ptr[i + 1];
+        for (; i < half_len; ++i) {
+            const size_t j = i * 2;
+            const double tw_re = twiddles[j], tw_im = twiddles[j + 1];
+            const double odd_re = odd_ptr[j], odd_im = odd_ptr[j + 1];
             const double t_re = tw_re * odd_re - tw_im * odd_im;
             const double t_im = tw_re * odd_im + tw_im * odd_re;
-            const double e_re = even_ptr[i], e_im = even_ptr[i + 1];
-            even_ptr[i]     = e_re + t_re;
-            even_ptr[i + 1] = e_im + t_im;
-            odd_ptr[i]      = e_re - t_re;
-            odd_ptr[i + 1]  = e_im - t_im;
+            const double e_re = even_ptr[j], e_im = even_ptr[j + 1];
+            even_ptr[j]     = e_re + t_re;
+            even_ptr[j + 1] = e_im + t_im;
+            odd_ptr[j]      = e_re - t_re;
+            odd_ptr[j + 1]  = e_im - t_im;
         }
     }
 }
@@ -458,11 +446,10 @@ OMNIDSP_FLATTEN void ButterflyStageF64(double* data, const double* twiddles,
 // `twiddles` layout: [W1[0..q], W2[0..q], W3[0..q]] where q = quarter_len.
 //   W1[k] applied to sub-block 2, W2[k] to sub-block 1, W3[k] to sub-block 3.
 // `forward`: 1 for forward FFT (-j rotation), 0 for inverse (+j rotation).
-// NOTE: Uses MulComplex for twiddle application. Ticket 11 will replace
-// this with a shared CmulVec inline helper for ARM optimization.
 OMNIDSP_FLATTEN void ButterflyStage4F32(float* data, const float* twiddles,
                         size_t quarter_len, size_t n, int forward) {
     const hn::ScalableTag<float> d;
+    using V = hn::Vec<decltype(d)>;
     const size_t N = hn::Lanes(d);
     const size_t full_len = quarter_len * 4;
     const size_t q_floats = quarter_len * 2;
@@ -471,11 +458,10 @@ OMNIDSP_FLATTEN void ButterflyStage4F32(float* data, const float* twiddles,
     const float* tw2 = twiddles + q_floats;
     const float* tw3 = twiddles + q_floats * 2;
 
-    const auto sign_pos = hn::Set(d, 1.0f);
-    const auto sign_neg = hn::Set(d, -1.0f);
-    const auto j_sign = forward
-        ? hn::OddEven(sign_neg, sign_pos)
-        : hn::OddEven(sign_pos, sign_neg);
+    // j rotation: forward = -j (re=+q_im, im=-q_re),
+    //             inverse = +j (re=-q_im, im=+q_re).
+    const auto j_re_sign = hn::Set(d, forward ? 1.0f : -1.0f);
+    const auto j_im_sign = hn::Neg(j_re_sign);
 
     for (size_t group_start = 0; group_start < n; group_start += full_len) {
         float* p0 = data + group_start * 2;
@@ -485,42 +471,59 @@ OMNIDSP_FLATTEN void ButterflyStage4F32(float* data, const float* twiddles,
 
         size_t i = 0;
         OMNIDSP_UNROLL
-        for (; i + N <= q_floats; i += N) {
-            const auto x0 = hn::LoadU(d, p0 + i);
-            const auto x1 = hn::LoadU(d, p1 + i);
-            const auto x2 = hn::LoadU(d, p2 + i);
-            const auto x3 = hn::LoadU(d, p3 + i);
+        for (; i + N <= quarter_len; i += N) {
+            V x0_re, x0_im, x1_re, x1_im, x2_re, x2_im, x3_re, x3_im;
+            DeinterleaveLoad(d, p0 + i * 2, x0_re, x0_im);
+            DeinterleaveLoad(d, p1 + i * 2, x1_re, x1_im);
+            DeinterleaveLoad(d, p2 + i * 2, x2_re, x2_im);
+            DeinterleaveLoad(d, p3 + i * 2, x3_re, x3_im);
 
-            const auto tw_x2 = hn::MulComplex(hn::LoadU(d, tw1 + i), x2);
-            const auto tw_x1 = hn::MulComplex(hn::LoadU(d, tw2 + i), x1);
-            const auto tw_x3 = hn::MulComplex(hn::LoadU(d, tw3 + i), x3);
+            V tw_re, tw_im;
+            V tx2_re, tx2_im, tx1_re, tx1_im, tx3_re, tx3_im;
+            DeinterleaveLoad(d, tw1 + i * 2, tw_re, tw_im);
+            CmulVec(tw_re, tw_im, x2_re, x2_im, tx2_re, tx2_im);
+            DeinterleaveLoad(d, tw2 + i * 2, tw_re, tw_im);
+            CmulVec(tw_re, tw_im, x1_re, x1_im, tx1_re, tx1_im);
+            DeinterleaveLoad(d, tw3 + i * 2, tw_re, tw_im);
+            CmulVec(tw_re, tw_im, x3_re, x3_im, tx3_re, tx3_im);
 
-            const auto u = hn::Add(x0, tw_x1);
-            const auto v = hn::Sub(x0, tw_x1);
-            const auto p_val = hn::Add(tw_x2, tw_x3);
-            const auto q_val = hn::Sub(tw_x2, tw_x3);
-            const auto jq = hn::Mul(hn::Reverse2(d, q_val), j_sign);
+            const auto u_re = hn::Add(x0_re, tx1_re);
+            const auto u_im = hn::Add(x0_im, tx1_im);
+            const auto v_re = hn::Sub(x0_re, tx1_re);
+            const auto v_im = hn::Sub(x0_im, tx1_im);
+            const auto p_re = hn::Add(tx2_re, tx3_re);
+            const auto p_im = hn::Add(tx2_im, tx3_im);
+            const auto q_re = hn::Sub(tx2_re, tx3_re);
+            const auto q_im = hn::Sub(tx2_im, tx3_im);
 
-            hn::StoreU(hn::Add(u, p_val), d, p0 + i);
-            hn::StoreU(hn::Add(v, jq), d, p1 + i);
-            hn::StoreU(hn::Sub(u, p_val), d, p2 + i);
-            hn::StoreU(hn::Sub(v, jq), d, p3 + i);
+            const auto jq_re = hn::Mul(q_im, j_re_sign);
+            const auto jq_im = hn::Mul(q_re, j_im_sign);
+
+            InterleaveStore(hn::Add(u_re, p_re), hn::Add(u_im, p_im),
+                            d, p0 + i * 2);
+            InterleaveStore(hn::Add(v_re, jq_re), hn::Add(v_im, jq_im),
+                            d, p1 + i * 2);
+            InterleaveStore(hn::Sub(u_re, p_re), hn::Sub(u_im, p_im),
+                            d, p2 + i * 2);
+            InterleaveStore(hn::Sub(v_re, jq_re), hn::Sub(v_im, jq_im),
+                            d, p3 + i * 2);
         }
-        for (; i < q_floats; i += 2) {
-            const float x0r = p0[i], x0i = p0[i + 1];
-            const float x1r = p1[i], x1i = p1[i + 1];
-            const float x2r = p2[i], x2i = p2[i + 1];
-            const float x3r = p3[i], x3i = p3[i + 1];
+        for (; i < quarter_len; ++i) {
+            const size_t j = i * 2;
+            const float x0r = p0[j], x0i = p0[j + 1];
+            const float x1r = p1[j], x1i = p1[j + 1];
+            const float x2r = p2[j], x2i = p2[j + 1];
+            const float x3r = p3[j], x3i = p3[j + 1];
 
-            const float t1r = tw1[i], t1i = tw1[i + 1];
+            const float t1r = tw1[j], t1i = tw1[j + 1];
             const float tx2r = t1r * x2r - t1i * x2i;
             const float tx2i = t1r * x2i + t1i * x2r;
 
-            const float t2r = tw2[i], t2i = tw2[i + 1];
+            const float t2r = tw2[j], t2i = tw2[j + 1];
             const float tx1r = t2r * x1r - t2i * x1i;
             const float tx1i = t2r * x1i + t2i * x1r;
 
-            const float t3r = tw3[i], t3i = tw3[i + 1];
+            const float t3r = tw3[j], t3i = tw3[j + 1];
             const float tx3r = t3r * x3r - t3i * x3i;
             const float tx3i = t3r * x3i + t3i * x3r;
 
@@ -532,10 +535,10 @@ OMNIDSP_FLATTEN void ButterflyStage4F32(float* data, const float* twiddles,
             const float jqr = forward ? qi : -qi;
             const float jqi = forward ? -qr : qr;
 
-            p0[i] = ur + pr; p0[i + 1] = ui + pi;
-            p1[i] = vr + jqr; p1[i + 1] = vi + jqi;
-            p2[i] = ur - pr; p2[i + 1] = ui - pi;
-            p3[i] = vr - jqr; p3[i + 1] = vi - jqi;
+            p0[j] = ur + pr; p0[j + 1] = ui + pi;
+            p1[j] = vr + jqr; p1[j + 1] = vi + jqi;
+            p2[j] = ur - pr; p2[j + 1] = ui - pi;
+            p3[j] = vr - jqr; p3[j + 1] = vi - jqi;
         }
     }
 }
@@ -544,6 +547,7 @@ OMNIDSP_FLATTEN void ButterflyStage4F32(float* data, const float* twiddles,
 OMNIDSP_FLATTEN void ButterflyStage4F64(double* data, const double* twiddles,
                         size_t quarter_len, size_t n, int forward) {
     const hn::ScalableTag<double> d;
+    using V = hn::Vec<decltype(d)>;
     const size_t N = hn::Lanes(d);
     const size_t full_len = quarter_len * 4;
     const size_t q_floats = quarter_len * 2;
@@ -552,11 +556,8 @@ OMNIDSP_FLATTEN void ButterflyStage4F64(double* data, const double* twiddles,
     const double* tw2 = twiddles + q_floats;
     const double* tw3 = twiddles + q_floats * 2;
 
-    const auto sign_pos = hn::Set(d, 1.0);
-    const auto sign_neg = hn::Set(d, -1.0);
-    const auto j_sign = forward
-        ? hn::OddEven(sign_neg, sign_pos)
-        : hn::OddEven(sign_pos, sign_neg);
+    const auto j_re_sign = hn::Set(d, forward ? 1.0 : -1.0);
+    const auto j_im_sign = hn::Neg(j_re_sign);
 
     for (size_t group_start = 0; group_start < n; group_start += full_len) {
         double* p0 = data + group_start * 2;
@@ -566,42 +567,59 @@ OMNIDSP_FLATTEN void ButterflyStage4F64(double* data, const double* twiddles,
 
         size_t i = 0;
         OMNIDSP_UNROLL
-        for (; i + N <= q_floats; i += N) {
-            const auto x0 = hn::LoadU(d, p0 + i);
-            const auto x1 = hn::LoadU(d, p1 + i);
-            const auto x2 = hn::LoadU(d, p2 + i);
-            const auto x3 = hn::LoadU(d, p3 + i);
+        for (; i + N <= quarter_len; i += N) {
+            V x0_re, x0_im, x1_re, x1_im, x2_re, x2_im, x3_re, x3_im;
+            DeinterleaveLoad(d, p0 + i * 2, x0_re, x0_im);
+            DeinterleaveLoad(d, p1 + i * 2, x1_re, x1_im);
+            DeinterleaveLoad(d, p2 + i * 2, x2_re, x2_im);
+            DeinterleaveLoad(d, p3 + i * 2, x3_re, x3_im);
 
-            const auto tw_x2 = hn::MulComplex(hn::LoadU(d, tw1 + i), x2);
-            const auto tw_x1 = hn::MulComplex(hn::LoadU(d, tw2 + i), x1);
-            const auto tw_x3 = hn::MulComplex(hn::LoadU(d, tw3 + i), x3);
+            V tw_re, tw_im;
+            V tx2_re, tx2_im, tx1_re, tx1_im, tx3_re, tx3_im;
+            DeinterleaveLoad(d, tw1 + i * 2, tw_re, tw_im);
+            CmulVec(tw_re, tw_im, x2_re, x2_im, tx2_re, tx2_im);
+            DeinterleaveLoad(d, tw2 + i * 2, tw_re, tw_im);
+            CmulVec(tw_re, tw_im, x1_re, x1_im, tx1_re, tx1_im);
+            DeinterleaveLoad(d, tw3 + i * 2, tw_re, tw_im);
+            CmulVec(tw_re, tw_im, x3_re, x3_im, tx3_re, tx3_im);
 
-            const auto u = hn::Add(x0, tw_x1);
-            const auto v = hn::Sub(x0, tw_x1);
-            const auto p_val = hn::Add(tw_x2, tw_x3);
-            const auto q_val = hn::Sub(tw_x2, tw_x3);
-            const auto jq = hn::Mul(hn::Reverse2(d, q_val), j_sign);
+            const auto u_re = hn::Add(x0_re, tx1_re);
+            const auto u_im = hn::Add(x0_im, tx1_im);
+            const auto v_re = hn::Sub(x0_re, tx1_re);
+            const auto v_im = hn::Sub(x0_im, tx1_im);
+            const auto p_re = hn::Add(tx2_re, tx3_re);
+            const auto p_im = hn::Add(tx2_im, tx3_im);
+            const auto q_re = hn::Sub(tx2_re, tx3_re);
+            const auto q_im = hn::Sub(tx2_im, tx3_im);
 
-            hn::StoreU(hn::Add(u, p_val), d, p0 + i);
-            hn::StoreU(hn::Add(v, jq), d, p1 + i);
-            hn::StoreU(hn::Sub(u, p_val), d, p2 + i);
-            hn::StoreU(hn::Sub(v, jq), d, p3 + i);
+            const auto jq_re = hn::Mul(q_im, j_re_sign);
+            const auto jq_im = hn::Mul(q_re, j_im_sign);
+
+            InterleaveStore(hn::Add(u_re, p_re), hn::Add(u_im, p_im),
+                            d, p0 + i * 2);
+            InterleaveStore(hn::Add(v_re, jq_re), hn::Add(v_im, jq_im),
+                            d, p1 + i * 2);
+            InterleaveStore(hn::Sub(u_re, p_re), hn::Sub(u_im, p_im),
+                            d, p2 + i * 2);
+            InterleaveStore(hn::Sub(v_re, jq_re), hn::Sub(v_im, jq_im),
+                            d, p3 + i * 2);
         }
-        for (; i < q_floats; i += 2) {
-            const double x0r = p0[i], x0i = p0[i + 1];
-            const double x1r = p1[i], x1i = p1[i + 1];
-            const double x2r = p2[i], x2i = p2[i + 1];
-            const double x3r = p3[i], x3i = p3[i + 1];
+        for (; i < quarter_len; ++i) {
+            const size_t j = i * 2;
+            const double x0r = p0[j], x0i = p0[j + 1];
+            const double x1r = p1[j], x1i = p1[j + 1];
+            const double x2r = p2[j], x2i = p2[j + 1];
+            const double x3r = p3[j], x3i = p3[j + 1];
 
-            const double t1r = tw1[i], t1i = tw1[i + 1];
+            const double t1r = tw1[j], t1i = tw1[j + 1];
             const double tx2r = t1r * x2r - t1i * x2i;
             const double tx2i = t1r * x2i + t1i * x2r;
 
-            const double t2r = tw2[i], t2i = tw2[i + 1];
+            const double t2r = tw2[j], t2i = tw2[j + 1];
             const double tx1r = t2r * x1r - t2i * x1i;
             const double tx1i = t2r * x1i + t2i * x1r;
 
-            const double t3r = tw3[i], t3i = tw3[i + 1];
+            const double t3r = tw3[j], t3i = tw3[j + 1];
             const double tx3r = t3r * x3r - t3i * x3i;
             const double tx3i = t3r * x3i + t3i * x3r;
 
@@ -613,10 +631,10 @@ OMNIDSP_FLATTEN void ButterflyStage4F64(double* data, const double* twiddles,
             const double jqr = forward ? qi : -qi;
             const double jqi = forward ? -qr : qr;
 
-            p0[i] = ur + pr; p0[i + 1] = ui + pi;
-            p1[i] = vr + jqr; p1[i + 1] = vi + jqi;
-            p2[i] = ur - pr; p2[i + 1] = ui - pi;
-            p3[i] = vr - jqr; p3[i + 1] = vi - jqi;
+            p0[j] = ur + pr; p0[j + 1] = ui + pi;
+            p1[j] = vr + jqr; p1[j + 1] = vi + jqi;
+            p2[j] = ur - pr; p2[j + 1] = ui - pi;
+            p3[j] = vr - jqr; p3[j + 1] = vi - jqi;
         }
     }
 }

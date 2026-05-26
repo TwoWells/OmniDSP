@@ -316,8 +316,18 @@ macro_rules! impl_hwy_dft {
     };
 }
 
-impl_hwy_dft!(f32, omnidsp_butterfly_stage_f32, omnidsp_butterfly_stage4_f32, omnidsp_scale_f32);
-impl_hwy_dft!(f64, omnidsp_butterfly_stage_f64, omnidsp_butterfly_stage4_f64, omnidsp_scale_f64);
+impl_hwy_dft!(
+    f32,
+    omnidsp_butterfly_stage_f32,
+    omnidsp_butterfly_stage4_f32,
+    omnidsp_scale_f32
+);
+impl_hwy_dft!(
+    f64,
+    omnidsp_butterfly_stage_f64,
+    omnidsp_butterfly_stage4_f64,
+    omnidsp_scale_f64
+);
 
 #[cfg(test)]
 #[allow(clippy::expect_used, reason = "tests use expect for clarity")]
