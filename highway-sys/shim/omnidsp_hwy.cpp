@@ -22,6 +22,15 @@
 #define OMNIDSP_FLATTEN
 #endif
 
+// Unroll factor: ARM A64 NEON holds 2 f64 lanes, so unroll 8 = 16 elements
+// per iteration to match Apple Silicon's wide execution units and expose
+// more ILP.  x86 AVX2 has 4 f64 lanes; unroll 4 = 16 elements is sufficient.
+#if HWY_ARCH_ARM_A64
+#define OMNIDSP_UNROLL HWY_UNROLL(8)
+#else
+#define OMNIDSP_UNROLL HWY_UNROLL(4)
+#endif
+
 HWY_BEFORE_NAMESPACE();
 namespace omnidsp {
 namespace HWY_NAMESPACE {
@@ -35,7 +44,7 @@ OMNIDSP_FLATTEN void MulF32(const float* HWY_RESTRICT a, const float* HWY_RESTRI
     const hn::ScalableTag<float> d;
     const size_t N = hn::Lanes(d);
     size_t i = 0;
-    HWY_UNROLL(4)
+    OMNIDSP_UNROLL
     for (; i + N <= count; i += N) {
         const auto va = hn::LoadU(d, a + i);
         const auto vb = hn::LoadU(d, b + i);
@@ -52,7 +61,7 @@ OMNIDSP_FLATTEN void MulF64(const double* HWY_RESTRICT a, const double* HWY_REST
     const hn::ScalableTag<double> d;
     const size_t N = hn::Lanes(d);
     size_t i = 0;
-    HWY_UNROLL(4)
+    OMNIDSP_UNROLL
     for (; i + N <= count; i += N) {
         const auto va = hn::LoadU(d, a + i);
         const auto vb = hn::LoadU(d, b + i);
@@ -69,7 +78,7 @@ OMNIDSP_FLATTEN void AddF32(const float* HWY_RESTRICT a, const float* HWY_RESTRI
     const hn::ScalableTag<float> d;
     const size_t N = hn::Lanes(d);
     size_t i = 0;
-    HWY_UNROLL(4)
+    OMNIDSP_UNROLL
     for (; i + N <= count; i += N) {
         const auto va = hn::LoadU(d, a + i);
         const auto vb = hn::LoadU(d, b + i);
@@ -86,7 +95,7 @@ OMNIDSP_FLATTEN void AddF64(const double* HWY_RESTRICT a, const double* HWY_REST
     const hn::ScalableTag<double> d;
     const size_t N = hn::Lanes(d);
     size_t i = 0;
-    HWY_UNROLL(4)
+    OMNIDSP_UNROLL
     for (; i + N <= count; i += N) {
         const auto va = hn::LoadU(d, a + i);
         const auto vb = hn::LoadU(d, b + i);
@@ -103,7 +112,7 @@ OMNIDSP_FLATTEN void ScaleF32(float* data, float scalar, size_t count) {
     const size_t N = hn::Lanes(d);
     const auto vs = hn::Set(d, scalar);
     size_t i = 0;
-    HWY_UNROLL(4)
+    OMNIDSP_UNROLL
     for (; i + N <= count; i += N) {
         const auto v = hn::LoadU(d, data + i);
         hn::StoreU(hn::Mul(v, vs), d, data + i);
@@ -119,7 +128,7 @@ OMNIDSP_FLATTEN void ScaleF64(double* data, double scalar, size_t count) {
     const size_t N = hn::Lanes(d);
     const auto vs = hn::Set(d, scalar);
     size_t i = 0;
-    HWY_UNROLL(4)
+    OMNIDSP_UNROLL
     for (; i + N <= count; i += N) {
         const auto v = hn::LoadU(d, data + i);
         hn::StoreU(hn::Mul(v, vs), d, data + i);
@@ -135,7 +144,7 @@ OMNIDSP_FLATTEN float DotF32(const float* a, const float* b, size_t count) {
     const size_t N = hn::Lanes(d);
     auto sum = hn::Zero(d);
     size_t i = 0;
-    HWY_UNROLL(4)
+    OMNIDSP_UNROLL
     for (; i + N <= count; i += N) {
         const auto va = hn::LoadU(d, a + i);
         const auto vb = hn::LoadU(d, b + i);
@@ -154,7 +163,7 @@ OMNIDSP_FLATTEN double DotF64(const double* a, const double* b, size_t count) {
     const size_t N = hn::Lanes(d);
     auto sum = hn::Zero(d);
     size_t i = 0;
-    HWY_UNROLL(4)
+    OMNIDSP_UNROLL
     for (; i + N <= count; i += N) {
         const auto va = hn::LoadU(d, a + i);
         const auto vb = hn::LoadU(d, b + i);
@@ -177,7 +186,7 @@ OMNIDSP_FLATTEN void CmulF32(const float* HWY_RESTRICT a, const float* HWY_RESTR
     const hn::ScalableTag<float> d;
     const size_t N = hn::Lanes(d);
     size_t i = 0;
-    HWY_UNROLL(4)
+    OMNIDSP_UNROLL
     for (; i + N <= count; i += N) {
         hn::Vec<decltype(d)> a_re, a_im, b_re, b_im;
         hn::LoadInterleaved2(d, a + i * 2, a_re, a_im);
@@ -204,7 +213,7 @@ OMNIDSP_FLATTEN void CmulF64(const double* HWY_RESTRICT a, const double* HWY_RES
     const hn::ScalableTag<double> d;
     const size_t N = hn::Lanes(d);
     size_t i = 0;
-    HWY_UNROLL(4)
+    OMNIDSP_UNROLL
     for (; i + N <= count; i += N) {
         hn::Vec<decltype(d)> a_re, a_im, b_re, b_im;
         hn::LoadInterleaved2(d, a + i * 2, a_re, a_im);
@@ -242,7 +251,7 @@ OMNIDSP_FLATTEN void ButterflyStageF32(float* data, const float* twiddles,
 
         // SIMD loop over the butterfly pairs in this group.
         size_t i = 0;
-        HWY_UNROLL(4)
+        OMNIDSP_UNROLL
         for (; i + N <= half_floats; i += N) {
             const auto tw  = hn::LoadU(d, twiddles + i);
             const auto odd = hn::LoadU(d, odd_ptr + i);
@@ -279,7 +288,7 @@ OMNIDSP_FLATTEN void ButterflyStageF64(double* data, const double* twiddles,
         double* odd_ptr  = even_ptr + half_floats;
 
         size_t i = 0;
-        HWY_UNROLL(4)
+        OMNIDSP_UNROLL
         for (; i + N <= half_floats; i += N) {
             const auto tw  = hn::LoadU(d, twiddles + i);
             const auto odd = hn::LoadU(d, odd_ptr + i);
@@ -302,6 +311,90 @@ OMNIDSP_FLATTEN void ButterflyStageF64(double* data, const double* twiddles,
     }
 }
 
+// --- No-alias element-wise multiply (f32) ---
+// Caller guarantees a, b, and out do not alias each other.
+// HWY_RESTRICT on all three pointers gives the compiler maximum freedom.
+OMNIDSP_FLATTEN void MulF32NoAlias(const float* HWY_RESTRICT a, const float* HWY_RESTRICT b,
+            float* HWY_RESTRICT out, size_t count) {
+    const hn::ScalableTag<float> d;
+    const size_t N = hn::Lanes(d);
+    size_t i = 0;
+    OMNIDSP_UNROLL
+    for (; i + N <= count; i += N) {
+        const auto va = hn::LoadU(d, a + i);
+        const auto vb = hn::LoadU(d, b + i);
+        hn::StoreU(hn::Mul(va, vb), d, out + i);
+    }
+    for (; i < count; ++i) {
+        out[i] = a[i] * b[i];
+    }
+}
+
+// --- No-alias element-wise multiply (f64) ---
+OMNIDSP_FLATTEN void MulF64NoAlias(const double* HWY_RESTRICT a, const double* HWY_RESTRICT b,
+            double* HWY_RESTRICT out, size_t count) {
+    const hn::ScalableTag<double> d;
+    const size_t N = hn::Lanes(d);
+    size_t i = 0;
+    OMNIDSP_UNROLL
+    for (; i + N <= count; i += N) {
+        const auto va = hn::LoadU(d, a + i);
+        const auto vb = hn::LoadU(d, b + i);
+        hn::StoreU(hn::Mul(va, vb), d, out + i);
+    }
+    for (; i < count; ++i) {
+        out[i] = a[i] * b[i];
+    }
+}
+
+// --- No-alias complex multiply (f32, interleaved re/im layout) ---
+OMNIDSP_FLATTEN void CmulF32NoAlias(const float* HWY_RESTRICT a, const float* HWY_RESTRICT b,
+             float* HWY_RESTRICT out, size_t count) {
+    const hn::ScalableTag<float> d;
+    const size_t N = hn::Lanes(d);
+    size_t i = 0;
+    OMNIDSP_UNROLL
+    for (; i + N <= count; i += N) {
+        hn::Vec<decltype(d)> a_re, a_im, b_re, b_im;
+        hn::LoadInterleaved2(d, a + i * 2, a_re, a_im);
+        hn::LoadInterleaved2(d, b + i * 2, b_re, b_im);
+        const auto out_re = hn::NegMulAdd(a_im, b_im, hn::Mul(a_re, b_re));
+        const auto out_im = hn::MulAdd(a_im, b_re, hn::Mul(a_re, b_im));
+        hn::StoreInterleaved2(out_re, out_im, d, out + i * 2);
+    }
+    for (; i < count; ++i) {
+        const size_t j = i * 2;
+        const float are = a[j], aim = a[j + 1];
+        const float bre = b[j], bim = b[j + 1];
+        out[j]     = are * bre - aim * bim;
+        out[j + 1] = are * bim + aim * bre;
+    }
+}
+
+// --- No-alias complex multiply (f64, interleaved re/im layout) ---
+OMNIDSP_FLATTEN void CmulF64NoAlias(const double* HWY_RESTRICT a, const double* HWY_RESTRICT b,
+             double* HWY_RESTRICT out, size_t count) {
+    const hn::ScalableTag<double> d;
+    const size_t N = hn::Lanes(d);
+    size_t i = 0;
+    OMNIDSP_UNROLL
+    for (; i + N <= count; i += N) {
+        hn::Vec<decltype(d)> a_re, a_im, b_re, b_im;
+        hn::LoadInterleaved2(d, a + i * 2, a_re, a_im);
+        hn::LoadInterleaved2(d, b + i * 2, b_re, b_im);
+        const auto out_re = hn::NegMulAdd(a_im, b_im, hn::Mul(a_re, b_re));
+        const auto out_im = hn::MulAdd(a_im, b_re, hn::Mul(a_re, b_im));
+        hn::StoreInterleaved2(out_re, out_im, d, out + i * 2);
+    }
+    for (; i < count; ++i) {
+        const size_t j = i * 2;
+        const double are = a[j], aim = a[j + 1];
+        const double bre = b[j], bim = b[j + 1];
+        out[j]     = are * bre - aim * bim;
+        out[j + 1] = are * bim + aim * bre;
+    }
+}
+
 }  // namespace HWY_NAMESPACE
 }  // namespace omnidsp
 HWY_AFTER_NAMESPACE();
@@ -321,6 +414,10 @@ HWY_EXPORT(CmulF32);
 HWY_EXPORT(CmulF64);
 HWY_EXPORT(ButterflyStageF32);
 HWY_EXPORT(ButterflyStageF64);
+HWY_EXPORT(MulF32NoAlias);
+HWY_EXPORT(MulF64NoAlias);
+HWY_EXPORT(CmulF32NoAlias);
+HWY_EXPORT(CmulF64NoAlias);
 
 // Dispatch wrappers — HWY_DYNAMIC_DISPATCH must be called from the same
 // namespace as HWY_EXPORT.  The compiler inlines these away.
@@ -359,6 +456,18 @@ void DispatchButterflyStageF32(float* data, const float* twiddles, size_t half_l
 }
 void DispatchButterflyStageF64(double* data, const double* twiddles, size_t half_len, size_t n) {
     HWY_DYNAMIC_DISPATCH(ButterflyStageF64)(data, twiddles, half_len, n);
+}
+void DispatchMulF32NoAlias(const float* a, const float* b, float* out, size_t count) {
+    HWY_DYNAMIC_DISPATCH(MulF32NoAlias)(a, b, out, count);
+}
+void DispatchMulF64NoAlias(const double* a, const double* b, double* out, size_t count) {
+    HWY_DYNAMIC_DISPATCH(MulF64NoAlias)(a, b, out, count);
+}
+void DispatchCmulF32NoAlias(const float* a, const float* b, float* out, size_t count) {
+    HWY_DYNAMIC_DISPATCH(CmulF32NoAlias)(a, b, out, count);
+}
+void DispatchCmulF64NoAlias(const double* a, const double* b, double* out, size_t count) {
+    HWY_DYNAMIC_DISPATCH(CmulF64NoAlias)(a, b, out, count);
 }
 }  // namespace omnidsp
 
@@ -399,6 +508,18 @@ void omnidsp_butterfly_stage_f32(float* data, const float* twiddles, size_t half
 }
 void omnidsp_butterfly_stage_f64(double* data, const double* twiddles, size_t half_len, size_t n) {
     omnidsp::DispatchButterflyStageF64(data, twiddles, half_len, n);
+}
+void omnidsp_mul_f32_noalias(const float* a, const float* b, float* out, size_t count) {
+    omnidsp::DispatchMulF32NoAlias(a, b, out, count);
+}
+void omnidsp_mul_f64_noalias(const double* a, const double* b, double* out, size_t count) {
+    omnidsp::DispatchMulF64NoAlias(a, b, out, count);
+}
+void omnidsp_cmul_f32_noalias(const float* a, const float* b, float* out, size_t count) {
+    omnidsp::DispatchCmulF32NoAlias(a, b, out, count);
+}
+void omnidsp_cmul_f64_noalias(const double* a, const double* b, double* out, size_t count) {
+    omnidsp::DispatchCmulF64NoAlias(a, b, out, count);
 }
 
 }  // extern "C"

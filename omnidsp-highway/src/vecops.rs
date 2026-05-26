@@ -52,8 +52,12 @@ fn check_lengths_2(a_len: usize, b_len: usize) -> Result<()> {
 impl VecOps<f32> for HwyVecOps {
     fn mul(&self, a: &[f32], b: &[f32], out: &mut [f32]) -> Result<()> {
         check_lengths_3(a.len(), b.len(), out.len())?;
-        // SAFETY: pointers are valid for `a.len()` elements; out may alias a or b.
-        unsafe { highway_sys::omnidsp_mul_f32(a.as_ptr(), b.as_ptr(), out.as_mut_ptr(), a.len()) };
+        // SAFETY: pointers are valid for `a.len()` elements. Rust's borrow rules
+        // guarantee `&[f32]` and `&mut [f32]` don't overlap, so the no-alias
+        // variant is sound — the compiler gets HWY_RESTRICT on all three pointers.
+        unsafe {
+            highway_sys::omnidsp_mul_f32_noalias(a.as_ptr(), b.as_ptr(), out.as_mut_ptr(), a.len());
+        }
         Ok(())
     }
 
@@ -78,9 +82,10 @@ impl VecOps<f32> for HwyVecOps {
     fn cmul(&self, a: &[Complex<f32>], b: &[Complex<f32>], out: &mut [Complex<f32>]) -> Result<()> {
         check_lengths_3(a.len(), b.len(), out.len())?;
         // SAFETY: Complex<f32> has the same layout as [f32; 2]. Pointers are valid
-        // for `a.len()` complex elements (= `a.len() * 2` floats).
+        // for `a.len()` complex elements (= `a.len() * 2` floats). Rust's borrow
+        // rules guarantee no aliasing, so the no-alias variant is sound.
         unsafe {
-            highway_sys::omnidsp_cmul_f32(
+            highway_sys::omnidsp_cmul_f32_noalias(
                 a.as_ptr().cast::<f32>(),
                 b.as_ptr().cast::<f32>(),
                 out.as_mut_ptr().cast::<f32>(),
@@ -139,8 +144,11 @@ impl VecOps<f32> for HwyVecOps {
 impl VecOps<f64> for HwyVecOps {
     fn mul(&self, a: &[f64], b: &[f64], out: &mut [f64]) -> Result<()> {
         check_lengths_3(a.len(), b.len(), out.len())?;
-        // SAFETY: pointers are valid for `a.len()` elements; out may alias a or b.
-        unsafe { highway_sys::omnidsp_mul_f64(a.as_ptr(), b.as_ptr(), out.as_mut_ptr(), a.len()) };
+        // SAFETY: pointers are valid for `a.len()` elements. Rust's borrow rules
+        // guarantee no aliasing, so the no-alias variant is sound.
+        unsafe {
+            highway_sys::omnidsp_mul_f64_noalias(a.as_ptr(), b.as_ptr(), out.as_mut_ptr(), a.len());
+        }
         Ok(())
     }
 
@@ -165,9 +173,10 @@ impl VecOps<f64> for HwyVecOps {
     fn cmul(&self, a: &[Complex<f64>], b: &[Complex<f64>], out: &mut [Complex<f64>]) -> Result<()> {
         check_lengths_3(a.len(), b.len(), out.len())?;
         // SAFETY: Complex<f64> has the same layout as [f64; 2]. Pointers are valid
-        // for `a.len()` complex elements (= `a.len() * 2` doubles).
+        // for `a.len()` complex elements (= `a.len() * 2` doubles). Rust's borrow
+        // rules guarantee no aliasing, so the no-alias variant is sound.
         unsafe {
-            highway_sys::omnidsp_cmul_f64(
+            highway_sys::omnidsp_cmul_f64_noalias(
                 a.as_ptr().cast::<f64>(),
                 b.as_ptr().cast::<f64>(),
                 out.as_mut_ptr().cast::<f64>(),

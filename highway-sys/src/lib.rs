@@ -87,6 +87,40 @@ unsafe extern "C" {
     /// - `out` may alias `a` or `b` (supports in-place operation).
     pub fn omnidsp_cmul_f64(a: *const f64, b: *const f64, out: *mut f64, count: usize);
 
+    /// No-alias element-wise multiply (f32): `out[i] = a[i] * b[i]`.
+    ///
+    /// # Safety
+    ///
+    /// - `a`, `b`, and `out` must point to at least `count` floats.
+    /// - `a`, `b`, and `out` must NOT alias each other.
+    pub fn omnidsp_mul_f32_noalias(a: *const f32, b: *const f32, out: *mut f32, count: usize);
+
+    /// No-alias element-wise multiply (f64): `out[i] = a[i] * b[i]`.
+    ///
+    /// # Safety
+    ///
+    /// - `a`, `b`, and `out` must point to at least `count` doubles.
+    /// - `a`, `b`, and `out` must NOT alias each other.
+    pub fn omnidsp_mul_f64_noalias(a: *const f64, b: *const f64, out: *mut f64, count: usize);
+
+    /// No-alias complex element-wise multiply (f32, interleaved `[re, im]`).
+    /// `count` is the number of complex elements (raw floats = `count * 2`).
+    ///
+    /// # Safety
+    ///
+    /// - `a`, `b`, and `out` must point to at least `count * 2` floats.
+    /// - `a`, `b`, and `out` must NOT alias each other.
+    pub fn omnidsp_cmul_f32_noalias(a: *const f32, b: *const f32, out: *mut f32, count: usize);
+
+    /// No-alias complex element-wise multiply (f64, interleaved `[re, im]`).
+    /// `count` is the number of complex elements (raw doubles = `count * 2`).
+    ///
+    /// # Safety
+    ///
+    /// - `a`, `b`, and `out` must point to at least `count * 2` doubles.
+    /// - `a`, `b`, and `out` must NOT alias each other.
+    pub fn omnidsp_cmul_f64_noalias(a: *const f64, b: *const f64, out: *mut f64, count: usize);
+
     /// One stage of a radix-2 Cooley-Tukey FFT butterfly (f32).
     ///
     /// Processes all butterfly groups for a stage with the given `half_len`.
