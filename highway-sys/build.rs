@@ -24,34 +24,41 @@ fn main() {
 
     // Build Highway runtime as a static library.
     //
-    // HWY_COMPILE_ONLY_STATIC: only compile for the target selected by
-    // compiler flags (i.e. -mcpu=native). This avoids conflicts between
-    // -mcpu=native and foreach_target's per-ISA pragmas, and turns
-    // HWY_DYNAMIC_DISPATCH into a direct call (no function pointer
-    // indirection), letting the compiler inline dispatch wrappers.
+    // HWY_COMPILE_ONLY_STATIC: compile once for the target selected by
+    // compiler flags (-mcpu=native). HWY_DYNAMIC_DISPATCH becomes a
+    // direct call (no function pointer indirection).
+    //
+    // HWY_DISABLE_ATTR: prevent HWY_BEFORE_NAMESPACE from attaching
+    // target-specific attributes (#pragma clang attribute) to functions.
+    // On Apple clang, these attributes conflict with the loop unroller,
+    // causing "unsupported transformation ordering" warnings and preventing
+    // all loop unrolling. With -mcpu=native the compiler already knows the
+    // target, so the attributes are redundant.
     cc::Build::new()
         .cpp(true)
         .std("c++17")
         .define("HWY_STATIC_DEFINE", None)
         .define("HWY_COMPILE_ONLY_STATIC", None)
+        .define("HWY_DISABLE_ATTR", None)
         .include(&highway_dir)
         .files(&hwy_sources)
         .compile("hwy");
 
-    // Build our shim (uses foreach_target, but with HWY_COMPILE_ONLY_STATIC
-    // it compiles once for the native target only).
+    // Build our shim.
     let mut shim = cc::Build::new();
     shim.cpp(true)
         .std("c++17")
         .define("HWY_STATIC_DEFINE", None)
         .define("HWY_COMPILE_ONLY_STATIC", None)
+        .define("HWY_DISABLE_ATTR", None)
         .include(&highway_dir)
         .include(&shim_dir)
         .file(shim_dir.join("omnidsp_hwy.cpp"));
 
     // Native CPU tuning — the compiler generates code specifically for this
-    // CPU. Combined with HWY_COMPILE_ONLY_STATIC, Highway targets the best
-    // ISA the compiler selects (AVX2/AVX-512 on x86, NEON on ARM).
+    // CPU. Combined with HWY_COMPILE_ONLY_STATIC + HWY_DISABLE_ATTR, the
+    // compiler has full optimization freedom (including loop unrolling)
+    // without conflicting Highway target pragmas.
     shim.flag_if_supported("-mcpu=native");
     shim.flag_if_supported("-mtune=native");
     shim.flag_if_supported("-funroll-loops");
