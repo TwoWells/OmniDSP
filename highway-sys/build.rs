@@ -23,30 +23,38 @@ fn main() {
     .collect();
 
     // Build Highway runtime as a static library.
+    //
+    // HWY_COMPILE_ONLY_STATIC: only compile for the target selected by
+    // compiler flags (i.e. -mcpu=native). This avoids conflicts between
+    // -mcpu=native and foreach_target's per-ISA pragmas, and turns
+    // HWY_DYNAMIC_DISPATCH into a direct call (no function pointer
+    // indirection), letting the compiler inline dispatch wrappers.
     cc::Build::new()
         .cpp(true)
         .std("c++17")
         .define("HWY_STATIC_DEFINE", None)
+        .define("HWY_COMPILE_ONLY_STATIC", None)
         .include(&highway_dir)
         .files(&hwy_sources)
         .compile("hwy");
 
-    // Build our shim (uses foreach_target for multi-ISA compilation).
+    // Build our shim (uses foreach_target, but with HWY_COMPILE_ONLY_STATIC
+    // it compiles once for the native target only).
     let mut shim = cc::Build::new();
     shim.cpp(true)
         .std("c++17")
         .define("HWY_STATIC_DEFINE", None)
+        .define("HWY_COMPILE_ONLY_STATIC", None)
         .include(&highway_dir)
         .include(&shim_dir)
         .file(shim_dir.join("omnidsp_hwy.cpp"));
 
-    // Enable native CPU tuning — critical for ARM where generic NEON
-    // scheduling loses 2-3x vs Apple Silicon-specific code generation.
-    // On x86 this enables AVX2/AVX-512 if available.
+    // Native CPU tuning — the compiler generates code specifically for this
+    // CPU. Combined with HWY_COMPILE_ONLY_STATIC, Highway targets the best
+    // ISA the compiler selects (AVX2/AVX-512 on x86, NEON on ARM).
     shim.flag_if_supported("-mcpu=native");
     shim.flag_if_supported("-mtune=native");
     shim.flag_if_supported("-funroll-loops");
-
 
     shim.compile("omnidsp_hwy");
 

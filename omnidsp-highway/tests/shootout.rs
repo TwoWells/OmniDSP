@@ -21,8 +21,8 @@ use omnidsp_core::types::Direction;
 use omnidsp_highway::{HwyDft, HwyVecOps};
 use omnidsp_rust::{RustDft, RustVecOps};
 
-const WARMUP: usize = 10;
-const ITERS: usize = 1000;
+const WARMUP: usize = 100;
+const ITERS: usize = 10_000;
 
 fn bench<F: FnMut()>(label: &str, mut f: F) -> std::time::Duration {
     // Warmup.
