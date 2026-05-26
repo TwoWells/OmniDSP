@@ -40,7 +40,7 @@ missing_safety_doc = "warn"
 
 [profile.release]
 panic = "abort"
-lto = true
+lto = "thin"
 codegen-units = 1
 opt-level = 3
 strip = "symbols"
