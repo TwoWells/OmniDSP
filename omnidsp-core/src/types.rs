@@ -33,121 +33,155 @@ pub enum FilterType {
 
 /// Window function description.
 ///
-/// Describes the shape and any shape parameters of a window function, without
-/// specifying a length.  Length is provided at the point of use — when
-/// constructing a [`Window<T>`] via [`Window::from_fn`].
+/// Describes the shape and any parameters of a window function.  Window is
+/// pure math — coefficient generation plus a single `mul_inplace` — not a
+/// module.
 ///
 /// Generic over `T` so that shape parameters (e.g. Kaiser `beta`, Gaussian
 /// `sigma`) match the data type.
 ///
-/// For user-supplied coefficients (custom windows), skip `WindowFn` entirely
-/// and construct a [`Window<T>`] directly via [`Window::new`].
+/// # Examples
+///
+/// ```
+/// use omnidsp_core::types::Window;
+///
+/// // Via convenience function
+/// let coeffs: Vec<f64> = Window::hann(512).unwrap();
+/// assert_eq!(coeffs.len(), 512);
+///
+/// // Via enum + coefficients()
+/// let w = Window::<f64>::Hann;
+/// let coeffs = w.coefficients(512).unwrap();
+/// assert_eq!(coeffs.len(), 512);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WindowFn<T> {
+pub enum Window<T> {
     /// Bartlett (triangular with zero endpoints) window.
     Bartlett,
     /// Blackman window.
     Blackman,
     /// Flat-top window (used for amplitude calibration).
     FlatTop,
-    /// Gaussian window.
-    Gaussian {
-        /// Standard deviation parameter (relative to half the window length).
-        sigma: T,
-    },
+    /// Gaussian window with the given standard deviation parameter
+    /// (relative to half the window length).
+    Gaussian(T),
     /// Hamming window.
     Hamming,
     /// Hann (raised cosine) window.
     Hann,
-    /// Kaiser window.
-    Kaiser {
-        /// Shape parameter controlling the trade-off between main-lobe width
-        /// and side-lobe level.
-        beta: T,
-    },
+    /// Kaiser window with the given shape parameter controlling the trade-off
+    /// between main-lobe width and side-lobe level.
+    Kaiser(T),
     /// Rectangular (all ones) window.
     Rectangular,
     /// Triangular (non-zero endpoints) window.
     Triangular,
-    /// Tukey (tapered cosine) window.
-    Tukey {
-        /// Taper fraction (`0.0` = rectangular, `1.0` = Hann).
-        alpha: T,
-    },
-}
-
-/// Computed window coefficients.
-///
-/// A `Window<T>` holds a vector of precomputed coefficients ready to be applied
-/// to a signal via element-wise multiply ([`VecOps::mul_inplace`]).
-///
-/// Construct from a [`WindowFn<T>`] and a length, or directly from raw
-/// coefficients:
-///
-/// ```
-/// use omnidsp_core::types::{Window, WindowFn};
-///
-/// // From a window function
-/// let w = Window::from_fn(&WindowFn::<f64>::Hann, 512).unwrap();
-/// assert_eq!(w.len(), 512);
-///
-/// // From raw coefficients (custom window)
-/// let w = Window::new(&[0.5_f64, 1.0, 0.5]);
-/// assert_eq!(w.len(), 3);
-/// ```
-///
-/// [`VecOps::mul_inplace`]: crate::traits::vecops::VecOps::mul_inplace
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Window<T> {
-    coefficients: Vec<T>,
+    /// Tukey (tapered cosine) window with the given taper fraction
+    /// (`0.0` = rectangular, `1.0` = Hann).
+    Tukey(T),
 }
 
 impl<T: Float> Window<T> {
-    /// Create a window from raw coefficients.
-    ///
-    /// Use this for custom windows where the coefficients are already known.
-    /// The coefficients are copied from the slice.
-    #[must_use]
-    pub fn new(coefficients: &[T]) -> Self {
-        Self {
-            coefficients: coefficients.to_vec(),
-        }
-    }
-
-    /// Create a window by evaluating a [`WindowFn`] at the given `length`.
+    /// Compute window coefficients for this window function at the given length.
     ///
     /// # Errors
     ///
     /// Returns [`InvalidSpec`](crate::error::Error::InvalidSpec) if `length` is zero or if the window
     /// function parameters are invalid (e.g. Kaiser `beta < 0`, Gaussian
     /// `sigma <= 0`, Tukey `alpha` outside `[0, 1]`).
-    pub fn from_fn(winfn: &WindowFn<T>, length: usize) -> Result<Self> {
-        let coefficients = crate::design::window::compute(winfn, length)?;
-        Ok(Self { coefficients })
+    pub fn coefficients(&self, length: usize) -> Result<Vec<T>> {
+        crate::design::window::compute(self, length)
     }
 
-    /// Access the precomputed window coefficients.
-    #[must_use]
-    pub fn coefficients(&self) -> &[T] {
-        &self.coefficients
+    /// Compute a Bartlett window of the given length.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidSpec`] if `length` is zero.
+    pub fn bartlett(length: usize) -> Result<Vec<T>> {
+        Self::Bartlett.coefficients(length)
     }
 
-    /// Consume the window and return the coefficient vector.
-    #[must_use]
-    pub fn into_coefficients(self) -> Vec<T> {
-        self.coefficients
+    /// Compute a Blackman window of the given length.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidSpec`] if `length` is zero.
+    pub fn blackman(length: usize) -> Result<Vec<T>> {
+        Self::Blackman.coefficients(length)
     }
 
-    /// Return the number of coefficients (window length).
-    #[must_use]
-    pub const fn len(&self) -> usize {
-        self.coefficients.len()
+    /// Compute a flat-top window of the given length.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidSpec`] if `length` is zero.
+    pub fn flat_top(length: usize) -> Result<Vec<T>> {
+        Self::FlatTop.coefficients(length)
     }
 
-    /// Returns `true` if the window has zero coefficients.
-    #[must_use]
-    pub const fn is_empty(&self) -> bool {
-        self.coefficients.is_empty()
+    /// Compute a Gaussian window of the given length.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidSpec`] if `length` is zero or `sigma <= 0`.
+    pub fn gaussian(sigma: T, length: usize) -> Result<Vec<T>> {
+        Self::Gaussian(sigma).coefficients(length)
+    }
+
+    /// Compute a Hamming window of the given length.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidSpec`] if `length` is zero.
+    pub fn hamming(length: usize) -> Result<Vec<T>> {
+        Self::Hamming.coefficients(length)
+    }
+
+    /// Compute a Hann window of the given length.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidSpec`] if `length` is zero.
+    pub fn hann(length: usize) -> Result<Vec<T>> {
+        Self::Hann.coefficients(length)
+    }
+
+    /// Compute a Kaiser window of the given length.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidSpec`] if `length` is zero or `beta < 0`.
+    pub fn kaiser(beta: T, length: usize) -> Result<Vec<T>> {
+        Self::Kaiser(beta).coefficients(length)
+    }
+
+    /// Compute a rectangular window of the given length.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidSpec`] if `length` is zero.
+    pub fn rectangular(length: usize) -> Result<Vec<T>> {
+        Self::Rectangular.coefficients(length)
+    }
+
+    /// Compute a triangular window of the given length.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidSpec`] if `length` is zero.
+    pub fn triangular(length: usize) -> Result<Vec<T>> {
+        Self::Triangular.coefficients(length)
+    }
+
+    /// Compute a Tukey window of the given length.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidSpec`] if `length` is zero or `alpha` is
+    /// outside `[0, 1]`.
+    pub fn tukey(alpha: T, length: usize) -> Result<Vec<T>> {
+        Self::Tukey(alpha).coefficients(length)
     }
 }
 

@@ -401,11 +401,11 @@ mod tests {
     use super::*;
     use crate::design::cqt;
     use crate::test_utils::{TestDft, TestVecOps};
-    use crate::types::WindowFn;
+    use crate::types::Window;
 
     /// Small CQT spec for fast tests: one octave, 12 bins/octave.
     fn small_spec() -> CqtSpec<f64> {
-        cqt::design(44100.0, 440.0, 880.0, 12, &WindowFn::Hann).expect("valid design")
+        cqt::design(44100.0, 440.0, 880.0, 12, &Window::Hann).expect("valid design")
     }
 
     /// Helper: create a CQT plan for the given spec.
@@ -741,7 +741,7 @@ mod tests {
             CQT_PROC_MIN_FREQ,
             CQT_PROC_MAX_FREQ,
             CQT_PROC_BINS_PER_OCTAVE,
-            &WindowFn::Hann,
+            &Window::Hann,
         )
         .expect("valid design")
     }

@@ -34,7 +34,7 @@ use num_traits::Float;
 
 use crate::error::{Error, Result};
 use crate::traits::fir::FirSpec;
-use crate::types::{FilterType, Window, WindowFn};
+use crate::types::{FilterType, Window};
 
 // ─── Public API ──────────────────────────────────────────────────────
 
@@ -53,7 +53,7 @@ use crate::types::{FilterType, Window, WindowFn};
 /// * `sample_rate` — sampling frequency (Hz).
 /// * `cutoff1` — primary cutoff frequency (Hz).
 /// * `cutoff2` — secondary cutoff (Hz), required for bandpass/bandstop.
-/// * `window_fn` — window function to apply to the ideal impulse response.
+/// * `window` — window function to apply to the ideal impulse response.
 ///
 /// # Errors
 ///
@@ -68,10 +68,10 @@ use crate::types::{FilterType, Window, WindowFn};
 ///
 /// ```
 /// use omnidsp_core::design::fir::design;
-/// use omnidsp_core::types::{FilterType, WindowFn};
+/// use omnidsp_core::types::{FilterType, Window};
 ///
 /// let spec = design(
-///     FilterType::Lowpass, 30, 44100.0, 1000.0, None, &WindowFn::Hamming,
+///     FilterType::Lowpass, 30, 44100.0, 1000.0, None, &Window::Hamming,
 /// ).unwrap();
 /// assert_eq!(spec.coefficients.len(), 31);
 /// ```
@@ -81,7 +81,7 @@ pub fn design<T: Float>(
     sample_rate: T,
     cutoff1: T,
     cutoff2: Option<T>,
-    window_fn: &WindowFn<T>,
+    window: &Window<T>,
 ) -> Result<FirSpec<T>> {
     let sr = to_f64(sample_rate)?;
     let c1 = to_f64(cutoff1)?;
@@ -112,10 +112,10 @@ pub fn design<T: Float>(
     };
 
     // Generate and apply window
-    let window = Window::from_fn(window_fn, validated.num_taps)?;
+    let win_coeffs = window.coefficients(validated.num_taps)?;
     let windowed: Result<Vec<f64>> = ideal
         .iter()
-        .zip(window.coefficients())
+        .zip(&win_coeffs)
         .map(|(h, w)| to_f64(*w).map(|wf| *h * wf))
         .collect();
 
@@ -360,7 +360,7 @@ mod tests {
             44100.0,
             fc,
             None,
-            &WindowFn::Hamming,
+            &Window::Hamming,
         )
         .expect("LP design")
         .coefficients
@@ -373,7 +373,7 @@ mod tests {
             44100.0,
             fc,
             None,
-            &WindowFn::Hamming,
+            &Window::Hamming,
         )
         .expect("HP design")
         .coefficients
@@ -386,7 +386,7 @@ mod tests {
             44100.0,
             fc1,
             Some(fc2),
-            &WindowFn::Hamming,
+            &Window::Hamming,
         )
         .expect("BP design")
         .coefficients
@@ -399,7 +399,7 @@ mod tests {
             44100.0,
             fc1,
             Some(fc2),
-            &WindowFn::Hamming,
+            &Window::Hamming,
         )
         .expect("BS design")
         .coefficients
@@ -426,7 +426,7 @@ mod tests {
             44100.0,
             1000.0,
             None,
-            &WindowFn::Hann,
+            &Window::Hann,
         )
         .expect("lowpass design")
         .coefficients;
@@ -453,7 +453,7 @@ mod tests {
             2.0, // fs=2 → Nyquist=1, fc=0.25 means quarter-band
             0.25,
             None,
-            &WindowFn::Rectangular,
+            &Window::Rectangular,
         )
         .expect("lowpass design")
         .coefficients;
@@ -552,15 +552,7 @@ mod tests {
     #[test]
     fn order_zero_is_error() {
         assert!(
-            design::<f64>(
-                FilterType::Lowpass,
-                0,
-                44100.0,
-                1000.0,
-                None,
-                &WindowFn::Hann
-            )
-            .is_err(),
+            design::<f64>(FilterType::Lowpass, 0, 44100.0, 1000.0, None, &Window::Hann).is_err(),
             "order 0 should be rejected"
         );
     }
@@ -568,7 +560,7 @@ mod tests {
     #[test]
     fn negative_sample_rate_is_error() {
         assert!(
-            design::<f64>(FilterType::Lowpass, 10, -1.0, 0.25, None, &WindowFn::Hann).is_err(),
+            design::<f64>(FilterType::Lowpass, 10, -1.0, 0.25, None, &Window::Hann).is_err(),
             "negative sample rate should be rejected"
         );
     }
@@ -582,7 +574,7 @@ mod tests {
                 44100.0,
                 22050.0,
                 None,
-                &WindowFn::Hann
+                &Window::Hann
             )
             .is_err(),
             "cutoff at Nyquist should be rejected"
@@ -598,7 +590,7 @@ mod tests {
                 44100.0,
                 30000.0,
                 None,
-                &WindowFn::Hann
+                &Window::Hann
             )
             .is_err(),
             "cutoff above Nyquist should be rejected"
@@ -614,7 +606,7 @@ mod tests {
                 44100.0,
                 1000.0,
                 None,
-                &WindowFn::Hann
+                &Window::Hann
             )
             .is_err(),
             "bandpass without cutoff2 should be rejected"
@@ -630,7 +622,7 @@ mod tests {
                 44100.0,
                 5000.0,
                 Some(1000.0),
-                &WindowFn::Hann,
+                &Window::Hann,
             )
             .is_err(),
             "cutoff2 <= cutoff1 should be rejected"
@@ -646,7 +638,7 @@ mod tests {
                 44100.0,
                 1000.0,
                 Some(5000.0),
-                &WindowFn::Hann,
+                &Window::Hann,
             )
             .is_err(),
             "lowpass with cutoff2 should be rejected"
@@ -698,7 +690,7 @@ mod tests {
             44100.0_f32,
             1000.0_f32,
             None,
-            &WindowFn::Hamming,
+            &Window::Hamming,
         )
         .expect("f32 lowpass");
         assert_eq!(spec.coefficients.len(), 31, "should have 31 taps");
@@ -747,7 +739,7 @@ mod tests {
             44100.0,
             10000.0,
             None,
-            &WindowFn::Hann,
+            &Window::Hann,
         )
         .expect("HP30 Hann design")
         .coefficients;
@@ -774,7 +766,7 @@ mod tests {
             2.0,
             0.25,
             None,
-            &WindowFn::Rectangular,
+            &Window::Rectangular,
         )
         .expect("LP4 rect design")
         .coefficients;
