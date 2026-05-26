@@ -24,6 +24,7 @@ void MulF32(const float* a, const float* b,
     const hn::ScalableTag<float> d;
     const size_t N = hn::Lanes(d);
     size_t i = 0;
+    HWY_DEFAULT_UNROLL
     for (; i + N <= count; i += N) {
         const auto va = hn::LoadU(d, a + i);
         const auto vb = hn::LoadU(d, b + i);
@@ -40,6 +41,7 @@ void MulF64(const double* a, const double* b,
     const hn::ScalableTag<double> d;
     const size_t N = hn::Lanes(d);
     size_t i = 0;
+    HWY_DEFAULT_UNROLL
     for (; i + N <= count; i += N) {
         const auto va = hn::LoadU(d, a + i);
         const auto vb = hn::LoadU(d, b + i);
@@ -56,6 +58,7 @@ void AddF32(const float* a, const float* b,
     const hn::ScalableTag<float> d;
     const size_t N = hn::Lanes(d);
     size_t i = 0;
+    HWY_DEFAULT_UNROLL
     for (; i + N <= count; i += N) {
         const auto va = hn::LoadU(d, a + i);
         const auto vb = hn::LoadU(d, b + i);
@@ -72,6 +75,7 @@ void AddF64(const double* a, const double* b,
     const hn::ScalableTag<double> d;
     const size_t N = hn::Lanes(d);
     size_t i = 0;
+    HWY_DEFAULT_UNROLL
     for (; i + N <= count; i += N) {
         const auto va = hn::LoadU(d, a + i);
         const auto vb = hn::LoadU(d, b + i);
@@ -88,6 +92,7 @@ void ScaleF32(float* data, float scalar, size_t count) {
     const size_t N = hn::Lanes(d);
     const auto vs = hn::Set(d, scalar);
     size_t i = 0;
+    HWY_DEFAULT_UNROLL
     for (; i + N <= count; i += N) {
         const auto v = hn::LoadU(d, data + i);
         hn::StoreU(hn::Mul(v, vs), d, data + i);
@@ -103,6 +108,7 @@ void ScaleF64(double* data, double scalar, size_t count) {
     const size_t N = hn::Lanes(d);
     const auto vs = hn::Set(d, scalar);
     size_t i = 0;
+    HWY_DEFAULT_UNROLL
     for (; i + N <= count; i += N) {
         const auto v = hn::LoadU(d, data + i);
         hn::StoreU(hn::Mul(v, vs), d, data + i);
@@ -118,6 +124,7 @@ float DotF32(const float* a, const float* b, size_t count) {
     const size_t N = hn::Lanes(d);
     auto sum = hn::Zero(d);
     size_t i = 0;
+    HWY_DEFAULT_UNROLL
     for (; i + N <= count; i += N) {
         const auto va = hn::LoadU(d, a + i);
         const auto vb = hn::LoadU(d, b + i);
@@ -136,6 +143,7 @@ double DotF64(const double* a, const double* b, size_t count) {
     const size_t N = hn::Lanes(d);
     auto sum = hn::Zero(d);
     size_t i = 0;
+    HWY_DEFAULT_UNROLL
     for (; i + N <= count; i += N) {
         const auto va = hn::LoadU(d, a + i);
         const auto vb = hn::LoadU(d, b + i);
@@ -156,6 +164,7 @@ void CmulF32(const float* a, const float* b,
     const size_t N = hn::Lanes(d);
     const size_t fcount = count * 2;
     size_t i = 0;
+    HWY_DEFAULT_UNROLL
     for (; i + N <= fcount; i += N) {
         const auto va = hn::LoadU(d, a + i);
         const auto vb = hn::LoadU(d, b + i);
@@ -177,6 +186,7 @@ void CmulF64(const double* a, const double* b,
     const size_t N = hn::Lanes(d);
     const size_t fcount = count * 2;
     size_t i = 0;
+    HWY_DEFAULT_UNROLL
     for (; i + N <= fcount; i += N) {
         const auto va = hn::LoadU(d, a + i);
         const auto vb = hn::LoadU(d, b + i);
@@ -211,6 +221,7 @@ void ButterflyStageF32(float* data, const float* twiddles,
 
         // SIMD loop over the butterfly pairs in this group.
         size_t i = 0;
+        HWY_DEFAULT_UNROLL
         for (; i + N <= half_floats; i += N) {
             const auto tw  = hn::LoadU(d, twiddles + i);
             const auto odd = hn::LoadU(d, odd_ptr + i);
@@ -247,6 +258,7 @@ void ButterflyStageF64(double* data, const double* twiddles,
         double* odd_ptr  = even_ptr + half_floats;
 
         size_t i = 0;
+        HWY_DEFAULT_UNROLL
         for (; i + N <= half_floats; i += N) {
             const auto tw  = hn::LoadU(d, twiddles + i);
             const auto odd = hn::LoadU(d, odd_ptr + i);
