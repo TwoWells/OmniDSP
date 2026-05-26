@@ -140,6 +140,50 @@ unsafe extern "C" {
         n: usize,
     );
 
+    /// One radix-4 butterfly stage (f32) — fuses two consecutive radix-2 stages.
+    ///
+    /// Processes all radix-4 groups for a stage pair with the given `quarter_len`.
+    /// `data` is interleaved `[re, im]` complex (`n * 2` floats).
+    /// `twiddles` layout: `[W1[0..q], W2[0..q], W3[0..q]]` where `q = quarter_len`.
+    /// `W1[k]` applied to sub-block 2, `W2[k]` to sub-block 1, `W3[k]` to sub-block 3.
+    /// Total twiddle floats: `6 * quarter_len`.
+    /// `forward`: 1 for forward FFT (−j rotation), 0 for inverse (+j rotation).
+    ///
+    /// # Safety
+    ///
+    /// - `data` must point to at least `n * 2` floats.
+    /// - `twiddles` must point to at least `quarter_len * 6` floats.
+    /// - `quarter_len` must be a power of 2 and `<= n / 4`.
+    pub fn omnidsp_butterfly_stage4_f32(
+        data: *mut f32,
+        twiddles: *const f32,
+        quarter_len: usize,
+        n: usize,
+        forward: i32,
+    );
+
+    /// One radix-4 butterfly stage (f64) — fuses two consecutive radix-2 stages.
+    ///
+    /// Processes all radix-4 groups for a stage pair with the given `quarter_len`.
+    /// `data` is interleaved `[re, im]` complex (`n * 2` doubles).
+    /// `twiddles` layout: `[W1[0..q], W2[0..q], W3[0..q]]` where `q = quarter_len`.
+    /// `W1[k]` applied to sub-block 2, `W2[k]` to sub-block 1, `W3[k]` to sub-block 3.
+    /// Total twiddle doubles: `6 * quarter_len`.
+    /// `forward`: 1 for forward FFT (−j rotation), 0 for inverse (+j rotation).
+    ///
+    /// # Safety
+    ///
+    /// - `data` must point to at least `n * 2` doubles.
+    /// - `twiddles` must point to at least `quarter_len * 6` doubles.
+    /// - `quarter_len` must be a power of 2 and `<= n / 4`.
+    pub fn omnidsp_butterfly_stage4_f64(
+        data: *mut f64,
+        twiddles: *const f64,
+        quarter_len: usize,
+        n: usize,
+        forward: i32,
+    );
+
     /// One stage of a radix-2 Cooley-Tukey FFT butterfly (f64).
     ///
     /// Processes all butterfly groups for a stage with the given `half_len`.
@@ -439,6 +483,107 @@ mod tests {
             (dot - 21.0).abs() < EPSILON_F32,
             "single element dot: expected 21.0, got {dot}"
         );
+    }
+
+    // --- butterfly_stage4 ---
+
+    /// 4-point FFT via single radix-4 stage (`quarter_len=1`, forward).
+    /// Bit-reversed [1,2,3,4] → [(1,0),(3,0),(2,0),(4,0)].
+    /// All twiddles are 1+0j (k=0 only).
+    /// Expected: FFT([1,2,3,4]) = [(10,0),(-2,2),(-2,0),(-2,-2)].
+    #[test]
+    fn butterfly_stage4_f64_4point_forward() {
+        let mut data: Vec<f64> = vec![1.0, 0.0, 3.0, 0.0, 2.0, 0.0, 4.0, 0.0];
+        // Twiddles: [W1[0], W2[0], W3[0]] = [(1,0), (1,0), (1,0)]
+        let twiddles: Vec<f64> = vec![1.0, 0.0, 1.0, 0.0, 1.0, 0.0];
+
+        unsafe {
+            omnidsp_butterfly_stage4_f64(data.as_mut_ptr(), twiddles.as_ptr(), 1, 4, 1);
+        }
+
+        let expected: Vec<f64> = vec![10.0, 0.0, -2.0, 2.0, -2.0, 0.0, -2.0, -2.0];
+        for (i, (&got, &exp)) in data.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (got - exp).abs() < EPSILON_F64,
+                "4pt fwd r4 mismatch at {i}: got {got}, expected {exp}"
+            );
+        }
+    }
+
+    /// 4-point inverse FFT via single radix-4 stage.
+    /// Input: FFT result [(10,0),(-2,2),(-2,0),(-2,-2)] bit-reversed.
+    /// Bit-reversal of [0,1,2,3] → [0,2,1,3], so input order:
+    /// [(10,0),(-2,0),(-2,2),(-2,-2)].
+    /// Twiddles use +sign (inverse).
+    /// Expected: IFFT unnormalized = [(4,0),(8,0),(12,0),(16,0)] = 4*[1,2,3,4].
+    #[test]
+    fn butterfly_stage4_f64_4point_inverse() {
+        // Bit-reversed FFT output.
+        let mut data: Vec<f64> = vec![10.0, 0.0, -2.0, 0.0, -2.0, 2.0, -2.0, -2.0];
+        // Inverse twiddles: exp(+2πi·k/4) at k=0 → all 1+0j.
+        let twiddles: Vec<f64> = vec![1.0, 0.0, 1.0, 0.0, 1.0, 0.0];
+
+        unsafe {
+            omnidsp_butterfly_stage4_f64(data.as_mut_ptr(), twiddles.as_ptr(), 1, 4, 0);
+        }
+
+        let expected: Vec<f64> = vec![4.0, 0.0, 8.0, 0.0, 12.0, 0.0, 16.0, 0.0];
+        for (i, (&got, &exp)) in data.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (got - exp).abs() < EPSILON_F64,
+                "4pt inv r4 mismatch at {i}: got {got}, expected {exp}"
+            );
+        }
+    }
+
+    /// 8-point FFT: radix-2 stage 0 then radix-4 stage pair (1,2).
+    /// Verifies the two kernels compose correctly.
+    #[test]
+    fn butterfly_stage4_f32_8point_forward() {
+        // Bit-reversed [1,2,3,4,5,6,7,8] as interleaved complex.
+        let mut data: Vec<f32> = vec![
+            1.0, 0.0, 5.0, 0.0, 3.0, 0.0, 7.0, 0.0, 2.0, 0.0, 6.0, 0.0, 4.0, 0.0, 8.0, 0.0,
+        ];
+
+        // Stage 0 (radix-2, half_len=1): twiddle = [1+0i].
+        let tw_r2: Vec<f32> = vec![1.0, 0.0];
+        unsafe {
+            omnidsp_butterfly_stage_f32(data.as_mut_ptr(), tw_r2.as_ptr(), 1, 8);
+        }
+
+        // Stage pair (1,2) via radix-4, quarter_len=2.
+        // W1[k] = exp(-2πi·k/8), W2[k] = exp(-2πi·2k/8), W3[k] = exp(-2πi·3k/8).
+        let s2 = std::f32::consts::FRAC_1_SQRT_2;
+        let twiddles_r4: Vec<f32> = vec![
+            // W1: k=0 → (1,0), k=1 → (cos π/4, -sin π/4)
+            1.0, 0.0, s2, -s2,
+            // W2: k=0 → (1,0), k=1 → (cos π/2, -sin π/2) = (0,-1)
+            1.0, 0.0, 0.0, -1.0,
+            // W3: k=0 → (1,0), k=1 → (cos 3π/4, -sin 3π/4) = (-s2, -s2)
+            1.0, 0.0, -s2, -s2,
+        ];
+        unsafe {
+            omnidsp_butterfly_stage4_f32(data.as_mut_ptr(), twiddles_r4.as_ptr(), 2, 8, 1);
+        }
+
+        // Expected: FFT([1..8]) = [36, -4+9.66j, -4+4j, -4+1.66j*, -4, ...]
+        let s2f = std::f32::consts::SQRT_2;
+        let expected: Vec<f32> = vec![
+            36.0, 0.0,
+            -4.0, 4.0f32.mul_add(s2f, 4.0),
+            -4.0, 4.0,
+            -4.0, 4.0f32.mul_add(s2f, -4.0),
+            -4.0, 0.0,
+            -4.0, 4.0f32.mul_add(-s2f, 4.0),
+            -4.0, -4.0,
+            -4.0, 4.0f32.mul_add(-s2f, -4.0),
+        ];
+        for (i, (&got, &exp)) in data.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (got - exp).abs() < 1e-4,
+                "8pt fwd r4 mismatch at {i}: got {got}, expected {exp}"
+            );
+        }
     }
 
     // --- butterfly_stage ---

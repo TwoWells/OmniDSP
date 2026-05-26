@@ -260,86 +260,6 @@ OMNIDSP_FLATTEN void CmulF64(const double* HWY_RESTRICT a, const double* HWY_RES
     }
 }
 
-// --- Butterfly stage (f32) ---
-// Processes one complete stage of a radix-2 Cooley-Tukey FFT.
-// `data` is interleaved [re, im] complex, length = n * 2 floats.
-// `twiddles` is interleaved [re, im], length = half_len * 2 floats.
-// `half_len` is the butterfly half-size for this stage (1, 2, 4, ...).
-// `n` is the FFT length (number of complex elements).
-OMNIDSP_FLATTEN void ButterflyStageF32(float* data, const float* twiddles,
-                       size_t half_len, size_t n) {
-    const hn::ScalableTag<float> d;
-    const size_t N = hn::Lanes(d);
-    const size_t full_len = half_len * 2;
-    // Number of float elements per half = half_len * 2 (interleaved re/im).
-    const size_t half_floats = half_len * 2;
-
-    for (size_t group_start = 0; group_start < n; group_start += full_len) {
-        float* even_ptr = data + group_start * 2;
-        float* odd_ptr  = even_ptr + half_floats;
-
-        // SIMD loop over the butterfly pairs in this group.
-        size_t i = 0;
-        OMNIDSP_UNROLL
-        for (; i + N <= half_floats; i += N) {
-            const auto tw  = hn::LoadU(d, twiddles + i);
-            const auto odd = hn::LoadU(d, odd_ptr + i);
-            const auto t   = hn::MulComplex(tw, odd);
-            const auto ev  = hn::LoadU(d, even_ptr + i);
-            hn::StoreU(hn::Add(ev, t), d, even_ptr + i);
-            hn::StoreU(hn::Sub(ev, t), d, odd_ptr + i);
-        }
-        // Scalar tail — process remaining complex pairs.
-        for (; i < half_floats; i += 2) {
-            const float tw_re = twiddles[i], tw_im = twiddles[i + 1];
-            const float odd_re = odd_ptr[i], odd_im = odd_ptr[i + 1];
-            const float t_re = tw_re * odd_re - tw_im * odd_im;
-            const float t_im = tw_re * odd_im + tw_im * odd_re;
-            const float e_re = even_ptr[i], e_im = even_ptr[i + 1];
-            even_ptr[i]     = e_re + t_re;
-            even_ptr[i + 1] = e_im + t_im;
-            odd_ptr[i]      = e_re - t_re;
-            odd_ptr[i + 1]  = e_im - t_im;
-        }
-    }
-}
-
-// --- Butterfly stage (f64) ---
-OMNIDSP_FLATTEN void ButterflyStageF64(double* data, const double* twiddles,
-                       size_t half_len, size_t n) {
-    const hn::ScalableTag<double> d;
-    const size_t N = hn::Lanes(d);
-    const size_t full_len = half_len * 2;
-    const size_t half_floats = half_len * 2;
-
-    for (size_t group_start = 0; group_start < n; group_start += full_len) {
-        double* even_ptr = data + group_start * 2;
-        double* odd_ptr  = even_ptr + half_floats;
-
-        size_t i = 0;
-        OMNIDSP_UNROLL
-        for (; i + N <= half_floats; i += N) {
-            const auto tw  = hn::LoadU(d, twiddles + i);
-            const auto odd = hn::LoadU(d, odd_ptr + i);
-            const auto t   = hn::MulComplex(tw, odd);
-            const auto ev  = hn::LoadU(d, even_ptr + i);
-            hn::StoreU(hn::Add(ev, t), d, even_ptr + i);
-            hn::StoreU(hn::Sub(ev, t), d, odd_ptr + i);
-        }
-        for (; i < half_floats; i += 2) {
-            const double tw_re = twiddles[i], tw_im = twiddles[i + 1];
-            const double odd_re = odd_ptr[i], odd_im = odd_ptr[i + 1];
-            const double t_re = tw_re * odd_re - tw_im * odd_im;
-            const double t_im = tw_re * odd_im + tw_im * odd_re;
-            const double e_re = even_ptr[i], e_im = even_ptr[i + 1];
-            even_ptr[i]     = e_re + t_re;
-            even_ptr[i + 1] = e_im + t_im;
-            odd_ptr[i]      = e_re - t_re;
-            odd_ptr[i + 1]  = e_im - t_im;
-        }
-    }
-}
-
 // --- No-alias element-wise multiply (f32) ---
 // Caller guarantees a, b, and out do not alias each other.
 // HWY_RESTRICT on all three pointers gives the compiler maximum freedom.
@@ -454,6 +374,253 @@ OMNIDSP_FLATTEN void CmulF64NoAlias(const double* HWY_RESTRICT a, const double* 
     }
 }
 
+// --- Butterfly stage (f32) ---
+// Processes one complete stage of a radix-2 Cooley-Tukey FFT.
+// `data` is interleaved [re, im] complex, length = n * 2 floats.
+// `twiddles` is interleaved [re, im], length = half_len * 2 floats.
+// `half_len` is the butterfly half-size for this stage (1, 2, 4, ...).
+// `n` is the FFT length (number of complex elements).
+// NOTE: Uses MulComplex for twiddle application. Ticket 11 will replace
+// this with a shared CmulVec inline helper for ARM optimization.
+OMNIDSP_FLATTEN void ButterflyStageF32(float* data, const float* twiddles,
+                       size_t half_len, size_t n) {
+    const hn::ScalableTag<float> d;
+    const size_t N = hn::Lanes(d);
+    const size_t full_len = half_len * 2;
+    const size_t half_floats = half_len * 2;
+
+    for (size_t group_start = 0; group_start < n; group_start += full_len) {
+        float* even_ptr = data + group_start * 2;
+        float* odd_ptr  = even_ptr + half_floats;
+
+        size_t i = 0;
+        OMNIDSP_UNROLL
+        for (; i + N <= half_floats; i += N) {
+            const auto tw  = hn::LoadU(d, twiddles + i);
+            const auto odd = hn::LoadU(d, odd_ptr + i);
+            const auto t   = hn::MulComplex(tw, odd);
+            const auto ev  = hn::LoadU(d, even_ptr + i);
+            hn::StoreU(hn::Add(ev, t), d, even_ptr + i);
+            hn::StoreU(hn::Sub(ev, t), d, odd_ptr + i);
+        }
+        for (; i < half_floats; i += 2) {
+            const float tw_re = twiddles[i], tw_im = twiddles[i + 1];
+            const float odd_re = odd_ptr[i], odd_im = odd_ptr[i + 1];
+            const float t_re = tw_re * odd_re - tw_im * odd_im;
+            const float t_im = tw_re * odd_im + tw_im * odd_re;
+            const float e_re = even_ptr[i], e_im = even_ptr[i + 1];
+            even_ptr[i]     = e_re + t_re;
+            even_ptr[i + 1] = e_im + t_im;
+            odd_ptr[i]      = e_re - t_re;
+            odd_ptr[i + 1]  = e_im - t_im;
+        }
+    }
+}
+
+// --- Butterfly stage (f64) ---
+OMNIDSP_FLATTEN void ButterflyStageF64(double* data, const double* twiddles,
+                       size_t half_len, size_t n) {
+    const hn::ScalableTag<double> d;
+    const size_t N = hn::Lanes(d);
+    const size_t full_len = half_len * 2;
+    const size_t half_floats = half_len * 2;
+
+    for (size_t group_start = 0; group_start < n; group_start += full_len) {
+        double* even_ptr = data + group_start * 2;
+        double* odd_ptr  = even_ptr + half_floats;
+
+        size_t i = 0;
+        OMNIDSP_UNROLL
+        for (; i + N <= half_floats; i += N) {
+            const auto tw  = hn::LoadU(d, twiddles + i);
+            const auto odd = hn::LoadU(d, odd_ptr + i);
+            const auto t   = hn::MulComplex(tw, odd);
+            const auto ev  = hn::LoadU(d, even_ptr + i);
+            hn::StoreU(hn::Add(ev, t), d, even_ptr + i);
+            hn::StoreU(hn::Sub(ev, t), d, odd_ptr + i);
+        }
+        for (; i < half_floats; i += 2) {
+            const double tw_re = twiddles[i], tw_im = twiddles[i + 1];
+            const double odd_re = odd_ptr[i], odd_im = odd_ptr[i + 1];
+            const double t_re = tw_re * odd_re - tw_im * odd_im;
+            const double t_im = tw_re * odd_im + tw_im * odd_re;
+            const double e_re = even_ptr[i], e_im = even_ptr[i + 1];
+            even_ptr[i]     = e_re + t_re;
+            even_ptr[i + 1] = e_im + t_im;
+            odd_ptr[i]      = e_re - t_re;
+            odd_ptr[i + 1]  = e_im - t_im;
+        }
+    }
+}
+
+// --- Radix-4 butterfly stage (f32) ---
+// Fuses two consecutive radix-2 stages into a single pass over the data.
+// `twiddles` layout: [W1[0..q], W2[0..q], W3[0..q]] where q = quarter_len.
+//   W1[k] applied to sub-block 2, W2[k] to sub-block 1, W3[k] to sub-block 3.
+// `forward`: 1 for forward FFT (-j rotation), 0 for inverse (+j rotation).
+// NOTE: Uses MulComplex for twiddle application. Ticket 11 will replace
+// this with a shared CmulVec inline helper for ARM optimization.
+OMNIDSP_FLATTEN void ButterflyStage4F32(float* data, const float* twiddles,
+                        size_t quarter_len, size_t n, int forward) {
+    const hn::ScalableTag<float> d;
+    const size_t N = hn::Lanes(d);
+    const size_t full_len = quarter_len * 4;
+    const size_t q_floats = quarter_len * 2;
+
+    const float* tw1 = twiddles;
+    const float* tw2 = twiddles + q_floats;
+    const float* tw3 = twiddles + q_floats * 2;
+
+    const auto sign_pos = hn::Set(d, 1.0f);
+    const auto sign_neg = hn::Set(d, -1.0f);
+    const auto j_sign = forward
+        ? hn::OddEven(sign_neg, sign_pos)
+        : hn::OddEven(sign_pos, sign_neg);
+
+    for (size_t group_start = 0; group_start < n; group_start += full_len) {
+        float* p0 = data + group_start * 2;
+        float* p1 = p0 + q_floats;
+        float* p2 = p1 + q_floats;
+        float* p3 = p2 + q_floats;
+
+        size_t i = 0;
+        OMNIDSP_UNROLL
+        for (; i + N <= q_floats; i += N) {
+            const auto x0 = hn::LoadU(d, p0 + i);
+            const auto x1 = hn::LoadU(d, p1 + i);
+            const auto x2 = hn::LoadU(d, p2 + i);
+            const auto x3 = hn::LoadU(d, p3 + i);
+
+            const auto tw_x2 = hn::MulComplex(hn::LoadU(d, tw1 + i), x2);
+            const auto tw_x1 = hn::MulComplex(hn::LoadU(d, tw2 + i), x1);
+            const auto tw_x3 = hn::MulComplex(hn::LoadU(d, tw3 + i), x3);
+
+            const auto u = hn::Add(x0, tw_x1);
+            const auto v = hn::Sub(x0, tw_x1);
+            const auto p_val = hn::Add(tw_x2, tw_x3);
+            const auto q_val = hn::Sub(tw_x2, tw_x3);
+            const auto jq = hn::Mul(hn::Reverse2(d, q_val), j_sign);
+
+            hn::StoreU(hn::Add(u, p_val), d, p0 + i);
+            hn::StoreU(hn::Add(v, jq), d, p1 + i);
+            hn::StoreU(hn::Sub(u, p_val), d, p2 + i);
+            hn::StoreU(hn::Sub(v, jq), d, p3 + i);
+        }
+        for (; i < q_floats; i += 2) {
+            const float x0r = p0[i], x0i = p0[i + 1];
+            const float x1r = p1[i], x1i = p1[i + 1];
+            const float x2r = p2[i], x2i = p2[i + 1];
+            const float x3r = p3[i], x3i = p3[i + 1];
+
+            const float t1r = tw1[i], t1i = tw1[i + 1];
+            const float tx2r = t1r * x2r - t1i * x2i;
+            const float tx2i = t1r * x2i + t1i * x2r;
+
+            const float t2r = tw2[i], t2i = tw2[i + 1];
+            const float tx1r = t2r * x1r - t2i * x1i;
+            const float tx1i = t2r * x1i + t2i * x1r;
+
+            const float t3r = tw3[i], t3i = tw3[i + 1];
+            const float tx3r = t3r * x3r - t3i * x3i;
+            const float tx3i = t3r * x3i + t3i * x3r;
+
+            const float ur = x0r + tx1r, ui = x0i + tx1i;
+            const float vr = x0r - tx1r, vi = x0i - tx1i;
+            const float pr = tx2r + tx3r, pi = tx2i + tx3i;
+            const float qr = tx2r - tx3r, qi = tx2i - tx3i;
+
+            const float jqr = forward ? qi : -qi;
+            const float jqi = forward ? -qr : qr;
+
+            p0[i] = ur + pr; p0[i + 1] = ui + pi;
+            p1[i] = vr + jqr; p1[i + 1] = vi + jqi;
+            p2[i] = ur - pr; p2[i + 1] = ui - pi;
+            p3[i] = vr - jqr; p3[i + 1] = vi - jqi;
+        }
+    }
+}
+
+// --- Radix-4 butterfly stage (f64) ---
+OMNIDSP_FLATTEN void ButterflyStage4F64(double* data, const double* twiddles,
+                        size_t quarter_len, size_t n, int forward) {
+    const hn::ScalableTag<double> d;
+    const size_t N = hn::Lanes(d);
+    const size_t full_len = quarter_len * 4;
+    const size_t q_floats = quarter_len * 2;
+
+    const double* tw1 = twiddles;
+    const double* tw2 = twiddles + q_floats;
+    const double* tw3 = twiddles + q_floats * 2;
+
+    const auto sign_pos = hn::Set(d, 1.0);
+    const auto sign_neg = hn::Set(d, -1.0);
+    const auto j_sign = forward
+        ? hn::OddEven(sign_neg, sign_pos)
+        : hn::OddEven(sign_pos, sign_neg);
+
+    for (size_t group_start = 0; group_start < n; group_start += full_len) {
+        double* p0 = data + group_start * 2;
+        double* p1 = p0 + q_floats;
+        double* p2 = p1 + q_floats;
+        double* p3 = p2 + q_floats;
+
+        size_t i = 0;
+        OMNIDSP_UNROLL
+        for (; i + N <= q_floats; i += N) {
+            const auto x0 = hn::LoadU(d, p0 + i);
+            const auto x1 = hn::LoadU(d, p1 + i);
+            const auto x2 = hn::LoadU(d, p2 + i);
+            const auto x3 = hn::LoadU(d, p3 + i);
+
+            const auto tw_x2 = hn::MulComplex(hn::LoadU(d, tw1 + i), x2);
+            const auto tw_x1 = hn::MulComplex(hn::LoadU(d, tw2 + i), x1);
+            const auto tw_x3 = hn::MulComplex(hn::LoadU(d, tw3 + i), x3);
+
+            const auto u = hn::Add(x0, tw_x1);
+            const auto v = hn::Sub(x0, tw_x1);
+            const auto p_val = hn::Add(tw_x2, tw_x3);
+            const auto q_val = hn::Sub(tw_x2, tw_x3);
+            const auto jq = hn::Mul(hn::Reverse2(d, q_val), j_sign);
+
+            hn::StoreU(hn::Add(u, p_val), d, p0 + i);
+            hn::StoreU(hn::Add(v, jq), d, p1 + i);
+            hn::StoreU(hn::Sub(u, p_val), d, p2 + i);
+            hn::StoreU(hn::Sub(v, jq), d, p3 + i);
+        }
+        for (; i < q_floats; i += 2) {
+            const double x0r = p0[i], x0i = p0[i + 1];
+            const double x1r = p1[i], x1i = p1[i + 1];
+            const double x2r = p2[i], x2i = p2[i + 1];
+            const double x3r = p3[i], x3i = p3[i + 1];
+
+            const double t1r = tw1[i], t1i = tw1[i + 1];
+            const double tx2r = t1r * x2r - t1i * x2i;
+            const double tx2i = t1r * x2i + t1i * x2r;
+
+            const double t2r = tw2[i], t2i = tw2[i + 1];
+            const double tx1r = t2r * x1r - t2i * x1i;
+            const double tx1i = t2r * x1i + t2i * x1r;
+
+            const double t3r = tw3[i], t3i = tw3[i + 1];
+            const double tx3r = t3r * x3r - t3i * x3i;
+            const double tx3i = t3r * x3i + t3i * x3r;
+
+            const double ur = x0r + tx1r, ui = x0i + tx1i;
+            const double vr = x0r - tx1r, vi = x0i - tx1i;
+            const double pr = tx2r + tx3r, pi = tx2i + tx3i;
+            const double qr = tx2r - tx3r, qi = tx2i - tx3i;
+
+            const double jqr = forward ? qi : -qi;
+            const double jqi = forward ? -qr : qr;
+
+            p0[i] = ur + pr; p0[i + 1] = ui + pi;
+            p1[i] = vr + jqr; p1[i + 1] = vi + jqi;
+            p2[i] = ur - pr; p2[i + 1] = ui - pi;
+            p3[i] = vr - jqr; p3[i + 1] = vi - jqi;
+        }
+    }
+}
+
 }  // namespace HWY_NAMESPACE
 }  // namespace omnidsp
 HWY_AFTER_NAMESPACE();
@@ -473,6 +640,8 @@ HWY_EXPORT(CmulF32);
 HWY_EXPORT(CmulF64);
 HWY_EXPORT(ButterflyStageF32);
 HWY_EXPORT(ButterflyStageF64);
+HWY_EXPORT(ButterflyStage4F32);
+HWY_EXPORT(ButterflyStage4F64);
 HWY_EXPORT(MulF32NoAlias);
 HWY_EXPORT(MulF64NoAlias);
 HWY_EXPORT(CmulF32NoAlias);
@@ -515,6 +684,12 @@ void DispatchButterflyStageF32(float* data, const float* twiddles, size_t half_l
 }
 void DispatchButterflyStageF64(double* data, const double* twiddles, size_t half_len, size_t n) {
     HWY_DYNAMIC_DISPATCH(ButterflyStageF64)(data, twiddles, half_len, n);
+}
+void DispatchButterflyStage4F32(float* data, const float* twiddles, size_t quarter_len, size_t n, int forward) {
+    HWY_DYNAMIC_DISPATCH(ButterflyStage4F32)(data, twiddles, quarter_len, n, forward);
+}
+void DispatchButterflyStage4F64(double* data, const double* twiddles, size_t quarter_len, size_t n, int forward) {
+    HWY_DYNAMIC_DISPATCH(ButterflyStage4F64)(data, twiddles, quarter_len, n, forward);
 }
 void DispatchMulF32NoAlias(const float* a, const float* b, float* out, size_t count) {
     HWY_DYNAMIC_DISPATCH(MulF32NoAlias)(a, b, out, count);
@@ -567,6 +742,12 @@ void omnidsp_butterfly_stage_f32(float* data, const float* twiddles, size_t half
 }
 void omnidsp_butterfly_stage_f64(double* data, const double* twiddles, size_t half_len, size_t n) {
     omnidsp::DispatchButterflyStageF64(data, twiddles, half_len, n);
+}
+void omnidsp_butterfly_stage4_f32(float* data, const float* twiddles, size_t quarter_len, size_t n, int forward) {
+    omnidsp::DispatchButterflyStage4F32(data, twiddles, quarter_len, n, forward);
+}
+void omnidsp_butterfly_stage4_f64(double* data, const double* twiddles, size_t quarter_len, size_t n, int forward) {
+    omnidsp::DispatchButterflyStage4F64(data, twiddles, quarter_len, n, forward);
 }
 void omnidsp_mul_f32_noalias(const float* a, const float* b, float* out, size_t count) {
     omnidsp::DispatchMulF32NoAlias(a, b, out, count);

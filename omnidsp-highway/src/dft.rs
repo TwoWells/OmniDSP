@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Two Wells <contact@twowells.dev>
 
-//! [`HwyDft`] — Highway SIMD DFT factory implementing radix-2 Cooley-Tukey FFT.
+//! [`HwyDft`] — Highway SIMD DFT factory implementing mixed radix-4/radix-2
+//! Cooley-Tukey FFT.
 //!
 //! Algorithm logic (loop structure, stage progression, bit-reversal) lives in
 //! Rust. The hot inner loops (butterfly twiddle application, scaling) use
-//! Highway SIMD kernels via `highway-sys`.
+//! Highway SIMD kernels via `highway-sys`. Radix-4 stages fuse two radix-2
+//! stages into a single pass, halving memory traffic. When the exponent is
+//! odd, a single radix-2 stage handles the first pass.
 
 use std::f64::consts::PI;
 
@@ -17,43 +20,53 @@ use omnidsp_core::types::Direction;
 
 /// Highway SIMD DFT factory.
 ///
-/// Creates [`HwyDftPlan`] instances for power-of-2 lengths using a radix-2
-/// iterative Cooley-Tukey FFT.  Non-power-of-2 lengths return an error.
+/// Creates [`HwyDftPlan`] instances for power-of-2 lengths using a mixed
+/// radix-4/radix-2 iterative Cooley-Tukey FFT. Non-power-of-2 lengths
+/// return an error.
 pub struct HwyDft;
 
 /// Execution plan for a DFT operation using Highway SIMD butterflies.
 ///
-/// Holds precomputed twiddle factors. The plan is immutable — naturally
-/// `Send + Sync` with no interior mutability needed.
+/// Uses radix-4 stages where possible (two radix-2 stages fused into one
+/// pass), with a single radix-2 stage at the start when the exponent is odd.
+/// The plan is immutable — naturally `Send + Sync` with no interior mutability.
 pub struct HwyDftPlan<T> {
     length: usize,
     direction: Direction,
     norm: DftNorm,
-    /// Twiddle factors for each butterfly stage, stored as interleaved
-    /// `[re, im, re, im, ...]` for direct use with the Highway cmul kernel.
+    /// Twiddle factors stored as interleaved `[re, im, ...]`.
+    ///
+    /// Layout: optional radix-2 twiddles for stage 0, then for each radix-4
+    /// pair, three contiguous blocks `[W1[0..q], W2[0..q], W3[0..q]]`.
     twiddles: Vec<T>,
+    /// True when the exponent is odd and stage 0 is a standalone radix-2 stage.
+    has_initial_radix2: bool,
 }
 
-/// Precompute twiddle factors for all stages of a radix-2 FFT.
+/// Precompute twiddle factors for the mixed radix-4/radix-2 FFT.
 ///
-/// For a forward FFT of length N, stage s has `half_len` = 2^s butterflies
-/// with twiddle factors exp(-2πi·k / (2·`half_len`)).
-/// For inverse, the sign is positive.
+/// When the exponent is odd, stage 0 is a standalone radix-2 stage (its
+/// twiddles come first). Remaining stages are paired into radix-4 groups.
+/// Each radix-4 pair with `quarter_len = q` stores three twiddle blocks:
+///   `[W1[0..q], W2[0..q], W3[0..q]]`
+/// where `W1[k] = exp(sign·2πi·k/(4q))`, `W2[k] = W1[k]²`, `W3[k] = W1[k]³`.
 ///
-/// Returns interleaved [re, im] flat buffer, with stages concatenated.
-fn compute_twiddles(length: usize, direction: Direction) -> Vec<f64> {
+/// Returns `(twiddles, has_initial_radix2)`.
+fn compute_twiddles(length: usize, direction: Direction) -> (Vec<f64>, bool) {
     let sign = match direction {
         Direction::Forward => -1.0,
         Direction::Inverse => 1.0,
     };
 
     let num_stages = length.trailing_zeros() as usize;
-    // Total twiddle count = sum of half_len for each stage = N - 1
-    // Each twiddle is 2 floats (re, im), so total = (N - 1) * 2
+    let has_initial_radix2 = num_stages % 2 == 1;
+
+    // Total twiddle count is still N - 1 (same storage, different layout).
     let mut twiddles = Vec::with_capacity((length - 1) * 2);
 
-    for s in 0..num_stages {
-        let half_len = 1_usize << s;
+    let start_stage = if has_initial_radix2 {
+        // Stage 0: radix-2 twiddles for half_len = 1.
+        let half_len = 1_usize;
         let full_len = half_len << 1;
         for k in 0..half_len {
             #[allow(
@@ -64,9 +77,56 @@ fn compute_twiddles(length: usize, direction: Direction) -> Vec<f64> {
             twiddles.push(angle.cos());
             twiddles.push(angle.sin());
         }
+        1
+    } else {
+        0
+    };
+
+    // Radix-4 pairs: stages (s, s+1) with quarter_len = 2^s.
+    let mut s = start_stage;
+    while s + 1 < num_stages {
+        let quarter_len = 1_usize << s;
+        #[allow(
+            clippy::cast_precision_loss,
+            reason = "FFT lengths and indices are well within f64 mantissa range"
+        )]
+        let full_len_f = (quarter_len * 4) as f64;
+
+        // W1: exp(sign·2πi·k / full_len)
+        for k in 0..quarter_len {
+            #[allow(
+                clippy::cast_precision_loss,
+                reason = "FFT lengths and indices are well within f64 mantissa range"
+            )]
+            let angle = sign * 2.0 * PI * (k as f64) / full_len_f;
+            twiddles.push(angle.cos());
+            twiddles.push(angle.sin());
+        }
+        // W2: exp(sign·2πi·2k / full_len)
+        for k in 0..quarter_len {
+            #[allow(
+                clippy::cast_precision_loss,
+                reason = "FFT lengths and indices are well within f64 mantissa range"
+            )]
+            let angle = sign * 2.0 * PI * ((2 * k) as f64) / full_len_f;
+            twiddles.push(angle.cos());
+            twiddles.push(angle.sin());
+        }
+        // W3: exp(sign·2πi·3k / full_len)
+        for k in 0..quarter_len {
+            #[allow(
+                clippy::cast_precision_loss,
+                reason = "FFT lengths and indices are well within f64 mantissa range"
+            )]
+            let angle = sign * 2.0 * PI * ((3 * k) as f64) / full_len_f;
+            twiddles.push(angle.cos());
+            twiddles.push(angle.sin());
+        }
+
+        s += 2;
     }
 
-    twiddles
+    (twiddles, has_initial_radix2)
 }
 
 /// Bit-reversal permutation in-place on a buffer of complex values stored
@@ -86,7 +146,7 @@ fn bit_reverse_permute<T: Copy>(buf: &mut [T], log2n: u32) {
 }
 
 macro_rules! impl_hwy_dft {
-    ($t:ty, $butterfly_fn:ident, $scale_fn:ident) => {
+    ($t:ty, $butterfly_fn:ident, $butterfly4_fn:ident, $scale_fn:ident) => {
         impl DftPlan<$t> for HwyDftPlan<$t> {
             fn process(&self, input: &[Complex<$t>], output: &mut [Complex<$t>]) -> Result<()> {
                 if input.len() != self.length {
@@ -124,26 +184,51 @@ macro_rules! impl_hwy_dft {
                 // Step 1: Bit-reversal permutation.
                 bit_reverse_permute(buf, log2n);
 
-                // Step 2: Iterative butterfly stages via Highway SIMD kernel.
+                // Step 2: Butterfly stages.
                 let num_stages = log2n as usize;
-                let mut twiddle_offset = 0;
+                // Optional leading radix-2 stage (when exponent is odd).
+                let (mut twiddle_offset, mut stage) = if self.has_initial_radix2 {
+                    let half_len = 1_usize;
 
-                for s in 0..num_stages {
-                    let half_len = 1_usize << s;
-                    let tw = &self.twiddles[twiddle_offset..twiddle_offset + half_len * 2];
-                    twiddle_offset += half_len * 2;
-
-                    // SAFETY: `buf` points to `self.length * 2` elements.
-                    // `tw` points to `half_len * 2` elements.
-                    // `half_len` is a power of 2 and <= self.length / 2.
+                    // SAFETY: `buf` has `self.length * 2` elements, twiddle
+                    // slice has `half_len * 2` elements.
                     unsafe {
                         highway_sys::$butterfly_fn(
                             buf.as_mut_ptr(),
-                            tw.as_ptr(),
+                            self.twiddles.as_ptr(),
                             half_len,
                             self.length,
                         );
                     }
+                    (half_len * 2, 1)
+                } else {
+                    (0, 0)
+                };
+
+                // Radix-4 stages (fused pairs).
+                let forward_flag: i32 = match self.direction {
+                    Direction::Forward => 1,
+                    Direction::Inverse => 0,
+                };
+
+                while stage + 1 < num_stages {
+                    let quarter_len = 1_usize << stage;
+                    let tw_len = quarter_len * 6;
+
+                    // SAFETY: `buf` has `self.length * 2` elements, twiddle
+                    // slice has `quarter_len * 6` elements, `quarter_len` is
+                    // a power of 2 and `<= self.length / 4`.
+                    unsafe {
+                        highway_sys::$butterfly4_fn(
+                            buf.as_mut_ptr(),
+                            self.twiddles[twiddle_offset..].as_ptr(),
+                            quarter_len,
+                            self.length,
+                            forward_flag,
+                        );
+                    }
+                    twiddle_offset += tw_len;
+                    stage += 2;
                 }
 
                 self.apply_norm(output)
@@ -211,7 +296,8 @@ macro_rules! impl_hwy_dft {
                     )));
                 }
 
-                let twiddles_f64 = compute_twiddles(spec.length, spec.direction);
+                let (twiddles_f64, has_initial_radix2) =
+                    compute_twiddles(spec.length, spec.direction);
                 #[allow(
                     clippy::cast_possible_truncation,
                     reason = "twiddle factors (sin/cos) are always in [-1, 1]"
@@ -223,14 +309,15 @@ macro_rules! impl_hwy_dft {
                     direction: spec.direction,
                     norm: spec.norm,
                     twiddles,
+                    has_initial_radix2,
                 })
             }
         }
     };
 }
 
-impl_hwy_dft!(f32, omnidsp_butterfly_stage_f32, omnidsp_scale_f32);
-impl_hwy_dft!(f64, omnidsp_butterfly_stage_f64, omnidsp_scale_f64);
+impl_hwy_dft!(f32, omnidsp_butterfly_stage_f32, omnidsp_butterfly_stage4_f32, omnidsp_scale_f32);
+impl_hwy_dft!(f64, omnidsp_butterfly_stage_f64, omnidsp_butterfly_stage4_f64, omnidsp_scale_f64);
 
 #[cfg(test)]
 #[allow(clippy::expect_used, reason = "tests use expect for clarity")]
