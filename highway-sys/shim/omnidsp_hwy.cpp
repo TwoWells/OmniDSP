@@ -13,6 +13,15 @@
 #include "hwy/foreach_target.h"
 #include "hwy/highway.h"
 
+// Force inlining of all callees (Highway ops) before the loop unroller runs.
+// Apple clang's unroller bails when it sees inline candidates in the loop body
+// (LLVM issue #88141). flatten ensures LoadU/Mul/StoreU are inlined first.
+#if HWY_COMPILER_CLANG || HWY_COMPILER_GCC
+#define OMNIDSP_FLATTEN __attribute__((flatten))
+#else
+#define OMNIDSP_FLATTEN
+#endif
+
 HWY_BEFORE_NAMESPACE();
 namespace omnidsp {
 namespace HWY_NAMESPACE {
@@ -21,7 +30,7 @@ namespace hn = hwy::HWY_NAMESPACE;
 // --- Element-wise multiply (f32) ---
 // HWY_RESTRICT on inputs: safe because we load before store each iteration,
 // even when out aliases an input (mul_inplace).
-void MulF32(const float* HWY_RESTRICT a, const float* HWY_RESTRICT b,
+OMNIDSP_FLATTEN void MulF32(const float* HWY_RESTRICT a, const float* HWY_RESTRICT b,
             float* out, size_t count) {
     const hn::ScalableTag<float> d;
     const size_t N = hn::Lanes(d);
@@ -38,7 +47,7 @@ void MulF32(const float* HWY_RESTRICT a, const float* HWY_RESTRICT b,
 }
 
 // --- Element-wise multiply (f64) ---
-void MulF64(const double* HWY_RESTRICT a, const double* HWY_RESTRICT b,
+OMNIDSP_FLATTEN void MulF64(const double* HWY_RESTRICT a, const double* HWY_RESTRICT b,
             double* out, size_t count) {
     const hn::ScalableTag<double> d;
     const size_t N = hn::Lanes(d);
@@ -55,7 +64,7 @@ void MulF64(const double* HWY_RESTRICT a, const double* HWY_RESTRICT b,
 }
 
 // --- Element-wise add (f32) ---
-void AddF32(const float* HWY_RESTRICT a, const float* HWY_RESTRICT b,
+OMNIDSP_FLATTEN void AddF32(const float* HWY_RESTRICT a, const float* HWY_RESTRICT b,
             float* out, size_t count) {
     const hn::ScalableTag<float> d;
     const size_t N = hn::Lanes(d);
@@ -72,7 +81,7 @@ void AddF32(const float* HWY_RESTRICT a, const float* HWY_RESTRICT b,
 }
 
 // --- Element-wise add (f64) ---
-void AddF64(const double* HWY_RESTRICT a, const double* HWY_RESTRICT b,
+OMNIDSP_FLATTEN void AddF64(const double* HWY_RESTRICT a, const double* HWY_RESTRICT b,
             double* out, size_t count) {
     const hn::ScalableTag<double> d;
     const size_t N = hn::Lanes(d);
@@ -89,7 +98,7 @@ void AddF64(const double* HWY_RESTRICT a, const double* HWY_RESTRICT b,
 }
 
 // --- Scale / broadcast multiply (f32) ---
-void ScaleF32(float* data, float scalar, size_t count) {
+OMNIDSP_FLATTEN void ScaleF32(float* data, float scalar, size_t count) {
     const hn::ScalableTag<float> d;
     const size_t N = hn::Lanes(d);
     const auto vs = hn::Set(d, scalar);
@@ -105,7 +114,7 @@ void ScaleF32(float* data, float scalar, size_t count) {
 }
 
 // --- Scale / broadcast multiply (f64) ---
-void ScaleF64(double* data, double scalar, size_t count) {
+OMNIDSP_FLATTEN void ScaleF64(double* data, double scalar, size_t count) {
     const hn::ScalableTag<double> d;
     const size_t N = hn::Lanes(d);
     const auto vs = hn::Set(d, scalar);
@@ -121,7 +130,7 @@ void ScaleF64(double* data, double scalar, size_t count) {
 }
 
 // --- Dot product (f32) ---
-float DotF32(const float* a, const float* b, size_t count) {
+OMNIDSP_FLATTEN float DotF32(const float* a, const float* b, size_t count) {
     const hn::ScalableTag<float> d;
     const size_t N = hn::Lanes(d);
     auto sum = hn::Zero(d);
@@ -140,7 +149,7 @@ float DotF32(const float* a, const float* b, size_t count) {
 }
 
 // --- Dot product (f64) ---
-double DotF64(const double* a, const double* b, size_t count) {
+OMNIDSP_FLATTEN double DotF64(const double* a, const double* b, size_t count) {
     const hn::ScalableTag<double> d;
     const size_t N = hn::Lanes(d);
     auto sum = hn::Zero(d);
@@ -163,7 +172,7 @@ double DotF64(const double* a, const double* b, size_t count) {
 // with MulComplex). LoadInterleaved2 splits re/im into separate vectors,
 // then FMA computes the complex product without shuffle overhead.
 // count = number of complex elements; raw floats = count * 2.
-void CmulF32(const float* HWY_RESTRICT a, const float* HWY_RESTRICT b,
+OMNIDSP_FLATTEN void CmulF32(const float* HWY_RESTRICT a, const float* HWY_RESTRICT b,
              float* out, size_t count) {
     const hn::ScalableTag<float> d;
     const size_t N = hn::Lanes(d);
@@ -190,7 +199,7 @@ void CmulF32(const float* HWY_RESTRICT a, const float* HWY_RESTRICT b,
 }
 
 // --- Complex multiply (f64, interleaved re/im layout) ---
-void CmulF64(const double* HWY_RESTRICT a, const double* HWY_RESTRICT b,
+OMNIDSP_FLATTEN void CmulF64(const double* HWY_RESTRICT a, const double* HWY_RESTRICT b,
              double* out, size_t count) {
     const hn::ScalableTag<double> d;
     const size_t N = hn::Lanes(d);
@@ -219,7 +228,7 @@ void CmulF64(const double* HWY_RESTRICT a, const double* HWY_RESTRICT b,
 // `twiddles` is interleaved [re, im], length = half_len * 2 floats.
 // `half_len` is the butterfly half-size for this stage (1, 2, 4, ...).
 // `n` is the FFT length (number of complex elements).
-void ButterflyStageF32(float* data, const float* twiddles,
+OMNIDSP_FLATTEN void ButterflyStageF32(float* data, const float* twiddles,
                        size_t half_len, size_t n) {
     const hn::ScalableTag<float> d;
     const size_t N = hn::Lanes(d);
@@ -258,7 +267,7 @@ void ButterflyStageF32(float* data, const float* twiddles,
 }
 
 // --- Butterfly stage (f64) ---
-void ButterflyStageF64(double* data, const double* twiddles,
+OMNIDSP_FLATTEN void ButterflyStageF64(double* data, const double* twiddles,
                        size_t half_len, size_t n) {
     const hn::ScalableTag<double> d;
     const size_t N = hn::Lanes(d);
