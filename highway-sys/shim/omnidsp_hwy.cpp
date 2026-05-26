@@ -19,7 +19,9 @@ namespace HWY_NAMESPACE {
 namespace hn = hwy::HWY_NAMESPACE;
 
 // --- Element-wise multiply (f32) ---
-void MulF32(const float* a, const float* b,
+// HWY_RESTRICT on inputs: safe because we load before store each iteration,
+// even when out aliases an input (mul_inplace).
+void MulF32(const float* HWY_RESTRICT a, const float* HWY_RESTRICT b,
             float* out, size_t count) {
     const hn::ScalableTag<float> d;
     const size_t N = hn::Lanes(d);
@@ -36,7 +38,7 @@ void MulF32(const float* a, const float* b,
 }
 
 // --- Element-wise multiply (f64) ---
-void MulF64(const double* a, const double* b,
+void MulF64(const double* HWY_RESTRICT a, const double* HWY_RESTRICT b,
             double* out, size_t count) {
     const hn::ScalableTag<double> d;
     const size_t N = hn::Lanes(d);
@@ -53,7 +55,7 @@ void MulF64(const double* a, const double* b,
 }
 
 // --- Element-wise add (f32) ---
-void AddF32(const float* a, const float* b,
+void AddF32(const float* HWY_RESTRICT a, const float* HWY_RESTRICT b,
             float* out, size_t count) {
     const hn::ScalableTag<float> d;
     const size_t N = hn::Lanes(d);
@@ -70,7 +72,7 @@ void AddF32(const float* a, const float* b,
 }
 
 // --- Element-wise add (f64) ---
-void AddF64(const double* a, const double* b,
+void AddF64(const double* HWY_RESTRICT a, const double* HWY_RESTRICT b,
             double* out, size_t count) {
     const hn::ScalableTag<double> d;
     const size_t N = hn::Lanes(d);
@@ -157,47 +159,57 @@ double DotF64(const double* a, const double* b, size_t count) {
 }
 
 // --- Complex multiply (f32, interleaved re/im layout) ---
+// Deinterleaved FMA: processes N complex elements per iteration (vs N/2
+// with MulComplex). LoadInterleaved2 splits re/im into separate vectors,
+// then FMA computes the complex product without shuffle overhead.
 // count = number of complex elements; raw floats = count * 2.
-void CmulF32(const float* a, const float* b,
+void CmulF32(const float* HWY_RESTRICT a, const float* HWY_RESTRICT b,
              float* out, size_t count) {
     const hn::ScalableTag<float> d;
     const size_t N = hn::Lanes(d);
-    const size_t fcount = count * 2;
     size_t i = 0;
     HWY_DEFAULT_UNROLL
-    for (; i + N <= fcount; i += N) {
-        const auto va = hn::LoadU(d, a + i);
-        const auto vb = hn::LoadU(d, b + i);
-        hn::StoreU(hn::MulComplex(va, vb), d, out + i);
+    for (; i + N <= count; i += N) {
+        hn::Vec<decltype(d)> a_re, a_im, b_re, b_im;
+        hn::LoadInterleaved2(d, a + i * 2, a_re, a_im);
+        hn::LoadInterleaved2(d, b + i * 2, b_re, b_im);
+        // (a_re + i*a_im)(b_re + i*b_im) =
+        //   (a_re*b_re - a_im*b_im) + i*(a_re*b_im + a_im*b_re)
+        const auto out_re = hn::NegMulAdd(a_im, b_im, hn::Mul(a_re, b_re));
+        const auto out_im = hn::MulAdd(a_im, b_re, hn::Mul(a_re, b_im));
+        hn::StoreInterleaved2(out_re, out_im, d, out + i * 2);
     }
     // Scalar remainder — process complex pairs.
-    for (; i < fcount; i += 2) {
-        const float are = a[i], aim = a[i + 1];
-        const float bre = b[i], bim = b[i + 1];
-        out[i]     = are * bre - aim * bim;
-        out[i + 1] = are * bim + aim * bre;
+    for (; i < count; ++i) {
+        const size_t j = i * 2;
+        const float are = a[j], aim = a[j + 1];
+        const float bre = b[j], bim = b[j + 1];
+        out[j]     = are * bre - aim * bim;
+        out[j + 1] = are * bim + aim * bre;
     }
 }
 
 // --- Complex multiply (f64, interleaved re/im layout) ---
-void CmulF64(const double* a, const double* b,
+void CmulF64(const double* HWY_RESTRICT a, const double* HWY_RESTRICT b,
              double* out, size_t count) {
     const hn::ScalableTag<double> d;
     const size_t N = hn::Lanes(d);
-    const size_t fcount = count * 2;
     size_t i = 0;
     HWY_DEFAULT_UNROLL
-    for (; i + N <= fcount; i += N) {
-        const auto va = hn::LoadU(d, a + i);
-        const auto vb = hn::LoadU(d, b + i);
-        hn::StoreU(hn::MulComplex(va, vb), d, out + i);
+    for (; i + N <= count; i += N) {
+        hn::Vec<decltype(d)> a_re, a_im, b_re, b_im;
+        hn::LoadInterleaved2(d, a + i * 2, a_re, a_im);
+        hn::LoadInterleaved2(d, b + i * 2, b_re, b_im);
+        const auto out_re = hn::NegMulAdd(a_im, b_im, hn::Mul(a_re, b_re));
+        const auto out_im = hn::MulAdd(a_im, b_re, hn::Mul(a_re, b_im));
+        hn::StoreInterleaved2(out_re, out_im, d, out + i * 2);
     }
-    // Scalar remainder — process complex pairs.
-    for (; i < fcount; i += 2) {
-        const double are = a[i], aim = a[i + 1];
-        const double bre = b[i], bim = b[i + 1];
-        out[i]     = are * bre - aim * bim;
-        out[i + 1] = are * bim + aim * bre;
+    for (; i < count; ++i) {
+        const size_t j = i * 2;
+        const double are = a[j], aim = a[j + 1];
+        const double bre = b[j], bim = b[j + 1];
+        out[j]     = are * bre - aim * bim;
+        out[j + 1] = are * bim + aim * bre;
     }
 }
 
