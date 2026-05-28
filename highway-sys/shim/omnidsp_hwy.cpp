@@ -639,6 +639,69 @@ OMNIDSP_FLATTEN void ButterflyStage4F64(double* data, const double* twiddles,
     }
 }
 
+// --- First-stage radix-4 butterfly (f32) ---
+// Specialized for quarter_len=1 where all twiddles are trivial (1+0j).
+// Eliminates 3 complex multiplies per group — the main bottleneck for
+// small and medium FFT sizes (see ticket 07).
+//
+// Scalar loop: each group is 4 complex elements with trivial twiddles,
+// so the butterfly is just adds/subs + j-rotation.  Callgrind shows this
+// beats an in-register SIMD approach (DupEven/InterleaveLower/OddEven/
+// IfThenElse) by ~2x on SSE2 N=4 because the shuffle overhead per group
+// outweighs the arithmetic savings when processing only 1 group/iter.
+OMNIDSP_FLATTEN void ButterflyStage4FirstF32(float* data, size_t n, int forward) {
+    const float j_re = forward ? 1.0f : -1.0f;
+    const float j_im = -j_re;
+
+    for (size_t g = 0; g < n; g += 4) {
+        float* p = data + g * 2;
+        const float x0r = p[0], x0i = p[1];
+        const float x1r = p[2], x1i = p[3];
+        const float x2r = p[4], x2i = p[5];
+        const float x3r = p[6], x3i = p[7];
+
+        const float ur = x0r + x1r, ui = x0i + x1i;
+        const float vr = x0r - x1r, vi = x0i - x1i;
+        const float pr = x2r + x3r, pi = x2i + x3i;
+        const float qr = x2r - x3r, qi = x2i - x3i;
+
+        const float jqr = j_re * qi;
+        const float jqi = j_im * qr;
+
+        p[0] = ur + pr; p[1] = ui + pi;
+        p[2] = vr + jqr; p[3] = vi + jqi;
+        p[4] = ur - pr; p[5] = ui - pi;
+        p[6] = vr - jqr; p[7] = vi - jqi;
+    }
+}
+
+// --- First-stage radix-4 butterfly (f64) ---
+OMNIDSP_FLATTEN void ButterflyStage4FirstF64(double* data, size_t n, int forward) {
+    const double j_re = forward ? 1.0 : -1.0;
+    const double j_im = -j_re;
+
+    for (size_t g = 0; g < n; g += 4) {
+        double* p = data + g * 2;
+        const double x0r = p[0], x0i = p[1];
+        const double x1r = p[2], x1i = p[3];
+        const double x2r = p[4], x2i = p[5];
+        const double x3r = p[6], x3i = p[7];
+
+        const double ur = x0r + x1r, ui = x0i + x1i;
+        const double vr = x0r - x1r, vi = x0i - x1i;
+        const double pr = x2r + x3r, pi = x2i + x3i;
+        const double qr = x2r - x3r, qi = x2i - x3i;
+
+        const double jqr = j_re * qi;
+        const double jqi = j_im * qr;
+
+        p[0] = ur + pr; p[1] = ui + pi;
+        p[2] = vr + jqr; p[3] = vi + jqi;
+        p[4] = ur - pr; p[5] = ui - pi;
+        p[6] = vr - jqr; p[7] = vi - jqi;
+    }
+}
+
 }  // namespace HWY_NAMESPACE
 }  // namespace omnidsp
 HWY_AFTER_NAMESPACE();
@@ -660,6 +723,8 @@ HWY_EXPORT(ButterflyStageF32);
 HWY_EXPORT(ButterflyStageF64);
 HWY_EXPORT(ButterflyStage4F32);
 HWY_EXPORT(ButterflyStage4F64);
+HWY_EXPORT(ButterflyStage4FirstF32);
+HWY_EXPORT(ButterflyStage4FirstF64);
 HWY_EXPORT(MulF32NoAlias);
 HWY_EXPORT(MulF64NoAlias);
 HWY_EXPORT(CmulF32NoAlias);
@@ -708,6 +773,12 @@ void DispatchButterflyStage4F32(float* data, const float* twiddles, size_t quart
 }
 void DispatchButterflyStage4F64(double* data, const double* twiddles, size_t quarter_len, size_t n, int forward) {
     HWY_DYNAMIC_DISPATCH(ButterflyStage4F64)(data, twiddles, quarter_len, n, forward);
+}
+void DispatchButterflyStage4FirstF32(float* data, size_t n, int forward) {
+    HWY_DYNAMIC_DISPATCH(ButterflyStage4FirstF32)(data, n, forward);
+}
+void DispatchButterflyStage4FirstF64(double* data, size_t n, int forward) {
+    HWY_DYNAMIC_DISPATCH(ButterflyStage4FirstF64)(data, n, forward);
 }
 void DispatchMulF32NoAlias(const float* a, const float* b, float* out, size_t count) {
     HWY_DYNAMIC_DISPATCH(MulF32NoAlias)(a, b, out, count);
@@ -766,6 +837,12 @@ void omnidsp_butterfly_stage4_f32(float* data, const float* twiddles, size_t qua
 }
 void omnidsp_butterfly_stage4_f64(double* data, const double* twiddles, size_t quarter_len, size_t n, int forward) {
     omnidsp::DispatchButterflyStage4F64(data, twiddles, quarter_len, n, forward);
+}
+void omnidsp_butterfly_stage4_first_f32(float* data, size_t n, int forward) {
+    omnidsp::DispatchButterflyStage4FirstF32(data, n, forward);
+}
+void omnidsp_butterfly_stage4_first_f64(double* data, size_t n, int forward) {
+    omnidsp::DispatchButterflyStage4FirstF64(data, n, forward);
 }
 void omnidsp_mul_f32_noalias(const float* a, const float* b, float* out, size_t count) {
     omnidsp::DispatchMulF32NoAlias(a, b, out, count);

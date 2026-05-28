@@ -184,6 +184,42 @@ unsafe extern "C" {
         forward: i32,
     );
 
+    /// First-stage radix-4 butterfly (f32) — specialized for `quarter_len=1`.
+    ///
+    /// All twiddles are trivial (1+0j), so no twiddle pointer is needed.
+    /// Eliminates 3 complex multiplies per group.
+    /// `data` is interleaved `[re, im]` complex (`n * 2` floats).
+    /// `n` is the FFT length (number of complex elements, must be >= 4).
+    /// `forward`: 1 for forward FFT (−j rotation), 0 for inverse (+j rotation).
+    ///
+    /// # Safety
+    ///
+    /// - `data` must point to at least `n * 2` floats.
+    /// - `n` must be a multiple of 4.
+    pub fn omnidsp_butterfly_stage4_first_f32(
+        data: *mut f32,
+        n: usize,
+        forward: i32,
+    );
+
+    /// First-stage radix-4 butterfly (f64) — specialized for `quarter_len=1`.
+    ///
+    /// All twiddles are trivial (1+0j), so no twiddle pointer is needed.
+    /// Eliminates 3 complex multiplies per group.
+    /// `data` is interleaved `[re, im]` complex (`n * 2` doubles).
+    /// `n` is the FFT length (number of complex elements, must be >= 4).
+    /// `forward`: 1 for forward FFT (−j rotation), 0 for inverse (+j rotation).
+    ///
+    /// # Safety
+    ///
+    /// - `data` must point to at least `n * 2` doubles.
+    /// - `n` must be a multiple of 4.
+    pub fn omnidsp_butterfly_stage4_first_f64(
+        data: *mut f64,
+        n: usize,
+        forward: i32,
+    );
+
     /// One stage of a radix-2 Cooley-Tukey FFT butterfly (f64).
     ///
     /// Processes all butterfly groups for a stage with the given `half_len`.
@@ -590,6 +626,76 @@ mod tests {
             assert!(
                 (got - exp).abs() < 1e-4,
                 "8pt fwd r4 mismatch at {i}: got {got}, expected {exp}"
+            );
+        }
+    }
+
+    // --- butterfly_stage4_first ---
+
+    /// 4-point FFT via first-stage kernel (forward).
+    /// Same math as butterfly_stage4 with trivial twiddles, but no
+    /// twiddle pointer needed.
+    #[test]
+    fn butterfly_stage4_first_f64_4point_forward() {
+        let mut data: Vec<f64> = vec![1.0, 0.0, 3.0, 0.0, 2.0, 0.0, 4.0, 0.0];
+
+        unsafe {
+            omnidsp_butterfly_stage4_first_f64(data.as_mut_ptr(), 4, 1);
+        }
+
+        let expected: Vec<f64> = vec![10.0, 0.0, -2.0, 2.0, -2.0, 0.0, -2.0, -2.0];
+        for (i, (&got, &exp)) in data.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (got - exp).abs() < EPSILON_F64,
+                "4pt first-stage fwd mismatch at {i}: got {got}, expected {exp}"
+            );
+        }
+    }
+
+    /// 4-point inverse FFT via first-stage kernel.
+    #[test]
+    fn butterfly_stage4_first_f64_4point_inverse() {
+        let mut data: Vec<f64> = vec![10.0, 0.0, -2.0, 0.0, -2.0, 2.0, -2.0, -2.0];
+
+        unsafe {
+            omnidsp_butterfly_stage4_first_f64(data.as_mut_ptr(), 4, 0);
+        }
+
+        let expected: Vec<f64> = vec![4.0, 0.0, 8.0, 0.0, 12.0, 0.0, 16.0, 0.0];
+        for (i, (&got, &exp)) in data.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (got - exp).abs() < EPSILON_F64,
+                "4pt first-stage inv mismatch at {i}: got {got}, expected {exp}"
+            );
+        }
+    }
+
+    /// Multiple groups: 8 complex elements = 2 groups of 4 (f32, forward).
+    #[test]
+    fn butterfly_stage4_first_f32_two_groups() {
+        // Group 0: (1,0),(2,0),(3,0),(4,0)
+        // Group 1: (5,0),(6,0),(7,0),(8,0)
+        let mut data: Vec<f32> = vec![
+            1.0, 0.0, 2.0, 0.0, 3.0, 0.0, 4.0, 0.0,
+            5.0, 0.0, 6.0, 0.0, 7.0, 0.0, 8.0, 0.0,
+        ];
+
+        unsafe {
+            omnidsp_butterfly_stage4_first_f32(data.as_mut_ptr(), 8, 1);
+        }
+
+        // Group 0: u=3, v=-1, p=7, q=-1; jq=(0,1)
+        //   y0=(10,0), y1=(-1,1), y2=(-4,0), y3=(-1,-1)
+        // Group 1: u=11, v=-1, p=15, q=-1; jq=(0,1)
+        //   y0=(26,0), y1=(-1,1), y2=(-4,0), y3=(-1,-1)
+        let expected: Vec<f32> = vec![
+            10.0, 0.0, -1.0, 1.0, -4.0, 0.0, -1.0, -1.0,
+            26.0, 0.0, -1.0, 1.0, -4.0, 0.0, -1.0, -1.0,
+        ];
+        for (i, (&got, &exp)) in data.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (got - exp).abs() < EPSILON_F32,
+                "2-group first-stage fwd mismatch at {i}: got {got}, expected {exp}"
             );
         }
     }

@@ -146,7 +146,7 @@ fn bit_reverse_permute<T: Copy>(buf: &mut [T], log2n: u32) {
 }
 
 macro_rules! impl_hwy_dft {
-    ($t:ty, $butterfly_fn:ident, $butterfly4_fn:ident, $scale_fn:ident) => {
+    ($t:ty, $butterfly_fn:ident, $butterfly4_fn:ident, $butterfly4_first_fn:ident, $scale_fn:ident) => {
         impl DftPlan<$t> for HwyDftPlan<$t> {
             fn process(&self, input: &[Complex<$t>], output: &mut [Complex<$t>]) -> Result<()> {
                 if input.len() != self.length {
@@ -215,17 +215,29 @@ macro_rules! impl_hwy_dft {
                     let quarter_len = 1_usize << stage;
                     let tw_len = quarter_len * 6;
 
-                    // SAFETY: `buf` has `self.length * 2` elements, twiddle
-                    // slice has `quarter_len * 6` elements, `quarter_len` is
-                    // a power of 2 and `<= self.length / 4`.
-                    unsafe {
-                        highway_sys::$butterfly4_fn(
-                            buf.as_mut_ptr(),
-                            self.twiddles[twiddle_offset..].as_ptr(),
-                            quarter_len,
-                            self.length,
-                            forward_flag,
-                        );
+                    if quarter_len == 1 {
+                        // SAFETY: `buf` has `self.length * 2` elements,
+                        // `self.length` is a multiple of 4.
+                        unsafe {
+                            highway_sys::$butterfly4_first_fn(
+                                buf.as_mut_ptr(),
+                                self.length,
+                                forward_flag,
+                            );
+                        }
+                    } else {
+                        // SAFETY: `buf` has `self.length * 2` elements, twiddle
+                        // slice has `quarter_len * 6` elements, `quarter_len` is
+                        // a power of 2 and `<= self.length / 4`.
+                        unsafe {
+                            highway_sys::$butterfly4_fn(
+                                buf.as_mut_ptr(),
+                                self.twiddles[twiddle_offset..].as_ptr(),
+                                quarter_len,
+                                self.length,
+                                forward_flag,
+                            );
+                        }
                     }
                     twiddle_offset += tw_len;
                     stage += 2;
@@ -320,12 +332,14 @@ impl_hwy_dft!(
     f32,
     omnidsp_butterfly_stage_f32,
     omnidsp_butterfly_stage4_f32,
+    omnidsp_butterfly_stage4_first_f32,
     omnidsp_scale_f32
 );
 impl_hwy_dft!(
     f64,
     omnidsp_butterfly_stage_f64,
     omnidsp_butterfly_stage4_f64,
+    omnidsp_butterfly_stage4_first_f64,
     omnidsp_scale_f64
 );
 
@@ -690,5 +704,32 @@ mod tests {
             .expect("inverse should succeed");
 
         assert_complex_slice_eq_f64(&recovered, &input, 1e-9);
+    }
+
+    #[test]
+    fn round_trip_f32_1024() {
+        let dft = HwyDft;
+        let n = 1024;
+        let fwd_plan = Dft::<f32>::create_plan(&dft, &fwd(n)).expect("forward plan should succeed");
+        let inv_plan = Dft::<f32>::create_plan(&dft, &inv(n)).expect("inverse plan should succeed");
+
+        let input: Vec<Complex<f32>> = (0..n)
+            .map(|i| {
+                #[allow(clippy::cast_precision_loss, reason = "test value")]
+                let v = (i as f32) * 0.01;
+                Complex::new(v.sin(), v.cos())
+            })
+            .collect();
+        let mut freq = vec![Complex::default(); n];
+        let mut recovered = vec![Complex::default(); n];
+
+        fwd_plan
+            .process(&input, &mut freq)
+            .expect("forward should succeed");
+        inv_plan
+            .process(&freq, &mut recovered)
+            .expect("inverse should succeed");
+
+        assert_complex_slice_eq_f32(&recovered, &input, 1e-3);
     }
 }

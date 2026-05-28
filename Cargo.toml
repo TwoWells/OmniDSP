@@ -44,3 +44,8 @@ lto = "thin"
 codegen-units = 1
 opt-level = 3
 strip = "symbols"
+
+[profile.profiling]
+inherits = "release"
+strip = "none"
+debug = 2

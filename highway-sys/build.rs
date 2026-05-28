@@ -59,6 +59,11 @@ fn main() {
     // CPU. Combined with HWY_COMPILE_ONLY_STATIC + HWY_DISABLE_ATTR, the
     // compiler has full optimization freedom (including loop unrolling)
     // without conflicting Highway target pragmas.
+    //
+    // -march=native (x86) / -mcpu=native (ARM): select the best ISA for
+    // this CPU.  Both are tried via flag_if_supported — the compiler
+    // accepts whichever matches the platform and ignores the other.
+    shim.flag_if_supported("-march=native");
     shim.flag_if_supported("-mcpu=native");
     shim.flag_if_supported("-mtune=native");
     shim.flag_if_supported("-funroll-loops");

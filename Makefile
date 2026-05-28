@@ -7,7 +7,7 @@
 #   make release-major   # 0.1.0 -> 1.0.0
 #   make release V=0.2.0 # explicit version
 
-.PHONY: bench build-release check deny shootout gen-cqt-reference gen-cqt-process-reference gen-fir-reference gen-fir-lfilter-reference gen-iir-reference gen-iir-sosfilt-reference gen-resample-reference gen-resample-poly-reference machete mutants setup setup-hooks setup-tools test release release-patch release-minor release-major publish tag-current
+.PHONY: bench build-release callgrind check deny shootout gen-cqt-reference gen-cqt-process-reference gen-fir-reference gen-fir-lfilter-reference gen-iir-reference gen-iir-sosfilt-reference gen-resample-reference gen-resample-poly-reference machete mutants setup setup-hooks setup-tools test release release-patch release-minor release-major publish tag-current
 
 # Get current version from Cargo.toml
 CURRENT_VERSION := $(shell grep '^version = ' omnidsp-core/Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
@@ -133,6 +133,20 @@ machete:
 
 shootout:
 	@cargo nextest run --workspace --run-ignored ignored-only -E 'binary(shootout)' --no-fail-fast --status-level pass --cargo-quiet --success-output immediate --cargo-profile release -j 1
+
+# Run a single test under callgrind for deterministic instruction counts.
+# Usage: make callgrind T=round_trip_f64_1024
+callgrind:
+	@if [ -z "$(T)" ]; then echo "Usage: make callgrind T=<test_name>"; exit 1; fi
+	@bin=$$(cargo test --package omnidsp-highway --lib --no-run --profile profiling --message-format=json 2>/dev/null \
+	       | jq -r 'select(.executable != null) | .executable' | head -1); \
+	 if [ -z "$$bin" ]; then echo "Failed to find test binary"; exit 1; fi; \
+	 valgrind --tool=callgrind --callgrind-out-file=callgrind.out.%p "$$bin" $(T) --nocapture 2>&1; \
+	 outfile=$$(ls -t callgrind.out.* 2>/dev/null | head -1); \
+	 if [ -n "$$outfile" ]; then \
+	   callgrind_annotate "$$outfile" | head -60; \
+	   rm -f "$$outfile"; \
+	 fi
 
 # --- Test ---
 
