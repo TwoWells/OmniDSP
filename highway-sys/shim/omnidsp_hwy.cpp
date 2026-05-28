@@ -702,6 +702,219 @@ OMNIDSP_FLATTEN void ButterflyStage4FirstF64(double* data, size_t n, int forward
     }
 }
 
+// --- Fully unrolled 4-point butterfly (f32) ---
+// Complete 4-point DFT on bit-reversed input.  All twiddles are trivial
+// (1+0j): the butterfly is purely adds/subs + j-rotation.  Equivalent to
+// ButterflyStage4First with n=4 but without loop overhead.
+// data: 4 complex elements (8 floats), bit-reversed.
+// forward: 1 for forward FFT (-j rotation), 0 for inverse (+j rotation).
+OMNIDSP_FLATTEN void Butterfly4F32(float* data, int forward) {
+    const float x0r = data[0], x0i = data[1];
+    const float x1r = data[2], x1i = data[3];
+    const float x2r = data[4], x2i = data[5];
+    const float x3r = data[6], x3i = data[7];
+
+    const float ur = x0r + x1r, ui = x0i + x1i;
+    const float vr = x0r - x1r, vi = x0i - x1i;
+    const float pr = x2r + x3r, pi = x2i + x3i;
+    const float qr = x2r - x3r, qi = x2i - x3i;
+
+    const float jqr = forward ? qi : -qi;
+    const float jqi = forward ? -qr : qr;
+
+    data[0] = ur + pr; data[1] = ui + pi;
+    data[2] = vr + jqr; data[3] = vi + jqi;
+    data[4] = ur - pr; data[5] = ui - pi;
+    data[6] = vr - jqr; data[7] = vi - jqi;
+}
+
+// --- Fully unrolled 4-point butterfly (f64) ---
+OMNIDSP_FLATTEN void Butterfly4F64(double* data, int forward) {
+    const double x0r = data[0], x0i = data[1];
+    const double x1r = data[2], x1i = data[3];
+    const double x2r = data[4], x2i = data[5];
+    const double x3r = data[6], x3i = data[7];
+
+    const double ur = x0r + x1r, ui = x0i + x1i;
+    const double vr = x0r - x1r, vi = x0i - x1i;
+    const double pr = x2r + x3r, pi = x2i + x3i;
+    const double qr = x2r - x3r, qi = x2i - x3i;
+
+    const double jqr = forward ? qi : -qi;
+    const double jqi = forward ? -qr : qr;
+
+    data[0] = ur + pr; data[1] = ui + pi;
+    data[2] = vr + jqr; data[3] = vi + jqi;
+    data[4] = ur - pr; data[5] = ui - pi;
+    data[6] = vr - jqr; data[7] = vi - jqi;
+}
+
+// --- Fully unrolled 8-point butterfly (f32) ---
+// Complete 8-point DFT on bit-reversed input.  Fuses radix-2 stage 0
+// with radix-4 stage pair (1,2).  Hardcodes all twiddle values:
+//   W1[1] = exp(∓πi/4), W2[1] = exp(∓πi/2), W3[1] = exp(∓3πi/4)
+// eliminating twiddle loads and 3 of 6 complex multiplies (the k=0
+// twiddles are all 1+0j).  The remaining 3 multiplies reduce to
+// add/sub/scale with the known twiddle structure.
+// data: 8 complex elements (16 floats), bit-reversed.
+// forward: 1 for forward FFT (-j rotation), 0 for inverse (+j rotation).
+OMNIDSP_FLATTEN void Butterfly8F32(float* data, int forward) {
+    const float S = 0.70710678118654752f;  // 1/sqrt(2)
+
+    // Load 8 complex elements (bit-reversed order).
+    const float x0r = data[0],  x0i = data[1];
+    const float x1r = data[2],  x1i = data[3];
+    const float x2r = data[4],  x2i = data[5];
+    const float x3r = data[6],  x3i = data[7];
+    const float x4r = data[8],  x4i = data[9];
+    const float x5r = data[10], x5i = data[11];
+    const float x6r = data[12], x6i = data[13];
+    const float x7r = data[14], x7i = data[15];
+
+    // Stage 0: radix-2, half_len=1, all twiddles = 1+0j.
+    const float a0r = x0r + x1r, a0i = x0i + x1i;
+    const float a1r = x0r - x1r, a1i = x0i - x1i;
+    const float a2r = x2r + x3r, a2i = x2i + x3i;
+    const float a3r = x2r - x3r, a3i = x2i - x3i;
+    const float a4r = x4r + x5r, a4i = x4i + x5i;
+    const float a5r = x4r - x5r, a5i = x4i - x5i;
+    const float a6r = x6r + x7r, a6i = x6i + x7i;
+    const float a7r = x6r - x7r, a7i = x6i - x7i;
+
+    // Stage pair (1,2): radix-4, quarter_len=2.
+    // Sub-blocks: p0=[a0,a1], p1=[a2,a3], p2=[a4,a5], p3=[a6,a7].
+    // W1 applied to p2, W2 to p1, W3 to p3.
+    //
+    // k=0: all twiddles = 1+0j, no multiply needed.
+    // k=1: hardcoded twiddle multiplies —
+    //   Forward: W1[1]=(S,-S), W2[1]=(0,-1), W3[1]=(-S,-S)
+    //   Inverse: W1[1]=(S,+S), W2[1]=(0,+1), W3[1]=(-S,+S)
+
+    // Twiddle-multiply k=1 elements.
+    float tx5r, tx5i, tx3r, tx3i, tx7r, tx7i;
+    if (forward) {
+        // W1[1]=(S,-S) * a5: (S*(a5r+a5i), S*(a5i-a5r))
+        tx5r = S * (a5r + a5i);  tx5i = S * (a5i - a5r);
+        // W2[1]=(0,-1) * a3: (a3i, -a3r)
+        tx3r = a3i;              tx3i = -a3r;
+        // W3[1]=(-S,-S) * a7: (S*(a7i-a7r), -S*(a7r+a7i))
+        tx7r = S * (a7i - a7r);  tx7i = -S * (a7r + a7i);
+    } else {
+        // W1[1]=(S,S) * a5: (S*(a5r-a5i), S*(a5r+a5i))
+        tx5r = S * (a5r - a5i);  tx5i = S * (a5r + a5i);
+        // W2[1]=(0,1) * a3: (-a3i, a3r)
+        tx3r = -a3i;             tx3i = a3r;
+        // W3[1]=(-S,S) * a7: (-S*(a7r+a7i), S*(a7r-a7i))
+        tx7r = -S * (a7r + a7i); tx7i = S * (a7r - a7i);
+    }
+
+    // j-rotation sign: forward = -j, inverse = +j.
+    const float jr = forward ? 1.0f : -1.0f;
+    const float ji = -jr;
+
+    // k=0 radix-4 butterfly: x0=a0, tx1=a2, tx2=a4, tx3=a6 (trivial).
+    const float u0r = a0r + a2r, u0i = a0i + a2i;
+    const float v0r = a0r - a2r, v0i = a0i - a2i;
+    const float p0r = a4r + a6r, p0i = a4i + a6i;
+    const float q0r = a4r - a6r, q0i = a4i - a6i;
+    const float jq0r = jr * q0i, jq0i = ji * q0r;
+
+    data[0]  = u0r + p0r;  data[1]  = u0i + p0i;   // y0[0]
+    data[4]  = v0r + jq0r; data[5]  = v0i + jq0i;  // y1[0]
+    data[8]  = u0r - p0r;  data[9]  = u0i - p0i;   // y2[0]
+    data[12] = v0r - jq0r; data[13] = v0i - jq0i;  // y3[0]
+
+    // k=1 radix-4 butterfly: x0=a1, tx1=W2*a3, tx2=W1*a5, tx3=W3*a7.
+    const float u1r = a1r + tx3r, u1i = a1i + tx3i;
+    const float v1r = a1r - tx3r, v1i = a1i - tx3i;
+    const float p1r = tx5r + tx7r, p1i = tx5i + tx7i;
+    const float q1r = tx5r - tx7r, q1i = tx5i - tx7i;
+    const float jq1r = jr * q1i, jq1i = ji * q1r;
+
+    data[2]  = u1r + p1r;  data[3]  = u1i + p1i;   // y0[1]
+    data[6]  = v1r + jq1r; data[7]  = v1i + jq1i;  // y1[1]
+    data[10] = u1r - p1r;  data[11] = u1i - p1i;   // y2[1]
+    data[14] = v1r - jq1r; data[15] = v1i - jq1i;  // y3[1]
+}
+
+// --- Fully unrolled 8-point butterfly (f64) ---
+OMNIDSP_FLATTEN void Butterfly8F64(double* data, int forward) {
+    const double S = 0.70710678118654752440;  // 1/sqrt(2)
+
+    const double x0r = data[0],  x0i = data[1];
+    const double x1r = data[2],  x1i = data[3];
+    const double x2r = data[4],  x2i = data[5];
+    const double x3r = data[6],  x3i = data[7];
+    const double x4r = data[8],  x4i = data[9];
+    const double x5r = data[10], x5i = data[11];
+    const double x6r = data[12], x6i = data[13];
+    const double x7r = data[14], x7i = data[15];
+
+    const double a0r = x0r + x1r, a0i = x0i + x1i;
+    const double a1r = x0r - x1r, a1i = x0i - x1i;
+    const double a2r = x2r + x3r, a2i = x2i + x3i;
+    const double a3r = x2r - x3r, a3i = x2i - x3i;
+    const double a4r = x4r + x5r, a4i = x4i + x5i;
+    const double a5r = x4r - x5r, a5i = x4i - x5i;
+    const double a6r = x6r + x7r, a6i = x6i + x7i;
+    const double a7r = x6r - x7r, a7i = x6i - x7i;
+
+    double tx5r, tx5i, tx3r, tx3i, tx7r, tx7i;
+    if (forward) {
+        tx5r = S * (a5r + a5i);  tx5i = S * (a5i - a5r);
+        tx3r = a3i;              tx3i = -a3r;
+        tx7r = S * (a7i - a7r);  tx7i = -S * (a7r + a7i);
+    } else {
+        tx5r = S * (a5r - a5i);  tx5i = S * (a5r + a5i);
+        tx3r = -a3i;             tx3i = a3r;
+        tx7r = -S * (a7r + a7i); tx7i = S * (a7r - a7i);
+    }
+
+    const double jr = forward ? 1.0 : -1.0;
+    const double ji = -jr;
+
+    const double u0r = a0r + a2r, u0i = a0i + a2i;
+    const double v0r = a0r - a2r, v0i = a0i - a2i;
+    const double p0r = a4r + a6r, p0i = a4i + a6i;
+    const double q0r = a4r - a6r, q0i = a4i - a6i;
+    const double jq0r = jr * q0i, jq0i = ji * q0r;
+
+    data[0]  = u0r + p0r;  data[1]  = u0i + p0i;
+    data[4]  = v0r + jq0r; data[5]  = v0i + jq0i;
+    data[8]  = u0r - p0r;  data[9]  = u0i - p0i;
+    data[12] = v0r - jq0r; data[13] = v0i - jq0i;
+
+    const double u1r = a1r + tx3r, u1i = a1i + tx3i;
+    const double v1r = a1r - tx3r, v1i = a1i - tx3i;
+    const double p1r = tx5r + tx7r, p1i = tx5i + tx7i;
+    const double q1r = tx5r - tx7r, q1i = tx5i - tx7i;
+    const double jq1r = jr * q1i, jq1i = ji * q1r;
+
+    data[2]  = u1r + p1r;  data[3]  = u1i + p1i;
+    data[6]  = v1r + jq1r; data[7]  = v1i + jq1i;
+    data[10] = u1r - p1r;  data[11] = u1i - p1i;
+    data[14] = v1r - jq1r; data[15] = v1i - jq1i;
+}
+
+// --- Batch 8-point butterfly (f32) ---
+// Applies Butterfly8 to all N/8 contiguous groups.  Replaces the first
+// 3 iterative stages of any FFT with N >= 16, fusing radix-2 stage 0 +
+// radix-4 pair (1,2) into a single twiddle-free pass.
+// data: N complex elements (2*N floats), bit-reversed.
+// n: FFT length (complex elements, must be >= 16 and a multiple of 8).
+OMNIDSP_FLATTEN void Butterfly8BatchF32(float* data, size_t n, int forward) {
+    for (size_t g = 0; g < n; g += 8) {
+        Butterfly8F32(data + g * 2, forward);
+    }
+}
+
+// --- Batch 8-point butterfly (f64) ---
+OMNIDSP_FLATTEN void Butterfly8BatchF64(double* data, size_t n, int forward) {
+    for (size_t g = 0; g < n; g += 8) {
+        Butterfly8F64(data + g * 2, forward);
+    }
+}
+
 }  // namespace HWY_NAMESPACE
 }  // namespace omnidsp
 HWY_AFTER_NAMESPACE();
@@ -725,6 +938,12 @@ HWY_EXPORT(ButterflyStage4F32);
 HWY_EXPORT(ButterflyStage4F64);
 HWY_EXPORT(ButterflyStage4FirstF32);
 HWY_EXPORT(ButterflyStage4FirstF64);
+HWY_EXPORT(Butterfly4F32);
+HWY_EXPORT(Butterfly4F64);
+HWY_EXPORT(Butterfly8F32);
+HWY_EXPORT(Butterfly8F64);
+HWY_EXPORT(Butterfly8BatchF32);
+HWY_EXPORT(Butterfly8BatchF64);
 HWY_EXPORT(MulF32NoAlias);
 HWY_EXPORT(MulF64NoAlias);
 HWY_EXPORT(CmulF32NoAlias);
@@ -779,6 +998,24 @@ void DispatchButterflyStage4FirstF32(float* data, size_t n, int forward) {
 }
 void DispatchButterflyStage4FirstF64(double* data, size_t n, int forward) {
     HWY_DYNAMIC_DISPATCH(ButterflyStage4FirstF64)(data, n, forward);
+}
+void DispatchButterfly4F32(float* data, int forward) {
+    HWY_DYNAMIC_DISPATCH(Butterfly4F32)(data, forward);
+}
+void DispatchButterfly4F64(double* data, int forward) {
+    HWY_DYNAMIC_DISPATCH(Butterfly4F64)(data, forward);
+}
+void DispatchButterfly8F32(float* data, int forward) {
+    HWY_DYNAMIC_DISPATCH(Butterfly8F32)(data, forward);
+}
+void DispatchButterfly8F64(double* data, int forward) {
+    HWY_DYNAMIC_DISPATCH(Butterfly8F64)(data, forward);
+}
+void DispatchButterfly8BatchF32(float* data, size_t n, int forward) {
+    HWY_DYNAMIC_DISPATCH(Butterfly8BatchF32)(data, n, forward);
+}
+void DispatchButterfly8BatchF64(double* data, size_t n, int forward) {
+    HWY_DYNAMIC_DISPATCH(Butterfly8BatchF64)(data, n, forward);
 }
 void DispatchMulF32NoAlias(const float* a, const float* b, float* out, size_t count) {
     HWY_DYNAMIC_DISPATCH(MulF32NoAlias)(a, b, out, count);
@@ -843,6 +1080,24 @@ void omnidsp_butterfly_stage4_first_f32(float* data, size_t n, int forward) {
 }
 void omnidsp_butterfly_stage4_first_f64(double* data, size_t n, int forward) {
     omnidsp::DispatchButterflyStage4FirstF64(data, n, forward);
+}
+void omnidsp_butterfly4_f32(float* data, int forward) {
+    omnidsp::DispatchButterfly4F32(data, forward);
+}
+void omnidsp_butterfly4_f64(double* data, int forward) {
+    omnidsp::DispatchButterfly4F64(data, forward);
+}
+void omnidsp_butterfly8_f32(float* data, int forward) {
+    omnidsp::DispatchButterfly8F32(data, forward);
+}
+void omnidsp_butterfly8_f64(double* data, int forward) {
+    omnidsp::DispatchButterfly8F64(data, forward);
+}
+void omnidsp_butterfly8_batch_f32(float* data, size_t n, int forward) {
+    omnidsp::DispatchButterfly8BatchF32(data, n, forward);
+}
+void omnidsp_butterfly8_batch_f64(double* data, size_t n, int forward) {
+    omnidsp::DispatchButterfly8BatchF64(data, n, forward);
 }
 void omnidsp_mul_f32_noalias(const float* a, const float* b, float* out, size_t count) {
     omnidsp::DispatchMulF32NoAlias(a, b, out, count);

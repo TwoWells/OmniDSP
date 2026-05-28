@@ -196,11 +196,7 @@ unsafe extern "C" {
     ///
     /// - `data` must point to at least `n * 2` floats.
     /// - `n` must be a multiple of 4.
-    pub fn omnidsp_butterfly_stage4_first_f32(
-        data: *mut f32,
-        n: usize,
-        forward: i32,
-    );
+    pub fn omnidsp_butterfly_stage4_first_f32(data: *mut f32, n: usize, forward: i32);
 
     /// First-stage radix-4 butterfly (f64) — specialized for `quarter_len=1`.
     ///
@@ -214,11 +210,66 @@ unsafe extern "C" {
     ///
     /// - `data` must point to at least `n * 2` doubles.
     /// - `n` must be a multiple of 4.
-    pub fn omnidsp_butterfly_stage4_first_f64(
-        data: *mut f64,
-        n: usize,
-        forward: i32,
-    );
+    pub fn omnidsp_butterfly_stage4_first_f64(data: *mut f64, n: usize, forward: i32);
+
+    /// Fully unrolled 4-point DFT on bit-reversed input (f32).
+    ///
+    /// All twiddles are trivial (1+0j). The butterfly is purely adds/subs
+    /// plus j-rotation — no multiply. Equivalent to a single radix-4 stage
+    /// with `quarter_len=1` but without loop overhead.
+    /// `forward`: 1 for forward FFT (−j rotation), 0 for inverse (+j rotation).
+    ///
+    /// # Safety
+    ///
+    /// - `data` must point to at least 8 floats (4 complex elements).
+    pub fn omnidsp_butterfly4_f32(data: *mut f32, forward: i32);
+
+    /// Fully unrolled 4-point DFT on bit-reversed input (f64).
+    ///
+    /// # Safety
+    ///
+    /// - `data` must point to at least 8 doubles (4 complex elements).
+    pub fn omnidsp_butterfly4_f64(data: *mut f64, forward: i32);
+
+    /// Fully unrolled 8-point DFT on bit-reversed input (f32).
+    ///
+    /// Fuses radix-2 stage 0 with radix-4 stage pair (1,2). Hardcodes all
+    /// twiddle values, eliminating twiddle loads and reducing 6 complex
+    /// multiplies to 3 add/sub/scale operations.
+    /// `forward`: 1 for forward FFT (−j rotation), 0 for inverse (+j rotation).
+    ///
+    /// # Safety
+    ///
+    /// - `data` must point to at least 16 floats (8 complex elements).
+    pub fn omnidsp_butterfly8_f32(data: *mut f32, forward: i32);
+
+    /// Fully unrolled 8-point DFT on bit-reversed input (f64).
+    ///
+    /// # Safety
+    ///
+    /// - `data` must point to at least 16 doubles (8 complex elements).
+    pub fn omnidsp_butterfly8_f64(data: *mut f64, forward: i32);
+
+    /// Batch 8-point butterfly (f32) — applies [`omnidsp_butterfly8_f32`] to all
+    /// `n / 8` contiguous groups.
+    ///
+    /// Replaces the first 3 iterative stages of any FFT with `n >= 16`.
+    /// `forward`: 1 for forward FFT (−j rotation), 0 for inverse (+j rotation).
+    ///
+    /// # Safety
+    ///
+    /// - `data` must point to at least `n * 2` floats.
+    /// - `n` must be a multiple of 8 and >= 16.
+    pub fn omnidsp_butterfly8_batch_f32(data: *mut f32, n: usize, forward: i32);
+
+    /// Batch 8-point butterfly (f64) — applies [`omnidsp_butterfly8_f64`] to all
+    /// `n / 8` contiguous groups.
+    ///
+    /// # Safety
+    ///
+    /// - `data` must point to at least `n * 2` doubles.
+    /// - `n` must be a multiple of 8 and >= 16.
+    pub fn omnidsp_butterfly8_batch_f64(data: *mut f64, n: usize, forward: i32);
 
     /// One stage of a radix-2 Cooley-Tukey FFT butterfly (f64).
     ///
@@ -633,7 +684,7 @@ mod tests {
     // --- butterfly_stage4_first ---
 
     /// 4-point FFT via first-stage kernel (forward).
-    /// Same math as butterfly_stage4 with trivial twiddles, but no
+    /// Same math as `butterfly_stage4` with trivial twiddles, but no
     /// twiddle pointer needed.
     #[test]
     fn butterfly_stage4_first_f64_4point_forward() {
@@ -676,8 +727,7 @@ mod tests {
         // Group 0: (1,0),(2,0),(3,0),(4,0)
         // Group 1: (5,0),(6,0),(7,0),(8,0)
         let mut data: Vec<f32> = vec![
-            1.0, 0.0, 2.0, 0.0, 3.0, 0.0, 4.0, 0.0,
-            5.0, 0.0, 6.0, 0.0, 7.0, 0.0, 8.0, 0.0,
+            1.0, 0.0, 2.0, 0.0, 3.0, 0.0, 4.0, 0.0, 5.0, 0.0, 6.0, 0.0, 7.0, 0.0, 8.0, 0.0,
         ];
 
         unsafe {
@@ -689,13 +739,191 @@ mod tests {
         // Group 1: u=11, v=-1, p=15, q=-1; jq=(0,1)
         //   y0=(26,0), y1=(-1,1), y2=(-4,0), y3=(-1,-1)
         let expected: Vec<f32> = vec![
-            10.0, 0.0, -1.0, 1.0, -4.0, 0.0, -1.0, -1.0,
-            26.0, 0.0, -1.0, 1.0, -4.0, 0.0, -1.0, -1.0,
+            10.0, 0.0, -1.0, 1.0, -4.0, 0.0, -1.0, -1.0, 26.0, 0.0, -1.0, 1.0, -4.0, 0.0, -1.0,
+            -1.0,
         ];
         for (i, (&got, &exp)) in data.iter().zip(expected.iter()).enumerate() {
             assert!(
                 (got - exp).abs() < EPSILON_F32,
                 "2-group first-stage fwd mismatch at {i}: got {got}, expected {exp}"
+            );
+        }
+    }
+
+    // --- butterfly4 ---
+
+    /// 4-point forward FFT via Butterfly4 (f64).
+    /// Bit-reversed [1,2,3,4] → [(1,0),(3,0),(2,0),(4,0)].
+    /// Expected: FFT([1,2,3,4]) = [(10,0),(-2,2),(-2,0),(-2,-2)].
+    #[test]
+    fn butterfly4_f64_forward() {
+        let mut data: Vec<f64> = vec![1.0, 0.0, 3.0, 0.0, 2.0, 0.0, 4.0, 0.0];
+
+        unsafe {
+            omnidsp_butterfly4_f64(data.as_mut_ptr(), 1);
+        }
+
+        let expected: Vec<f64> = vec![10.0, 0.0, -2.0, 2.0, -2.0, 0.0, -2.0, -2.0];
+        for (i, (&got, &exp)) in data.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (got - exp).abs() < EPSILON_F64,
+                "4pt bfly4 fwd mismatch at {i}: got {got}, expected {exp}"
+            );
+        }
+    }
+
+    /// 4-point inverse FFT via Butterfly4 (f64).
+    #[test]
+    fn butterfly4_f64_inverse() {
+        // Bit-reversed FFT output: [(10,0),(-2,0),(-2,2),(-2,-2)].
+        let mut data: Vec<f64> = vec![10.0, 0.0, -2.0, 0.0, -2.0, 2.0, -2.0, -2.0];
+
+        unsafe {
+            omnidsp_butterfly4_f64(data.as_mut_ptr(), 0);
+        }
+
+        // Unnormalized IFFT: 4 * [1,2,3,4].
+        let expected: Vec<f64> = vec![4.0, 0.0, 8.0, 0.0, 12.0, 0.0, 16.0, 0.0];
+        for (i, (&got, &exp)) in data.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (got - exp).abs() < EPSILON_F64,
+                "4pt bfly4 inv mismatch at {i}: got {got}, expected {exp}"
+            );
+        }
+    }
+
+    /// 4-point forward FFT via Butterfly4 (f32).
+    #[test]
+    fn butterfly4_f32_forward() {
+        let mut data: Vec<f32> = vec![1.0, 0.0, 3.0, 0.0, 2.0, 0.0, 4.0, 0.0];
+
+        unsafe {
+            omnidsp_butterfly4_f32(data.as_mut_ptr(), 1);
+        }
+
+        let expected: Vec<f32> = vec![10.0, 0.0, -2.0, 2.0, -2.0, 0.0, -2.0, -2.0];
+        for (i, (&got, &exp)) in data.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (got - exp).abs() < EPSILON_F32,
+                "4pt bfly4 f32 fwd mismatch at {i}: got {got}, expected {exp}"
+            );
+        }
+    }
+
+    // --- butterfly8 ---
+
+    /// 8-point forward FFT via Butterfly8 (f64).
+    /// Bit-reversed [1,2,3,4,5,6,7,8] → [1,5,3,7,2,6,4,8].
+    /// Expected: numpy.fft.fft([1,2,3,4,5,6,7,8]).
+    #[test]
+    fn butterfly8_f64_forward() {
+        // Bit-reversed input.
+        let mut data: Vec<f64> = vec![
+            1.0, 0.0, 5.0, 0.0, 3.0, 0.0, 7.0, 0.0, 2.0, 0.0, 6.0, 0.0, 4.0, 0.0, 8.0, 0.0,
+        ];
+
+        unsafe {
+            omnidsp_butterfly8_f64(data.as_mut_ptr(), 1);
+        }
+
+        let sqrt2 = std::f64::consts::SQRT_2;
+        let expected: Vec<f64> = vec![
+            36.0,
+            0.0,
+            -4.0,
+            4.0f64.mul_add(sqrt2, 4.0),
+            -4.0,
+            4.0,
+            -4.0,
+            4.0f64.mul_add(sqrt2, -4.0),
+            -4.0,
+            0.0,
+            -4.0,
+            4.0f64.mul_add(-sqrt2, 4.0),
+            -4.0,
+            -4.0,
+            -4.0,
+            4.0f64.mul_add(-sqrt2, -4.0),
+        ];
+        for (i, (&got, &exp)) in data.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (got - exp).abs() < EPSILON_F64,
+                "8pt bfly8 f64 fwd mismatch at {i}: got {got}, expected {exp}"
+            );
+        }
+    }
+
+    /// 8-point inverse FFT via Butterfly8 (f64): round-trip check.
+    #[test]
+    fn butterfly8_f64_round_trip() {
+        // Forward: bit-reversed [1,2,3,4,5,6,7,8].
+        let mut data: Vec<f64> = vec![
+            1.0, 0.0, 5.0, 0.0, 3.0, 0.0, 7.0, 0.0, 2.0, 0.0, 6.0, 0.0, 4.0, 0.0, 8.0, 0.0,
+        ];
+
+        unsafe {
+            omnidsp_butterfly8_f64(data.as_mut_ptr(), 1);
+        }
+
+        // Bit-reverse the FFT output for IFFT input.
+        // Bit-reversal of indices [0..8] with log2=3: [0,4,2,6,1,5,3,7].
+        let freq = data.clone();
+        for i in 0..8_usize {
+            let j = i.reverse_bits() >> (usize::BITS - 3);
+            data[i * 2] = freq[j * 2];
+            data[i * 2 + 1] = freq[j * 2 + 1];
+        }
+
+        unsafe {
+            omnidsp_butterfly8_f64(data.as_mut_ptr(), 0);
+        }
+
+        // Unnormalized round-trip: input * N.
+        let expected: Vec<f64> = vec![
+            8.0, 0.0, 16.0, 0.0, 24.0, 0.0, 32.0, 0.0, 40.0, 0.0, 48.0, 0.0, 56.0, 0.0, 64.0, 0.0,
+        ];
+        for (i, (&got, &exp)) in data.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (got - exp).abs() < 1e-10,
+                "8pt bfly8 round-trip mismatch at {i}: got {got}, expected {exp}"
+            );
+        }
+    }
+
+    /// 8-point forward FFT via Butterfly8 (f32).
+    #[test]
+    fn butterfly8_f32_forward() {
+        let mut data: Vec<f32> = vec![
+            1.0, 0.0, 5.0, 0.0, 3.0, 0.0, 7.0, 0.0, 2.0, 0.0, 6.0, 0.0, 4.0, 0.0, 8.0, 0.0,
+        ];
+
+        unsafe {
+            omnidsp_butterfly8_f32(data.as_mut_ptr(), 1);
+        }
+
+        let sqrt2 = std::f32::consts::SQRT_2;
+        let expected: Vec<f32> = vec![
+            36.0,
+            0.0,
+            -4.0,
+            4.0f32.mul_add(sqrt2, 4.0),
+            -4.0,
+            4.0,
+            -4.0,
+            4.0f32.mul_add(sqrt2, -4.0),
+            -4.0,
+            0.0,
+            -4.0,
+            4.0f32.mul_add(-sqrt2, 4.0),
+            -4.0,
+            -4.0,
+            -4.0,
+            4.0f32.mul_add(-sqrt2, -4.0),
+        ];
+        for (i, (&got, &exp)) in data.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (got - exp).abs() < 1e-4,
+                "8pt bfly8 f32 fwd mismatch at {i}: got {got}, expected {exp}"
             );
         }
     }

@@ -28,7 +28,9 @@ pub struct HwyDft;
 /// Execution plan for a DFT operation using Highway SIMD butterflies.
 ///
 /// Uses radix-4 stages where possible (two radix-2 stages fused into one
-/// pass), with a single radix-2 stage at the start when the exponent is odd.
+/// pass), with a single radix-2 stage when the remaining stage count is odd.
+/// For N >= 16, the first 3 stages are fused into a batch of fully unrolled
+/// 8-point butterflies with hardcoded twiddle values.
 /// The plan is immutable — naturally `Send + Sync` with no interior mutability.
 pub struct HwyDftPlan<T> {
     length: usize,
@@ -36,51 +38,63 @@ pub struct HwyDftPlan<T> {
     norm: DftNorm,
     /// Twiddle factors stored as interleaved `[re, im, ...]`.
     ///
-    /// Layout: optional radix-2 twiddles for stage 0, then for each radix-4
-    /// pair, three contiguous blocks `[W1[0..q], W2[0..q], W3[0..q]]`.
+    /// Layout: optional radix-2 twiddles, then for each radix-4 pair,
+    /// three contiguous blocks `[W1[0..q], W2[0..q], W3[0..q]]`.
+    /// Stages below `base_stage` have twiddles hardcoded in the butterfly
+    /// kernel, so no twiddles are stored for them.
     twiddles: Vec<T>,
-    /// True when the exponent is odd and stage 0 is a standalone radix-2 stage.
+    /// True when the remaining stage count (after `base_stage`) is odd,
+    /// requiring a standalone radix-2 stage before the radix-4 pairs.
     has_initial_radix2: bool,
+    /// First stage handled by twiddle-based butterfly kernels.
+    /// 0 for small N, 3 when using `Butterfly8Batch` (N >= 16).
+    base_stage: usize,
 }
 
 /// Precompute twiddle factors for the mixed radix-4/radix-2 FFT.
 ///
-/// When the exponent is odd, stage 0 is a standalone radix-2 stage (its
-/// twiddles come first). Remaining stages are paired into radix-4 groups.
-/// Each radix-4 pair with `quarter_len = q` stores three twiddle blocks:
+/// `base_stage` is the first stage that needs twiddle-based kernels.
+/// Stages `0..base_stage` are handled by specialized butterfly kernels
+/// with hardcoded twiddle values (e.g. `Butterfly8Batch` for `base_stage=3`).
+///
+/// When the remaining stage count (`num_stages - base_stage`) is odd, the
+/// first remaining stage is a standalone radix-2 stage (its twiddles come
+/// first). The rest are paired into radix-4 groups. Each radix-4 pair with
+/// `quarter_len = q` stores three twiddle blocks:
 ///   `[W1[0..q], W2[0..q], W3[0..q]]`
 /// where `W1[k] = exp(sign·2πi·k/(4q))`, `W2[k] = W1[k]²`, `W3[k] = W1[k]³`.
 ///
 /// Returns `(twiddles, has_initial_radix2)`.
-fn compute_twiddles(length: usize, direction: Direction) -> (Vec<f64>, bool) {
+fn compute_twiddles(length: usize, direction: Direction, base_stage: usize) -> (Vec<f64>, bool) {
     let sign = match direction {
         Direction::Forward => -1.0,
         Direction::Inverse => 1.0,
     };
 
     let num_stages = length.trailing_zeros() as usize;
-    let has_initial_radix2 = num_stages % 2 == 1;
+    let remaining = num_stages - base_stage;
+    let has_initial_radix2 = remaining % 2 == 1;
 
-    // Total twiddle count is still N - 1 (same storage, different layout).
-    let mut twiddles = Vec::with_capacity((length - 1) * 2);
+    let mut twiddles = Vec::with_capacity(length * 2);
 
-    let start_stage = if has_initial_radix2 {
-        // Stage 0: radix-2 twiddles for half_len = 1.
-        let half_len = 1_usize;
-        let full_len = half_len << 1;
-        for k in 0..half_len {
-            #[allow(
-                clippy::cast_precision_loss,
-                reason = "FFT lengths and indices are well within f64 mantissa range"
-            )]
-            let angle = sign * 2.0 * PI * (k as f64) / (full_len as f64);
-            twiddles.push(angle.cos());
-            twiddles.push(angle.sin());
-        }
-        1
-    } else {
-        0
-    };
+    let start_stage = base_stage
+        + if has_initial_radix2 {
+            // Radix-2 twiddles for half_len = 2^base_stage.
+            let half_len = 1_usize << base_stage;
+            let full_len = half_len << 1;
+            for k in 0..half_len {
+                #[allow(
+                    clippy::cast_precision_loss,
+                    reason = "FFT lengths and indices are well within f64 mantissa range"
+                )]
+                let angle = sign * 2.0 * PI * (k as f64) / (full_len as f64);
+                twiddles.push(angle.cos());
+                twiddles.push(angle.sin());
+            }
+            1
+        } else {
+            0
+        };
 
     // Radix-4 pairs: stages (s, s+1) with quarter_len = 2^s.
     let mut s = start_stage;
@@ -146,7 +160,7 @@ fn bit_reverse_permute<T: Copy>(buf: &mut [T], log2n: u32) {
 }
 
 macro_rules! impl_hwy_dft {
-    ($t:ty, $butterfly_fn:ident, $butterfly4_fn:ident, $butterfly4_first_fn:ident, $scale_fn:ident) => {
+    ($t:ty, $butterfly_fn:ident, $butterfly4_fn:ident, $butterfly4_first_fn:ident, $bfly4_fn:ident, $bfly8_fn:ident, $bfly8_batch_fn:ident, $scale_fn:ident) => {
         impl DftPlan<$t> for HwyDftPlan<$t> {
             fn process(&self, input: &[Complex<$t>], output: &mut [Complex<$t>]) -> Result<()> {
                 if input.len() != self.length {
@@ -185,10 +199,46 @@ macro_rules! impl_hwy_dft {
                 bit_reverse_permute(buf, log2n);
 
                 // Step 2: Butterfly stages.
+                let forward_flag: i32 = match self.direction {
+                    Direction::Forward => 1,
+                    Direction::Inverse => 0,
+                };
+
+                // Specialized base-case butterflies for small sizes.
+                // Fully unrolled with hardcoded twiddle values — eliminates
+                // twiddle loads, reduces FFI calls, and avoids loop overhead.
+                if self.length == 4 {
+                    // SAFETY: `buf` has 8 elements (4 complex).
+                    unsafe {
+                        highway_sys::$bfly4_fn(buf.as_mut_ptr(), forward_flag);
+                    }
+                    return self.apply_norm(output);
+                }
+                if self.length == 8 {
+                    // SAFETY: `buf` has 16 elements (8 complex).
+                    unsafe {
+                        highway_sys::$bfly8_fn(buf.as_mut_ptr(), forward_flag);
+                    }
+                    return self.apply_norm(output);
+                }
+
+                // For N >= 16: batch of 8-point butterflies replaces the first
+                // 3 stages, fusing radix-2 + radix-4 into a single twiddle-free
+                // pass over all N/8 groups.
+                if self.base_stage == 3 {
+                    // SAFETY: `buf` has `self.length * 2` elements,
+                    // `self.length` is a multiple of 8.
+                    unsafe {
+                        highway_sys::$bfly8_batch_fn(buf.as_mut_ptr(), self.length, forward_flag);
+                    }
+                }
+
                 let num_stages = log2n as usize;
-                // Optional leading radix-2 stage (when exponent is odd).
+
+                // Optional standalone radix-2 stage (when remaining stage count
+                // after base_stage is odd). half_len = 2^base_stage.
                 let (mut twiddle_offset, mut stage) = if self.has_initial_radix2 {
-                    let half_len = 1_usize;
+                    let half_len = 1_usize << self.base_stage;
 
                     // SAFETY: `buf` has `self.length * 2` elements, twiddle
                     // slice has `half_len * 2` elements.
@@ -200,44 +250,27 @@ macro_rules! impl_hwy_dft {
                             self.length,
                         );
                     }
-                    (half_len * 2, 1)
+                    (half_len * 2, self.base_stage + 1)
                 } else {
-                    (0, 0)
+                    (0, self.base_stage)
                 };
 
                 // Radix-4 stages (fused pairs).
-                let forward_flag: i32 = match self.direction {
-                    Direction::Forward => 1,
-                    Direction::Inverse => 0,
-                };
-
                 while stage + 1 < num_stages {
                     let quarter_len = 1_usize << stage;
                     let tw_len = quarter_len * 6;
 
-                    if quarter_len == 1 {
-                        // SAFETY: `buf` has `self.length * 2` elements,
-                        // `self.length` is a multiple of 4.
-                        unsafe {
-                            highway_sys::$butterfly4_first_fn(
-                                buf.as_mut_ptr(),
-                                self.length,
-                                forward_flag,
-                            );
-                        }
-                    } else {
-                        // SAFETY: `buf` has `self.length * 2` elements, twiddle
-                        // slice has `quarter_len * 6` elements, `quarter_len` is
-                        // a power of 2 and `<= self.length / 4`.
-                        unsafe {
-                            highway_sys::$butterfly4_fn(
-                                buf.as_mut_ptr(),
-                                self.twiddles[twiddle_offset..].as_ptr(),
-                                quarter_len,
-                                self.length,
-                                forward_flag,
-                            );
-                        }
+                    // SAFETY: `buf` has `self.length * 2` elements, twiddle
+                    // slice has `quarter_len * 6` elements, `quarter_len` is
+                    // a power of 2 and `<= self.length / 4`.
+                    unsafe {
+                        highway_sys::$butterfly4_fn(
+                            buf.as_mut_ptr(),
+                            self.twiddles[twiddle_offset..].as_ptr(),
+                            quarter_len,
+                            self.length,
+                            forward_flag,
+                        );
                     }
                     twiddle_offset += tw_len;
                     stage += 2;
@@ -308,8 +341,13 @@ macro_rules! impl_hwy_dft {
                     )));
                 }
 
+                // For N >= 16, Butterfly8Batch handles the first 3 stages
+                // with hardcoded twiddle values — no twiddles needed for them.
+                let num_stages = spec.length.trailing_zeros() as usize;
+                let base_stage = if num_stages >= 4 { 3 } else { 0 };
+
                 let (twiddles_f64, has_initial_radix2) =
-                    compute_twiddles(spec.length, spec.direction);
+                    compute_twiddles(spec.length, spec.direction, base_stage);
                 #[allow(
                     clippy::cast_possible_truncation,
                     reason = "twiddle factors (sin/cos) are always in [-1, 1]"
@@ -322,6 +360,7 @@ macro_rules! impl_hwy_dft {
                     norm: spec.norm,
                     twiddles,
                     has_initial_radix2,
+                    base_stage,
                 })
             }
         }
@@ -333,6 +372,9 @@ impl_hwy_dft!(
     omnidsp_butterfly_stage_f32,
     omnidsp_butterfly_stage4_f32,
     omnidsp_butterfly_stage4_first_f32,
+    omnidsp_butterfly4_f32,
+    omnidsp_butterfly8_f32,
+    omnidsp_butterfly8_batch_f32,
     omnidsp_scale_f32
 );
 impl_hwy_dft!(
@@ -340,6 +382,9 @@ impl_hwy_dft!(
     omnidsp_butterfly_stage_f64,
     omnidsp_butterfly_stage4_f64,
     omnidsp_butterfly_stage4_first_f64,
+    omnidsp_butterfly4_f64,
+    omnidsp_butterfly8_f64,
+    omnidsp_butterfly8_batch_f64,
     omnidsp_scale_f64
 );
 

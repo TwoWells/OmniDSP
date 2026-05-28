@@ -77,6 +77,18 @@ fn dft_shootout(n: usize) {
 
 #[test]
 #[ignore = "benchmark — run manually with make test T=shootout"]
+fn dft_shootout_4() {
+    dft_shootout(4);
+}
+
+#[test]
+#[ignore = "benchmark — run manually with make test T=shootout"]
+fn dft_shootout_8() {
+    dft_shootout(8);
+}
+
+#[test]
+#[ignore = "benchmark — run manually with make test T=shootout"]
 fn dft_shootout_64() {
     dft_shootout(64);
 }
