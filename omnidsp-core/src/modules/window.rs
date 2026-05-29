@@ -4,11 +4,10 @@
 //! Window module — [`VecOps`]-accelerated window apply.
 //!
 //! [`OmniWindow`] is a lightweight factory that pairs a [`VecOps`]
-//! implementation with a [`Window`](crate::types::Window) to produce
-//! [`OmniWindowPlan`]s.  The [`Window`](crate::types::Window) is the spec —
-//! construct one via [`Window::from_fn`](crate::types::Window::from_fn) or
-//! [`Window::new`](crate::types::Window::new).  This module just applies the
-//! window via [`VecOps::mul_inplace`].
+//! implementation with a [`Window`] to produce [`OmniWindowPlan`]s.
+//! The [`Window`] is the spec — construct one via [`Window::from_fn`] or
+//! [`Window::new`].  This module just applies the window via
+//! [`VecOps::mul_inplace`].
 
 use num_traits::Float;
 

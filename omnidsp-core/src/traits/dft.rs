@@ -15,11 +15,17 @@ use crate::types::Direction;
 // ─── Spec ────────────────────────────────────────────────────────────
 
 /// Normalization convention for the DFT.
+///
+/// Controls the scaling factor applied during forward and inverse transforms.
+/// A forward+inverse round-trip must use the same convention to get
+/// predictable results.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DftNorm {
-    /// No normalization — round-trip scales by N.
+    /// No normalization on either direction — `IFFT(FFT(x)) = N·x`.
     None,
-    /// Divide by N on the inverse transform — round-trip is identity.
+    /// Divide by N on the inverse transform — `IFFT(FFT(x)) = x`.
+    ///
+    /// This is the convention used by the convolution and FIR modules.
     Inverse,
     /// Divide by √N on both transforms — unitary (energy-preserving).
     Ortho,
@@ -29,13 +35,30 @@ pub enum DftNorm {
 ///
 /// Describes the length, direction, and normalization convention for a
 /// DFT plan.  Any backend can consume this spec.
+///
+/// # Examples
+///
+/// ```
+/// use omnidsp_core::traits::dft::{DftSpec, DftNorm};
+/// use omnidsp_core::types::Direction;
+///
+/// // 1024-point forward FFT with inverse normalization (round-trip = identity)
+/// let spec = DftSpec::new(1024, Direction::Forward, DftNorm::Inverse);
+/// assert_eq!(spec.length, 1024);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DftSpec {
-    /// Transform length (number of samples).
+    /// Number of complex samples for both input and output buffers.
+    ///
+    /// Determines the frequency resolution: each bin spans
+    /// `sample_rate / length` Hz.
     pub length: usize,
     /// Transform direction (forward or inverse).
     pub direction: Direction,
     /// Normalization convention.
+    ///
+    /// Must be consistent between a forward/inverse pair for the
+    /// round-trip to produce the expected scaling.
     pub norm: DftNorm,
 }
 

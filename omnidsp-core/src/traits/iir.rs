@@ -17,9 +17,29 @@ use crate::types::BiquadSection;
 /// Describes the second-order sections for a biquad cascade filter.
 /// This is the contract between the design layer (which computes
 /// biquad coefficients) and any backend (which executes the filter).
+///
+/// Construct via [`design::iir::design`](crate::design::iir::design) for
+/// automatic coefficient generation, or directly via [`IirSpec::new`] with
+/// pre-computed sections.
+///
+/// # Examples
+///
+/// ```
+/// use omnidsp_core::traits::iir::IirSpec;
+/// use omnidsp_core::types::BiquadSection;
+///
+/// let spec = IirSpec::new(vec![
+///     BiquadSection { b0: 0.5, b1: 0.5, b2: 0.0, a1: 0.0, a2: 0.0 },
+/// ]);
+/// assert_eq!(spec.sections.len(), 1);
+/// ```
 #[derive(Debug, Clone)]
 pub struct IirSpec<T> {
-    /// Second-order sections applied in order.
+    /// Second-order sections applied in series, first to last.
+    ///
+    /// The output of `sections[0]` feeds `sections[1]`, and so on.
+    /// The total filter order is `2 × sections.len()` (or less if
+    /// any section is first-order with `b2 = a2 = 0`).
     pub sections: Vec<BiquadSection<T>>,
 }
 

@@ -3,13 +3,20 @@
 
 //! Resampling design — polyphase prototype filter and plan-ready spec.
 //!
-//! [`design`] takes plain parameters (rates, quality, window) and returns
-//! a [`ResampleSpec`] — the plan-ready contract holding rational factors
-//! L/M, a prototype FIR filter, and the processing mode.  Any resampler
-//! backend can consume a spec.
+//! # Algorithm
 //!
-//! Users with pre-computed coefficients can construct a [`ResampleSpec`]
-//! directly via [`ResampleSpec::new`].
+//! 1. **Rational approximation:** the rate ratio `output_rate / input_rate`
+//!    is approximated as `L / M` via continued fractions, bounded by
+//!    `max_phases` to limit the number of polyphase sub-filters.
+//! 2. **Prototype filter:** a lowpass FIR with cutoff `1 / (2 · max(L, M))`
+//!    (normalized to the upsampled rate) prevents aliasing.  Filter length
+//!    is estimated from the quality parameter via Kaiser's formula.
+//! 3. **Output:** a [`ResampleSpec`] holding `L`, `M`, the prototype
+//!    coefficients, and the processing mode.
+//!
+//! [`design`] takes plain parameters (rates, quality, window) and returns
+//! the spec.  Users with pre-computed coefficients can construct a
+//! [`ResampleSpec`] directly via [`ResampleSpec::new`].
 
 #![allow(
     clippy::cast_precision_loss,

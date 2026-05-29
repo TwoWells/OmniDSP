@@ -3,10 +3,9 @@
 
 //! Convolution module — direct and FFT-based fast convolution.
 //!
-//! [`OmniConv`] implements the [`Conv`](crate::traits::conv::Conv) trait
-//! generically over any [`Dft`] and [`VecOps`] implementation.  Supports
-//! both time-domain (direct) and frequency-domain (FFT) convolution,
-//! selected via [`ConvMethod`](crate::traits::conv::ConvMethod).
+//! [`OmniConv`] implements the [`Conv`] trait generically over any [`Dft`]
+//! and [`VecOps`] implementation.  Supports both time-domain (direct) and
+//! frequency-domain (FFT) convolution, selected via [`ConvMethod`].
 //!
 //! The [`recommend_method`] function provides an operation-count heuristic
 //! for the `Auto` case.
@@ -86,6 +85,10 @@ impl<D, V> OmniConv<D, V> {
 /// thread-safe (`Send + Sync`).
 ///
 /// Output length is `a_len + b_len - 1` (full convolution).
+///
+/// **Memory:** the direct path allocates nothing beyond the plan struct.
+/// The FFT path allocates 3 × `fft_length` complex values for scratch
+/// buffers (behind a [`Mutex`] for thread safety).
 pub struct OmniConvPlan<T, P, V> {
     inner: PlanInner<T, P, V>,
     a_len: usize,

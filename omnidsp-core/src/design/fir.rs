@@ -3,7 +3,20 @@
 
 //! FIR filter design via the windowed-sinc method.
 //!
-//! Produces a `Vec<T>` of tap coefficients ready to pass to
+//! # Algorithm
+//!
+//! 1. Compute the ideal (infinite-length) impulse response for the desired
+//!    frequency response shape and normalized cutoff(s).
+//! 2. Truncate to `order + 1` taps and apply the chosen window function to
+//!    reduce spectral leakage.
+//! 3. Normalize the gain so the filter has unity response at a reference
+//!    frequency: DC for lowpass/bandstop, Nyquist for highpass, band center
+//!    for bandpass.
+//!
+//! All arithmetic is performed in `f64` internally; the output coefficients
+//! are converted to the target type `T`.
+//!
+//! The returned [`FirSpec`] is ready to pass to
 //! [`Fir::create_plan`](crate::traits::fir::Fir::create_plan).
 
 #![allow(

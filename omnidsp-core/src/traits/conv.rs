@@ -15,24 +15,40 @@ use crate::error::Result;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConvMethod {
     /// Backend decides based on input sizes.
+    ///
+    /// Resolved at plan creation time — the plan always uses a concrete method.
     Auto,
-    /// Frequency-domain (FFT-based) convolution.
+    /// Frequency-domain (FFT-based) convolution — `O(N log N)`.
     Fft,
-    /// Time-domain (direct) convolution.
+    /// Time-domain (direct) convolution — `O(a_len × b_len)`.
     Direct,
 }
 
 /// Convolution operation specification.
 ///
 /// Describes the input sizes and preferred implementation method.  Any
-/// backend can consume this spec.
+/// backend can consume this spec.  The plan validates that
+/// [`process`](ConvPlan::process) inputs match these lengths.
+///
+/// Output length is always `a_len + b_len - 1` (full linear convolution).
+///
+/// # Examples
+///
+/// ```
+/// use omnidsp_core::traits::conv::{ConvSpec, ConvMethod};
+///
+/// // Let the backend pick direct vs. FFT
+/// let spec = ConvSpec::new(1024, 64, ConvMethod::Auto);
+/// assert_eq!(spec.a_len, 1024);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ConvSpec {
-    /// Length of the first input.
+    /// Length of the first input signal.
     pub a_len: usize,
-    /// Length of the second input.
+    /// Length of the second input (often the shorter kernel).
     pub b_len: usize,
-    /// Preferred implementation method.
+    /// Preferred implementation method.  [`ConvMethod::Auto`] is resolved
+    /// at plan creation time; the plan itself always uses a concrete method.
     pub method: ConvMethod,
 }
 

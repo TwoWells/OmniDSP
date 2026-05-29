@@ -8,20 +8,20 @@
 //! All classical IIR designs (Butterworth, Chebyshev, elliptic) share
 //! the same pipeline — only the analog prototype differs:
 //!
-//! 1. **Analog prototype** ([`AnalogPrototype`]) — poles (and zeros) in
-//!    the s-plane, normalized to cutoff = 1 rad/s.  Butterworth has
-//!    poles on the unit circle and no finite zeros; Chebyshev II and
-//!    elliptic add zeros on the imaginary axis.
+//! 1. **Analog prototype** — poles (and zeros) in the s-plane,
+//!    normalized to cutoff = 1 rad/s.  Butterworth has poles on the unit
+//!    circle and no finite zeros; Chebyshev II and elliptic add zeros on
+//!    the imaginary axis.
 //! 2. **Frequency transform** — LP→LP, LP→HP, LP→BP, or LP→BS.
 //!    Transforms both poles and zeros; adds extra zeros for HP/BP/BS.
-//! 3. **Bilinear transform** ([`AnalogPrototype::into_digital`]) — maps
-//!    the s-plane to the z-plane and yields a [`DigitalZpk`].
-//! 4. **SOS formation** ([`DigitalZpk::into_sos`]) — pairs z-plane poles
-//!    with zeros into second-order sections ([`BiquadSection`]).
+//! 3. **Bilinear transform** — maps the s-plane to the z-plane and
+//!    yields a zero-pole-gain (ZPK) representation.
+//! 4. **SOS formation** — pairs z-plane poles with zeros into
+//!    second-order sections ([`BiquadSection`]).
 //! 5. **Gain normalization** — scales numerators so the cascade has
 //!    unity gain at the reference frequency.
 //!
-//! To add a new filter family, provide a new [`AnalogPrototype`]
+//! To add a new filter family, provide a new analog prototype
 //! constructor.  The rest of the pipeline is shared.
 
 #![allow(
@@ -54,8 +54,12 @@ pub enum FilterFamily {
 /// Design an IIR filter as cascaded biquad sections.
 ///
 /// Returns an [`IirSpec<T>`] with normalized coefficients (`a0 = 1`).
+/// Sections use the same sign convention as scipy's `sosfilt` (see
+/// [`BiquadSection`]).
+///
 /// The number of sections is `⌈order / 2⌉` for lowpass/highpass and
-/// `order` for bandpass/bandstop.
+/// `order` for bandpass/bandstop (frequency transforms double the
+/// prototype order for band filters).
 ///
 /// # Errors
 ///
@@ -457,7 +461,7 @@ impl DigitalZpk {
 
 /// Separate poles into conjugate pairs and unpaired real values.
 ///
-/// Real poles are paired adjacent (via [`chunks_exact`]); at most one
+/// Real poles are paired adjacent (via `chunks_exact`); at most one
 /// remains unpaired (odd-order LP/HP).
 fn pair_poles(values: &[Complex64]) -> (Vec<(Complex64, Complex64)>, Vec<f64>) {
     let (mut pairs, reals) = extract_conjugates(values);

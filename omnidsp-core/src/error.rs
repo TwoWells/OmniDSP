@@ -26,5 +26,5 @@ pub enum Error {
     Internal(String),
 }
 
-/// Convenience alias for results with [`Error`].
+/// Convenience alias for results with [`enum@Error`].
 pub type Result<T> = std::result::Result<T, Error>;

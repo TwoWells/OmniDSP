@@ -26,8 +26,9 @@ use crate::traits::vecops::VecOps;
 /// Creates [`OmniResamplePlan`]s from [`ResampleSpec`]s.  The factory
 /// owns the `VecOps` instance; plans own a clone of it.
 ///
-/// Unlike the filter modules, there is no `Resample` trait — this is a
-/// standalone factory like [`OmniWindow`](super::window::OmniWindow).
+/// There is no `Resample` trait — this is a standalone factory.
+/// The spec/plan contract is the same as the trait-based modules:
+/// construct a spec, pass it to `create_plan`, call `process` on the plan.
 #[derive(Debug, Clone)]
 pub struct OmniResample<V> {
     vecops: V,
@@ -44,7 +45,12 @@ impl<V> OmniResample<V> {
 /// Execution plan for a streaming polyphase resampler.
 ///
 /// Created by [`OmniResample::create_plan`].  Mutable — holds a delay
-/// line and phase counter that persist across calls.
+/// line and phase counter that persist across calls so successive
+/// `process` calls form a continuous stream.  Call [`reset`](Self::reset)
+/// to clear the delay line without recreating the plan.
+///
+/// **Memory:** `L × taps_per_phase` for the polyphase coefficients plus
+/// `2 × taps_per_phase` for the doubled delay buffer.
 pub struct OmniResamplePlan<T, V> {
     /// Polyphase coefficients: `up_factor` phases × `taps_per_phase`,
     /// flat layout with stride `taps_per_phase`.  Each phase is stored

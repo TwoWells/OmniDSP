@@ -15,10 +15,17 @@ use crate::error::Result;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FirStrategy {
     /// Backend decides based on filter length.
+    ///
+    /// Resolved at plan creation time — the plan always uses a concrete strategy.
     Auto,
-    /// Time-domain direct convolution (MAC loop).
+    /// Time-domain direct convolution — one dot product per output sample.
+    ///
+    /// Lower overhead for short filters (typically < 64 taps).
     Direct,
-    /// Frequency-domain overlap-save.
+    /// Frequency-domain overlap-save — block FFT processing.
+    ///
+    /// Amortizes the FFT cost over many output samples; wins for longer
+    /// filters.
     OverlapSave,
 }
 
@@ -27,11 +34,31 @@ pub enum FirStrategy {
 /// Describes the filter coefficients and preferred implementation strategy.
 /// This is the contract between the design layer (which computes
 /// coefficients) and any backend (which executes the filter).
+///
+/// Construct via [`design::fir::design`](crate::design::fir::design) for
+/// automatic coefficient generation, or directly via [`FirSpec::new`] with
+/// pre-computed taps.
+///
+/// # Examples
+///
+/// ```
+/// use omnidsp_core::traits::fir::{FirSpec, FirStrategy};
+///
+/// // 3-tap moving average, force direct strategy
+/// let spec = FirSpec::new(vec![1.0 / 3.0; 3])
+///     .with_strategy(FirStrategy::Direct);
+/// assert_eq!(spec.coefficients.len(), 3);
+/// ```
 #[derive(Debug, Clone)]
 pub struct FirSpec<T> {
-    /// Filter tap coefficients.
+    /// Filter tap coefficients in time-domain order: `h[0], h[1], …, h[N-1]`.
+    ///
+    /// The number of taps (`coefficients.len()`) determines the filter order
+    /// (`N - 1`), group delay (`(N - 1) / 2` samples for linear phase), and
+    /// the direct/overlap-save crossover point.
     pub coefficients: Vec<T>,
-    /// Preferred implementation strategy.
+    /// Preferred implementation strategy.  [`FirStrategy::Auto`] is resolved
+    /// at plan creation time based on the number of taps.
     pub strategy: FirStrategy,
 }
 

@@ -3,10 +3,10 @@
 
 //! FIR filter module — direct and overlap-save streaming filter.
 //!
-//! [`OmniFir`] implements the [`Fir`](crate::traits::fir::Fir) trait
-//! generically over any [`Dft`] and [`VecOps`] implementation.  Supports
-//! both time-domain (direct MAC loop) and frequency-domain (overlap-save)
-//! execution, selected via [`FirStrategy`](crate::traits::fir::FirStrategy).
+//! [`OmniFir`] implements the [`Fir`] trait generically over any [`Dft`]
+//! and [`VecOps`] implementation.  Supports both time-domain (direct MAC
+//! loop) and frequency-domain (overlap-save) execution, selected via
+//! [`FirStrategy`].
 //!
 //! The [`recommend_strategy`] function provides an operation-count heuristic
 //! for the `Auto` case.
@@ -89,7 +89,13 @@ impl<D, V> OmniFir<D, V> {
 /// Execution plan for a streaming FIR filter.
 ///
 /// Created by [`OmniFir::create_plan`](Fir::create_plan).  Mutable — holds
-/// a delay line that persists across calls.
+/// a delay line that persists across calls so successive `process` calls
+/// form a continuous stream.  Call [`reset`](FirPlan::reset) to clear the
+/// delay line without recreating the plan.
+///
+/// **Memory:** the direct path allocates `2 × num_taps` for the doubled
+/// delay buffer.  The overlap-save path allocates 3 × `block_size` complex
+/// values for FFT scratch plus `num_taps − 1` for the overlap buffer.
 pub struct OmniFirPlan<T, P, V> {
     inner: PlanInner<T, P, V>,
 }
