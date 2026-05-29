@@ -7,7 +7,7 @@
 #   make release-major   # 0.1.0 -> 1.0.0
 #   make release V=0.2.0 # explicit version
 
-.PHONY: bench build-release check deny gen-cqt-reference gen-cqt-process-reference gen-fir-reference gen-fir-lfilter-reference gen-iir-reference gen-iir-sosfilt-reference gen-resample-reference gen-resample-poly-reference machete mutants setup setup-hooks setup-tools test release release-patch release-minor release-major publish tag-current
+.PHONY: bench build-release check deny gen-cqt-reference gen-cqt-process-reference gen-cqt-librosa-reference gen-fir-reference gen-fir-lfilter-reference gen-iir-reference gen-iir-sosfilt-reference gen-resample-reference gen-resample-poly-reference machete mutants setup setup-hooks setup-tools test release release-patch release-minor release-major publish tag-current
 
 # Get current version from Cargo.toml
 CURRENT_VERSION := $(shell grep '^version = ' omnidsp-core/Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
@@ -100,6 +100,10 @@ gen-cqt-reference:
 gen-cqt-process-reference:
 	@python3 scripts/gen_cqt_process_reference.py > omnidsp-core/testdata/cqt_process_numpy.rs
 	@echo "Generated omnidsp-core/testdata/cqt_process_numpy.rs"
+
+gen-cqt-librosa-reference:
+	@python3 scripts/gen_cqt_librosa_reference.py > omnidsp-core/testdata/cqt_librosa.rs
+	@echo "Generated omnidsp-core/testdata/cqt_librosa.rs"
 
 gen-iir-reference:
 	@python3 scripts/gen_iir_reference.py > omnidsp-core/testdata/iir_scipy.rs
