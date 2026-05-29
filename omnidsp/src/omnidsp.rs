@@ -233,7 +233,9 @@ impl_create_cqt!(f64);
 mod tests {
     use num_complex::Complex;
     use omnidsp_core::design::cqt;
-    use omnidsp_core::design::resample::{ResampleQuality, ResampleSpec};
+    use omnidsp_core::design::resample::{
+        self as resample, DEFAULT_MAX_PHASES, ResampleMode, ResampleQuality,
+    };
     use omnidsp_core::traits::conv::{ConvMethod, ConvPlan, ConvSpec};
     use omnidsp_core::traits::dft::{DftNorm, DftPlan, DftSpec};
     use omnidsp_core::traits::fir::{FirPlan, FirSpec};
@@ -335,23 +337,26 @@ mod tests {
     #[test]
     fn create_resample_plan_f64() {
         let dsp = OmniDSP::new();
-        let spec = ResampleSpec::new(
+        let spec = resample::design(
             44100.0_f64,
             48000.0,
             ResampleQuality::new(5).expect("quality"),
-            Window::Hamming,
+            &Window::Hamming,
+            DEFAULT_MAX_PHASES,
+            ResampleMode::Streaming,
         )
         .expect("resample spec");
         let mut plan = dsp.create_plan(&spec).expect("resample plan");
 
         // Resample a DC signal — output amplitude should be close to 1.0.
         let input = vec![1.0_f64; 441];
-        let mut output = vec![0.0; 480];
-        plan.process(&input, &mut output).expect("resample");
+        let max_out = plan.max_output_len(input.len());
+        let mut output = vec![0.0; max_out];
+        let written = plan.process(&input, &mut output).expect("resample");
 
         // Check that the middle samples are close to 1.0 (skip edges
         // where filter transients may occur).
-        let mid = output.len() / 2;
+        let mid = written / 2;
         assert!(
             (output[mid] - 1.0).abs() < 0.05,
             "resampled DC should be ~1.0 in the middle, got {}",
@@ -413,11 +418,13 @@ mod tests {
 
         let _resample = dsp
             .create_plan(
-                &ResampleSpec::new(
+                &resample::design(
                     48000.0_f64,
                     16000.0,
                     ResampleQuality::new(3).expect("quality"),
-                    Window::Hann,
+                    &Window::Hann,
+                    DEFAULT_MAX_PHASES,
+                    ResampleMode::Streaming,
                 )
                 .expect("spec"),
             )

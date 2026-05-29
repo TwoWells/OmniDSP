@@ -25,7 +25,7 @@ use omnidsp_core::traits::dft::{Dft, DftNorm, DftPlan, DftSpec};
 use omnidsp_core::traits::fir::{Fir, FirPlan, FirStrategy};
 use omnidsp_core::traits::iir::{Iir, IirPlan};
 use omnidsp_core::traits::vecops::VecOps;
-use omnidsp_core::types::{Direction, FilterType, WindowFn};
+use omnidsp_core::types::{Direction, FilterType, Window};
 use omnidsp_rust::{RustDft, RustIir, RustVecOps};
 
 // ─── Test data ─────────────────────────────────────────────────────────
@@ -88,7 +88,7 @@ mod fir_integration {
             44100.0_f64,
             1000.0,
             None,
-            &WindowFn::Hamming,
+            &Window::Hamming,
         )
         .expect("FIR design");
 
@@ -138,7 +138,7 @@ mod fir_integration {
             44100.0_f64,
             10000.0,
             None,
-            &WindowFn::Hann,
+            &Window::Hann,
         )
         .expect("FIR design");
 
@@ -188,7 +188,7 @@ mod fir_integration {
             44100.0_f64,
             1000.0,
             None,
-            &WindowFn::Hamming,
+            &Window::Hamming,
         )
         .expect("FIR design");
 
@@ -387,7 +387,7 @@ mod resample_integration {
             44100.0_f64,
             48000.0,
             ResampleQuality::new(5).expect("valid quality"),
-            &WindowFn::Hamming,
+            &Window::Hamming,
             DEFAULT_MAX_PHASES,
             ResampleMode::Streaming,
         )
@@ -431,7 +431,7 @@ mod resample_integration {
             44100.0_f64,
             48000.0,
             ResampleQuality::new(5).expect("valid quality"),
-            &WindowFn::Hamming,
+            &Window::Hamming,
             DEFAULT_MAX_PHASES,
             ResampleMode::Streaming,
         )
@@ -474,7 +474,7 @@ mod streaming_equivalence {
             44100.0_f64,
             2000.0,
             None,
-            &WindowFn::Hamming,
+            &Window::Hamming,
         )
         .expect("FIR design");
 
@@ -570,7 +570,7 @@ mod streaming_equivalence {
             44100.0_f64,
             48000.0,
             ResampleQuality::new(5).expect("valid quality"),
-            &WindowFn::Hamming,
+            &Window::Hamming,
             DEFAULT_MAX_PHASES,
             ResampleMode::Streaming,
         )
@@ -644,7 +644,7 @@ mod pipeline {
             44100.0_f64,
             48000.0,
             ResampleQuality::new(3).expect("valid quality"),
-            &WindowFn::Hamming,
+            &Window::Hamming,
             DEFAULT_MAX_PHASES,
             ResampleMode::Streaming,
         )
@@ -674,7 +674,7 @@ mod pipeline {
             48000.0_f64,
             8000.0,
             None,
-            &WindowFn::Hamming,
+            &Window::Hamming,
         )
         .expect("FIR design");
 
@@ -784,11 +784,11 @@ mod pipeline {
         let signal: Vec<f64> = (0..n).map(|i| (TAU * freq * i as f64 / sr).sin()).collect();
 
         // Apply Hann window.
-        let window = Window::from_fn(&WindowFn::<f64>::Hann, n).expect("window creation");
+        let coeffs: Vec<f64> = Window::hann(n).expect("window creation");
         let vecops = RustVecOps;
         let mut windowed = signal;
         vecops
-            .mul_inplace(&mut windowed, window.coefficients())
+            .mul_inplace(&mut windowed, &coeffs)
             .expect("window apply");
 
         // Forward FFT with unitary normalization.
@@ -837,7 +837,7 @@ mod cqt_integration {
             CQT_LIB_MIN_FREQ,
             CQT_LIB_MAX_FREQ,
             CQT_LIB_BINS_PER_OCTAVE,
-            &WindowFn::<f64>::Hann,
+            &Window::<f64>::Hann,
         )
         .expect("CQT design")
     }
