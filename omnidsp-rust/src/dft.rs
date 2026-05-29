@@ -6,11 +6,32 @@
 use std::sync::{Arc, Mutex};
 
 use num_complex::Complex;
-use rustfft::{Fft, FftPlanner};
+use num_traits::FromPrimitive;
+use rustfft::{Fft, FftNum, FftPlanner};
 
 use omnidsp_core::error::{Error, Result};
 use omnidsp_core::traits::dft::{Dft, DftNorm, DftPlan, DftSpec};
 use omnidsp_core::types::Direction;
+
+// ─── Type erasure ────────────────────────────────────────────────────
+
+/// Private trait that hides `rustfft::FftNum` from the public API.
+///
+/// `RustDftPlan<T>` stores `Box<dyn DftEngine<T>>` instead of
+/// `Arc<dyn Fft<T>>`, so the `FftNum` bound stays on the impl block
+/// (inside `create_plan`) and doesn't leak into the struct definition
+/// or the dispatch layer.
+trait DftEngine<T>: Send + Sync {
+    fn process(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]);
+}
+
+impl<T: FftNum> DftEngine<T> for Arc<dyn Fft<T>> {
+    fn process(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+        Fft::process_with_scratch(&**self, buffer, scratch);
+    }
+}
+
+// ─── Public types ────────────────────────────────────────────────────
 
 /// Pure Rust DFT factory.
 ///
@@ -21,18 +42,23 @@ pub struct RustDft;
 
 /// Execution plan for a DFT operation backed by `RustFFT`.
 ///
-/// Holds the precomputed FFT plan from `RustFFT` and a scratch buffer behind
-/// a `Mutex` so that `Send + Sync` is satisfied while keeping execution
+/// Holds the precomputed FFT plan and a scratch buffer behind a `Mutex`
+/// so that `Send + Sync` is satisfied while keeping execution
 /// allocation-free.
-pub struct RustDftPlan<T: rustfft::FftNum> {
-    fft: Arc<dyn Fft<T>>,
+pub struct RustDftPlan<T> {
+    engine: Box<dyn DftEngine<T>>,
     length: usize,
     direction: Direction,
     norm: DftNorm,
     scratch: Mutex<Vec<Complex<T>>>,
 }
 
-impl<T: rustfft::FftNum> DftPlan<T> for RustDftPlan<T> {
+// ─── Trait implementations ───────────────────────────────────────────
+
+impl<T> DftPlan<T> for RustDftPlan<T>
+where
+    T: Copy + FromPrimitive + std::ops::Mul<Output = T> + Send + Sync + 'static,
+{
     fn process(&self, input: &[Complex<T>], output: &mut [Complex<T>]) -> Result<()> {
         if input.len() != self.length {
             return Err(Error::BufferMismatch {
@@ -53,7 +79,7 @@ impl<T: rustfft::FftNum> DftPlan<T> for RustDftPlan<T> {
             .scratch
             .lock()
             .map_err(|e| Error::Internal(format!("scratch buffer lock poisoned: {e}")))?;
-        self.fft.process_with_scratch(output, &mut scratch);
+        self.engine.process(output, &mut scratch);
 
         // RustFFT is unnormalized — apply scaling based on the norm convention.
         let scale = self.compute_scale()?;
@@ -67,7 +93,7 @@ impl<T: rustfft::FftNum> DftPlan<T> for RustDftPlan<T> {
     }
 }
 
-impl<T: rustfft::FftNum> RustDftPlan<T> {
+impl<T: Copy + FromPrimitive + std::ops::Mul<Output = T>> RustDftPlan<T> {
     /// Compute the scaling factor for the configured normalization, or `None`
     /// if no scaling is needed.
     fn compute_scale(&self) -> Result<Option<T>> {
@@ -110,7 +136,7 @@ macro_rules! impl_dft {
                 let scratch_len = fft.get_inplace_scratch_len();
 
                 Ok(RustDftPlan {
-                    fft,
+                    engine: Box::new(fft),
                     length: spec.length,
                     direction: spec.direction,
                     norm: spec.norm,
