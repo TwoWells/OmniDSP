@@ -1,16 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Two Wells <contact@twowells.dev>
 
-//! Resampling design — specification and polyphase prototype filter.
+//! Resampling design — polyphase prototype filter and plan-ready spec.
 //!
-//! [`ResampleSpec`] captures the user's intent (rates, quality, window)
-//! without prescribing an implementation.  Any resampler backend can
-//! consume a spec.
+//! [`design`] takes plain parameters (rates, quality, window) and returns
+//! a [`ResampleSpec`] — the plan-ready contract holding rational factors
+//! L/M, a prototype FIR filter, and the processing mode.  Any resampler
+//! backend can consume a spec.
 //!
-//! [`design`] computes the polyphase prototype filter for the
-//! `omnidsp-core` resampling module — it produces rational factors
-//! L/M and a lowpass FIR prototype.  Other backends (e.g. IPP) may
-//! ignore this and interpret the spec directly.
+//! Users with pre-computed coefficients can construct a [`ResampleSpec`]
+//! directly via [`ResampleSpec::new`].
 
 #![allow(
     clippy::cast_precision_loss,
@@ -94,137 +93,86 @@ impl ResampleQuality {
     }
 }
 
-/// Resampling specification — backend-agnostic description of the
-/// desired sample rate conversion.
+/// Resampling specification — plan-ready data for a polyphase resampler.
 ///
-/// Backends interpret this however they need:
-/// - The polyphase resampling module calls [`design`] to get L/M
-///   and a prototype filter.
-/// - IPP maps quality to its own window/rolloff parameters and takes
-///   the rate ratio directly.
+/// Holds the rational conversion factors, prototype anti-aliasing FIR
+/// filter, and processing mode.  Construct via [`design`] for automatic
+/// filter generation, or via [`ResampleSpec::new`] with pre-computed
+/// coefficients.
 ///
 /// # Examples
 ///
 /// ```
-/// use omnidsp_core::design::resample::{ResampleSpec, ResampleQuality};
+/// use omnidsp_core::design::resample::{
+///     self, ResampleSpec, ResampleMode, ResampleQuality, DEFAULT_MAX_PHASES,
+/// };
 /// use omnidsp_core::types::WindowFn;
 ///
-/// let spec = ResampleSpec::new(
-///     44100.0_f64,
-///     48000.0,
+/// // Via design():
+/// let spec = resample::design(
+///     44100.0_f64, 48000.0,
 ///     ResampleQuality::new(5).unwrap(),
-///     WindowFn::Hamming,
+///     &WindowFn::Hamming,
+///     DEFAULT_MAX_PHASES,
+///     ResampleMode::Streaming,
 /// ).unwrap();
+/// assert_eq!(spec.up_factor(), 160);
+/// assert_eq!(spec.down_factor(), 147);
 ///
-/// assert!((spec.input_rate() - 44100.0).abs() < f64::EPSILON);
-/// assert!((spec.output_rate() - 48000.0).abs() < f64::EPSILON);
+/// // Or directly from pre-computed data:
+/// let spec = ResampleSpec::new(2, 1, vec![0.5_f64, 1.0, 0.5], ResampleMode::Streaming);
+/// assert_eq!(spec.up_factor(), 2);
 /// ```
 #[derive(Debug, Clone)]
 pub struct ResampleSpec<T> {
-    input_rate: T,
-    output_rate: T,
-    quality: ResampleQuality,
-    window_fn: WindowFn<T>,
-    max_phases: usize,
+    up_factor: usize,
+    down_factor: usize,
+    prototype_filter: Vec<T>,
     mode: ResampleMode,
 }
 
 /// Default maximum number of polyphase phases.
-const DEFAULT_MAX_PHASES: usize = 256;
+pub const DEFAULT_MAX_PHASES: usize = 256;
 
 /// Hard upper limit on polyphase phases.
-const MAX_PHASES_LIMIT: usize = 1024;
+pub const MAX_PHASES_LIMIT: usize = 1024;
 
-impl<T: Float> ResampleSpec<T> {
-    /// Create a new resampling specification with default `max_phases` (256).
-    ///
-    /// # Errors
-    ///
-    /// Returns [`Error::InvalidSpec`] if either rate is not positive.
-    pub fn new(
-        input_rate: T,
-        output_rate: T,
-        quality: ResampleQuality,
-        window_fn: WindowFn<T>,
-    ) -> Result<Self> {
-        Self::with_max_phases(
-            input_rate,
-            output_rate,
-            quality,
-            window_fn,
-            DEFAULT_MAX_PHASES,
-        )
-    }
-
-    /// Create a new resampling specification with an explicit `max_phases`.
-    ///
-    /// `max_phases` controls the maximum number of polyphase filter banks
-    /// used by the polyphase resampler.  It is clamped to the range
-    /// `1..=1024`.  Non-OmniDSP backends may ignore this parameter.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`Error::InvalidSpec`] if either rate is not positive.
-    pub fn with_max_phases(
-        input_rate: T,
-        output_rate: T,
-        quality: ResampleQuality,
-        window_fn: WindowFn<T>,
-        max_phases: usize,
-    ) -> Result<Self> {
-        let sr_in = to_f64(input_rate)?;
-        let sr_out = to_f64(output_rate)?;
-        if sr_in <= 0.0 {
-            return Err(Error::InvalidSpec(
-                "input sample rate must be positive".into(),
-            ));
+impl<T> ResampleSpec<T> {
+    /// Create a spec from pre-computed polyphase data.
+    #[must_use]
+    pub const fn new(
+        up_factor: usize,
+        down_factor: usize,
+        prototype_filter: Vec<T>,
+        mode: ResampleMode,
+    ) -> Self {
+        Self {
+            up_factor,
+            down_factor,
+            prototype_filter,
+            mode,
         }
-        if sr_out <= 0.0 {
-            return Err(Error::InvalidSpec(
-                "output sample rate must be positive".into(),
-            ));
-        }
-        Ok(Self {
-            input_rate,
-            output_rate,
-            quality,
-            window_fn,
-            max_phases: max_phases.clamp(1, MAX_PHASES_LIMIT),
-            mode: ResampleMode::Streaming,
-        })
     }
 
-    /// Input sample rate (Hz).
+    /// Upsampling factor L (number of polyphase phases).
     #[must_use]
-    pub const fn input_rate(&self) -> T {
-        self.input_rate
+    pub const fn up_factor(&self) -> usize {
+        self.up_factor
     }
 
-    /// Output sample rate (Hz).
+    /// Downsampling factor M.
     #[must_use]
-    pub const fn output_rate(&self) -> T {
-        self.output_rate
+    pub const fn down_factor(&self) -> usize {
+        self.down_factor
     }
 
-    /// Quality hint.
+    /// Prototype FIR filter coefficients.
     #[must_use]
-    pub const fn quality(&self) -> ResampleQuality {
-        self.quality
+    pub fn prototype_filter(&self) -> &[T] {
+        &self.prototype_filter
     }
 
-    /// Window function for the prototype filter.
-    #[must_use]
-    pub const fn window_fn(&self) -> &WindowFn<T> {
-        &self.window_fn
-    }
-
-    /// Maximum number of polyphase phases (hint for polyphase backends).
-    #[must_use]
-    pub const fn max_phases(&self) -> usize {
-        self.max_phases
-    }
-
-    /// Processing mode ([`Streaming`](ResampleMode::Streaming) by default).
+    /// Processing mode.
     #[must_use]
     pub const fn mode(&self) -> ResampleMode {
         self.mode
@@ -240,34 +188,42 @@ impl<T: Float> ResampleSpec<T> {
 
 // ─── Polyphase design ────────────────────────────────────────────────
 
-/// Result of polyphase resampling design.
-///
-/// Produced by [`design`] from a [`ResampleSpec`].  Contains the rational
-/// conversion factors and the prototype anti-aliasing FIR filter.
-#[derive(Debug, Clone)]
-pub struct ResampleDesign<T> {
-    /// Upsampling factor (number of polyphase banks).
-    pub up_factor: usize,
-    /// Downsampling factor.
-    pub down_factor: usize,
-    /// Prototype FIR filter coefficients (lowpass, length = order + 1).
-    pub prototype_filter: Vec<T>,
-}
-
-/// Design a polyphase resampling prototype filter from a [`ResampleSpec`].
+/// Design a polyphase resampling prototype filter.
 ///
 /// Computes rational conversion factors L/M via best rational approximation
-/// (continued fractions) bounded by [`ResampleSpec::max_phases`], then
-/// produces a lowpass FIR prototype filter whose cutoff prevents aliasing.
+/// (continued fractions) bounded by `max_phases`, then produces a lowpass
+/// FIR prototype filter whose cutoff prevents aliasing.
+///
+/// `max_phases` is clamped to `1..=1024`.  Use [`DEFAULT_MAX_PHASES`] (256)
+/// when unsure.
 ///
 /// # Errors
 ///
-/// Returns [`Error::InvalidSpec`] if the rate ratio cannot be approximated
-/// within the phase limit.
-pub fn design<T: Float>(spec: &ResampleSpec<T>) -> Result<ResampleDesign<T>> {
-    let sr_in = to_f64(spec.input_rate)?;
-    let sr_out = to_f64(spec.output_rate)?;
-    let max = spec.max_phases as u64;
+/// Returns [`Error::InvalidSpec`] if either rate is not positive.
+pub fn design<T: Float>(
+    input_rate: T,
+    output_rate: T,
+    quality: ResampleQuality,
+    window_fn: &WindowFn<T>,
+    max_phases: usize,
+    mode: ResampleMode,
+) -> Result<ResampleSpec<T>> {
+    let sr_in = to_f64(input_rate)?;
+    let sr_out = to_f64(output_rate)?;
+
+    if sr_in <= 0.0 {
+        return Err(Error::InvalidSpec(
+            "input sample rate must be positive".into(),
+        ));
+    }
+    if sr_out <= 0.0 {
+        return Err(Error::InvalidSpec(
+            "output sample rate must be positive".into(),
+        ));
+    }
+
+    let max_phases = max_phases.clamp(1, MAX_PHASES_LIMIT);
+    let max = max_phases as u64;
 
     // ── Rational factor L/M ──────────────────────────────────────
 
@@ -281,7 +237,7 @@ pub fn design<T: Float>(spec: &ResampleSpec<T>) -> Result<ResampleDesign<T>> {
     let cutoff_normalized = (1.0 / (2.0 * max_factor)).min(0.5 - 1e-8);
 
     // Quality → attenuation and transition width
-    let (attenuation_db, transition_fraction) = quality_params(spec.quality);
+    let (attenuation_db, transition_fraction) = quality_params(quality);
     let delta_f = cutoff_normalized * transition_fraction;
 
     // Kaiser's formula for filter order
@@ -304,13 +260,14 @@ pub fn design<T: Float>(spec: &ResampleSpec<T>) -> Result<ResampleDesign<T>> {
         from_f64(upsampled_rate)?,
         from_f64(cutoff_hz)?,
         None,
-        &spec.window_fn,
+        window_fn,
     )?;
 
-    Ok(ResampleDesign {
+    Ok(ResampleSpec {
         up_factor: up as usize,
         down_factor: down as usize,
         prototype_filter: fir_result.coefficients,
+        mode,
     })
 }
 
@@ -420,18 +377,33 @@ mod tests {
         ResampleQuality::new(val).expect("valid quality")
     }
 
-    fn spec(sr_in: f64, sr_out: f64, quality: u8) -> ResampleSpec<f64> {
-        ResampleSpec::new(sr_in, sr_out, q(quality), WindowFn::Hamming).expect("valid spec")
+    fn designed(sr_in: f64, sr_out: f64, quality: u8) -> ResampleSpec<f64> {
+        design(
+            sr_in,
+            sr_out,
+            q(quality),
+            &WindowFn::Hamming,
+            DEFAULT_MAX_PHASES,
+            ResampleMode::Streaming,
+        )
+        .expect("valid design")
     }
 
-    fn spec_with_phases(
+    fn designed_with_phases(
         sr_in: f64,
         sr_out: f64,
         quality: u8,
         max_phases: usize,
     ) -> ResampleSpec<f64> {
-        ResampleSpec::with_max_phases(sr_in, sr_out, q(quality), WindowFn::Hamming, max_phases)
-            .expect("valid spec")
+        design(
+            sr_in,
+            sr_out,
+            q(quality),
+            &WindowFn::Hamming,
+            max_phases,
+            ResampleMode::Streaming,
+        )
+        .expect("valid design")
     }
 
     // ── ResampleQuality ──────────────────────────────────────────
@@ -458,66 +430,97 @@ mod tests {
         );
     }
 
-    // ── ResampleSpec validation ──────────────────────────────────
+    // ── Rate validation (now in design()) ──────────────────────────
 
     #[test]
-    fn spec_valid() {
-        let s = ResampleSpec::new(44100.0, 48000.0, q(5), WindowFn::<f64>::Hamming);
-        assert!(s.is_ok(), "valid spec should succeed");
-    }
-
-    #[test]
-    fn spec_zero_input_rate_is_error() {
+    fn design_zero_input_rate_is_error() {
         assert!(
-            ResampleSpec::new(0.0, 48000.0, q(5), WindowFn::<f64>::Hamming).is_err(),
+            design(
+                0.0,
+                48000.0,
+                q(5),
+                &WindowFn::<f64>::Hamming,
+                DEFAULT_MAX_PHASES,
+                ResampleMode::Streaming
+            )
+            .is_err(),
             "zero input rate should be rejected"
         );
     }
 
     #[test]
-    fn spec_negative_input_rate_is_error() {
+    fn design_negative_input_rate_is_error() {
         assert!(
-            ResampleSpec::new(-44100.0, 48000.0, q(5), WindowFn::<f64>::Hamming).is_err(),
+            design(
+                -44100.0,
+                48000.0,
+                q(5),
+                &WindowFn::<f64>::Hamming,
+                DEFAULT_MAX_PHASES,
+                ResampleMode::Streaming
+            )
+            .is_err(),
             "negative input rate should be rejected"
         );
     }
 
     #[test]
-    fn spec_zero_output_rate_is_error() {
+    fn design_zero_output_rate_is_error() {
         assert!(
-            ResampleSpec::new(44100.0, 0.0, q(5), WindowFn::<f64>::Hamming).is_err(),
+            design(
+                44100.0,
+                0.0,
+                q(5),
+                &WindowFn::<f64>::Hamming,
+                DEFAULT_MAX_PHASES,
+                ResampleMode::Streaming
+            )
+            .is_err(),
             "zero output rate should be rejected"
         );
     }
 
     #[test]
-    fn spec_negative_output_rate_is_error() {
+    fn design_negative_output_rate_is_error() {
         assert!(
-            ResampleSpec::new(44100.0, -48000.0, q(5), WindowFn::<f64>::Hamming).is_err(),
+            design(
+                44100.0,
+                -48000.0,
+                q(5),
+                &WindowFn::<f64>::Hamming,
+                DEFAULT_MAX_PHASES,
+                ResampleMode::Streaming
+            )
+            .is_err(),
             "negative output rate should be rejected"
         );
     }
 
-    #[test]
-    fn spec_max_phases_clamped() {
-        let s = ResampleSpec::with_max_phases(44100.0, 48000.0, q(5), WindowFn::Hamming, 9999)
-            .expect("valid spec");
-        assert_eq!(
-            s.max_phases(),
-            MAX_PHASES_LIMIT,
-            "should clamp to upper limit"
-        );
+    // ── ResampleSpec direct construction ────────────────────────────
 
-        let s = ResampleSpec::with_max_phases(44100.0, 48000.0, q(5), WindowFn::Hamming, 0)
-            .expect("valid spec");
-        assert_eq!(s.max_phases(), 1, "should clamp to lower limit");
+    #[test]
+    fn spec_accessors() {
+        let spec = ResampleSpec::new(
+            3,
+            2,
+            vec![0.25, 0.5, 1.0, 0.5, 0.25],
+            ResampleMode::Streaming,
+        );
+        assert_eq!(spec.up_factor(), 3, "up_factor");
+        assert_eq!(spec.down_factor(), 2, "down_factor");
+        assert_eq!(spec.prototype_filter().len(), 5, "prototype length");
+        assert_eq!(spec.mode(), ResampleMode::Streaming, "mode");
     }
 
     #[test]
-    fn spec_default_max_phases() {
-        let s = ResampleSpec::new(44100.0, 48000.0, q(5), WindowFn::<f64>::Hamming)
-            .expect("valid spec");
-        assert_eq!(s.max_phases(), DEFAULT_MAX_PHASES, "default should be 256");
+    fn spec_with_mode() {
+        let spec = ResampleSpec::new(2, 1, vec![1.0_f64], ResampleMode::Streaming)
+            .with_mode(ResampleMode::Batch);
+        assert_eq!(
+            spec.mode(),
+            ResampleMode::Batch,
+            "mode should be overridden"
+        );
     }
 
     // ── Rational approximation ───────────────────────────────────
@@ -593,51 +596,46 @@ mod tests {
 
     #[test]
     fn design_44100_to_48000() {
-        let s = spec(44100.0, 48000.0, 5);
-        let result = design(&s).expect("44100→48000 design");
-        assert_eq!(result.up_factor, 160, "L=160");
-        assert_eq!(result.down_factor, 147, "M=147");
+        let result = designed(44100.0, 48000.0, 5);
+        assert_eq!(result.up_factor(), 160, "L=160");
+        assert_eq!(result.down_factor(), 147, "M=147");
         assert!(
-            !result.prototype_filter.is_empty(),
+            !result.prototype_filter().is_empty(),
             "prototype filter should not be empty"
         );
         // Even order → odd number of taps
         assert!(
-            !result.prototype_filter.len().is_multiple_of(2),
+            !result.prototype_filter().len().is_multiple_of(2),
             "filter length should be odd (even order + 1) — got {}",
-            result.prototype_filter.len()
+            result.prototype_filter().len()
         );
     }
 
     #[test]
     fn design_passthrough() {
-        let s = spec(44100.0, 44100.0, 3);
-        let result = design(&s).expect("passthrough design");
-        assert_eq!(result.up_factor, 1, "L=1");
-        assert_eq!(result.down_factor, 1, "M=1");
+        let result = designed(44100.0, 44100.0, 3);
+        assert_eq!(result.up_factor(), 1, "L=1");
+        assert_eq!(result.down_factor(), 1, "M=1");
     }
 
     #[test]
     fn design_decimation() {
-        let s = spec(44100.0, 22050.0, 5);
-        let result = design(&s).expect("decimation design");
-        assert_eq!(result.up_factor, 1, "L=1");
-        assert_eq!(result.down_factor, 2, "M=2");
+        let result = designed(44100.0, 22050.0, 5);
+        assert_eq!(result.up_factor(), 1, "L=1");
+        assert_eq!(result.down_factor(), 2, "M=2");
     }
 
     #[test]
     fn design_interpolation() {
-        let s = spec(22050.0, 44100.0, 5);
-        let result = design(&s).expect("interpolation design");
-        assert_eq!(result.up_factor, 2, "L=2");
-        assert_eq!(result.down_factor, 1, "M=1");
+        let result = designed(22050.0, 44100.0, 5);
+        assert_eq!(result.up_factor(), 2, "L=2");
+        assert_eq!(result.down_factor(), 1, "M=1");
     }
 
     #[test]
     fn prototype_is_lowpass() {
-        let s = spec(44100.0, 48000.0, 5);
-        let result = design(&s).expect("44100→48000 design");
-        let dc_gain: f64 = result.prototype_filter.iter().sum();
+        let result = designed(44100.0, 48000.0, 5);
+        let dc_gain: f64 = result.prototype_filter().iter().sum();
         assert!(
             (dc_gain - 1.0).abs() < 1e-8,
             "prototype DC gain should be 1.0, got {dc_gain}"
@@ -646,9 +644,8 @@ mod tests {
 
     #[test]
     fn prototype_is_symmetric() {
-        let s = spec(44100.0, 48000.0, 5);
-        let result = design(&s).expect("44100→48000 design");
-        let taps = &result.prototype_filter;
+        let result = designed(44100.0, 48000.0, 5);
+        let taps = result.prototype_filter();
         let n = taps.len();
         for i in 0..n / 2 {
             assert!(
@@ -661,37 +658,36 @@ mod tests {
     #[test]
     fn quality_increases_order() {
         // Use a small ratio so orders don't all clamp to 4096.
-        let low = design(&spec(22050.0, 44100.0, 0)).expect("quality 0");
-        let mid = design(&spec(22050.0, 44100.0, 5)).expect("quality 5");
-        let high = design(&spec(22050.0, 44100.0, 10)).expect("quality 10");
+        let low = designed(22050.0, 44100.0, 0);
+        let mid = designed(22050.0, 44100.0, 5);
+        let high = designed(22050.0, 44100.0, 10);
         assert!(
-            low.prototype_filter.len() < mid.prototype_filter.len(),
+            low.prototype_filter().len() < mid.prototype_filter().len(),
             "higher quality should produce longer filter: q0={} vs q5={}",
-            low.prototype_filter.len(),
-            mid.prototype_filter.len()
+            low.prototype_filter().len(),
+            mid.prototype_filter().len()
         );
         assert!(
-            mid.prototype_filter.len() < high.prototype_filter.len(),
+            mid.prototype_filter().len() < high.prototype_filter().len(),
             "higher quality should produce longer filter: q5={} vs q10={}",
-            mid.prototype_filter.len(),
-            high.prototype_filter.len()
+            mid.prototype_filter().len(),
+            high.prototype_filter().len()
         );
     }
 
     #[test]
     fn design_with_custom_max_phases() {
         // With max_phases=10, 160/147 won't fit — uses approximation.
-        let s = spec_with_phases(44100.0, 48000.0, 5, 10);
-        let result = design(&s).expect("44100→48000 with max_phases=10");
+        let result = designed_with_phases(44100.0, 48000.0, 5, 10);
         assert!(
-            result.up_factor <= 10,
+            result.up_factor() <= 10,
             "L should be ≤ 10, got {}",
-            result.up_factor
+            result.up_factor()
         );
         assert!(
-            result.down_factor <= 10,
+            result.down_factor() <= 10,
             "M should be ≤ 10, got {}",
-            result.down_factor
+            result.down_factor()
         );
     }
 
@@ -699,12 +695,18 @@ mod tests {
 
     #[test]
     fn f32_design_works() {
-        let s = ResampleSpec::new(44100.0_f32, 48000.0_f32, q(5), WindowFn::Hamming)
-            .expect("valid spec");
-        let result = design(&s).expect("f32 design");
-        assert_eq!(result.up_factor, 160, "L=160");
-        assert_eq!(result.down_factor, 147, "M=147");
-        let dc_gain: f32 = result.prototype_filter.iter().sum();
+        let result = design(
+            44100.0_f32,
+            48000.0_f32,
+            q(5),
+            &WindowFn::Hamming,
+            DEFAULT_MAX_PHASES,
+            ResampleMode::Streaming,
+        )
+        .expect("f32 design");
+        assert_eq!(result.up_factor(), 160, "L=160");
+        assert_eq!(result.down_factor(), 147, "M=147");
+        let dc_gain: f32 = result.prototype_filter().iter().sum();
         assert!(
             (dc_gain - 1.0).abs() < 1e-4,
             "f32 prototype DC gain should be ~1.0, got {dc_gain}"
@@ -746,26 +748,26 @@ mod tests {
     }
 
     /// Helper: design with `max_phases` high enough for exact integer-rate results.
-    fn design_exact(sr_in: f64, sr_out: f64, quality: u8) -> ResampleDesign<f64> {
-        let s = spec_with_phases(sr_in, sr_out, quality, MAX_PHASES_LIMIT);
-        design(&s).expect("design_exact")
+    fn design_exact(sr_in: f64, sr_out: f64, quality: u8) -> ResampleSpec<f64> {
+        designed_with_phases(sr_in, sr_out, quality, MAX_PHASES_LIMIT)
     }
 
     #[test]
     fn scipy_44100_to_22050() {
         let result = design_exact(44100.0, 22050.0, 5);
-        assert_eq!(result.up_factor, RESAMPLE_44100_22050_Q5_UP, "L mismatch");
+        assert_eq!(result.up_factor(), RESAMPLE_44100_22050_Q5_UP, "L mismatch");
         assert_eq!(
-            result.down_factor, RESAMPLE_44100_22050_Q5_DOWN,
+            result.down_factor(),
+            RESAMPLE_44100_22050_Q5_DOWN,
             "M mismatch"
         );
         assert_eq!(
-            result.prototype_filter.len(),
+            result.prototype_filter().len(),
             RESAMPLE_44100_22050_Q5_ORDER + 1,
             "order mismatch"
         );
         assert_fir_response_match(
-            &result.prototype_filter,
+            result.prototype_filter(),
             RESAMPLE_44100_22050_Q5_TAPS,
             44100.0,
             1e-10,
@@ -776,19 +778,20 @@ mod tests {
     #[test]
     fn scipy_22050_to_44100() {
         let result = design_exact(22050.0, 44100.0, 5);
-        assert_eq!(result.up_factor, RESAMPLE_22050_44100_Q5_UP, "L mismatch");
+        assert_eq!(result.up_factor(), RESAMPLE_22050_44100_Q5_UP, "L mismatch");
         assert_eq!(
-            result.down_factor, RESAMPLE_22050_44100_Q5_DOWN,
+            result.down_factor(),
+            RESAMPLE_22050_44100_Q5_DOWN,
             "M mismatch"
         );
         assert_eq!(
-            result.prototype_filter.len(),
+            result.prototype_filter().len(),
             RESAMPLE_22050_44100_Q5_ORDER + 1,
             "order mismatch"
         );
-        let upsampled_rate = f64::from(result.up_factor as u32) * 22050.0;
+        let upsampled_rate = f64::from(result.up_factor() as u32) * 22050.0;
         assert_fir_response_match(
-            &result.prototype_filter,
+            result.prototype_filter(),
             RESAMPLE_22050_44100_Q5_TAPS,
             upsampled_rate,
             1e-10,
@@ -799,18 +802,19 @@ mod tests {
     #[test]
     fn scipy_44100_to_44100() {
         let result = design_exact(44100.0, 44100.0, 5);
-        assert_eq!(result.up_factor, RESAMPLE_44100_44100_Q5_UP, "L mismatch");
+        assert_eq!(result.up_factor(), RESAMPLE_44100_44100_Q5_UP, "L mismatch");
         assert_eq!(
-            result.down_factor, RESAMPLE_44100_44100_Q5_DOWN,
+            result.down_factor(),
+            RESAMPLE_44100_44100_Q5_DOWN,
             "M mismatch"
         );
         assert_eq!(
-            result.prototype_filter.len(),
+            result.prototype_filter().len(),
             RESAMPLE_44100_44100_Q5_ORDER + 1,
             "order mismatch"
         );
         assert_fir_response_match(
-            &result.prototype_filter,
+            result.prototype_filter(),
             RESAMPLE_44100_44100_Q5_TAPS,
             44100.0,
             1e-10,
@@ -821,18 +825,19 @@ mod tests {
     #[test]
     fn scipy_48000_to_16000() {
         let result = design_exact(48000.0, 16000.0, 3);
-        assert_eq!(result.up_factor, RESAMPLE_48000_16000_Q3_UP, "L mismatch");
+        assert_eq!(result.up_factor(), RESAMPLE_48000_16000_Q3_UP, "L mismatch");
         assert_eq!(
-            result.down_factor, RESAMPLE_48000_16000_Q3_DOWN,
+            result.down_factor(),
+            RESAMPLE_48000_16000_Q3_DOWN,
             "M mismatch"
         );
         assert_eq!(
-            result.prototype_filter.len(),
+            result.prototype_filter().len(),
             RESAMPLE_48000_16000_Q3_ORDER + 1,
             "order mismatch"
         );
         assert_fir_response_match(
-            &result.prototype_filter,
+            result.prototype_filter(),
             RESAMPLE_48000_16000_Q3_TAPS,
             48000.0,
             1e-10,
@@ -843,19 +848,20 @@ mod tests {
     #[test]
     fn scipy_16000_to_48000() {
         let result = design_exact(16000.0, 48000.0, 3);
-        assert_eq!(result.up_factor, RESAMPLE_16000_48000_Q3_UP, "L mismatch");
+        assert_eq!(result.up_factor(), RESAMPLE_16000_48000_Q3_UP, "L mismatch");
         assert_eq!(
-            result.down_factor, RESAMPLE_16000_48000_Q3_DOWN,
+            result.down_factor(),
+            RESAMPLE_16000_48000_Q3_DOWN,
             "M mismatch"
         );
         assert_eq!(
-            result.prototype_filter.len(),
+            result.prototype_filter().len(),
             RESAMPLE_16000_48000_Q3_ORDER + 1,
             "order mismatch"
         );
-        let upsampled_rate = f64::from(result.up_factor as u32) * 16000.0;
+        let upsampled_rate = f64::from(result.up_factor() as u32) * 16000.0;
         assert_fir_response_match(
-            &result.prototype_filter,
+            result.prototype_filter(),
             RESAMPLE_16000_48000_Q3_TAPS,
             upsampled_rate,
             1e-10,
@@ -868,19 +874,20 @@ mod tests {
     #[test]
     fn scipy_44100_to_48000_q0() {
         let result = design_exact(44100.0, 48000.0, 0);
-        assert_eq!(result.up_factor, RESAMPLE_44100_48000_Q0_UP, "L mismatch");
+        assert_eq!(result.up_factor(), RESAMPLE_44100_48000_Q0_UP, "L mismatch");
         assert_eq!(
-            result.down_factor, RESAMPLE_44100_48000_Q0_DOWN,
+            result.down_factor(),
+            RESAMPLE_44100_48000_Q0_DOWN,
             "M mismatch"
         );
         assert_eq!(
-            result.prototype_filter.len(),
+            result.prototype_filter().len(),
             RESAMPLE_44100_48000_Q0_ORDER + 1,
             "order mismatch"
         );
-        let upsampled_rate = f64::from(result.up_factor as u32) * 44100.0;
+        let upsampled_rate = f64::from(result.up_factor() as u32) * 44100.0;
         assert_fir_response_match(
-            &result.prototype_filter,
+            result.prototype_filter(),
             RESAMPLE_44100_48000_Q0_TAPS,
             upsampled_rate,
             1e-10,
@@ -891,19 +898,20 @@ mod tests {
     #[test]
     fn scipy_44100_to_48000_q5() {
         let result = design_exact(44100.0, 48000.0, 5);
-        assert_eq!(result.up_factor, RESAMPLE_44100_48000_Q5_UP, "L mismatch");
+        assert_eq!(result.up_factor(), RESAMPLE_44100_48000_Q5_UP, "L mismatch");
         assert_eq!(
-            result.down_factor, RESAMPLE_44100_48000_Q5_DOWN,
+            result.down_factor(),
+            RESAMPLE_44100_48000_Q5_DOWN,
             "M mismatch"
         );
         assert_eq!(
-            result.prototype_filter.len(),
+            result.prototype_filter().len(),
             RESAMPLE_44100_48000_Q5_ORDER + 1,
             "order mismatch"
         );
-        let upsampled_rate = f64::from(result.up_factor as u32) * 44100.0;
+        let upsampled_rate = f64::from(result.up_factor() as u32) * 44100.0;
         assert_fir_response_match(
-            &result.prototype_filter,
+            result.prototype_filter(),
             RESAMPLE_44100_48000_Q5_TAPS,
             upsampled_rate,
             1e-10,
@@ -914,19 +922,20 @@ mod tests {
     #[test]
     fn scipy_48000_to_44100_q5() {
         let result = design_exact(48000.0, 44100.0, 5);
-        assert_eq!(result.up_factor, RESAMPLE_48000_44100_Q5_UP, "L mismatch");
+        assert_eq!(result.up_factor(), RESAMPLE_48000_44100_Q5_UP, "L mismatch");
         assert_eq!(
-            result.down_factor, RESAMPLE_48000_44100_Q5_DOWN,
+            result.down_factor(),
+            RESAMPLE_48000_44100_Q5_DOWN,
             "M mismatch"
         );
         assert_eq!(
-            result.prototype_filter.len(),
+            result.prototype_filter().len(),
             RESAMPLE_48000_44100_Q5_ORDER + 1,
             "order mismatch"
         );
-        let upsampled_rate = f64::from(result.up_factor as u32) * 48000.0;
+        let upsampled_rate = f64::from(result.up_factor() as u32) * 48000.0;
         assert_fir_response_match(
-            &result.prototype_filter,
+            result.prototype_filter(),
             RESAMPLE_48000_44100_Q5_TAPS,
             upsampled_rate,
             1e-10,

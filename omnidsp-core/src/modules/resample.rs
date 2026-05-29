@@ -15,7 +15,7 @@
 
 use num_traits::Float;
 
-use crate::design::resample::{self, ResampleMode, ResampleSpec};
+use crate::design::resample::{ResampleMode, ResampleSpec};
 use crate::error::{Error, Result};
 use crate::traits::vecops::VecOps;
 
@@ -227,23 +227,34 @@ where
 impl<V> OmniResample<V> {
     /// Create a resampling plan from a [`ResampleSpec`].
     ///
-    /// Calls [`design::resample::design`](resample::design) to compute
-    /// rational conversion factors and the prototype FIR filter, then
-    /// decomposes the prototype into polyphase sub-filters.
+    /// The spec provides rational conversion factors and a prototype FIR
+    /// filter.  Construct one via [`design`](crate::design::resample::design)
+    /// or [`ResampleSpec::new`] for pre-computed data.
     ///
     /// # Errors
     ///
-    /// Returns an error if the design step fails.
+    /// Returns an error if the spec is invalid (empty prototype filter,
+    /// zero factors).
     pub fn create_plan<T>(&self, spec: &ResampleSpec<T>) -> Result<OmniResamplePlan<T, V>>
     where
         T: Float + Send + Sync,
         V: VecOps<T>,
     {
-        let rd = resample::design(spec)?;
+        let up = spec.up_factor();
+        let down = spec.down_factor();
+        let proto = spec.prototype_filter();
 
-        let up = rd.up_factor;
-        let down = rd.down_factor;
-        let proto = &rd.prototype_filter;
+        if proto.is_empty() {
+            return Err(Error::InvalidSpec(
+                "prototype filter must not be empty".into(),
+            ));
+        }
+        if up == 0 || down == 0 {
+            return Err(Error::InvalidSpec(
+                "up_factor and down_factor must be positive".into(),
+            ));
+        }
+
         let taps_per_phase = proto.len().div_ceil(up);
 
         // Decompose into L polyphase sub-filters stored in flat layout.
@@ -294,7 +305,7 @@ impl<V> OmniResample<V> {
 #[allow(clippy::expect_used, reason = "tests use expect for clarity")]
 mod tests {
     use super::*;
-    use crate::design::resample::{ResampleMode, ResampleQuality, ResampleSpec};
+    use crate::design::resample::{self, DEFAULT_MAX_PHASES, ResampleMode, ResampleQuality};
     use crate::test_utils::TestVecOps;
     use crate::types::WindowFn;
 
@@ -307,7 +318,15 @@ mod tests {
     }
 
     fn spec(sr_in: f64, sr_out: f64, quality: u8) -> ResampleSpec<f64> {
-        ResampleSpec::new(sr_in, sr_out, q(quality), WindowFn::Hamming).expect("valid spec")
+        resample::design(
+            sr_in,
+            sr_out,
+            q(quality),
+            &WindowFn::Hamming,
+            DEFAULT_MAX_PHASES,
+            ResampleMode::Streaming,
+        )
+        .expect("valid design")
     }
 
     // ── Factory / Plan creation ─────────────────────────────────────

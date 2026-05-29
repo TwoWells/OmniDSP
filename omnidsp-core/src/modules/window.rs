@@ -4,22 +4,23 @@
 //! Window module — [`VecOps`]-accelerated window apply.
 //!
 //! [`OmniWindow`] is a lightweight factory that pairs a [`VecOps`]
-//! implementation with window coefficients to produce [`OmniWindowPlan`]s.
-//! Coefficient generation is handled by the design layer
-//! ([`Window::from_fn`](crate::types::Window::from_fn)); this module just
-//! applies the window via [`VecOps::mul_inplace`].
+//! implementation with a [`Window`](crate::types::Window) to produce
+//! [`OmniWindowPlan`]s.  The [`Window`](crate::types::Window) is the spec —
+//! construct one via [`Window::from_fn`](crate::types::Window::from_fn) or
+//! [`Window::new`](crate::types::Window::new).  This module just applies the
+//! window via [`VecOps::mul_inplace`].
 
 use num_traits::Float;
 
 use crate::error::{Error, Result};
 use crate::traits::vecops::VecOps;
-use crate::types::{Window, WindowFn};
+use crate::types::Window;
 
 // ─── Public types ──────────────────────────────────────────────────────
 
 /// Generic window factory backed by a [`VecOps`] implementation.
 ///
-/// Creates [`OmniWindowPlan`]s from a [`WindowFn`] and length.
+/// Creates [`OmniWindowPlan`]s from [`Window`] coefficients.
 /// The factory itself is lightweight — all state lives in the plan.
 #[derive(Debug, Clone)]
 pub struct OmniWindow<V> {
@@ -69,36 +70,25 @@ impl<T: Float, V: VecOps<T>> OmniWindowPlan<T, V> {
 }
 
 impl<V> OmniWindow<V> {
-    /// Create a plan from a [`WindowFn`] and length.
+    /// Create a plan from [`Window`] coefficients.
+    ///
+    /// The [`Window`] is the spec — construct one via
+    /// [`Window::from_fn`] or [`Window::new`].
     ///
     /// # Errors
     ///
-    /// Returns [`Error::InvalidSpec`] if the length is zero or the window
-    /// function parameters are invalid.
-    pub fn create_plan<T: Float>(
-        &self,
-        winfn: &WindowFn<T>,
-        length: usize,
-    ) -> Result<OmniWindowPlan<T, V>>
+    /// Returns [`Error::InvalidSpec`] if the window has zero length.
+    pub fn create_plan<T: Float>(&self, window: &Window<T>) -> Result<OmniWindowPlan<T, V>>
     where
         V: VecOps<T>,
     {
-        let window = Window::from_fn(winfn, length)?;
+        if window.is_empty() {
+            return Err(Error::InvalidSpec("window must not be empty".into()));
+        }
         Ok(OmniWindowPlan {
-            window,
+            window: window.clone(),
             vecops: self.vecops.clone(),
         })
-    }
-
-    /// Create a plan from pre-existing [`Window`] coefficients.
-    pub fn create_plan_from_window<T: Float>(&self, window: Window<T>) -> OmniWindowPlan<T, V>
-    where
-        V: VecOps<T>,
-    {
-        OmniWindowPlan {
-            window,
-            vecops: self.vecops.clone(),
-        }
     }
 }
 
@@ -109,6 +99,7 @@ impl<V> OmniWindow<V> {
 mod tests {
     use super::*;
     use crate::test_utils::TestVecOps;
+    use crate::types::WindowFn;
 
     const EPSILON: f64 = 1e-10;
 
@@ -127,8 +118,9 @@ mod tests {
     #[test]
     fn apply_multiplies_by_coefficients() {
         let factory = OmniWindow::new(TestVecOps);
+        let window = Window::from_fn(&WindowFn::Hann, 5).expect("window");
         let plan = factory
-            .create_plan(&WindowFn::Hann, 5)
+            .create_plan(&window)
             .expect("plan creation should succeed");
 
         let mut data = [2.0_f64; 5];
@@ -147,8 +139,9 @@ mod tests {
     #[test]
     fn apply_wrong_length_returns_error() {
         let factory = OmniWindow::new(TestVecOps);
+        let window = Window::from_fn(&WindowFn::Hann, 5).expect("window");
         let plan = factory
-            .create_plan(&WindowFn::Hann, 5)
+            .create_plan(&window)
             .expect("plan creation should succeed");
 
         let mut data = [1.0_f64; 3];
@@ -161,8 +154,9 @@ mod tests {
     #[test]
     fn coefficients_length_matches_window() {
         let factory = OmniWindow::new(TestVecOps);
+        let window = Window::from_fn(&WindowFn::Hamming, 128).expect("window");
         let plan = factory
-            .create_plan(&WindowFn::Hamming, 128)
+            .create_plan(&window)
             .expect("plan creation should succeed");
 
         assert_eq!(
@@ -173,26 +167,22 @@ mod tests {
     }
 
     #[test]
-    fn factory_create_plan_zero_length_error() {
-        let factory = OmniWindow::new(TestVecOps);
-        let result = factory.create_plan(&WindowFn::<f64>::Hann, 0);
-        assert!(result.is_err(), "zero length plan should fail");
-    }
-
-    #[test]
     fn hann_5_coefficients() {
         let factory = OmniWindow::new(TestVecOps);
+        let window = Window::from_fn(&WindowFn::Hann, 5).expect("window");
         let plan = factory
-            .create_plan(&WindowFn::Hann, 5)
+            .create_plan(&window)
             .expect("plan creation should succeed");
         assert_approx_eq(plan.coefficients(), &[0.0, 0.5, 1.0, 0.5, 0.0], EPSILON);
     }
 
     #[test]
-    fn from_window_uses_given_coefficients() {
+    fn from_raw_coefficients() {
         let factory = OmniWindow::new(TestVecOps);
         let window = Window::new(&[0.25, 0.5, 1.0, 0.5, 0.25]);
-        let plan = factory.create_plan_from_window(window);
+        let plan = factory
+            .create_plan(&window)
+            .expect("plan creation should succeed");
 
         assert_approx_eq(plan.coefficients(), &[0.25, 0.5, 1.0, 0.5, 0.25], EPSILON);
 
