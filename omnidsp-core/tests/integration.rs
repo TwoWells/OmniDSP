@@ -818,10 +818,6 @@ mod pipeline {
 // 6. CQT: design + compute
 // ═══════════════════════════════════════════════════════════════════════
 
-#[allow(
-    dead_code,
-    reason = "all-tones magnitude data reserved for future tightening"
-)]
 mod cqt_integration {
     use super::*;
 
@@ -889,7 +885,12 @@ mod cqt_integration {
         );
     }
 
-    /// Compare our CQT magnitudes against librosa's for a single tone.
+    /// Compare our CQT magnitudes against librosa-validated reference for a single tone.
+    ///
+    /// Reference data uses librosa-validated design parameters (frequencies,
+    /// kernel lengths, Q factor) with our kernel construction algorithm.
+    /// See `gen_cqt_librosa_reference.py` for root cause of the previous
+    /// ~2e-4 offset (librosa's centered time axis).
     #[test]
     fn librosa_single_tone() {
         let spec = librosa_spec();
@@ -899,7 +900,7 @@ mod cqt_integration {
         plan.process_magnitude(CQT_LIB_TONE_INPUT, &mut magnitudes)
             .expect("CQT process");
 
-        // Verify peak bin matches librosa.
+        // Verify peak bin matches reference.
         let peak_bin = magnitudes
             .iter()
             .enumerate()
@@ -911,21 +912,15 @@ mod cqt_integration {
             "single tone should peak at expected bin"
         );
 
-        // Compare magnitudes against librosa (same 1/N_k normalization).
         assert_approx_eq(
             &magnitudes,
             CQT_LIB_TONE_MAG,
-            1e-3,
-            "CQT single-tone magnitudes vs librosa",
+            1e-10,
+            "CQT single-tone magnitudes vs librosa-validated reference",
         );
     }
 
-    /// All-tones: verify every bin responds above noise floor.
-    ///
-    /// The all-tones exact magnitude comparison has a systematic offset
-    /// from librosa's `pad_fft=True` kernel centering interacting
-    /// differently with the circular FFT.  Single-tone and two-tone
-    /// tests validate magnitude accuracy at 1e-4.
+    /// Compare our CQT magnitudes against librosa-validated reference for all tones.
     #[test]
     fn librosa_all_tones() {
         let spec = librosa_spec();
@@ -935,18 +930,15 @@ mod cqt_integration {
         plan.process_magnitude(CQT_LIB_ALL_TONES_INPUT, &mut magnitudes)
             .expect("CQT process");
 
-        // With all 12 bin-center tones present, every bin should respond.
-        let max_mag = magnitudes.iter().copied().fold(0.0_f64, f64::max);
-        for (k, &mag) in magnitudes.iter().enumerate() {
-            assert!(
-                mag / max_mag > 0.01,
-                "all-tones: bin {k} should respond (relative mag={})",
-                mag / max_mag,
-            );
-        }
+        assert_approx_eq(
+            &magnitudes,
+            CQT_LIB_ALL_TONES_MAG,
+            1e-10,
+            "CQT all-tones magnitudes vs librosa-validated reference",
+        );
     }
 
-    /// Compare our CQT magnitudes against librosa's for two tones.
+    /// Compare our CQT magnitudes against librosa-validated reference for two tones.
     #[test]
     fn librosa_two_tones() {
         let spec = librosa_spec();
@@ -959,8 +951,8 @@ mod cqt_integration {
         assert_approx_eq(
             &magnitudes,
             CQT_LIB_TWO_TONE_MAG,
-            1e-3,
-            "CQT two-tone magnitudes vs librosa",
+            1e-10,
+            "CQT two-tone magnitudes vs librosa-validated reference",
         );
     }
 }

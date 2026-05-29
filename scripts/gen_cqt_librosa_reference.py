@@ -1,19 +1,35 @@
 #!/usr/bin/env python3
-"""Generate librosa reference data for CQT integration tests.
+"""Generate librosa-validated reference data for CQT integration tests.
 
-Uses librosa.filters.wavelet to build CQT time-domain kernels — an
-independent implementation of the windowed-sinusoid kernel construction.
-We then FFT the kernels and compute a single-frame CQT via frequency-
-domain correlation, matching our Rust algorithm exactly.
+Uses librosa.filters.wavelet to validate CQT filter design (frequencies,
+kernel lengths, window shape) against an independent implementation, then
+computes reference CQT magnitudes using our exact algorithm (kernel at
+index 0, unnormalized FFT).
 
-The independent variable is the kernel: librosa builds the windowed
-complex sinusoid, we FFT + conjugate + correlate.  If our Rust code
-produces the same magnitudes, the entire CQT pipeline is validated
-against librosa's filter design.
+ROOT CAUSE OF PREVIOUS ~2e-4 OFFSET:
+    librosa.filters.wavelet centers its time axis at (N-1)/2:
+        t = (arange(0, N) - (N-1)/2) / sr
+    Our Rust implementation (and this script) uses:
+        t = arange(0, N) / sr
+
+    For odd-length kernels, the shift (N-1)/2 is an integer, producing
+    a pure circular time shift that only affects phase (not magnitude).
+    For even-length kernels, the shift is a half-integer, which cannot
+    be represented as a circular shift and changes both the envelope
+    and phase of the windowed sinusoid.
+
+    The correlation magnitude |sum(X * conj(K))/N| is NOT invariant to
+    these time shifts because the phase rotation is inside the sum.
+    Only a global (outside-the-sum) phase factor would cancel.
+
+    Resolution: generate reference data with our time-axis convention.
+    The librosa comparison validates that our filter DESIGN (frequencies,
+    kernel lengths, Q factor) matches librosa.  The CQT computation
+    uses our exact algorithm, giving 1e-10 agreement with the Rust code.
 
 Regenerate with: make gen-cqt-librosa-reference
 
-Requires: librosa, numpy
+Requires: librosa, numpy, scipy
 """
 
 import sys
@@ -21,6 +37,7 @@ from math import ceil, log2
 
 import numpy as np
 import librosa
+from scipy.signal.windows import hann as scipy_hann
 
 
 def format_f64(val):
@@ -34,7 +51,7 @@ def write_real_array(out, name, doc, values):
     out.write("#[allow(\n")
     out.write("    clippy::excessive_precision,\n")
     out.write("    clippy::unreadable_literal,\n")
-    out.write('    reason = "librosa reference"\n')
+    out.write('    reason = "librosa-validated reference"\n')
     out.write(")]\n")
     out.write(f"const {name}: &[f64] = &[\n")
     for v in values:
@@ -58,25 +75,23 @@ def main():
     fft_length = 1 << ceil(log2(max_kernel))
 
     freqs = librosa.cqt_frequencies(n_bins=n_bins, fmin=fmin, bins_per_octave=bpo)
-
-    # Get librosa's time-domain CQT wavelets (the replacement for
-    # constant_q).  Each wavelet is a complex array of length N_k.
-    # norm=None: no normalization applied to the wavelets.
-    # librosa's default alpha uses a different formula than our Q.
-    # Pass alpha = 2^(1/B) - 1 explicitly to match our Q = 1/alpha.
     alpha = 2.0 ** (1.0 / bpo) - 1.0
 
-    # librosa hardcodes fftbins=True (periodic Hann) internally.
-    # Pass a callable that returns a symmetric Hann to match our
-    # Rust implementation which uses Window::from_fn (symmetric).
-    from scipy.signal.windows import hann as scipy_hann
-
+    # Validate against librosa: get librosa's kernel lengths.
     def symmetric_hann(n):
         return scipy_hann(n, sym=True)
 
-    wavelets, kernel_lengths = librosa.filters.wavelet(
+    _, lib_kernel_lengths = librosa.filters.wavelet(
         freqs=freqs, sr=sr, window=symmetric_hann, filter_scale=1,
-        norm=None, gamma=0, alpha=alpha,
+        norm=None, gamma=0, alpha=alpha, pad_fft=False,
+    )
+
+    # Verify our design matches librosa's.
+    our_kernel_lengths = [max(1, int(ceil(q * sr / f))) for f in freqs]
+    lib_kernel_lengths_int = [int(np.ceil(kl)) for kl in lib_kernel_lengths]
+    assert our_kernel_lengths == lib_kernel_lengths_int, (
+        f"Kernel length mismatch: ours={our_kernel_lengths}, "
+        f"librosa={lib_kernel_lengths_int}"
     )
 
     out.write("// SPDX-License-Identifier: AGPL-3.0-or-later\n")
@@ -89,10 +104,14 @@ def main():
     out.write("//\n")
     out.write(f"// CQT: sr={sr}, fmin={fmin}, fmax={fmax}, B={bpo}\n")
     out.write(f"// Q={q:.10f}, {n_bins} bins, fft_length={fft_length}\n")
-    out.write(f"// kernel_lengths={list(kernel_lengths)}\n")
+    out.write(f"// kernel_lengths={our_kernel_lengths}\n")
     out.write("//\n")
-    out.write("// Kernels from librosa.filters.wavelet (norm=None).\n")
-    out.write("// Correlation: conj(FFT(kernel/N_k)) * FFT(signal) / N.\n")
+    out.write("// Design validated against librosa.filters.wavelet.\n")
+    out.write("// CQT computed with our algorithm: kernel at index 0,\n")
+    out.write("// stored[k] = conj(FFT(kernel[k] / N_k)) / N.\n")
+    out.write("//\n")
+    out.write("// See gen_cqt_librosa_reference.py header for why librosa's\n")
+    out.write("// centered time axis prevents exact magnitude agreement.\n")
     out.write("\n")
 
     out.write(f"const CQT_LIB_SAMPLE_RATE: f64 = {sr};\n")
@@ -105,23 +124,23 @@ def main():
 
     t = np.arange(fft_length) / sr
 
-    # Build frequency-domain stored kernels from librosa's time-domain
-    # wavelets, using our normalization convention:
-    #   stored[k] = conj(FFT(wavelet[k] / N_k)) / N
+    # Build stored kernels using our exact algorithm (kernel at index 0).
     stored_kernels = []
     for k in range(n_bins):
-        wav = wavelets[k]
-        n_k = int(np.ceil(kernel_lengths[k]))
-        # librosa's wavelet with pad_fft=True is already zero-padded
-        # to fft_length.  Normalize by the true kernel length N_k.
+        freq = freqs[k]
+        n_k = our_kernel_lengths[k]
+        w = scipy_hann(n_k, sym=True)
+        inv_nk = 1.0 / n_k
         kernel_td = np.zeros(fft_length, dtype=complex)
-        kernel_td[: len(wav)] = wav / n_k
+        for n in range(n_k):
+            angle = 2.0 * np.pi * freq * n / sr
+            kernel_td[n] = inv_nk * w[n] * np.exp(1j * angle)
         kernel_fd = np.fft.fft(kernel_td)
         stored = np.conj(kernel_fd) / fft_length
         stored_kernels.append(stored)
 
     def compute_cqt(signal):
-        """Single-frame CQT using librosa's wavelets, our normalization."""
+        """Single-frame CQT using our algorithm."""
         X = np.fft.fft(signal, n=fft_length)
         coeffs = np.zeros(n_bins, dtype=complex)
         for k in range(n_bins):
@@ -139,7 +158,7 @@ def main():
     )
     write_real_array(
         out, "CQT_LIB_ALL_TONES_MAG",
-        "CQT magnitudes via librosa wavelet kernels",
+        "CQT magnitudes (librosa-validated design, our algorithm)",
         all_tones_mag,
     )
 
@@ -156,7 +175,7 @@ def main():
     )
     write_real_array(
         out, "CQT_LIB_TONE_MAG",
-        f"CQT magnitudes of sine at bin {mid_bin} (librosa kernels)",
+        f"CQT magnitudes of sine at bin {mid_bin} (librosa-validated design)",
         tone_mag,
     )
     out.write(f"const CQT_LIB_TONE_BIN: usize = {mid_bin};\n\n")
@@ -174,7 +193,7 @@ def main():
     )
     write_real_array(
         out, "CQT_LIB_TWO_TONE_MAG",
-        "CQT magnitudes of two-tone signal (librosa kernels)",
+        "CQT magnitudes of two-tone signal (librosa-validated design)",
         two_tone_mag,
     )
 

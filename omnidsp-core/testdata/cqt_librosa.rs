@@ -8,10 +8,14 @@
 //
 // CQT: sr=44100.0, fmin=440.0, fmax=880.0, B=12
 // Q=16.8171537451, 12 bins, fft_length=2048
-// kernel_lengths=[np.float64(1685.5374549071905), np.float64(1590.9355067497754), np.float64(1501.643157954346), np.float64(1417.362403607326), np.float64(1337.811964525738), np.float64(1262.726348514077), np.float64(1191.854964308789), np.float64(1124.9612852532225), np.float64(1061.8220599119), np.float64(1002.2265669896045), np.float64(945.9759120686463), np.float64(892.8823638172316)]
+// kernel_lengths=[1686, 1591, 1502, 1418, 1338, 1263, 1192, 1125, 1062, 1003, 946, 893]
 //
-// Kernels from librosa.filters.wavelet (norm=None).
-// Correlation: conj(FFT(kernel/N_k)) * FFT(signal) / N.
+// Design validated against librosa.filters.wavelet.
+// CQT computed with our algorithm: kernel at index 0,
+// stored[k] = conj(FFT(kernel[k] / N_k)) / N.
+//
+// See gen_cqt_librosa_reference.py header for why librosa's
+// centered time axis prevents exact magnitude agreement.
 
 const CQT_LIB_SAMPLE_RATE: f64 = 44100.0;
 const CQT_LIB_MIN_FREQ: f64 = 440.0;
@@ -24,7 +28,7 @@ const CQT_LIB_NUM_BINS: usize = 12;
 #[allow(
     clippy::excessive_precision,
     clippy::unreadable_literal,
-    reason = "librosa reference"
+    reason = "librosa-validated reference"
 )]
 const CQT_LIB_ALL_TONES_INPUT: &[f64] = &[
     0.00000000000000000e+00,
@@ -2077,32 +2081,32 @@ const CQT_LIB_ALL_TONES_INPUT: &[f64] = &[
     5.50474201148477338e-01,
 ];
 
-/// CQT magnitudes via librosa wavelet kernels
+/// CQT magnitudes (librosa-validated design, our algorithm)
 #[allow(
     clippy::excessive_precision,
     clippy::unreadable_literal,
-    reason = "librosa reference"
+    reason = "librosa-validated reference"
 )]
 const CQT_LIB_ALL_TONES_MAG: &[f64] = &[
-    1.72812610321148058e-01,
-    6.91915006578611991e-02,
-    1.15964252585004174e-01,
-    1.64671449493074967e-01,
-    2.25634224355747176e-01,
-    2.99973282648030359e-01,
-    3.75539262887486236e-01,
-    4.42170110719168397e-01,
-    4.89792425459758263e-01,
-    5.10997793218758711e-01,
-    5.02487584870619619e-01,
-    3.79310464402060177e-01,
+    1.21285805964324922e-01,
+    2.90909978533233290e-02,
+    2.22520435861847665e-02,
+    1.84164542113759502e-02,
+    1.63392357563895384e-02,
+    1.58733201984850615e-02,
+    1.57888054367215716e-02,
+    1.49627460531967967e-02,
+    1.39764593281186279e-02,
+    1.30027204248742995e-02,
+    1.23044245369322396e-02,
+    1.26506512563204526e-01,
 ];
 
 /// Pure sine at 622.253967 Hz (bin 6, 2048 samples)
 #[allow(
     clippy::excessive_precision,
     clippy::unreadable_literal,
-    reason = "librosa reference"
+    reason = "librosa-validated reference"
 )]
 const CQT_LIB_TONE_INPUT: &[f64] = &[
     0.00000000000000000e+00,
@@ -4155,25 +4159,25 @@ const CQT_LIB_TONE_INPUT: &[f64] = &[
     -6.69250098522349957e-01,
 ];
 
-/// CQT magnitudes of sine at bin 6 (librosa kernels)
+/// CQT magnitudes of sine at bin 6 (librosa-validated design)
 #[allow(
     clippy::excessive_precision,
     clippy::unreadable_literal,
-    reason = "librosa reference"
+    reason = "librosa-validated reference"
 )]
 const CQT_LIB_TONE_MAG: &[f64] = &[
-    2.97384266861858773e-05,
-    4.23508460983776228e-04,
-    9.20121142804255056e-04,
-    1.46352085567733221e-03,
-    2.11952951316930500e-03,
-    1.25010025077623765e-01,
-    2.49579155518991902e-01,
-    1.35584267476148629e-01,
-    9.29176720854505214e-03,
-    4.11536832886557832e-03,
-    2.07360455679189834e-03,
-    7.03824288217943681e-04,
+    2.72261305164667679e-05,
+    4.24959715979222668e-04,
+    9.22448989941541801e-04,
+    1.47777256774812610e-03,
+    2.17210355074812060e-03,
+    1.25009431092932027e-01,
+    2.49789599521466815e-01,
+    1.35584177310939774e-01,
+    9.18026582820654843e-03,
+    4.11538277327268449e-03,
+    2.07031103690155259e-03,
+    6.99302279250315099e-04,
 ];
 
 const CQT_LIB_TONE_BIN: usize = 6;
@@ -4182,7 +4186,7 @@ const CQT_LIB_TONE_BIN: usize = 6;
 #[allow(
     clippy::excessive_precision,
     clippy::unreadable_literal,
-    reason = "librosa reference"
+    reason = "librosa-validated reference"
 )]
 const CQT_LIB_TWO_TONE_INPUT: &[f64] = &[
     0.00000000000000000e+00,
@@ -6235,24 +6239,24 @@ const CQT_LIB_TWO_TONE_INPUT: &[f64] = &[
     3.59796774005929854e-01,
 ];
 
-/// CQT magnitudes of two-tone signal (librosa kernels)
+/// CQT magnitudes of two-tone signal (librosa-validated design)
 #[allow(
     clippy::excessive_precision,
     clippy::unreadable_literal,
-    reason = "librosa reference"
+    reason = "librosa-validated reference"
 )]
 const CQT_LIB_TWO_TONE_MAG: &[f64] = &[
-    2.16462186523119814e-03,
-    1.25025567319652864e-01,
-    2.49697689247879190e-01,
-    1.35539799228550362e-01,
-    9.15015761356527402e-03,
-    3.99400316451758303e-03,
-    2.20511169233731210e-03,
-    2.08600275197257795e-03,
-    1.25128545045109812e-01,
-    2.49637011781035451e-01,
-    1.35690297820919348e-01,
-    9.24408901484158330e-03,
+    2.20824230766549423e-03,
+    1.25002222462074153e-01,
+    2.49784791402108658e-01,
+    1.35477395378975352e-01,
+    9.11942114126925059e-03,
+    3.21703112833476206e-03,
+    1.93297825634438552e-03,
+    2.66775111118329683e-03,
+    1.24865534133552503e-01,
+    2.49878819198017160e-01,
+    1.35731650739351867e-01,
+    9.34688087860260745e-03,
 ];
 

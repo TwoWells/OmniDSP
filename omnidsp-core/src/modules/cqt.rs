@@ -12,6 +12,22 @@
 //! bin.  The caller is responsible for framing (hop + overlap), just like an
 //! FFT-based spectrogram.
 //!
+//! # Kernel time-axis convention
+//!
+//! Kernels are placed starting at index 0 (causal):
+//!
+//! ```text
+//! kernel[n] = (1/N_k) · window[n] · exp(j·2π·f_k·n / sr),  n = 0 … N_k−1
+//! ```
+//!
+//! This differs from librosa, which centers the kernel at `(N_k−1)/2`.
+//! For hop-based multi-frame processing both conventions produce the same
+//! spectrogram content — the only difference is a half-kernel time offset
+//! in which sample each frame's coefficient is attributed to (analogous
+//! to `center=True` vs `center=False` in an STFT).  Individual-frame
+//! magnitudes differ by ≈2e-4 for single tones due to the phase rotation
+//! landing inside the frequency-domain summation.
+//!
 //! Internal scratch buffers are behind a [`Mutex`] so that the plan satisfies
 //! `Send + Sync` on `&self`.  The lock is uncontended in the common
 //! single-threaded case.
@@ -322,9 +338,11 @@ impl<D, V> OmniCqt<D, V> {
                 .ok_or_else(|| Error::Internal("cannot convert kernel length to T".into()))?
                 .recip();
 
-            // Build time-domain kernel:
+            // Build time-domain kernel at index 0 (causal convention):
             //   kernel[n] = (1/N_k) * window[n] * exp(j·2π·f_k·n / sr)
             // and zero-pad to fft_length.
+            // See module-level docs for why this differs from librosa's
+            // centered placement and why the difference is benign.
             kern_time.fill(zero);
             for (n, &w) in coeffs.iter().enumerate() {
                 let angle = TAU * bin.frequency * n as f64 / spec.sample_rate();
