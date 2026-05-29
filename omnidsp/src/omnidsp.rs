@@ -6,11 +6,14 @@
 use omnidsp_core::design::cqt::CqtSpec;
 use omnidsp_core::design::resample::ResampleSpec;
 use omnidsp_core::error::Result;
+use omnidsp_core::scalar::ScalarVecOps;
 use omnidsp_core::traits::conv::ConvSpec;
+use omnidsp_core::traits::dft::DftSpec;
 use omnidsp_core::traits::fir::FirSpec;
-use omnidsp_rust::{RustDft, RustVecOps};
+use omnidsp_core::traits::iir::IirSpec;
+use omnidsp_rustfft::RustDft;
 
-use crate::create::{CreateConv, CreateCqt, CreateFir, CreateResampler};
+use crate::create::{CreateConv, CreateCqt, CreateDft, CreateFir, CreateIir, CreateResampler};
 use crate::generic::Generic;
 
 // ─── OmniDSP struct ─────────────────────────────────────────────────
@@ -89,22 +92,46 @@ impl<B> OmniDSP<B> {
     {
         self.backend.create_cqt(spec)
     }
+
+    /// Create a DFT plan.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the spec is invalid or plan creation fails.
+    pub fn dft<T>(&self, spec: &DftSpec<T>) -> Result<B::Dft>
+    where
+        B: CreateDft<T>,
+    {
+        self.backend.create_dft(spec)
+    }
+
+    /// Create an IIR filter plan.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the spec is invalid or plan creation fails.
+    pub fn iir<T>(&self, spec: &IirSpec<T>) -> Result<B::Iir>
+    where
+        B: CreateIir<T>,
+    {
+        self.backend.create_iir(spec)
+    }
 }
 
 // ─── Named constructors ─────────────────────────────────────────────
 
-impl OmniDSP<Generic<RustDft, RustVecOps>> {
+impl OmniDSP<Generic<RustDft, ScalarVecOps>> {
     /// Create an engine using the pure Rust fallback backend.
     ///
-    /// Uses [`RustDft`] (`RustFFT`) and [`RustVecOps`] (scalar loops,
+    /// Uses [`RustDft`] (`RustFFT`) and [`ScalarVecOps`] (scalar loops,
     /// LLVM auto-vectorized).
     #[must_use]
     pub const fn rust() -> Self {
-        Self::new(Generic(RustDft, RustVecOps))
+        Self::new(Generic(RustDft, ScalarVecOps))
     }
 }
 
-impl Default for OmniDSP<Generic<RustDft, RustVecOps>> {
+impl Default for OmniDSP<Generic<RustDft, ScalarVecOps>> {
     fn default() -> Self {
         Self::rust()
     }
@@ -115,9 +142,10 @@ impl Default for OmniDSP<Generic<RustDft, RustVecOps>> {
 #[cfg(test)]
 #[allow(clippy::expect_used, reason = "expect is the preferred idiom in tests")]
 mod tests {
+    use omnidsp_core::scalar::ScalarVecOps;
     use omnidsp_core::traits::conv::{ConvMethod, ConvPlan, ConvSpec};
     use omnidsp_core::traits::fir::{FirPlan, FirSpec};
-    use omnidsp_rust::{RustDft, RustVecOps};
+    use omnidsp_rustfft::RustDft;
 
     use super::*;
     use crate::{Auto, CreateConv};
@@ -151,7 +179,7 @@ mod tests {
 
     #[test]
     fn new_with_generic() {
-        let dsp = OmniDSP::new(Generic(RustDft, RustVecOps));
+        let dsp = OmniDSP::new(Generic(RustDft, ScalarVecOps));
         let spec = ConvSpec::<f32>::new(2, 2, ConvMethod::Direct);
         let _plan = dsp.conv(&spec).expect("conv plan via new(Generic)");
     }
@@ -181,20 +209,20 @@ mod tests {
 
     struct MacroTestBackend {
         dft: RustDft,
-        vecops: RustVecOps,
+        vecops: ScalarVecOps,
     }
 
     crate::impl_generic_backend! {
         backend: MacroTestBackend,
         dft: RustDft,
-        vecops: RustVecOps,
+        vecops: ScalarVecOps,
     }
 
     #[test]
     fn macro_generates_create_conv() {
         let backend = MacroTestBackend {
             dft: RustDft,
-            vecops: RustVecOps,
+            vecops: ScalarVecOps,
         };
         let spec = ConvSpec::<f64>::new(3, 2, ConvMethod::Direct);
         let plan = CreateConv::create_conv(&backend, &spec).expect("macro conv plan");

@@ -18,6 +18,7 @@ macro_rules! testdata {
 pub mod design;
 pub mod error;
 pub mod modules;
+pub mod scalar;
 pub mod traits;
 pub mod types;
 

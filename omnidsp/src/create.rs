@@ -11,7 +11,9 @@ use omnidsp_core::design::cqt::CqtSpec;
 use omnidsp_core::design::resample::ResampleSpec;
 use omnidsp_core::error::Result;
 use omnidsp_core::traits::conv::ConvSpec;
+use omnidsp_core::traits::dft::DftSpec;
 use omnidsp_core::traits::fir::FirSpec;
+use omnidsp_core::traits::iir::IirSpec;
 
 /// Factory trait for creating convolution plans.
 ///
@@ -75,4 +77,36 @@ pub trait CreateCqt<T> {
     ///
     /// Returns an error if the spec is invalid or plan creation fails.
     fn create_cqt(&self, spec: &CqtSpec<T>) -> Result<Self::Cqt>;
+}
+
+/// Factory trait for creating DFT plans.
+///
+/// Implementations provide a specific DFT plan type and a method to
+/// create it from a [`DftSpec`].
+pub trait CreateDft<T> {
+    /// The DFT plan type produced by this factory.
+    type Dft;
+
+    /// Create a DFT plan from the given specification.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the spec is invalid or plan creation fails.
+    fn create_dft(&self, spec: &DftSpec<T>) -> Result<Self::Dft>;
+}
+
+/// Factory trait for creating IIR filter plans.
+///
+/// Implementations provide a specific IIR plan type and a method to
+/// create it from an [`IirSpec`].
+pub trait CreateIir<T> {
+    /// The IIR filter plan type produced by this factory.
+    type Iir;
+
+    /// Create an IIR filter plan from the given specification.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the spec is invalid or plan creation fails.
+    fn create_iir(&self, spec: &IirSpec<T>) -> Result<Self::Iir>;
 }

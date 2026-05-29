@@ -22,16 +22,16 @@ pub mod generic;
 mod macros;
 mod omnidsp;
 
-pub use create::{CreateConv, CreateCqt, CreateFir, CreateResampler};
+pub use create::{CreateConv, CreateCqt, CreateDft, CreateFir, CreateIir, CreateResampler};
 pub use generic::Generic;
 pub use omnidsp::OmniDSP;
 
 /// The best available backend, selected at compile time.
 ///
-/// Defaults to [`Generic<RustDft, RustVecOps>`](Generic) (pure Rust
+/// Defaults to [`Generic<RustDft, ScalarVecOps>`](Generic) (pure Rust
 /// fallback).  Updated when vendor features (IPP, Accelerate, oneMKL)
 /// are enabled.
-pub type Best = Generic<omnidsp_rust::RustDft, omnidsp_rust::RustVecOps>;
+pub type Best = Generic<omnidsp_rustfft::RustDft, omnidsp_core::scalar::ScalarVecOps>;
 
 /// Convenience alias: [`OmniDSP`] with the best compiled-in backend.
 ///

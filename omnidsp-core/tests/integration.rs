@@ -4,8 +4,9 @@
 //! End-to-end integration tests: design layer → module factory → plan → process.
 //!
 //! These tests exercise the full pipeline using real primitive implementations
-//! (`RustDft`, `RustVecOps`, `RustIir`) from `omnidsp-rust`, validating the
-//! public API surface as an external consumer would.
+//! (`RustDft` from `omnidsp-rustfft`, `ScalarVecOps` and `ScalarIir` from
+//! `omnidsp-core::scalar`), validating the public API surface as an external
+//! consumer would.
 
 #![allow(clippy::expect_used, reason = "tests use expect for clarity")]
 #![allow(
@@ -21,12 +22,13 @@ use omnidsp_core::design::{cqt, fir, iir, resample};
 use omnidsp_core::modules::cqt::OmniCqt;
 use omnidsp_core::modules::fir::OmniFir;
 use omnidsp_core::modules::resample::OmniResample;
+use omnidsp_core::scalar::{ScalarIir, ScalarVecOps};
 use omnidsp_core::traits::dft::{Dft, DftNorm, DftPlan, DftSpec};
 use omnidsp_core::traits::fir::{Fir, FirPlan, FirStrategy};
 use omnidsp_core::traits::iir::{Iir, IirPlan};
 use omnidsp_core::traits::vecops::VecOps;
 use omnidsp_core::types::{Direction, FilterType, Window};
-use omnidsp_rust::{RustDft, RustIir, RustVecOps};
+use omnidsp_rustfft::RustDft;
 
 // ─── Test data ─────────────────────────────────────────────────────────
 
@@ -34,17 +36,6 @@ use omnidsp_rust::{RustDft, RustIir, RustVecOps};
 macro_rules! testdata {
     ($file:expr) => {
         concat!(env!("CARGO_MANIFEST_DIR"), "/testdata/", $file)
-    };
-}
-
-/// Resolve a path relative to `testdata/` in the `omnidsp-rust` crate root.
-macro_rules! testdata_rust {
-    ($file:expr) => {
-        concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../omnidsp-rust/testdata/",
-            $file
-        )
     };
 }
 
@@ -77,7 +68,7 @@ mod fir_integration {
 
     include!(testdata!("fir_lfilter_scipy.rs"));
 
-    /// End-to-end: design LP FIR → create plan with RustDft+RustVecOps → process → compare scipy.
+    /// End-to-end: design LP FIR → create plan with RustDft+ScalarVecOps → process → compare scipy.
     #[test]
     fn design_and_apply_lowpass() {
         // Design: lowpass, order 30, Hamming, fc=1000 Hz, fs=44100
@@ -101,7 +92,7 @@ mod fir_integration {
         );
 
         // Create plan with real primitives and process.
-        let factory = OmniFir::new(RustDft, RustVecOps);
+        let factory = OmniFir::new(RustDft, ScalarVecOps);
 
         for &strategy in &[FirStrategy::Direct, FirStrategy::OverlapSave] {
             let plan_spec = spec.clone().with_strategy(strategy);
@@ -142,7 +133,7 @@ mod fir_integration {
         )
         .expect("FIR design");
 
-        let factory = OmniFir::new(RustDft, RustVecOps);
+        let factory = OmniFir::new(RustDft, ScalarVecOps);
 
         for &strategy in &[FirStrategy::Direct, FirStrategy::OverlapSave] {
             let plan_spec = spec.clone().with_strategy(strategy);
@@ -192,7 +183,7 @@ mod fir_integration {
         )
         .expect("FIR design");
 
-        let factory = OmniFir::new(RustDft, RustVecOps);
+        let factory = OmniFir::new(RustDft, ScalarVecOps);
 
         for &strategy in &[FirStrategy::Direct, FirStrategy::OverlapSave] {
             let plan_spec = spec.clone().with_strategy(strategy);
@@ -232,9 +223,9 @@ mod fir_integration {
 mod iir_integration {
     use super::*;
 
-    include!(testdata_rust!("iir_sosfilt_scipy.rs"));
+    include!(testdata!("iir_sosfilt_scipy.rs"));
 
-    /// End-to-end: design LP Butterworth → `RustIir` → process → compare scipy sosfilt.
+    /// End-to-end: design LP Butterworth → `ScalarIir` → process → compare scipy sosfilt.
     ///
     /// Our SOS sections may be ordered differently from scipy's `butter`,
     /// but the cascade transfer function is identical, so the processed
@@ -260,7 +251,7 @@ mod iir_integration {
         );
 
         // Create plan and process — compare output against scipy's sosfilt.
-        let iir_factory = RustIir::new();
+        let iir_factory = ScalarIir::new();
         let mut plan = Iir::<f64>::create_plan(&iir_factory, &spec).expect("IIR plan creation");
 
         let mut output = vec![0.0; SOSFILT_INPUT.len()];
@@ -270,7 +261,7 @@ mod iir_integration {
         assert_approx_eq(&output, SOSFILT_LP4_OUTPUT, 1e-8, "IIR LP4 design+apply");
     }
 
-    /// End-to-end: design HP Butterworth → `RustIir` → process → compare scipy.
+    /// End-to-end: design HP Butterworth → `ScalarIir` → process → compare scipy.
     #[test]
     fn design_and_apply_highpass() {
         let spec = iir::design::<f64>(
@@ -289,7 +280,7 @@ mod iir_integration {
             "IIR HP4: section count mismatch"
         );
 
-        let iir_factory = RustIir::new();
+        let iir_factory = ScalarIir::new();
         let mut plan = Iir::<f64>::create_plan(&iir_factory, &spec).expect("IIR plan creation");
 
         let mut output = vec![0.0; SOSFILT_INPUT.len()];
@@ -299,7 +290,7 @@ mod iir_integration {
         assert_approx_eq(&output, SOSFILT_HP4_OUTPUT, 1e-8, "IIR HP4 design+apply");
     }
 
-    /// End-to-end: design BP Butterworth → `RustIir` → process → compare scipy.
+    /// End-to-end: design BP Butterworth → `ScalarIir` → process → compare scipy.
     #[test]
     fn design_and_apply_bandpass() {
         let spec = iir::design::<f64>(
@@ -318,7 +309,7 @@ mod iir_integration {
             "IIR BP4: section count mismatch"
         );
 
-        let iir_factory = RustIir::new();
+        let iir_factory = ScalarIir::new();
         let mut plan = Iir::<f64>::create_plan(&iir_factory, &spec).expect("IIR plan creation");
 
         let mut output = vec![0.0; SOSFILT_INPUT.len()];
@@ -341,7 +332,7 @@ mod iir_integration {
         )
         .expect("IIR design");
 
-        let iir_factory = RustIir::new();
+        let iir_factory = ScalarIir::new();
         let mut plan = Iir::<f64>::create_plan(&iir_factory, &spec).expect("IIR plan creation");
 
         let mut output = vec![0.0; SOSFILT_LONG_INPUT.len()];
@@ -396,7 +387,7 @@ mod resample_integration {
         assert_eq!(spec.up_factor(), 160, "L should be 160");
         assert_eq!(spec.down_factor(), 147, "M should be 147");
 
-        let factory = OmniResample::new(RustVecOps);
+        let factory = OmniResample::new(ScalarVecOps);
         let mut plan = factory.create_plan(&spec).expect("resample plan");
 
         // Generate a 400 Hz sine at 44100 Hz.
@@ -437,7 +428,7 @@ mod resample_integration {
         )
         .expect("resample design");
 
-        let factory = OmniResample::new(RustVecOps);
+        let factory = OmniResample::new(ScalarVecOps);
         let mut plan = factory.create_plan(&spec).expect("resample plan");
 
         let input = vec![1.0_f64; 500];
@@ -478,7 +469,7 @@ mod streaming_equivalence {
         )
         .expect("FIR design");
 
-        let factory = OmniFir::new(RustDft, RustVecOps);
+        let factory = OmniFir::new(RustDft, ScalarVecOps);
         let input: Vec<f64> = (0..1024)
             .map(|i| (TAU * 400.0 * f64::from(i) / 44100.0).sin())
             .collect();
@@ -532,7 +523,7 @@ mod streaming_equivalence {
         )
         .expect("IIR design");
 
-        let iir_factory = RustIir::new();
+        let iir_factory = ScalarIir::new();
         let input: Vec<f64> = (0..1024)
             .map(|i| (TAU * 400.0 * f64::from(i) / 44100.0).sin())
             .collect();
@@ -576,7 +567,7 @@ mod streaming_equivalence {
         )
         .expect("resample design");
 
-        let factory = OmniResample::new(RustVecOps);
+        let factory = OmniResample::new(ScalarVecOps);
         let input: Vec<f64> = (0..512)
             .map(|i| (TAU * 400.0 * f64::from(i) / 44100.0).sin())
             .collect();
@@ -650,7 +641,7 @@ mod pipeline {
         )
         .expect("resample design");
 
-        let resample_factory = OmniResample::new(RustVecOps);
+        let resample_factory = OmniResample::new(ScalarVecOps);
         let mut resample_plan = resample_factory
             .create_plan(&resample_spec)
             .expect("resample plan");
@@ -678,7 +669,7 @@ mod pipeline {
         )
         .expect("FIR design");
 
-        let fir_factory = OmniFir::new(RustDft, RustVecOps);
+        let fir_factory = OmniFir::new(RustDft, ScalarVecOps);
         let mut fir_plan = Fir::<f64>::create_plan(&fir_factory, &fir_spec).expect("FIR plan");
 
         let mut filtered = vec![0.0; resampled.len()];
@@ -708,7 +699,7 @@ mod pipeline {
         reason = "hp_plan/lp_plan are distinct filter stages"
     )]
     fn iir_cascade_bandpass() {
-        let iir_factory = RustIir::new();
+        let iir_factory = ScalarIir::new();
 
         // Stage 1: highpass at 100 Hz.
         let hp_spec = iir::design::<f64>(
@@ -785,7 +776,7 @@ mod pipeline {
 
         // Apply Hann window.
         let coeffs: Vec<f64> = Window::hann(n).expect("window creation");
-        let vecops = RustVecOps;
+        let vecops = ScalarVecOps;
         let mut windowed = signal;
         vecops
             .mul_inplace(&mut windowed, &coeffs)
@@ -826,8 +817,9 @@ mod cqt_integration {
     /// Helper: create a CQT plan with real primitives.
     fn make_plan(
         spec: &omnidsp_core::design::cqt::CqtSpec<f64>,
-    ) -> omnidsp_core::modules::cqt::OmniCqtPlan<f64, <RustDft as Dft<f64>>::Plan, RustVecOps> {
-        let factory = OmniCqt::new(RustDft, RustVecOps);
+    ) -> omnidsp_core::modules::cqt::OmniCqtPlan<f64, <RustDft as Dft<f64>>::Plan, ScalarVecOps>
+    {
+        let factory = OmniCqt::new(RustDft, ScalarVecOps);
         factory.create_plan(spec).expect("CQT plan creation")
     }
 
@@ -842,7 +834,7 @@ mod cqt_integration {
         .expect("CQT design")
     }
 
-    /// End-to-end: design CQT → create plan with RustDft+RustVecOps → process.
+    /// End-to-end: design CQT → create plan with RustDft+ScalarVecOps → process.
     ///
     /// Verifies that a pure tone at A440 produces a peak at the correct bin.
     #[test]

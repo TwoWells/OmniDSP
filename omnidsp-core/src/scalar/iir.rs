@@ -1,30 +1,28 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Two Wells <contact@twowells.dev>
 
-//! [`RustIir`] — pure Rust IIR filter (scalar DF2T biquad cascade).
+//! [`ScalarIir`] — scalar DF2T biquad cascade IIR filter.
 //!
 //! The inner loop is a sequential recurrence that cannot be vectorized, so this
-//! implementation is scalar.  It is the baseline for all platforms; a
-//! SIMD-accelerated multi-channel variant (`HwyIir`) may live in
-//! `omnidsp-highway` in the future.
+//! implementation is scalar.  It is the baseline for all platforms.
 //!
 //! Plans are **mutable** — they hold biquad delay states that persist across
 //! calls so successive `process` calls form a continuous stream.
 
-use omnidsp_core::error::{Error, Result};
-use omnidsp_core::traits::iir::{Iir, IirPlan, IirSpec};
-use omnidsp_core::types::{BiquadSection, DspFloat};
+use crate::error::{Error, Result};
+use crate::traits::iir::{Iir, IirPlan, IirSpec};
+use crate::types::{BiquadSection, DspFloat};
 
 // ─── Public types ──────────────────────────────────────────────────────
 
-/// Pure Rust IIR filter factory (scalar DF2T biquad cascade).
+/// Scalar IIR filter factory (DF2T biquad cascade).
 ///
-/// Creates [`RustIirPlan`]s for biquad cascade specifications.  This is a
+/// Creates [`ScalarIirPlan`]s for biquad cascade specifications.  This is a
 /// zero-sized type — all state lives in the plan.
 #[derive(Debug, Clone, Copy)]
-pub struct RustIir;
+pub struct ScalarIir;
 
-impl RustIir {
+impl ScalarIir {
     /// Create a new IIR filter factory.
     #[must_use]
     pub const fn new() -> Self {
@@ -32,7 +30,7 @@ impl RustIir {
     }
 }
 
-impl Default for RustIir {
+impl Default for ScalarIir {
     fn default() -> Self {
         Self::new()
     }
@@ -40,17 +38,17 @@ impl Default for RustIir {
 
 /// Execution plan for a streaming IIR filter (biquad cascade).
 ///
-/// Created by [`RustIir::create_plan`](Iir::create_plan).  Mutable — holds
+/// Created by [`ScalarIir::create_plan`](Iir::create_plan).  Mutable — holds
 /// biquad delay states that persist across calls.
-pub struct RustIirPlan<T> {
+pub struct ScalarIirPlan<T> {
     sections: Vec<BiquadSection<T>>,
     /// Delay state per section: `[s1, s2]` for DF2T.
     state: Vec<[T; 2]>,
 }
 
-impl<T: std::fmt::Debug> std::fmt::Debug for RustIirPlan<T> {
+impl<T: std::fmt::Debug> std::fmt::Debug for ScalarIirPlan<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("RustIirPlan")
+        f.debug_struct("ScalarIirPlan")
             .field("num_sections", &self.sections.len())
             .field("state", &self.state)
             .finish_non_exhaustive()
@@ -59,7 +57,7 @@ impl<T: std::fmt::Debug> std::fmt::Debug for RustIirPlan<T> {
 
 // ─── Trait implementations ────────────────────────────────────────────
 
-impl<T: DspFloat> IirPlan<T> for RustIirPlan<T> {
+impl<T: DspFloat> IirPlan<T> for ScalarIirPlan<T> {
     fn process(&mut self, input: &[T], output: &mut [T]) -> Result<()> {
         if input.len() != output.len() {
             return Err(Error::BufferMismatch {
@@ -92,8 +90,8 @@ impl<T: DspFloat> IirPlan<T> for RustIirPlan<T> {
     }
 }
 
-impl<T: DspFloat> Iir<T> for RustIir {
-    type Plan = RustIirPlan<T>;
+impl<T: DspFloat> Iir<T> for ScalarIir {
+    type Plan = ScalarIirPlan<T>;
 
     fn create_plan(&self, spec: &IirSpec<T>) -> Result<Self::Plan> {
         if spec.sections.is_empty() {
@@ -104,7 +102,7 @@ impl<T: DspFloat> Iir<T> for RustIir {
 
         let state = vec![[T::zero(); 2]; spec.sections.len()];
 
-        Ok(RustIirPlan {
+        Ok(ScalarIirPlan {
             sections: spec.sections.clone(),
             state,
         })
@@ -117,12 +115,12 @@ impl<T: DspFloat> Iir<T> for RustIir {
 #[allow(clippy::expect_used, reason = "tests use expect for clarity")]
 mod tests {
     use super::*;
-    use omnidsp_core::traits::iir::{Iir, IirPlan, IirSpec};
+    use crate::traits::iir::{Iir, IirPlan, IirSpec};
 
     const EPSILON: f64 = 1e-12;
 
-    fn make_factory() -> RustIir {
-        RustIir::new()
+    fn make_factory() -> ScalarIir {
+        ScalarIir::new()
     }
 
     fn spec(sections: Vec<BiquadSection<f64>>) -> IirSpec<f64> {
@@ -356,8 +354,8 @@ mod tests {
 
     #[test]
     fn lowpass_dc_converges() {
-        use omnidsp_core::design::iir::{FilterFamily, design};
-        use omnidsp_core::types::FilterType;
+        use crate::design::iir::{FilterFamily, design};
+        use crate::types::FilterType;
 
         let factory = make_factory();
         let iir_spec = design::<f64>(
@@ -390,8 +388,8 @@ mod tests {
 
     #[test]
     fn highpass_dc_decays() {
-        use omnidsp_core::design::iir::{FilterFamily, design};
-        use omnidsp_core::types::FilterType;
+        use crate::design::iir::{FilterFamily, design};
+        use crate::types::FilterType;
 
         let factory = make_factory();
         let iir_spec = design::<f64>(

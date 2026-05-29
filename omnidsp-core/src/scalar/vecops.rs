@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Two Wells <contact@twowells.dev>
 
-//! [`RustVecOps`] — scalar loop implementations of element-wise operations.
+//! [`ScalarVecOps`] — scalar loop implementations of element-wise operations.
 
 use num_complex::Complex;
 
-use omnidsp_core::error::{Error, Result};
-use omnidsp_core::traits::vecops::VecOps;
+use crate::error::{Error, Result};
+use crate::traits::vecops::VecOps;
 
-/// Pure Rust element-wise vector operations.
+/// Scalar element-wise vector operations.
 ///
 /// Scalar loop implementations that LLVM auto-vectorizes.  Stateless unit
 /// struct — trivially `Send + Sync + Copy`.
 #[derive(Debug, Clone, Copy)]
-pub struct RustVecOps;
+pub struct ScalarVecOps;
 
 #[allow(
     clippy::missing_const_for_fn,
@@ -51,7 +51,7 @@ fn check_lengths_2(a_len: usize, b_len: usize) -> Result<()> {
 
 macro_rules! impl_vecops {
     ($t:ty) => {
-        impl VecOps<$t> for RustVecOps {
+        impl VecOps<$t> for ScalarVecOps {
             fn mul(&self, a: &[$t], b: &[$t], out: &mut [$t]) -> Result<()> {
                 check_lengths_3(a.len(), b.len(), out.len())?;
                 for ((o, x), y) in out.iter_mut().zip(a).zip(b) {
@@ -135,7 +135,7 @@ mod tests {
 
     #[test]
     fn mul_f32() {
-        let ops = RustVecOps;
+        let ops = ScalarVecOps;
         let a = [1.0_f32, 2.0, 3.0];
         let b = [4.0_f32, 5.0, 6.0];
         let mut out = [0.0_f32; 3];
@@ -145,7 +145,7 @@ mod tests {
 
     #[test]
     fn mul_f64() {
-        let ops = RustVecOps;
+        let ops = ScalarVecOps;
         let a = [1.0_f64, 2.0, 3.0];
         let b = [4.0_f64, 5.0, 6.0];
         let mut out = [0.0_f64; 3];
@@ -155,7 +155,7 @@ mod tests {
 
     #[test]
     fn mul_length_mismatch() {
-        let ops = RustVecOps;
+        let ops = ScalarVecOps;
         let a = [1.0_f32; 3];
         let b = [1.0_f32; 4];
         let mut out = [0.0_f32; 3];
@@ -169,7 +169,7 @@ mod tests {
 
     #[test]
     fn add_f32() {
-        let ops = RustVecOps;
+        let ops = ScalarVecOps;
         let a = [1.0_f32, 2.0, 3.0];
         let b = [4.0_f32, 5.0, 6.0];
         let mut out = [0.0_f32; 3];
@@ -181,7 +181,7 @@ mod tests {
 
     #[test]
     fn scale_f64() {
-        let ops = RustVecOps;
+        let ops = ScalarVecOps;
         let mut data = [1.0_f64, 2.0, 3.0];
         ops.scale(&mut data, 2.0);
         assert_eq!(data, [2.0, 4.0, 6.0], "scale failed");
@@ -191,7 +191,7 @@ mod tests {
 
     #[test]
     fn dot_f32() {
-        let ops = RustVecOps;
+        let ops = ScalarVecOps;
         let a = [1.0_f32, 2.0, 3.0];
         let b = [4.0_f32, 5.0, 6.0];
         let result = ops.dot(&a, &b).expect("dot should succeed");
@@ -203,7 +203,7 @@ mod tests {
 
     #[test]
     fn dot_f64() {
-        let ops = RustVecOps;
+        let ops = ScalarVecOps;
         let a = [1.0_f64, 2.0, 3.0];
         let b = [4.0_f64, 5.0, 6.0];
         let result = ops.dot(&a, &b).expect("dot should succeed");
@@ -215,7 +215,7 @@ mod tests {
 
     #[test]
     fn dot_length_mismatch() {
-        let ops = RustVecOps;
+        let ops = ScalarVecOps;
         let a = [1.0_f32; 3];
         let b = [1.0_f32; 2];
         assert!(
@@ -228,7 +228,7 @@ mod tests {
 
     #[test]
     fn cmul_f32() {
-        let ops = RustVecOps;
+        let ops = ScalarVecOps;
         let a = [Complex::new(1.0_f32, 2.0), Complex::new(3.0, 4.0)];
         let b = [Complex::new(5.0_f32, 6.0), Complex::new(7.0, 8.0)];
         let mut out = [Complex::default(); 2];
@@ -251,7 +251,7 @@ mod tests {
 
     #[test]
     fn mul_inplace_f32() {
-        let ops = RustVecOps;
+        let ops = ScalarVecOps;
         let mut data = [1.0_f32, 2.0, 3.0];
         let other = [4.0_f32, 5.0, 6.0];
         ops.mul_inplace(&mut data, &other)
@@ -263,7 +263,7 @@ mod tests {
 
     #[test]
     fn add_inplace_f64() {
-        let ops = RustVecOps;
+        let ops = ScalarVecOps;
         let mut data = [1.0_f64, 2.0, 3.0];
         let other = [4.0_f64, 5.0, 6.0];
         ops.add_inplace(&mut data, &other)
@@ -275,7 +275,7 @@ mod tests {
 
     #[test]
     fn cmul_inplace_f64() {
-        let ops = RustVecOps;
+        let ops = ScalarVecOps;
         let mut data = [Complex::new(1.0_f64, 2.0), Complex::new(3.0, 4.0)];
         let other = [Complex::new(5.0_f64, 6.0), Complex::new(7.0, 8.0)];
         ops.cmul_inplace(&mut data, &other)
@@ -297,7 +297,7 @@ mod tests {
 
     #[test]
     fn empty_slices() {
-        let ops = RustVecOps;
+        let ops = ScalarVecOps;
         let empty: &[f32] = &[];
         let mut out: [f32; 0] = [];
 
@@ -320,7 +320,7 @@ mod tests {
 
     #[test]
     fn single_element() {
-        let ops = RustVecOps;
+        let ops = ScalarVecOps;
         let a = [3.0_f64];
         let b = [7.0_f64];
         let mut out = [0.0_f64];

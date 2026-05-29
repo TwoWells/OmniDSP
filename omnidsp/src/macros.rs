@@ -34,6 +34,10 @@ macro_rules! impl_generic_backend {
         $crate::impl_generic_backend!(@resampler $backend, $dft, $vecops, f64);
         $crate::impl_generic_backend!(@cqt $backend, $dft, $vecops, f32);
         $crate::impl_generic_backend!(@cqt $backend, $dft, $vecops, f64);
+        $crate::impl_generic_backend!(@dft $backend, $dft, $vecops, f32);
+        $crate::impl_generic_backend!(@dft $backend, $dft, $vecops, f64);
+        $crate::impl_generic_backend!(@iir $backend, $dft, $vecops, f32);
+        $crate::impl_generic_backend!(@iir $backend, $dft, $vecops, f64);
     };
 
     (@conv $backend:ty, $dft:ty, $vecops:ty, $float:ty) => {
@@ -97,6 +101,40 @@ macro_rules! impl_generic_backend {
                 spec: &$crate::design::cqt::CqtSpec<$float>,
             ) -> $crate::error::Result<Self::Cqt> {
                 $crate::CreateCqt::<$float>::create_cqt(
+                    &$crate::Generic(self.dft.clone(), self.vecops.clone()),
+                    spec,
+                )
+            }
+        }
+    };
+
+    (@dft $backend:ty, $dft:ty, $vecops:ty, $float:ty) => {
+        impl $crate::CreateDft<$float> for $backend {
+            type Dft =
+                <$crate::Generic<$dft, $vecops> as $crate::CreateDft<$float>>::Dft;
+
+            fn create_dft(
+                &self,
+                spec: &$crate::traits::dft::DftSpec<$float>,
+            ) -> $crate::error::Result<Self::Dft> {
+                $crate::CreateDft::<$float>::create_dft(
+                    &$crate::Generic(self.dft.clone(), self.vecops.clone()),
+                    spec,
+                )
+            }
+        }
+    };
+
+    (@iir $backend:ty, $dft:ty, $vecops:ty, $float:ty) => {
+        impl $crate::CreateIir<$float> for $backend {
+            type Iir =
+                <$crate::Generic<$dft, $vecops> as $crate::CreateIir<$float>>::Iir;
+
+            fn create_iir(
+                &self,
+                spec: &$crate::traits::iir::IirSpec<$float>,
+            ) -> $crate::error::Result<Self::Iir> {
+                $crate::CreateIir::<$float>::create_iir(
                     &$crate::Generic(self.dft.clone(), self.vecops.clone()),
                     spec,
                 )

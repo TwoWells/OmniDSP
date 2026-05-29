@@ -12,5 +12,5 @@ workspace = true
 
 [dependencies]
 omnidsp-core = { path = "../omnidsp-core" }
-omnidsp-rust = { path = "../omnidsp-rust" }
+omnidsp-rustfft = { path = "../omnidsp-rustfft" }
 num-traits = "0.2"

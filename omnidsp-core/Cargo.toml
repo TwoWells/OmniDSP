@@ -16,4 +16,4 @@ num-traits = "0.2"
 thiserror = "2"
 
 [dev-dependencies]
-omnidsp-rust = { path = "../omnidsp-rust" }
+omnidsp-rustfft = { path = "../omnidsp-rustfft" }

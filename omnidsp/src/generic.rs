@@ -17,12 +17,15 @@ use omnidsp_core::modules::conv::{OmniConv, OmniConvPlan};
 use omnidsp_core::modules::cqt::{OmniCqt, OmniCqtPlan};
 use omnidsp_core::modules::fir::{OmniFir, OmniFirPlan};
 use omnidsp_core::modules::resample::{OmniResample, OmniResamplePlan};
+use omnidsp_core::scalar::{ScalarIir, ScalarIirPlan};
 use omnidsp_core::traits::conv::{Conv, ConvSpec};
-use omnidsp_core::traits::dft::Dft;
+use omnidsp_core::traits::dft::{Dft, DftSpec};
 use omnidsp_core::traits::fir::{Fir, FirSpec};
+use omnidsp_core::traits::iir::{Iir, IirSpec};
 use omnidsp_core::traits::vecops::VecOps;
+use omnidsp_core::types::DspFloat;
 
-use crate::create::{CreateConv, CreateCqt, CreateFir, CreateResampler};
+use crate::create::{CreateConv, CreateCqt, CreateDft, CreateFir, CreateIir, CreateResampler};
 
 /// Generic composition wrapper over a [`Dft`] + [`VecOps`] pair.
 ///
@@ -35,9 +38,10 @@ use crate::create::{CreateConv, CreateCqt, CreateFir, CreateResampler};
 ///
 /// ```
 /// use omnidsp::{Generic, OmniDSP};
-/// use omnidsp_rust::{RustDft, RustVecOps};
+/// use omnidsp_core::scalar::ScalarVecOps;
+/// use omnidsp_rustfft::RustDft;
 ///
-/// let dsp = OmniDSP::new(Generic(RustDft, RustVecOps));
+/// let dsp = OmniDSP::new(Generic(RustDft, ScalarVecOps));
 /// ```
 #[derive(Debug, Clone, Copy)]
 pub struct Generic<D, V>(pub D, pub V);
@@ -94,5 +98,27 @@ where
     fn create_cqt(&self, spec: &CqtSpec<T>) -> Result<Self::Cqt> {
         let factory = OmniCqt::new(self.0.clone(), self.1.clone());
         factory.create_plan(spec)
+    }
+}
+
+impl<T, D, V> CreateDft<T> for Generic<D, V>
+where
+    D: Dft<T>,
+{
+    type Dft = D::Plan;
+
+    fn create_dft(&self, spec: &DftSpec<T>) -> Result<Self::Dft> {
+        self.0.create_plan(spec)
+    }
+}
+
+impl<T, D, V> CreateIir<T> for Generic<D, V>
+where
+    T: DspFloat,
+{
+    type Iir = ScalarIirPlan<T>;
+
+    fn create_iir(&self, spec: &IirSpec<T>) -> Result<Self::Iir> {
+        Iir::<T>::create_plan(&ScalarIir, spec)
     }
 }
