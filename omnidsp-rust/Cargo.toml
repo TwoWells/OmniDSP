@@ -13,5 +13,4 @@ workspace = true
 [dependencies]
 omnidsp-core = { path = "../omnidsp-core" }
 num-complex = "0.4"
-num-traits = "0.2"
 rustfft = "6"

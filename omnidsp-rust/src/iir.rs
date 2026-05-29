@@ -11,11 +11,9 @@
 //! Plans are **mutable** — they hold biquad delay states that persist across
 //! calls so successive `process` calls form a continuous stream.
 
-use num_traits::Float;
-
 use omnidsp_core::error::{Error, Result};
 use omnidsp_core::traits::iir::{Iir, IirPlan, IirSpec};
-use omnidsp_core::types::BiquadSection;
+use omnidsp_core::types::{BiquadSection, DspFloat};
 
 // ─── Public types ──────────────────────────────────────────────────────
 
@@ -61,10 +59,7 @@ impl<T: std::fmt::Debug> std::fmt::Debug for RustIirPlan<T> {
 
 // ─── Trait implementations ────────────────────────────────────────────
 
-impl<T> IirPlan<T> for RustIirPlan<T>
-where
-    T: Float + Send + Sync,
-{
+impl<T: DspFloat> IirPlan<T> for RustIirPlan<T> {
     fn process(&mut self, input: &[T], output: &mut [T]) -> Result<()> {
         if input.len() != output.len() {
             return Err(Error::BufferMismatch {
@@ -97,10 +92,7 @@ where
     }
 }
 
-impl<T> Iir<T> for RustIir
-where
-    T: Float + Send + Sync,
-{
+impl<T: DspFloat> Iir<T> for RustIir {
     type Plan = RustIirPlan<T>;
 
     fn create_plan(&self, spec: &IirSpec<T>) -> Result<Self::Plan> {

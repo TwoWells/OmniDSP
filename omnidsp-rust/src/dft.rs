@@ -6,12 +6,11 @@
 use std::sync::{Arc, Mutex};
 
 use num_complex::Complex;
-use num_traits::FromPrimitive;
 use rustfft::{Fft, FftNum, FftPlanner};
 
 use omnidsp_core::error::{Error, Result};
 use omnidsp_core::traits::dft::{Dft, DftNorm, DftPlan, DftSpec};
-use omnidsp_core::types::Direction;
+use omnidsp_core::types::{Direction, DspFloat};
 
 // ─── Type erasure ────────────────────────────────────────────────────
 
@@ -55,10 +54,7 @@ pub struct RustDftPlan<T> {
 
 // ─── Trait implementations ───────────────────────────────────────────
 
-impl<T> DftPlan<T> for RustDftPlan<T>
-where
-    T: Copy + FromPrimitive + std::ops::Mul<Output = T> + Send + Sync + 'static,
-{
+impl<T: DspFloat> DftPlan<T> for RustDftPlan<T> {
     fn process(&self, input: &[Complex<T>], output: &mut [Complex<T>]) -> Result<()> {
         if input.len() != self.length {
             return Err(Error::BufferMismatch {
@@ -93,7 +89,7 @@ where
     }
 }
 
-impl<T: Copy + FromPrimitive + std::ops::Mul<Output = T>> RustDftPlan<T> {
+impl<T: DspFloat> RustDftPlan<T> {
     /// Compute the scaling factor for the configured normalization, or `None`
     /// if no scaling is needed.
     fn compute_scale(&self) -> Result<Option<T>> {

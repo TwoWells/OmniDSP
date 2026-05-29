@@ -3,9 +3,18 @@
 
 //! Core type aliases and enums.
 
-use num_traits::Float;
+use num_traits::{Float, FromPrimitive};
 
 pub use num_complex::{Complex32, Complex64};
+
+/// Floating-point type suitable for DSP operations.
+///
+/// Bundles the numeric, conversion, and thread-safety bounds that all
+/// `OmniDSP` primitives require.  Implemented automatically for any type
+/// that satisfies the constituent bounds (`f32` and `f64` in practice).
+pub trait DspFloat: Float + FromPrimitive + Send + Sync + 'static {}
+
+impl<T: Float + FromPrimitive + Send + Sync + 'static> DspFloat for T {}
 
 use crate::error::Result;
 

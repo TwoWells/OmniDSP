@@ -6,10 +6,10 @@
 use std::fmt;
 
 use num_complex::Complex;
-use num_traits::FromPrimitive;
 
 use omnidsp_core::error::Result;
 use omnidsp_core::traits::dft::{Dft, DftPlan, DftSpec};
+use omnidsp_core::types::DspFloat;
 use omnidsp_rust::{RustDft, RustDftPlan};
 
 /// Dispatch enum wrapping concrete DFT factories.
@@ -50,10 +50,7 @@ macro_rules! impl_dyn_dft {
 impl_dyn_dft!(f32);
 impl_dyn_dft!(f64);
 
-impl<T> DftPlan<T> for DynDftPlan<T>
-where
-    T: Copy + FromPrimitive + std::ops::Mul<Output = T> + Send + Sync + 'static,
-{
+impl<T: DspFloat> DftPlan<T> for DynDftPlan<T> {
     fn process(&self, input: &[Complex<T>], output: &mut [Complex<T>]) -> Result<()> {
         match self {
             Self::Rust(p) => p.process(input, output),
