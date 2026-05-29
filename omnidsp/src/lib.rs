@@ -17,6 +17,15 @@ pub use omnidsp_core::types;
 // Re-export Window at crate root for convenience
 pub use omnidsp_core::types::Window;
 
+pub mod backend;
+pub mod config;
+pub mod dispatch;
+pub(crate) mod resolve;
+
+pub use backend::Backend;
+pub use config::Config;
+pub use dispatch::{DynDft, DynDftPlan, DynIir, DynIirPlan, DynVecOps};
+
 #[cfg(test)]
 #[allow(clippy::expect_used, reason = "expect is the preferred idiom in tests")]
 mod tests {

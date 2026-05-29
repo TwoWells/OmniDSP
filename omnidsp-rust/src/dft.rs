@@ -16,6 +16,7 @@ use omnidsp_core::types::Direction;
 ///
 /// Creates [`RustDftPlan`] instances backed by `RustFFT`.  Supports
 /// arbitrary lengths (not just power-of-2).
+#[derive(Debug, Clone, Copy)]
 pub struct RustDft;
 
 /// Execution plan for a DFT operation backed by `RustFFT`.

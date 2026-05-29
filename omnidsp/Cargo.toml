@@ -16,3 +16,8 @@ ignored = ["omnidsp-rust"] # used by dispatch enums in ticket 01
 [dependencies]
 omnidsp-core = { path = "../omnidsp-core" }
 omnidsp-rust = { path = "../omnidsp-rust" }
+num-complex = "0.4"
+rustfft = "6"
+
+[dev-dependencies]
+num-traits = "0.2"
