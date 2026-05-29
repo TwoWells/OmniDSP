@@ -19,12 +19,19 @@ pub use omnidsp_core::types::Window;
 
 pub mod backend;
 pub mod config;
+pub mod create_plan;
 pub mod dispatch;
+mod omnidsp;
 pub(crate) mod resolve;
 
 pub use backend::Backend;
 pub use config::Config;
+pub use create_plan::CreatePlan;
 pub use dispatch::{DynDft, DynDftPlan, DynIir, DynIirPlan, DynVecOps};
+pub use omnidsp::{
+    ConvPlan32, ConvPlan64, CqtPlan32, CqtPlan64, DftPlan32, DftPlan64, FirPlan32, FirPlan64,
+    IirPlan32, IirPlan64, OmniDSP, ResamplePlan32, ResamplePlan64,
+};
 
 #[cfg(test)]
 #[allow(clippy::expect_used, reason = "expect is the preferred idiom in tests")]

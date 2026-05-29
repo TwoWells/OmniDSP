@@ -9,7 +9,6 @@ use crate::backend::Backend;
 use crate::dispatch::{DynDft, DynIir, DynVecOps};
 
 /// Resolve the best available DFT backend.
-#[allow(dead_code, reason = "used by OmniDSP::with_config in ticket 02")]
 pub fn resolve_dft(priority: &[Backend]) -> DynDft {
     if let Some(&backend) = priority.iter().find(|b| b.is_available()) {
         match backend {
@@ -20,7 +19,6 @@ pub fn resolve_dft(priority: &[Backend]) -> DynDft {
 }
 
 /// Resolve the best available `VecOps` backend.
-#[allow(dead_code, reason = "used by OmniDSP::with_config in ticket 02")]
 pub fn resolve_vecops(priority: &[Backend]) -> DynVecOps {
     if let Some(&backend) = priority.iter().find(|b| b.is_available()) {
         match backend {
@@ -31,7 +29,6 @@ pub fn resolve_vecops(priority: &[Backend]) -> DynVecOps {
 }
 
 /// Resolve the best available IIR backend.
-#[allow(dead_code, reason = "used by OmniDSP::with_config in ticket 02")]
 pub fn resolve_iir(priority: &[Backend]) -> DynIir {
     if let Some(&backend) = priority.iter().find(|b| b.is_available()) {
         match backend {

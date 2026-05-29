@@ -18,7 +18,6 @@ pub enum Backend {
 
 impl Backend {
     /// Is this backend compiled into the binary?
-    #[allow(dead_code, reason = "used by OmniDSP::with_config in ticket 02")]
     pub(crate) const fn is_available(self) -> bool {
         match self {
             Self::Rust => true,
