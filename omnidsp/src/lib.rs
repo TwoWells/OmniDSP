@@ -4,8 +4,8 @@
 //! `OmniDSP` — composable DSP with pluggable backends.
 //!
 //! This crate is the user-facing entry point. It re-exports the
-//! [`omnidsp-core`] public API and adds the dispatch layer that
-//! selects the best available backend at construction time.
+//! `omnidsp-core` public API and adds a generic dispatch layer
+//! that lets users select a backend at compile time.
 
 // Re-export core public API
 pub use omnidsp_core::design;
@@ -17,21 +17,27 @@ pub use omnidsp_core::types;
 // Re-export Window at crate root for convenience
 pub use omnidsp_core::types::Window;
 
-pub mod backend;
-pub mod config;
-pub mod create_plan;
-pub mod dispatch;
+pub mod create;
+pub mod generic;
+mod macros;
 mod omnidsp;
-pub(crate) mod resolve;
 
-pub use backend::Backend;
-pub use config::Config;
-pub use create_plan::CreatePlan;
-pub use dispatch::{DynDft, DynDftPlan, DynIir, DynIirPlan, DynVecOps};
-pub use omnidsp::{
-    ConvPlan32, ConvPlan64, CqtPlan32, CqtPlan64, DftPlan32, DftPlan64, FirPlan32, FirPlan64,
-    IirPlan32, IirPlan64, OmniDSP, ResamplePlan32, ResamplePlan64,
-};
+pub use create::{CreateConv, CreateCqt, CreateFir, CreateResampler};
+pub use generic::Generic;
+pub use omnidsp::OmniDSP;
+
+/// The best available backend, selected at compile time.
+///
+/// Defaults to [`Generic<RustDft, RustVecOps>`](Generic) (pure Rust
+/// fallback).  Updated when vendor features (IPP, Accelerate, oneMKL)
+/// are enabled.
+pub type Best = Generic<omnidsp_rust::RustDft, omnidsp_rust::RustVecOps>;
+
+/// Convenience alias: [`OmniDSP`] with the best compiled-in backend.
+///
+/// `Auto::default()` creates an engine using the best backend without
+/// naming it explicitly.
+pub type Auto = OmniDSP<Best>;
 
 #[cfg(test)]
 #[allow(clippy::expect_used, reason = "expect is the preferred idiom in tests")]
