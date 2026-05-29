@@ -57,7 +57,11 @@ impl<T: rustfft::FftNum> DftPlan<T> for DynDftPlan<T> {
     }
 }
 
-// Static assertion: DynDftPlan must be Send + Sync (tested in tests::dyn_dft_plan_is_send_sync).
+const _: () = {
+    const fn _assert<T: Send + Sync>() {}
+    let _ = _assert::<DynDftPlan<f32>>;
+    let _ = _assert::<DynDftPlan<f64>>;
+};
 
 #[cfg(test)]
 #[allow(clippy::expect_used, reason = "expect is the preferred idiom in tests")]
