@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["omnidsp-core", "omnidsp-rust"]
+members = ["omnidsp-core", "omnidsp-rust", "omnidsp"]
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

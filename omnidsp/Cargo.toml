@@ -1,0 +1,18 @@
+[package]
+name = "omnidsp"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "OmniDSP — composable DSP with pluggable backends."
+authors = ["Mark Wells"]
+repository = "https://github.com/TwoWells/OmniDSP"
+
+[lints]
+workspace = true
+
+[package.metadata.cargo-machete]
+ignored = ["omnidsp-rust"] # used by dispatch enums in ticket 01
+
+[dependencies]
+omnidsp-core = { path = "../omnidsp-core" }
+omnidsp-rust = { path = "../omnidsp-rust" }
