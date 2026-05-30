@@ -106,7 +106,7 @@ impl<T: Float> Window<T> {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::InvalidSpec`] if `length` is zero.
+    /// Returns [`InvalidSpec`](crate::error::Error::InvalidSpec) if `length` is zero.
     pub fn bartlett(length: usize) -> Result<Vec<T>> {
         Self::Bartlett.coefficients(length)
     }
@@ -115,7 +115,7 @@ impl<T: Float> Window<T> {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::InvalidSpec`] if `length` is zero.
+    /// Returns [`InvalidSpec`](crate::error::Error::InvalidSpec) if `length` is zero.
     pub fn blackman(length: usize) -> Result<Vec<T>> {
         Self::Blackman.coefficients(length)
     }
@@ -124,7 +124,7 @@ impl<T: Float> Window<T> {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::InvalidSpec`] if `length` is zero.
+    /// Returns [`InvalidSpec`](crate::error::Error::InvalidSpec) if `length` is zero.
     pub fn flat_top(length: usize) -> Result<Vec<T>> {
         Self::FlatTop.coefficients(length)
     }
@@ -133,7 +133,7 @@ impl<T: Float> Window<T> {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::InvalidSpec`] if `length` is zero or `sigma <= 0`.
+    /// Returns [`InvalidSpec`](crate::error::Error::InvalidSpec) if `length` is zero or `sigma <= 0`.
     pub fn gaussian(sigma: T, length: usize) -> Result<Vec<T>> {
         Self::Gaussian(sigma).coefficients(length)
     }
@@ -142,7 +142,7 @@ impl<T: Float> Window<T> {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::InvalidSpec`] if `length` is zero.
+    /// Returns [`InvalidSpec`](crate::error::Error::InvalidSpec) if `length` is zero.
     pub fn hamming(length: usize) -> Result<Vec<T>> {
         Self::Hamming.coefficients(length)
     }
@@ -151,7 +151,7 @@ impl<T: Float> Window<T> {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::InvalidSpec`] if `length` is zero.
+    /// Returns [`InvalidSpec`](crate::error::Error::InvalidSpec) if `length` is zero.
     pub fn hann(length: usize) -> Result<Vec<T>> {
         Self::Hann.coefficients(length)
     }
@@ -160,7 +160,7 @@ impl<T: Float> Window<T> {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::InvalidSpec`] if `length` is zero or `beta < 0`.
+    /// Returns [`InvalidSpec`](crate::error::Error::InvalidSpec) if `length` is zero or `beta < 0`.
     pub fn kaiser(beta: T, length: usize) -> Result<Vec<T>> {
         Self::Kaiser(beta).coefficients(length)
     }
@@ -169,7 +169,7 @@ impl<T: Float> Window<T> {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::InvalidSpec`] if `length` is zero.
+    /// Returns [`InvalidSpec`](crate::error::Error::InvalidSpec) if `length` is zero.
     pub fn rectangular(length: usize) -> Result<Vec<T>> {
         Self::Rectangular.coefficients(length)
     }
@@ -178,7 +178,7 @@ impl<T: Float> Window<T> {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::InvalidSpec`] if `length` is zero.
+    /// Returns [`InvalidSpec`](crate::error::Error::InvalidSpec) if `length` is zero.
     pub fn triangular(length: usize) -> Result<Vec<T>> {
         Self::Triangular.coefficients(length)
     }
@@ -187,7 +187,7 @@ impl<T: Float> Window<T> {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::InvalidSpec`] if `length` is zero or `alpha` is
+    /// Returns [`InvalidSpec`](crate::error::Error::InvalidSpec) if `length` is zero or `alpha` is
     /// outside `[0, 1]`.
     pub fn tukey(alpha: T, length: usize) -> Result<Vec<T>> {
         Self::Tukey(alpha).coefficients(length)
