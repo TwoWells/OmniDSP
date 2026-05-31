@@ -38,6 +38,8 @@ macro_rules! impl_generic_backend {
         $crate::impl_generic_backend!(@dft $backend, $dft, $vecops, f64);
         $crate::impl_generic_backend!(@iir $backend, $dft, $vecops, f32);
         $crate::impl_generic_backend!(@iir $backend, $dft, $vecops, f64);
+        $crate::impl_generic_backend!(@hilbert $backend, $dft, $vecops, f32);
+        $crate::impl_generic_backend!(@hilbert $backend, $dft, $vecops, f64);
     };
 
     (@conv $backend:ty, $dft:ty, $vecops:ty, $float:ty) => {
@@ -144,6 +146,27 @@ macro_rules! impl_generic_backend {
                     &$crate::scalar::ScalarIir,
                     spec,
                 )
+            }
+        }
+    };
+
+    (@hilbert $backend:ty, $dft:ty, $vecops:ty, $float:ty) => {
+        impl $crate::CreatePlan<$crate::modules::hilbert::HilbertSpec<$float>> for $backend {
+            type Plan = $crate::modules::hilbert::OmniHilbertPlan<
+                $float,
+                <$dft as $crate::traits::dft::Dft<$float>>::Plan,
+                $vecops,
+            >;
+
+            fn create_plan(
+                &self,
+                spec: &$crate::modules::hilbert::HilbertSpec<$float>,
+            ) -> $crate::error::Result<Self::Plan> {
+                let factory = $crate::modules::hilbert::OmniHilbert::new(
+                    self.dft.clone(),
+                    self.vecops.clone(),
+                );
+                factory.create_plan(spec)
             }
         }
     };

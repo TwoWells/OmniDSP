@@ -260,4 +260,13 @@ impl VecOps<f64> for TestVecOps {
         }
         Ok(())
     }
+
+    fn cscale_inplace(&self, data: &mut [Complex<f64>], scalars: &[f64]) -> Result<()> {
+        check2(data.len(), scalars.len())?;
+        for (c, &s) in data.iter_mut().zip(scalars) {
+            c.re *= s;
+            c.im *= s;
+        }
+        Ok(())
+    }
 }

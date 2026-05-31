@@ -123,6 +123,15 @@ macro_rules! impl_vecops {
                 }
                 Ok(())
             }
+
+            fn cscale_inplace(&self, data: &mut [Complex<$t>], scalars: &[$t]) -> Result<()> {
+                check_lengths_2(data.len(), scalars.len())?;
+                for (c, &s) in data.iter_mut().zip(scalars) {
+                    c.re *= s;
+                    c.im *= s;
+                }
+                Ok(())
+            }
         }
     };
 }
@@ -346,6 +355,57 @@ mod tests {
         let mut out = [0.0_f32; 2];
         assert!(
             ops.mag_sq(&input, &mut out).is_err(),
+            "mismatched lengths should return error"
+        );
+    }
+
+    // --- cscale_inplace ---
+
+    #[test]
+    fn cscale_inplace_f32() {
+        let ops = ScalarVecOps;
+        let mut data = [Complex::new(1.0_f32, 2.0), Complex::new(3.0, 4.0)];
+        let scalars = [2.0_f32, 0.5];
+        ops.cscale_inplace(&mut data, &scalars)
+            .expect("cscale_inplace should succeed");
+        assert!(
+            (data[0].re - 2.0).abs() < EPSILON_F32 && (data[0].im - 4.0).abs() < EPSILON_F32,
+            "cscale_inplace[0] failed: got {:?}",
+            data[0]
+        );
+        assert!(
+            (data[1].re - 1.5).abs() < EPSILON_F32 && (data[1].im - 2.0).abs() < EPSILON_F32,
+            "cscale_inplace[1] failed: got {:?}",
+            data[1]
+        );
+    }
+
+    #[test]
+    fn cscale_inplace_f64() {
+        let ops = ScalarVecOps;
+        let mut data = [Complex::new(5.0_f64, -3.0), Complex::new(0.0, 1.0)];
+        let scalars = [0.0_f64, 2.0];
+        ops.cscale_inplace(&mut data, &scalars)
+            .expect("cscale_inplace should succeed");
+        assert!(
+            (data[0].re).abs() < EPSILON_F64 && (data[0].im).abs() < EPSILON_F64,
+            "cscale by zero should zero the element: got {:?}",
+            data[0]
+        );
+        assert!(
+            (data[1].re).abs() < EPSILON_F64 && (data[1].im - 2.0).abs() < EPSILON_F64,
+            "cscale_inplace[1] failed: got {:?}",
+            data[1]
+        );
+    }
+
+    #[test]
+    fn cscale_inplace_length_mismatch() {
+        let ops = ScalarVecOps;
+        let mut data = [Complex::new(1.0_f32, 2.0); 3];
+        let scalars = [1.0_f32; 2];
+        assert!(
+            ops.cscale_inplace(&mut data, &scalars).is_err(),
             "mismatched lengths should return error"
         );
     }

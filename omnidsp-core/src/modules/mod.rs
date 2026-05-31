@@ -10,4 +10,5 @@
 pub mod conv;
 pub mod cqt;
 pub mod fir;
+pub mod hilbert;
 pub mod resample;

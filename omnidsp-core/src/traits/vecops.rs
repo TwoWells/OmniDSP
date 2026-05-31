@@ -99,4 +99,15 @@ pub trait VecOps<T>: Send + Sync + Clone {
     ///
     /// Returns an error if the slice lengths do not match.
     fn mag_sq(&self, input: &[Complex<T>], out: &mut [T]) -> Result<()>;
+
+    /// Scale complex elements by corresponding real scalars in-place.
+    ///
+    /// `data[i].re *= scalars[i]`, `data[i].im *= scalars[i]`.
+    ///
+    /// Both slices must have the same length.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the slice lengths do not match.
+    fn cscale_inplace(&self, data: &mut [Complex<T>], scalars: &[T]) -> Result<()>;
 }
