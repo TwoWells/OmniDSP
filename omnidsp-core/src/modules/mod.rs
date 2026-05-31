@@ -13,3 +13,4 @@ pub mod dct;
 pub mod fir;
 pub mod hilbert;
 pub mod resample;
+pub mod xcorr;

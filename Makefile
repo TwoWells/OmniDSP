@@ -7,7 +7,7 @@
 #   make release-major   # 0.1.0 -> 1.0.0
 #   make release V=0.2.0 # explicit version
 
-.PHONY: bench build-release check deny doc gen-cqt-reference gen-cqt-process-reference gen-cqt-librosa-reference gen-fir-reference gen-fir-lfilter-reference gen-hilbert-reference gen-iir-reference gen-iir-sosfilt-reference gen-resample-reference gen-resample-poly-reference machete mutants setup setup-hooks setup-tools test release release-patch release-minor release-major publish tag-current
+.PHONY: bench build-release check deny doc gen-cqt-reference gen-cqt-process-reference gen-cqt-librosa-reference gen-fir-reference gen-fir-lfilter-reference gen-hilbert-reference gen-iir-reference gen-iir-sosfilt-reference gen-resample-reference gen-resample-poly-reference gen-xcorr-reference machete mutants setup setup-hooks setup-tools test release release-patch release-minor release-major publish tag-current
 
 # Get current version from Cargo.toml
 CURRENT_VERSION := $(shell grep '^version = ' omnidsp-core/Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
@@ -132,6 +132,10 @@ gen-hilbert-reference:
 gen-dct-reference:
 	@python3 scripts/gen_dct_reference.py > omnidsp-core/testdata/dct_scipy.rs
 	@echo "Generated omnidsp-core/testdata/dct_scipy.rs"
+
+gen-xcorr-reference:
+	@python3 scripts/gen_xcorr_reference.py > omnidsp-core/testdata/xcorr_scipy.rs
+	@echo "Generated omnidsp-core/testdata/xcorr_scipy.rs"
 
 machete:
 	@cargo machete --skip-target-dir

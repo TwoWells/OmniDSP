@@ -22,6 +22,7 @@ use omnidsp_core::design::{cqt, fir, iir, resample};
 use omnidsp_core::modules::cqt::OmniCqt;
 use omnidsp_core::modules::fir::OmniFir;
 use omnidsp_core::modules::resample::OmniResample;
+use omnidsp_core::modules::xcorr::{CrossCorrSpec, OmniCrossCorr};
 use omnidsp_core::scalar::{ScalarIir, ScalarVecOps};
 use omnidsp_core::traits::dft::{Dft, DftNorm, DftPlan, DftSpec};
 use omnidsp_core::traits::fir::{Fir, FirPlan, FirStrategy};
@@ -945,6 +946,78 @@ mod cqt_integration {
             CQT_LIB_TWO_TONE_MAG,
             1e-10,
             "CQT two-tone magnitudes vs librosa-validated reference",
+        );
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 7. Cross-correlation: scipy.signal.correlate reference
+// ═══════════════════════════════════════════════════════════════════════
+
+#[allow(dead_code, reason = "not all scipy reference constants are used")]
+mod xcorr_integration {
+    use super::*;
+
+    include!(testdata!("xcorr_scipy.rs"));
+
+    const fn make_factory() -> OmniCrossCorr<RustDft, ScalarVecOps> {
+        OmniCrossCorr::new(RustDft, ScalarVecOps)
+    }
+
+    /// Short asymmetric signals (len=16 × len=8) vs scipy.signal.correlate.
+    #[test]
+    fn scipy_short_asymmetric() {
+        let factory = make_factory();
+        let spec = CrossCorrSpec::<f64>::new(XCORR_SHORT_A.len(), XCORR_SHORT_B.len());
+        let plan = factory.create_plan(&spec).expect("plan creation");
+
+        let mut output = vec![0.0; spec.output_len()];
+        plan.process(XCORR_SHORT_A, XCORR_SHORT_B, &mut output)
+            .expect("xcorr process");
+
+        assert_approx_eq(
+            &output,
+            XCORR_SHORT_RESULT,
+            1e-10,
+            "short xcorr vs scipy.signal.correlate",
+        );
+    }
+
+    /// Equal-length signals (len=32 × len=32) vs scipy.signal.correlate.
+    #[test]
+    fn scipy_equal_length() {
+        let factory = make_factory();
+        let spec = CrossCorrSpec::<f64>::new(XCORR_EQUAL_A.len(), XCORR_EQUAL_B.len());
+        let plan = factory.create_plan(&spec).expect("plan creation");
+
+        let mut output = vec![0.0; spec.output_len()];
+        plan.process(XCORR_EQUAL_A, XCORR_EQUAL_B, &mut output)
+            .expect("xcorr process");
+
+        assert_approx_eq(
+            &output,
+            XCORR_EQUAL_RESULT,
+            1e-10,
+            "equal-length xcorr vs scipy.signal.correlate",
+        );
+    }
+
+    /// Sinusoidal delay signals (len=128 × len=128) vs scipy.signal.correlate.
+    #[test]
+    fn scipy_delay_sinusoids() {
+        let factory = make_factory();
+        let spec = CrossCorrSpec::<f64>::new(XCORR_DELAY_A.len(), XCORR_DELAY_B.len());
+        let plan = factory.create_plan(&spec).expect("plan creation");
+
+        let mut output = vec![0.0; spec.output_len()];
+        plan.process(XCORR_DELAY_A, XCORR_DELAY_B, &mut output)
+            .expect("xcorr process");
+
+        assert_approx_eq(
+            &output,
+            XCORR_DELAY_RESULT,
+            1e-8,
+            "delay xcorr vs scipy.signal.correlate",
         );
     }
 }

@@ -7,6 +7,7 @@ use omnidsp_core::design::cqt::CqtSpec;
 use omnidsp_core::design::resample::ResampleSpec;
 use omnidsp_core::error::Result;
 use omnidsp_core::modules::hilbert::HilbertSpec;
+use omnidsp_core::modules::xcorr::CrossCorrSpec;
 use omnidsp_core::scalar::ScalarVecOps;
 use omnidsp_core::traits::conv::ConvSpec;
 use omnidsp_core::traits::dct::DctSpec;
@@ -197,6 +198,21 @@ impl<B> OmniDSP<B> {
     pub fn dct<T>(&self, spec: &DctSpec<T>) -> Result<<B as CreatePlan<DctSpec<T>>>::Plan>
     where
         B: CreatePlan<DctSpec<T>>,
+    {
+        self.create_plan(spec)
+    }
+
+    /// Create a cross-correlation plan.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the spec is invalid or plan creation fails.
+    pub fn xcorr<T>(
+        &self,
+        spec: &CrossCorrSpec<T>,
+    ) -> Result<<B as CreatePlan<CrossCorrSpec<T>>>::Plan>
+    where
+        B: CreatePlan<CrossCorrSpec<T>>,
     {
         self.create_plan(spec)
     }

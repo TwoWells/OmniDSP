@@ -42,6 +42,8 @@ macro_rules! impl_generic_backend {
         $crate::impl_generic_backend!(@hilbert $backend, $dft, $vecops, f64);
         $crate::impl_generic_backend!(@dct $backend, $dft, $vecops, f32);
         $crate::impl_generic_backend!(@dct $backend, $dft, $vecops, f64);
+        $crate::impl_generic_backend!(@xcorr $backend, $dft, $vecops, f32);
+        $crate::impl_generic_backend!(@xcorr $backend, $dft, $vecops, f64);
     };
 
     (@conv $backend:ty, $dft:ty, $vecops:ty, $float:ty) => {
@@ -186,6 +188,27 @@ macro_rules! impl_generic_backend {
             ) -> $crate::error::Result<Self::Plan> {
                 let factory = $crate::modules::dct::OmniDct::new(self.dft.clone());
                 $crate::traits::dct::Dct::<$float>::create_plan(&factory, spec)
+            }
+        }
+    };
+
+    (@xcorr $backend:ty, $dft:ty, $vecops:ty, $float:ty) => {
+        impl $crate::CreatePlan<$crate::modules::xcorr::CrossCorrSpec<$float>> for $backend {
+            type Plan = $crate::modules::xcorr::OmniCrossCorrPlan<
+                $float,
+                <$dft as $crate::traits::dft::Dft<$float>>::Plan,
+                $vecops,
+            >;
+
+            fn create_plan(
+                &self,
+                spec: &$crate::modules::xcorr::CrossCorrSpec<$float>,
+            ) -> $crate::error::Result<Self::Plan> {
+                let factory = $crate::modules::xcorr::OmniCrossCorr::new(
+                    self.dft.clone(),
+                    self.vecops.clone(),
+                );
+                factory.create_plan(spec)
             }
         }
     };
