@@ -129,6 +129,10 @@ gen-hilbert-reference:
 	@python3 scripts/gen_hilbert_reference.py > omnidsp-core/testdata/hilbert_scipy.rs
 	@echo "Generated omnidsp-core/testdata/hilbert_scipy.rs"
 
+gen-dct-reference:
+	@python3 scripts/gen_dct_reference.py > omnidsp-core/testdata/dct_scipy.rs
+	@echo "Generated omnidsp-core/testdata/dct_scipy.rs"
+
 machete:
 	@cargo machete --skip-target-dir
 

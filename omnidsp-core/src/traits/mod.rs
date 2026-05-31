@@ -14,6 +14,7 @@
 //! See the [architecture docs](https://github.com/TwoWells/OmniDSP) for details.
 
 pub mod conv;
+pub mod dct;
 pub mod dft;
 pub mod fir;
 pub mod iir;

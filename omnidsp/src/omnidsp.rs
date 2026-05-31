@@ -9,6 +9,7 @@ use omnidsp_core::error::Result;
 use omnidsp_core::modules::hilbert::HilbertSpec;
 use omnidsp_core::scalar::ScalarVecOps;
 use omnidsp_core::traits::conv::ConvSpec;
+use omnidsp_core::traits::dct::DctSpec;
 use omnidsp_core::traits::dft::DftSpec;
 use omnidsp_core::traits::fir::FirSpec;
 use omnidsp_core::traits::iir::IirSpec;
@@ -184,6 +185,18 @@ impl<B> OmniDSP<B> {
     ) -> Result<<B as CreatePlan<HilbertSpec<T>>>::Plan>
     where
         B: CreatePlan<HilbertSpec<T>>,
+    {
+        self.create_plan(spec)
+    }
+
+    /// Create a DCT plan.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the spec is invalid or plan creation fails.
+    pub fn dct<T>(&self, spec: &DctSpec<T>) -> Result<<B as CreatePlan<DctSpec<T>>>::Plan>
+    where
+        B: CreatePlan<DctSpec<T>>,
     {
         self.create_plan(spec)
     }

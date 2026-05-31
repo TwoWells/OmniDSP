@@ -40,6 +40,8 @@ macro_rules! impl_generic_backend {
         $crate::impl_generic_backend!(@iir $backend, $dft, $vecops, f64);
         $crate::impl_generic_backend!(@hilbert $backend, $dft, $vecops, f32);
         $crate::impl_generic_backend!(@hilbert $backend, $dft, $vecops, f64);
+        $crate::impl_generic_backend!(@dct $backend, $dft, $vecops, f32);
+        $crate::impl_generic_backend!(@dct $backend, $dft, $vecops, f64);
     };
 
     (@conv $backend:ty, $dft:ty, $vecops:ty, $float:ty) => {
@@ -167,6 +169,23 @@ macro_rules! impl_generic_backend {
                     self.vecops.clone(),
                 );
                 factory.create_plan(spec)
+            }
+        }
+    };
+
+    (@dct $backend:ty, $dft:ty, $vecops:ty, $float:ty) => {
+        impl $crate::CreatePlan<$crate::traits::dct::DctSpec<$float>> for $backend {
+            type Plan = $crate::modules::dct::OmniDctPlan<
+                $float,
+                <$dft as $crate::traits::dft::Dft<$float>>::Plan,
+            >;
+
+            fn create_plan(
+                &self,
+                spec: &$crate::traits::dct::DctSpec<$float>,
+            ) -> $crate::error::Result<Self::Plan> {
+                let factory = $crate::modules::dct::OmniDct::new(self.dft.clone());
+                $crate::traits::dct::Dct::<$float>::create_plan(&factory, spec)
             }
         }
     };
