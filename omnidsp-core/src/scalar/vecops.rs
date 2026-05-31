@@ -115,6 +115,14 @@ macro_rules! impl_vecops {
                 }
                 Ok(())
             }
+
+            fn mag_sq(&self, input: &[Complex<$t>], out: &mut [$t]) -> Result<()> {
+                check_lengths_2(input.len(), out.len())?;
+                for (o, z) in out.iter_mut().zip(input) {
+                    *o = z.re.mul_add(z.re, z.im * z.im);
+                }
+                Ok(())
+            }
         }
     };
 }
@@ -293,6 +301,55 @@ mod tests {
         );
     }
 
+    // --- mag_sq ---
+
+    #[test]
+    fn mag_sq_f32() {
+        let ops = ScalarVecOps;
+        let input = [Complex::new(3.0_f32, 4.0), Complex::new(1.0, 1.0)];
+        let mut out = [0.0_f32; 2];
+        ops.mag_sq(&input, &mut out).expect("mag_sq should succeed");
+        assert!(
+            (out[0] - 25.0).abs() < EPSILON_F32,
+            "mag_sq[0] should be 25.0, got {}",
+            out[0]
+        );
+        assert!(
+            (out[1] - 2.0).abs() < EPSILON_F32,
+            "mag_sq[1] should be 2.0, got {}",
+            out[1]
+        );
+    }
+
+    #[test]
+    fn mag_sq_f64() {
+        let ops = ScalarVecOps;
+        let input = [Complex::new(3.0_f64, 4.0), Complex::new(0.0, 5.0)];
+        let mut out = [0.0_f64; 2];
+        ops.mag_sq(&input, &mut out).expect("mag_sq should succeed");
+        assert!(
+            (out[0] - 25.0).abs() < EPSILON_F64,
+            "mag_sq[0] should be 25.0, got {}",
+            out[0]
+        );
+        assert!(
+            (out[1] - 25.0).abs() < EPSILON_F64,
+            "mag_sq[1] should be 25.0, got {}",
+            out[1]
+        );
+    }
+
+    #[test]
+    fn mag_sq_length_mismatch() {
+        let ops = ScalarVecOps;
+        let input = [Complex::new(1.0_f32, 2.0); 3];
+        let mut out = [0.0_f32; 2];
+        assert!(
+            ops.mag_sq(&input, &mut out).is_err(),
+            "mismatched lengths should return error"
+        );
+    }
+
     // --- empty slices ---
 
     #[test]
@@ -314,6 +371,10 @@ mod tests {
         let mut out_c: [Complex<f32>; 0] = [];
         ops.cmul(empty_c, empty_c, &mut out_c)
             .expect("empty cmul should succeed");
+
+        let mut empty_real: [f32; 0] = [];
+        ops.mag_sq(empty_c, &mut empty_real)
+            .expect("empty mag_sq should succeed");
     }
 
     // --- single element ---

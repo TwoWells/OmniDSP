@@ -90,4 +90,13 @@ pub trait VecOps<T>: Send + Sync + Clone {
     ///
     /// Returns an error if the slice lengths do not match.
     fn cmul_inplace(&self, data: &mut [Complex<T>], other: &[Complex<T>]) -> Result<()>;
+
+    /// Complex magnitude squared: `out[i] = input[i].re² + input[i].im²`.
+    ///
+    /// `input` and `out` must have the same length.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the slice lengths do not match.
+    fn mag_sq(&self, input: &[Complex<T>], out: &mut [T]) -> Result<()>;
 }
