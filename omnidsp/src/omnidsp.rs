@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Two Wells <contact@twowells.dev>
 
-//! `OmniDSP` struct — top-level DSP engine with pluggable backends.
+//! `OmniDSP` struct and `RustBackend` — top-level DSP engine with pluggable backends.
 
 use omnidsp_core::design::cqt::CqtSpec;
 use omnidsp_core::design::resample::ResampleSpec;
@@ -13,16 +13,53 @@ use omnidsp_core::traits::fir::FirSpec;
 use omnidsp_core::traits::iir::IirSpec;
 use omnidsp_rustfft::RustDft;
 
-use crate::create::{CreateConv, CreateCqt, CreateDft, CreateFir, CreateIir, CreateResampler};
-use crate::generic::Generic;
+use crate::create::CreatePlan;
+
+// ─── RustBackend ───────────────────────────────────────────────────────
+
+/// Pure Rust fallback backend.
+///
+/// Combines [`RustDft`] (wrapping `RustFFT`) with [`ScalarVecOps`]
+/// (scalar loops, LLVM auto-vectorized).  Builds on every platform
+/// with no external dependencies.
+#[derive(Debug, Clone, Copy)]
+pub struct RustBackend {
+    /// DFT factory (`RustFFT` wrapper).
+    pub(crate) dft: RustDft,
+    /// Vector operations (scalar fallback).
+    pub(crate) vecops: ScalarVecOps,
+}
+
+impl RustBackend {
+    /// Create a new Rust fallback backend.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            dft: RustDft,
+            vecops: ScalarVecOps,
+        }
+    }
+}
+
+impl Default for RustBackend {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+crate::impl_generic_backend! {
+    backend: RustBackend,
+    dft: RustDft,
+    vecops: ScalarVecOps,
+}
 
 // ─── OmniDSP struct ─────────────────────────────────────────────────
 
 /// Top-level DSP engine with a pluggable backend.
 ///
-/// `OmniDSP<B>` wraps a backend `B` and provides named methods for
-/// creating module plans.  Each method bounds on the specific `Create*`
-/// trait it needs — backends only implement the traits they support.
+/// `OmniDSP<B>` wraps a backend `B` and provides a universal
+/// [`create_plan`](Self::create_plan) method plus convenience wrappers
+/// for each module.  The spec type drives compile-time dispatch.
 ///
 /// # Examples
 ///
@@ -31,7 +68,7 @@ use crate::generic::Generic;
 /// use omnidsp::traits::conv::{ConvSpec, ConvMethod};
 ///
 /// let dsp = OmniDSP::rust();
-/// let plan = dsp.conv(&ConvSpec::<f64>::new(3, 2, ConvMethod::Direct)).unwrap();
+/// let plan = dsp.create_plan(&ConvSpec::<f64>::new(3, 2, ConvMethod::Direct)).unwrap();
 /// ```
 #[derive(Debug, Clone)]
 pub struct OmniDSP<B> {
@@ -45,16 +82,31 @@ impl<B> OmniDSP<B> {
         Self { backend }
     }
 
+    /// Create a plan from the given specification.
+    ///
+    /// The spec type `S` drives dispatch — the backend must implement
+    /// `CreatePlan<S>` for the spec type.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the spec is invalid or plan creation fails.
+    pub fn create_plan<S>(&self, spec: &S) -> Result<<B as CreatePlan<S>>::Plan>
+    where
+        B: CreatePlan<S>,
+    {
+        self.backend.create_plan(spec)
+    }
+
     /// Create a convolution plan.
     ///
     /// # Errors
     ///
     /// Returns an error if the spec is invalid or plan creation fails.
-    pub fn conv<T>(&self, spec: &ConvSpec<T>) -> Result<B::Conv>
+    pub fn conv<T>(&self, spec: &ConvSpec<T>) -> Result<<B as CreatePlan<ConvSpec<T>>>::Plan>
     where
-        B: CreateConv<T>,
+        B: CreatePlan<ConvSpec<T>>,
     {
-        self.backend.create_conv(spec)
+        self.create_plan(spec)
     }
 
     /// Create a FIR filter plan.
@@ -62,11 +114,11 @@ impl<B> OmniDSP<B> {
     /// # Errors
     ///
     /// Returns an error if the spec is invalid or plan creation fails.
-    pub fn fir<T>(&self, spec: &FirSpec<T>) -> Result<B::Fir>
+    pub fn fir<T>(&self, spec: &FirSpec<T>) -> Result<<B as CreatePlan<FirSpec<T>>>::Plan>
     where
-        B: CreateFir<T>,
+        B: CreatePlan<FirSpec<T>>,
     {
-        self.backend.create_fir(spec)
+        self.create_plan(spec)
     }
 
     /// Create a resampler plan.
@@ -74,11 +126,14 @@ impl<B> OmniDSP<B> {
     /// # Errors
     ///
     /// Returns an error if the spec is invalid or plan creation fails.
-    pub fn resample<T>(&self, spec: &ResampleSpec<T>) -> Result<B::Resampler>
+    pub fn resample<T>(
+        &self,
+        spec: &ResampleSpec<T>,
+    ) -> Result<<B as CreatePlan<ResampleSpec<T>>>::Plan>
     where
-        B: CreateResampler<T>,
+        B: CreatePlan<ResampleSpec<T>>,
     {
-        self.backend.create_resampler(spec)
+        self.create_plan(spec)
     }
 
     /// Create a CQT plan.
@@ -86,11 +141,11 @@ impl<B> OmniDSP<B> {
     /// # Errors
     ///
     /// Returns an error if the spec is invalid or plan creation fails.
-    pub fn cqt<T>(&self, spec: &CqtSpec<T>) -> Result<B::Cqt>
+    pub fn cqt<T>(&self, spec: &CqtSpec<T>) -> Result<<B as CreatePlan<CqtSpec<T>>>::Plan>
     where
-        B: CreateCqt<T>,
+        B: CreatePlan<CqtSpec<T>>,
     {
-        self.backend.create_cqt(spec)
+        self.create_plan(spec)
     }
 
     /// Create a DFT plan.
@@ -98,11 +153,11 @@ impl<B> OmniDSP<B> {
     /// # Errors
     ///
     /// Returns an error if the spec is invalid or plan creation fails.
-    pub fn dft<T>(&self, spec: &DftSpec<T>) -> Result<B::Dft>
+    pub fn dft<T>(&self, spec: &DftSpec<T>) -> Result<<B as CreatePlan<DftSpec<T>>>::Plan>
     where
-        B: CreateDft<T>,
+        B: CreatePlan<DftSpec<T>>,
     {
-        self.backend.create_dft(spec)
+        self.create_plan(spec)
     }
 
     /// Create an IIR filter plan.
@@ -110,29 +165,41 @@ impl<B> OmniDSP<B> {
     /// # Errors
     ///
     /// Returns an error if the spec is invalid or plan creation fails.
-    pub fn iir<T>(&self, spec: &IirSpec<T>) -> Result<B::Iir>
+    pub fn iir<T>(&self, spec: &IirSpec<T>) -> Result<<B as CreatePlan<IirSpec<T>>>::Plan>
     where
-        B: CreateIir<T>,
+        B: CreatePlan<IirSpec<T>>,
     {
-        self.backend.create_iir(spec)
+        self.create_plan(spec)
     }
 }
 
 // ─── Named constructors ─────────────────────────────────────────────
 
-impl OmniDSP<Generic<RustDft, ScalarVecOps>> {
+impl OmniDSP<RustBackend> {
     /// Create an engine using the pure Rust fallback backend.
     ///
     /// Uses [`RustDft`] (`RustFFT`) and [`ScalarVecOps`] (scalar loops,
     /// LLVM auto-vectorized).
     #[must_use]
     pub const fn rust() -> Self {
-        Self::new(Generic(RustDft, ScalarVecOps))
+        Self::new(RustBackend::new())
     }
 }
 
-impl Default for OmniDSP<Generic<RustDft, ScalarVecOps>> {
+impl crate::Auto {
+    /// Create an engine using the best compiled-in backend.
+    ///
+    /// Selects the best backend at compile time via the [`Best`](crate::Best)
+    /// type alias.  Currently [`RustBackend`]; updated when vendor features
+    /// (IPP, Accelerate, oneMKL) are enabled.
+    #[must_use]
+    pub const fn auto() -> Self {
+        Self::new(crate::Best::new())
+    }
+}
+
+impl Default for crate::Auto {
     fn default() -> Self {
-        Self::rust()
+        Self::auto()
     }
 }

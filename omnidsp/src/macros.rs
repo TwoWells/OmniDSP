@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Two Wells <contact@twowells.dev>
 
-//! Backend macro for generating `Create*` trait implementations.
+//! Backend macro for generating [`CreatePlan<S>`](crate::CreatePlan) implementations.
 
-/// Generate all `Create*` trait implementations for a backend type
-/// using generic composition.
+/// Generate [`CreatePlan<S>`](crate::CreatePlan) implementations for all
+/// known spec types using generic composition.
 ///
-/// The backend struct must have `dft` and `vecops` fields of the
-/// specified types.  The macro delegates to [`Generic`](crate::Generic)
-/// internally, producing the same composition-based plans.
+/// The backend struct must have `dft` and `vecops` fields of the specified
+/// types.  The macro delegates to `omnidsp-core` modules internally,
+/// producing composition-based plans.
 ///
-/// Vendor backends use this macro for the baseline generic impls,
-/// then hand-write `Create*` impls for modules where native
-/// implementations outperform generic composition.
+/// Vendor backends use this macro for the baseline generic impls, then
+/// hand-write `CreatePlan<S>` impls for specs where native implementations
+/// outperform generic composition.
 ///
 /// # Example
 ///
@@ -41,101 +41,107 @@ macro_rules! impl_generic_backend {
     };
 
     (@conv $backend:ty, $dft:ty, $vecops:ty, $float:ty) => {
-        impl $crate::CreateConv<$float> for $backend {
-            type Conv =
-                <$crate::Generic<$dft, $vecops> as $crate::CreateConv<$float>>::Conv;
+        impl $crate::CreatePlan<$crate::traits::conv::ConvSpec<$float>> for $backend {
+            type Plan = $crate::modules::conv::OmniConvPlan<
+                $float,
+                <$dft as $crate::traits::dft::Dft<$float>>::Plan,
+                $vecops,
+            >;
 
-            fn create_conv(
+            fn create_plan(
                 &self,
                 spec: &$crate::traits::conv::ConvSpec<$float>,
-            ) -> $crate::error::Result<Self::Conv> {
-                $crate::CreateConv::<$float>::create_conv(
-                    &$crate::Generic(self.dft.clone(), self.vecops.clone()),
-                    spec,
-                )
+            ) -> $crate::error::Result<Self::Plan> {
+                let factory = $crate::modules::conv::OmniConv::new(
+                    self.dft.clone(),
+                    self.vecops.clone(),
+                );
+                $crate::traits::conv::Conv::<$float>::create_plan(&factory, spec)
             }
         }
     };
 
     (@fir $backend:ty, $dft:ty, $vecops:ty, $float:ty) => {
-        impl $crate::CreateFir<$float> for $backend {
-            type Fir =
-                <$crate::Generic<$dft, $vecops> as $crate::CreateFir<$float>>::Fir;
+        impl $crate::CreatePlan<$crate::traits::fir::FirSpec<$float>> for $backend {
+            type Plan = $crate::modules::fir::OmniFirPlan<
+                $float,
+                <$dft as $crate::traits::dft::Dft<$float>>::Plan,
+                $vecops,
+            >;
 
-            fn create_fir(
+            fn create_plan(
                 &self,
                 spec: &$crate::traits::fir::FirSpec<$float>,
-            ) -> $crate::error::Result<Self::Fir> {
-                $crate::CreateFir::<$float>::create_fir(
-                    &$crate::Generic(self.dft.clone(), self.vecops.clone()),
-                    spec,
-                )
+            ) -> $crate::error::Result<Self::Plan> {
+                let factory = $crate::modules::fir::OmniFir::new(
+                    self.dft.clone(),
+                    self.vecops.clone(),
+                );
+                $crate::traits::fir::Fir::<$float>::create_plan(&factory, spec)
             }
         }
     };
 
     (@resampler $backend:ty, $dft:ty, $vecops:ty, $float:ty) => {
-        impl $crate::CreateResampler<$float> for $backend {
-            type Resampler =
-                <$crate::Generic<$dft, $vecops> as $crate::CreateResampler<$float>>::Resampler;
+        impl $crate::CreatePlan<$crate::design::resample::ResampleSpec<$float>> for $backend {
+            type Plan = $crate::modules::resample::OmniResamplePlan<$float, $vecops>;
 
-            fn create_resampler(
+            fn create_plan(
                 &self,
                 spec: &$crate::design::resample::ResampleSpec<$float>,
-            ) -> $crate::error::Result<Self::Resampler> {
-                $crate::CreateResampler::<$float>::create_resampler(
-                    &$crate::Generic(self.dft.clone(), self.vecops.clone()),
-                    spec,
-                )
+            ) -> $crate::error::Result<Self::Plan> {
+                let factory = $crate::modules::resample::OmniResample::new(
+                    self.vecops.clone(),
+                );
+                factory.create_plan(spec)
             }
         }
     };
 
     (@cqt $backend:ty, $dft:ty, $vecops:ty, $float:ty) => {
-        impl $crate::CreateCqt<$float> for $backend {
-            type Cqt =
-                <$crate::Generic<$dft, $vecops> as $crate::CreateCqt<$float>>::Cqt;
+        impl $crate::CreatePlan<$crate::design::cqt::CqtSpec<$float>> for $backend {
+            type Plan = $crate::modules::cqt::OmniCqtPlan<
+                $float,
+                <$dft as $crate::traits::dft::Dft<$float>>::Plan,
+                $vecops,
+            >;
 
-            fn create_cqt(
+            fn create_plan(
                 &self,
                 spec: &$crate::design::cqt::CqtSpec<$float>,
-            ) -> $crate::error::Result<Self::Cqt> {
-                $crate::CreateCqt::<$float>::create_cqt(
-                    &$crate::Generic(self.dft.clone(), self.vecops.clone()),
-                    spec,
-                )
+            ) -> $crate::error::Result<Self::Plan> {
+                let factory = $crate::modules::cqt::OmniCqt::new(
+                    self.dft.clone(),
+                    self.vecops.clone(),
+                );
+                factory.create_plan(spec)
             }
         }
     };
 
     (@dft $backend:ty, $dft:ty, $vecops:ty, $float:ty) => {
-        impl $crate::CreateDft<$float> for $backend {
-            type Dft =
-                <$crate::Generic<$dft, $vecops> as $crate::CreateDft<$float>>::Dft;
+        impl $crate::CreatePlan<$crate::traits::dft::DftSpec<$float>> for $backend {
+            type Plan = <$dft as $crate::traits::dft::Dft<$float>>::Plan;
 
-            fn create_dft(
+            fn create_plan(
                 &self,
                 spec: &$crate::traits::dft::DftSpec<$float>,
-            ) -> $crate::error::Result<Self::Dft> {
-                $crate::CreateDft::<$float>::create_dft(
-                    &$crate::Generic(self.dft.clone(), self.vecops.clone()),
-                    spec,
-                )
+            ) -> $crate::error::Result<Self::Plan> {
+                $crate::traits::dft::Dft::<$float>::create_plan(&self.dft, spec)
             }
         }
     };
 
     (@iir $backend:ty, $dft:ty, $vecops:ty, $float:ty) => {
-        impl $crate::CreateIir<$float> for $backend {
-            type Iir =
-                <$crate::Generic<$dft, $vecops> as $crate::CreateIir<$float>>::Iir;
+        impl $crate::CreatePlan<$crate::traits::iir::IirSpec<$float>> for $backend {
+            type Plan = $crate::scalar::ScalarIirPlan<$float>;
 
-            fn create_iir(
+            fn create_plan(
                 &self,
                 spec: &$crate::traits::iir::IirSpec<$float>,
-            ) -> $crate::error::Result<Self::Iir> {
-                $crate::CreateIir::<$float>::create_iir(
-                    &$crate::Generic(self.dft.clone(), self.vecops.clone()),
+            ) -> $crate::error::Result<Self::Plan> {
+                $crate::traits::iir::Iir::<$float>::create_plan(
+                    &$crate::scalar::ScalarIir,
                     spec,
                 )
             }

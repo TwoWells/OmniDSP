@@ -11,6 +11,7 @@
 pub use omnidsp_core::design;
 pub use omnidsp_core::error;
 pub use omnidsp_core::modules;
+pub use omnidsp_core::scalar;
 pub use omnidsp_core::traits;
 pub use omnidsp_core::types;
 
@@ -18,20 +19,17 @@ pub use omnidsp_core::types;
 pub use omnidsp_core::types::Window;
 
 pub mod create;
-pub mod generic;
 mod macros;
 mod omnidsp;
 
-pub use create::{CreateConv, CreateCqt, CreateDft, CreateFir, CreateIir, CreateResampler};
-pub use generic::Generic;
-pub use omnidsp::OmniDSP;
+pub use create::CreatePlan;
+pub use omnidsp::{OmniDSP, RustBackend};
 
 /// The best available backend, selected at compile time.
 ///
-/// Defaults to [`Generic<RustDft, ScalarVecOps>`](Generic) (pure Rust
-/// fallback).  Updated when vendor features (IPP, Accelerate, oneMKL)
-/// are enabled.
-pub type Best = Generic<omnidsp_rustfft::RustDft, omnidsp_core::scalar::ScalarVecOps>;
+/// Defaults to [`RustBackend`] (pure Rust fallback).  Updated when
+/// vendor features (IPP, Accelerate, oneMKL) are enabled.
+pub type Best = RustBackend;
 
 /// Convenience alias: [`OmniDSP`] with the best compiled-in backend.
 ///

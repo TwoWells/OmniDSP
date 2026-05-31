@@ -4,9 +4,9 @@
 //! Integration tests for the generic `OmniDSP<B>` dispatch API.
 //!
 //! Exercises every module method through `OmniDSP::rust()`,
-//! `OmniDSP::new(Generic(...))`, and `Auto::default()`, for both
-//! `f32` and `f64`.  Also verifies that `impl_generic_backend!`
-//! produces working `Create*` implementations.
+//! `OmniDSP::auto()`, and `Auto::default()`, for both `f32` and `f64`.
+//! Also verifies that `impl_generic_backend!` produces working
+//! `CreatePlan<S>` implementations.
 
 #![allow(clippy::expect_used, reason = "expect is the preferred idiom in tests")]
 
@@ -15,9 +15,8 @@ use std::f64::consts::TAU;
 use num_complex::Complex;
 use num_traits::Float;
 
-use omnidsp::create::{CreateConv, CreateCqt, CreateDft, CreateFir, CreateIir, CreateResampler};
-use omnidsp::generic::Generic;
-use omnidsp::{Auto, OmniDSP};
+use omnidsp::create::CreatePlan;
+use omnidsp::{Auto, OmniDSP, RustBackend};
 use omnidsp_core::design::cqt::{self, CqtBinSpec, CqtSpec};
 use omnidsp_core::design::resample::{ResampleMode, ResampleSpec};
 use omnidsp_core::scalar::ScalarVecOps;
@@ -29,8 +28,6 @@ use omnidsp_core::types::{BiquadSection, Direction, Window};
 use omnidsp_rustfft::RustDft;
 
 // ─── Helpers ───────────────────────────────────────────────────────────
-
-type Rust = Generic<RustDft, ScalarVecOps>;
 
 fn assert_approx<T: Float + std::fmt::Debug>(actual: &[T], expected: &[T], tol: T, label: &str) {
     assert_eq!(
@@ -56,8 +53,8 @@ fn assert_approx<T: Float + std::fmt::Debug>(actual: &[T], expected: &[T], tol: 
 fn dft_round_trip<T, B>(dsp: &OmniDSP<B>, tol: T)
 where
     T: Float + Send + Sync + std::fmt::Debug,
-    B: CreateDft<T>,
-    B::Dft: DftPlan<T>,
+    B: CreatePlan<DftSpec<T>>,
+    B::Plan: DftPlan<T>,
 {
     let n = 8;
     let fwd = dsp
@@ -101,8 +98,8 @@ fn rust_dft_f32() {
 fn conv_verify<T, B>(dsp: &OmniDSP<B>, tol: T)
 where
     T: Float + Send + Sync + std::fmt::Debug,
-    B: CreateConv<T>,
-    B::Conv: ConvPlan<T>,
+    B: CreatePlan<ConvSpec<T>>,
+    B::Plan: ConvPlan<T>,
 {
     let spec = ConvSpec::<T>::new(3, 2, ConvMethod::Direct);
     let plan = dsp.conv(&spec).expect("conv plan");
@@ -138,8 +135,8 @@ fn rust_conv_f32() {
 fn fir_impulse<T, B>(dsp: &OmniDSP<B>, tol: T)
 where
     T: Float + Send + Sync + std::fmt::Debug,
-    B: CreateFir<T>,
-    B::Fir: FirPlan<T>,
+    B: CreatePlan<FirSpec<T>>,
+    B::Plan: FirPlan<T>,
 {
     let quarter = T::from(0.25).expect("0.25");
     let half = T::from(0.5).expect("0.5");
@@ -180,8 +177,8 @@ fn rust_fir_f32() {
 fn iir_passthrough<T, B>(dsp: &OmniDSP<B>, tol: T)
 where
     T: Float + Send + Sync + std::fmt::Debug + num_traits::FromPrimitive + 'static,
-    B: CreateIir<T>,
-    B::Iir: IirPlan<T>,
+    B: CreatePlan<IirSpec<T>>,
+    B::Plan: IirPlan<T>,
 {
     let spec = IirSpec::new(vec![BiquadSection {
         b0: T::one(),
@@ -204,8 +201,8 @@ where
 fn iir_first_order<T, B>(dsp: &OmniDSP<B>, tol: T)
 where
     T: Float + Send + Sync + std::fmt::Debug + num_traits::FromPrimitive + 'static,
-    B: CreateIir<T>,
-    B::Iir: IirPlan<T>,
+    B: CreatePlan<IirSpec<T>>,
+    B::Plan: IirPlan<T>,
 {
     let half = T::from(0.5).expect("0.5");
     let spec = IirSpec::new(vec![BiquadSection {
@@ -268,7 +265,7 @@ fn rust_iir_first_order_f32() {
 
 /// 2× upsample with a simple prototype filter: output count should be
 /// exactly 2× input count (streaming mode).
-fn resample_upsample_f64(dsp: &OmniDSP<Rust>) {
+fn resample_upsample_f64(dsp: &OmniDSP<RustBackend>) {
     let spec = ResampleSpec::<f64>::new(2, 1, vec![0.5, 1.0, 0.5], ResampleMode::Streaming);
     let mut plan = dsp.resample(&spec).expect("resample plan");
 
@@ -282,7 +279,7 @@ fn resample_upsample_f64(dsp: &OmniDSP<Rust>) {
     clippy::cast_precision_loss,
     reason = "small test indices fit in f32 mantissa"
 )]
-fn resample_upsample_f32(dsp: &OmniDSP<Rust>) {
+fn resample_upsample_f32(dsp: &OmniDSP<RustBackend>) {
     let spec = ResampleSpec::<f32>::new(2, 1, vec![0.5, 1.0, 0.5], ResampleMode::Streaming);
     let mut plan = dsp.resample(&spec).expect("resample plan f32");
 
@@ -307,7 +304,7 @@ fn rust_resample_f32() {
 // ═══════════════════════════════════════════════════════════════════════
 
 /// Construct a minimal CQT plan and process a zero-input frame.
-fn cqt_smoke_f64(dsp: &OmniDSP<Rust>) {
+fn cqt_smoke_f64(dsp: &OmniDSP<RustBackend>) {
     let bins = vec![CqtBinSpec {
         frequency: 440.0,
         window: vec![0.0_f64, 0.5, 1.0, 0.5, 0.0],
@@ -326,7 +323,7 @@ fn cqt_smoke_f64(dsp: &OmniDSP<Rust>) {
     );
 }
 
-fn cqt_smoke_f32(dsp: &OmniDSP<Rust>) {
+fn cqt_smoke_f32(dsp: &OmniDSP<RustBackend>) {
     let bins = vec![CqtBinSpec {
         frequency: 440.0,
         window: vec![0.0_f32, 0.5, 1.0, 0.5, 0.0],
@@ -352,7 +349,7 @@ fn cqt_smoke_f32(dsp: &OmniDSP<Rust>) {
     clippy::cast_precision_loss,
     reason = "sample indices are small enough for f64"
 )]
-fn cqt_tone_detect_f64(dsp: &OmniDSP<Rust>) {
+fn cqt_tone_detect_f64(dsp: &OmniDSP<RustBackend>) {
     let sr = 8000.0;
     let freq = 440.0;
     // Design covers one octave around the tone (220–880 Hz).
@@ -396,7 +393,7 @@ fn cqt_tone_detect_f64(dsp: &OmniDSP<Rust>) {
     clippy::cast_precision_loss,
     reason = "sample indices are small enough for f64"
 )]
-fn cqt_tone_detect_f32(dsp: &OmniDSP<Rust>) {
+fn cqt_tone_detect_f32(dsp: &OmniDSP<RustBackend>) {
     let sr = 8000.0;
     let freq = 440.0;
     let spec = cqt::design::<f32>(sr, 220.0, 880.0, 12, &Window::Hann).expect("CQT design");
@@ -449,14 +446,13 @@ fn rust_cqt_tone_f32() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// new() with Generic — open extension proof
+// create_plan — universal method
 // ═══════════════════════════════════════════════════════════════════════
 
-/// Constructing via `OmniDSP::new(Generic(RustDft, ScalarVecOps))` should
-/// produce the same results as `OmniDSP::rust()`.
+/// `create_plan` should work for all spec types via the universal method.
 #[test]
-fn new_generic_all_modules_f64() {
-    let dsp = OmniDSP::new(Generic(RustDft, ScalarVecOps));
+fn create_plan_all_modules_f64() {
+    let dsp = OmniDSP::rust();
 
     dft_round_trip(&dsp, 1e-12);
     conv_verify(&dsp, 1e-12);
@@ -469,8 +465,8 @@ fn new_generic_all_modules_f64() {
 }
 
 #[test]
-fn new_generic_all_modules_f32() {
-    let dsp = OmniDSP::new(Generic(RustDft, ScalarVecOps));
+fn create_plan_all_modules_f32() {
+    let dsp = OmniDSP::rust();
 
     dft_round_trip::<f32, _>(&dsp, 1e-5);
     conv_verify::<f32, _>(&dsp, 1e-5);
@@ -520,12 +516,20 @@ fn auto_default_cqt() {
     cqt_smoke_f64(&Auto::default());
 }
 
+#[test]
+fn auto_constructor() {
+    let dsp = OmniDSP::auto();
+    conv_verify(&dsp, 1e-12);
+    dft_round_trip(&dsp, 1e-12);
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // impl_generic_backend! macro
 // ═══════════════════════════════════════════════════════════════════════
 
 /// A test backend that exercises the macro code path.  The macro
-/// generates all `Create*` trait impls by delegating to `Generic`.
+/// generates all `CreatePlan<S>` impls by delegating to `omnidsp-core`
+/// modules.
 struct MacroTestBackend {
     dft: RustDft,
     vecops: ScalarVecOps,
@@ -548,7 +552,7 @@ const fn macro_backend() -> MacroTestBackend {
 fn macro_create_conv_f64() {
     let b = macro_backend();
     let spec = ConvSpec::<f64>::new(3, 2, ConvMethod::Direct);
-    let plan = CreateConv::create_conv(&b, &spec).expect("macro conv plan");
+    let plan = CreatePlan::create_plan(&b, &spec).expect("macro conv plan");
 
     let a = [1.0, 2.0, 3.0];
     let b = [1.0, 1.0];
@@ -561,7 +565,7 @@ fn macro_create_conv_f64() {
 fn macro_create_conv_f32() {
     let b = macro_backend();
     let spec = ConvSpec::<f32>::new(3, 2, ConvMethod::Direct);
-    let plan = CreateConv::create_conv(&b, &spec).expect("macro conv plan f32");
+    let plan = CreatePlan::create_plan(&b, &spec).expect("macro conv plan f32");
 
     let a = [1.0_f32, 2.0, 3.0];
     let b = [1.0_f32, 1.0];
@@ -588,7 +592,7 @@ fn macro_create_dft_f32() {
 fn macro_create_fir_f64() {
     let b = macro_backend();
     let spec = FirSpec::new(vec![0.25_f64, 0.5, 0.25]);
-    let mut plan = CreateFir::create_fir(&b, &spec).expect("macro FIR plan");
+    let mut plan = CreatePlan::create_plan(&b, &spec).expect("macro FIR plan");
 
     let mut input = vec![0.0; 8];
     input[0] = 1.0;
@@ -601,7 +605,7 @@ fn macro_create_fir_f64() {
 fn macro_create_fir_f32() {
     let b = macro_backend();
     let spec = FirSpec::new(vec![0.25_f32, 0.5, 0.25]);
-    let mut plan = CreateFir::create_fir(&b, &spec).expect("macro FIR plan f32");
+    let mut plan = CreatePlan::create_plan(&b, &spec).expect("macro FIR plan f32");
 
     let mut input = vec![0.0_f32; 8];
     input[0] = 1.0;
@@ -620,7 +624,7 @@ fn macro_create_iir_f64() {
         a1: 0.0,
         a2: 0.0,
     }]);
-    let mut plan = CreateIir::create_iir(&b, &spec).expect("macro IIR plan");
+    let mut plan = CreatePlan::create_plan(&b, &spec).expect("macro IIR plan");
 
     let input: Vec<f64> = (0..8).map(f64::from).collect();
     let mut output = vec![0.0; 8];
@@ -642,7 +646,7 @@ fn macro_create_iir_f32() {
         a1: 0.0,
         a2: 0.0,
     }]);
-    let mut plan = CreateIir::create_iir(&b, &spec).expect("macro IIR plan f32");
+    let mut plan = CreatePlan::create_plan(&b, &spec).expect("macro IIR plan f32");
 
     let input: Vec<f32> = (0..8).map(|i| i as f32).collect();
     let mut output = vec![0.0_f32; 8];
@@ -654,7 +658,7 @@ fn macro_create_iir_f32() {
 fn macro_create_resample_f64() {
     let b = macro_backend();
     let spec = ResampleSpec::<f64>::new(2, 1, vec![0.5, 1.0, 0.5], ResampleMode::Streaming);
-    let mut plan = CreateResampler::create_resampler(&b, &spec).expect("macro resample plan");
+    let mut plan = CreatePlan::create_plan(&b, &spec).expect("macro resample plan");
 
     let input: Vec<f64> = (0..16).map(f64::from).collect();
     let mut output = vec![0.0; 64];
@@ -670,7 +674,7 @@ fn macro_create_cqt_f64() {
         window: vec![0.0_f64, 0.5, 1.0, 0.5, 0.0],
     }];
     let spec = CqtSpec::new(44100.0, 8, 2, bins).expect("CQT spec");
-    let plan = CreateCqt::create_cqt(&b, &spec).expect("macro CQT plan");
+    let plan = CreatePlan::create_plan(&b, &spec).expect("macro CQT plan");
 
     let input = vec![0.0; 8];
     let mut output = vec![Complex::new(0.0, 0.0); 1];
