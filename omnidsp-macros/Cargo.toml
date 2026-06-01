@@ -1,0 +1,19 @@
+[package]
+name = "omnidsp-macros"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Proc macros for OmniDSP backend generation."
+authors = ["Mark Wells"]
+repository = "https://github.com/TwoWells/OmniDSP"
+
+[lib]
+proc-macro = true
+
+[lints]
+workspace = true
+
+[dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full"] }

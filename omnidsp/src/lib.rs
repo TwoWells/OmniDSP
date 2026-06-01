@@ -19,7 +19,6 @@ pub use omnidsp_core::types;
 pub use omnidsp_core::types::Window;
 
 pub mod create;
-mod macros;
 mod omnidsp;
 
 pub use create::CreatePlan;

@@ -16,7 +16,7 @@ use omnidsp_core::traits::fir::FirSpec;
 use omnidsp_core::traits::iir::IirSpec;
 use omnidsp_rustfft::RustDft;
 
-use crate::create::CreatePlan;
+use omnidsp_core::create::CreatePlan;
 
 // ─── RustBackend ───────────────────────────────────────────────────────
 
@@ -50,7 +50,7 @@ impl Default for RustBackend {
     }
 }
 
-crate::impl_generic_backend! {
+omnidsp_macros::impl_generic_backend! {
     backend: RustBackend,
     dft: RustDft,
     vecops: ScalarVecOps,

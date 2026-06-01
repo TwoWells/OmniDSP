@@ -12,6 +12,7 @@ workspace = true
 
 [dependencies]
 omnidsp-core = { path = "../omnidsp-core" }
+omnidsp-macros = { path = "../omnidsp-macros" }
 omnidsp-rustfft = { path = "../omnidsp-rustfft" }
 
 [dev-dependencies]

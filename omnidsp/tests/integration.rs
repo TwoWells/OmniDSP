@@ -535,7 +535,7 @@ struct MacroTestBackend {
     vecops: ScalarVecOps,
 }
 
-omnidsp::impl_generic_backend! {
+omnidsp_macros::impl_generic_backend! {
     backend: MacroTestBackend,
     dft: RustDft,
     vecops: ScalarVecOps,
@@ -683,4 +683,79 @@ fn macro_create_cqt_f64() {
         output[0].re.abs() < 1e-10,
         "macro CQT of zero input should be ~zero",
     );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// impl_generic_backend! with skip
+// ═══════════════════════════════════════════════════════════════════════
+
+/// A test backend that skips conv, proving the macro's `skip` list works.
+/// The backend can then hand-write `CreatePlan<ConvSpec<T>>` without
+/// conflicting with macro-generated impls.
+struct SkipConvBackend {
+    dft: RustDft,
+    vecops: ScalarVecOps,
+}
+
+omnidsp_macros::impl_generic_backend! {
+    backend: SkipConvBackend,
+    dft: RustDft,
+    vecops: ScalarVecOps,
+    skip: [conv],
+}
+
+// Hand-written override for ConvSpec<f64> — proves no conflict.
+impl CreatePlan<ConvSpec<f64>> for SkipConvBackend {
+    type Plan = omnidsp_core::modules::conv::OmniConvPlan<
+        f64,
+        <RustDft as omnidsp_core::traits::dft::Dft<f64>>::Plan,
+        ScalarVecOps,
+    >;
+
+    fn create_plan(&self, spec: &ConvSpec<f64>) -> omnidsp_core::error::Result<Self::Plan> {
+        let factory = omnidsp_core::modules::conv::OmniConv::new(self.dft, self.vecops);
+        omnidsp_core::traits::conv::Conv::<f64>::create_plan(&factory, spec)
+    }
+}
+
+// Hand-written override for ConvSpec<f32> — proves no conflict.
+impl CreatePlan<ConvSpec<f32>> for SkipConvBackend {
+    type Plan = omnidsp_core::modules::conv::OmniConvPlan<
+        f32,
+        <RustDft as omnidsp_core::traits::dft::Dft<f32>>::Plan,
+        ScalarVecOps,
+    >;
+
+    fn create_plan(&self, spec: &ConvSpec<f32>) -> omnidsp_core::error::Result<Self::Plan> {
+        let factory = omnidsp_core::modules::conv::OmniConv::new(self.dft, self.vecops);
+        omnidsp_core::traits::conv::Conv::<f32>::create_plan(&factory, spec)
+    }
+}
+
+#[test]
+fn skip_conv_backend_hand_written_conv() {
+    let b = SkipConvBackend {
+        dft: RustDft,
+        vecops: ScalarVecOps,
+    };
+    let spec = ConvSpec::<f64>::new(3, 2, ConvMethod::Direct);
+    let plan = CreatePlan::create_plan(&b, &spec).expect("skip-conv hand-written plan");
+
+    let a = [1.0, 2.0, 3.0];
+    let bv = [1.0, 1.0];
+    let mut output = [0.0; 4];
+    plan.process(&a, &bv, &mut output).expect("convolve");
+    assert_approx(&output, &[1.0, 3.0, 5.0, 3.0], 1e-12, "skip-conv override");
+}
+
+#[test]
+fn skip_conv_backend_other_modules_work() {
+    let b = SkipConvBackend {
+        dft: RustDft,
+        vecops: ScalarVecOps,
+    };
+    let dsp = OmniDSP::new(b);
+    dft_round_trip(&dsp, 1e-12);
+    fir_impulse(&dsp, 1e-12);
+    iir_passthrough(&dsp, 1e-12);
 }

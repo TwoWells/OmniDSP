@@ -30,6 +30,7 @@ allow = [
 
 exceptions = [
     { name = "omnidsp-core", allow = ["AGPL-3.0-or-later"] },
+    { name = "omnidsp-macros", allow = ["AGPL-3.0-or-later"] },
     { name = "omnidsp-rustfft", allow = ["AGPL-3.0-or-later"] },
     { name = "omnidsp", allow = ["AGPL-3.0-or-later"] },
 ]
