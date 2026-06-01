@@ -143,6 +143,45 @@ mod tests {
         );
     }
 
+    // --- cdot ---
+
+    #[test]
+    fn cdot_f32() {
+        let ops = ScalarVecOps;
+        let a = [Complex::new(1.0_f32, 2.0), Complex::new(3.0, 4.0)];
+        let b = [Complex::new(5.0_f32, 6.0), Complex::new(7.0, 8.0)];
+        // sum of (1+2i)*(5+6i) + (3+4i)*(7+8i) = (-7+16i) + (-11+52i) = -18+68i
+        let result = ops.cdot(&a, &b).expect("cdot should succeed");
+        assert!(
+            (result.re - (-18.0)).abs() < EPSILON_F32 && (result.im - 68.0).abs() < EPSILON_F32,
+            "cdot should be -18+68i, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn cdot_f64() {
+        let ops = ScalarVecOps;
+        let a = [Complex::new(1.0_f64, 0.0), Complex::new(0.0, 1.0)];
+        let b = [Complex::new(0.0_f64, 1.0), Complex::new(1.0, 0.0)];
+        // (1+0i)*(0+1i) + (0+1i)*(1+0i) = 0+1i + 0+1i = 0+2i
+        let result = ops.cdot(&a, &b).expect("cdot should succeed");
+        assert!(
+            result.re.abs() < EPSILON_F64 && (result.im - 2.0).abs() < EPSILON_F64,
+            "cdot should be 0+2i, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn cdot_length_mismatch() {
+        let ops = ScalarVecOps;
+        let a = [Complex::new(1.0_f32, 0.0); 3];
+        let b = [Complex::new(1.0_f32, 0.0); 2];
+        assert!(
+            ops.cdot(&a, &b).is_err(),
+            "mismatched lengths should return error"
+        );
+    }
+
     // --- mul_inplace ---
 
     #[test]
@@ -289,6 +328,150 @@ mod tests {
         );
     }
 
+    // --- conj_inplace ---
+
+    #[test]
+    fn conj_inplace_f64() {
+        let ops = ScalarVecOps;
+        let mut data = [Complex::new(1.0_f64, 2.0), Complex::new(-3.0, 4.0)];
+        ops.conj_inplace(&mut data);
+        assert!(
+            (data[0].re - 1.0).abs() < EPSILON_F64 && (data[0].im - (-2.0)).abs() < EPSILON_F64,
+            "conj_inplace[0] failed: got {:?}",
+            data[0]
+        );
+        assert!(
+            (data[1].re - (-3.0)).abs() < EPSILON_F64 && (data[1].im - (-4.0)).abs() < EPSILON_F64,
+            "conj_inplace[1] failed: got {:?}",
+            data[1]
+        );
+    }
+
+    #[test]
+    fn conj_inplace_empty() {
+        let ops = ScalarVecOps;
+        let mut data: [Complex<f32>; 0] = [];
+        ops.conj_inplace(&mut data);
+    }
+
+    // --- real_to_complex ---
+
+    #[test]
+    fn real_to_complex_f32() {
+        let ops = ScalarVecOps;
+        let real = [1.0_f32, 2.0, 3.0];
+        let mut out = [Complex::default(); 3];
+        ops.real_to_complex(&real, &mut out)
+            .expect("real_to_complex should succeed");
+        assert!(
+            (out[0].re - 1.0).abs() < EPSILON_F32 && out[0].im.abs() < EPSILON_F32,
+            "real_to_complex[0] failed: got {:?}",
+            out[0]
+        );
+        assert!(
+            (out[1].re - 2.0).abs() < EPSILON_F32 && out[1].im.abs() < EPSILON_F32,
+            "real_to_complex[1] failed: got {:?}",
+            out[1]
+        );
+        assert!(
+            (out[2].re - 3.0).abs() < EPSILON_F32 && out[2].im.abs() < EPSILON_F32,
+            "real_to_complex[2] failed: got {:?}",
+            out[2]
+        );
+    }
+
+    #[test]
+    fn real_to_complex_length_mismatch() {
+        let ops = ScalarVecOps;
+        let real = [1.0_f64; 3];
+        let mut out = [Complex::default(); 2];
+        assert!(
+            ops.real_to_complex(&real, &mut out).is_err(),
+            "mismatched lengths should return error"
+        );
+    }
+
+    // --- extract_real ---
+
+    #[test]
+    fn extract_real_f64() {
+        let ops = ScalarVecOps;
+        let input = [Complex::new(1.0_f64, 9.0), Complex::new(2.0, 8.0)];
+        let mut out = [0.0_f64; 2];
+        ops.extract_real(&input, &mut out)
+            .expect("extract_real should succeed");
+        assert!(
+            (out[0] - 1.0).abs() < EPSILON_F64,
+            "extract_real[0] should be 1.0, got {}",
+            out[0]
+        );
+        assert!(
+            (out[1] - 2.0).abs() < EPSILON_F64,
+            "extract_real[1] should be 2.0, got {}",
+            out[1]
+        );
+    }
+
+    #[test]
+    fn extract_real_length_mismatch() {
+        let ops = ScalarVecOps;
+        let input = [Complex::new(1.0_f32, 0.0); 3];
+        let mut out = [0.0_f32; 2];
+        assert!(
+            ops.extract_real(&input, &mut out).is_err(),
+            "mismatched lengths should return error"
+        );
+    }
+
+    // --- mag ---
+
+    #[test]
+    fn mag_f32() {
+        let ops = ScalarVecOps;
+        let input = [Complex::new(3.0_f32, 4.0), Complex::new(0.0, 5.0)];
+        let mut out = [0.0_f32; 2];
+        ops.mag(&input, &mut out).expect("mag should succeed");
+        assert!(
+            (out[0] - 5.0).abs() < EPSILON_F32,
+            "mag[0] should be 5.0, got {}",
+            out[0]
+        );
+        assert!(
+            (out[1] - 5.0).abs() < EPSILON_F32,
+            "mag[1] should be 5.0, got {}",
+            out[1]
+        );
+    }
+
+    #[test]
+    fn mag_f64() {
+        let ops = ScalarVecOps;
+        let input = [Complex::new(3.0_f64, 4.0), Complex::new(1.0, 0.0)];
+        let mut out = [0.0_f64; 2];
+        ops.mag(&input, &mut out).expect("mag should succeed");
+        assert!(
+            (out[0] - 5.0).abs() < EPSILON_F64,
+            "mag[0] should be 5.0, got {}",
+            out[0]
+        );
+        assert!(
+            (out[1] - 1.0).abs() < EPSILON_F64,
+            "mag[1] should be 1.0, got {}",
+            out[1]
+        );
+    }
+
+    #[test]
+    fn mag_length_mismatch() {
+        let ops = ScalarVecOps;
+        let input = [Complex::new(1.0_f32, 2.0); 3];
+        let mut out = [0.0_f32; 2];
+        assert!(
+            ops.mag(&input, &mut out).is_err(),
+            "mismatched lengths should return error"
+        );
+    }
+
     // --- empty slices ---
 
     #[test]
@@ -310,10 +493,24 @@ mod tests {
         let mut out_c: [Complex<f32>; 0] = [];
         ops.cmul(empty_c, empty_c, &mut out_c)
             .expect("empty cmul should succeed");
+        let cdot = ops
+            .cdot(empty_c, empty_c)
+            .expect("empty cdot should succeed");
+        assert!(
+            cdot.re.abs() < EPSILON_F32 && cdot.im.abs() < EPSILON_F32,
+            "empty cdot should be 0+0i"
+        );
 
         let mut empty_real: [f32; 0] = [];
         ops.mag_sq(empty_c, &mut empty_real)
             .expect("empty mag_sq should succeed");
+        ops.mag(empty_c, &mut empty_real)
+            .expect("empty mag should succeed");
+        ops.extract_real(empty_c, &mut empty_real)
+            .expect("empty extract_real should succeed");
+        ops.real_to_complex(empty, &mut out_c)
+            .expect("empty real_to_complex should succeed");
+        ops.conj_inplace(&mut out_c);
     }
 
     // --- single element ---

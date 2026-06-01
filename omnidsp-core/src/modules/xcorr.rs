@@ -144,24 +144,21 @@ struct Scratch<T> {
     buf_c: Vec<Complex<T>>,
 }
 
-/// Zero-pad a real slice into a pre-allocated complex buffer.
+/// Zero-pad a real slice into a pre-allocated complex buffer via `VecOps`.
 ///
-/// First `real.len()` elements are set to `real[i] + 0i`; the remainder
-/// is zeroed.
-fn pad_real_to_complex<T: Float>(real: &[T], buf: &mut [Complex<T>]) {
-    for (c, &r) in buf.iter_mut().zip(real) {
-        *c = Complex::new(r, T::zero());
-    }
-    for c in &mut buf[real.len()..] {
+/// First `real.len()` elements are converted via [`VecOps::real_to_complex`];
+/// the remainder is zeroed.
+fn pad_real_to_complex<T: Float + AddAssign + MulAssign, V: VecOps<T>>(
+    vecops: &V,
+    real: &[T],
+    buf: &mut [Complex<T>],
+) -> Result<()> {
+    let n = real.len();
+    vecops.real_to_complex(real, &mut buf[..n])?;
+    for c in &mut buf[n..] {
         *c = Complex::new(T::zero(), T::zero());
     }
-}
-
-/// Conjugate every element of a complex slice in-place.
-fn conjugate_inplace<T: Float>(buf: &mut [Complex<T>]) {
-    for c in buf.iter_mut() {
-        c.im = T::zero() - c.im;
-    }
+    Ok(())
 }
 
 // ─── Plan implementation ─────────────────────────────────────────────────
@@ -219,15 +216,15 @@ where
         } = &mut *guard;
 
         // 1. Zero-pad a → buf_a, then forward FFT → buf_b.
-        pad_real_to_complex(a, buf_a);
+        pad_real_to_complex(&self.vecops, a, buf_a)?;
         self.fwd.process(buf_a, buf_b)?;
 
         // 2. Zero-pad b → buf_a (reuse), then forward FFT → buf_c.
-        pad_real_to_complex(b, buf_a);
+        pad_real_to_complex(&self.vecops, b, buf_a)?;
         self.fwd.process(buf_a, buf_c)?;
 
         // 3. Conjugate buf_c in-place: conj(FFT(b)).
-        conjugate_inplace(buf_c);
+        self.vecops.conj_inplace(buf_c);
 
         // 4. Complex element-wise multiply: buf_b = FFT(a) · conj(FFT(b)).
         self.vecops.cmul_inplace(buf_b, buf_c)?;
@@ -242,15 +239,10 @@ where
         //    Full output order: negative lags first, then non-negative.
         let neg_lags = self.b_len - 1;
         let fft_len = buf_a.len();
-        for (o, c) in output[..neg_lags]
-            .iter_mut()
-            .zip(&buf_a[fft_len - neg_lags..fft_len])
-        {
-            *o = c.re;
-        }
-        for (o, c) in output[neg_lags..].iter_mut().zip(&buf_a[..self.a_len]) {
-            *o = c.re;
-        }
+        self.vecops
+            .extract_real(&buf_a[fft_len - neg_lags..fft_len], &mut output[..neg_lags])?;
+        self.vecops
+            .extract_real(&buf_a[..self.a_len], &mut output[neg_lags..])?;
 
         Ok(())
     }

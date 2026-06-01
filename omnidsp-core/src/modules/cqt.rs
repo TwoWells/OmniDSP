@@ -112,17 +112,11 @@ struct CqtScratch<T> {
     buf_coeffs: Vec<Complex<T>>,
 }
 
-#[allow(
-    clippy::struct_field_names,
-    reason = "buf_ prefix clarifies these are reusable buffers"
-)]
 struct FftScratch<T> {
     /// Complex input buffer for FFT.
     buf_input: Vec<Complex<T>>,
     /// FFT output (frequency-domain representation of the frame).
     buf_spectrum: Vec<Complex<T>>,
-    /// Per-bin complex multiply result.
-    buf_product: Vec<Complex<T>>,
 }
 
 // ─── Plan methods ─────────────────────────────────────────────────────
@@ -221,13 +215,11 @@ where
             buf_coeffs,
             fft,
         )?;
-        for (mag, c) in output.iter_mut().zip(buf_coeffs.iter()) {
-            *mag = (c.re * c.re + c.im * c.im).sqrt();
-        }
+        self.vecops.mag(buf_coeffs, output)?;
         Ok(())
     }
 
-    /// Core processing: FFT input, then per-bin cmul + sum.
+    /// Core processing: FFT input, then per-bin complex dot product.
     fn process_inner(
         fwd: &P,
         vecops: &V,
@@ -239,27 +231,18 @@ where
         let FftScratch {
             buf_input,
             buf_spectrum,
-            buf_product,
         } = scratch;
 
         // 1. Convert real input to complex and forward-FFT.
-        for (c, &r) in buf_input.iter_mut().zip(input) {
-            *c = Complex::new(r, T::zero());
-        }
+        vecops.real_to_complex(input, buf_input)?;
         fwd.process(buf_input, buf_spectrum)?;
 
-        // 2. For each bin: complex multiply spectrum × conjugate kernel,
-        //    then sum the products.  The stored kernels already include
-        //    the 1/N scaling so the sum directly equals the time-domain
-        //    correlation.
+        // 2. For each bin: complex dot product of spectrum with the
+        //    pre-FFT'd conjugate kernel.  The stored kernels already
+        //    include 1/N scaling so the dot product directly equals the
+        //    time-domain correlation.
         for (k, kernel) in kernels.iter().enumerate() {
-            vecops.cmul(buf_spectrum, kernel, buf_product)?;
-            let mut sum = Complex::new(T::zero(), T::zero());
-            for c in buf_product.iter() {
-                sum.re += c.re;
-                sum.im += c.im;
-            }
-            output[k] = sum;
+            output[k] = vecops.cdot(buf_spectrum, kernel)?;
         }
 
         Ok(())
@@ -373,7 +356,6 @@ impl<D, V> OmniCqt<D, V> {
             fft: FftScratch {
                 buf_input: vec![zero; fft_length],
                 buf_spectrum: vec![zero; fft_length],
-                buf_product: vec![zero; fft_length],
             },
             buf_coeffs: vec![zero; num_bins],
         };

@@ -165,14 +165,21 @@ struct OverlapSaveState<T, P, V> {
     buf_ifft: Vec<Complex<T>>,
 }
 
-/// Zero-pad a real slice into a pre-allocated complex buffer.
-fn pad_real_to_complex<T: Float>(real: &[T], buf: &mut [Complex<T>]) {
-    for (c, &r) in buf.iter_mut().zip(real) {
-        *c = Complex::new(r, T::zero());
-    }
-    for c in &mut buf[real.len()..] {
+/// Zero-pad a real slice into a pre-allocated complex buffer via `VecOps`.
+///
+/// First `real.len()` elements are converted via [`VecOps::real_to_complex`];
+/// the remainder is zeroed.
+fn pad_real_to_complex<T: Float + AddAssign + MulAssign, V: VecOps<T>>(
+    vecops: &V,
+    real: &[T],
+    buf: &mut [Complex<T>],
+) -> Result<()> {
+    let n = real.len();
+    vecops.real_to_complex(real, &mut buf[..n])?;
+    for c in &mut buf[n..] {
         *c = Complex::new(T::zero(), T::zero());
     }
+    Ok(())
 }
 
 // ─── Trait implementations ─────────────────────────────────────────────
@@ -257,15 +264,13 @@ where
             let new_samples = remaining_input.min(state.valid_per_block);
 
             // Build the block: overlap prefix + new input + zero-pad.
-            for (c, &r) in state.buf_time.iter_mut().zip(state.overlap.iter()) {
-                *c = Complex::new(r, T::zero());
-            }
-            for (c, &r) in state.buf_time[overlap_len..]
-                .iter_mut()
-                .zip(&input[input_pos..input_pos + new_samples])
-            {
-                *c = Complex::new(r, T::zero());
-            }
+            state
+                .vecops
+                .real_to_complex(&state.overlap, &mut state.buf_time[..overlap_len])?;
+            state.vecops.real_to_complex(
+                &input[input_pos..input_pos + new_samples],
+                &mut state.buf_time[overlap_len..overlap_len + new_samples],
+            )?;
             for c in &mut state.buf_time[overlap_len + new_samples..] {
                 *c = Complex::new(T::zero(), T::zero());
             }
@@ -283,12 +288,10 @@ where
 
             // Extract valid output: skip first overlap_len samples.
             let valid_start = overlap_len;
-            for (o, c) in output[output_pos..output_pos + new_samples]
-                .iter_mut()
-                .zip(&state.buf_ifft[valid_start..valid_start + new_samples])
-            {
-                *o = c.re;
-            }
+            state.vecops.extract_real(
+                &state.buf_ifft[valid_start..valid_start + new_samples],
+                &mut output[output_pos..output_pos + new_samples],
+            )?;
 
             // Update overlap buffer with the last overlap_len input samples.
             if new_samples >= overlap_len {
@@ -365,7 +368,7 @@ where
                 let mut buf_time = vec![zero; block_size];
                 let mut freq_coeffs = vec![zero; block_size];
 
-                pad_real_to_complex(&spec.coefficients, &mut buf_time);
+                pad_real_to_complex(&self.vecops, &spec.coefficients, &mut buf_time)?;
                 fwd.process(&buf_time, &mut freq_coeffs)?;
 
                 PlanInner::OverlapSave {

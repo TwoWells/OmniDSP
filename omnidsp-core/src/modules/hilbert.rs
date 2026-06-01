@@ -169,9 +169,8 @@ where
             .map_err(|_| Error::Internal("hilbert scratch mutex poisoned".to_owned()))?;
 
         // Pack real input into complex buffer (imaginary = 0).
-        for (out, &x) in scratch.buf_spectrum.iter_mut().zip(input) {
-            *out = Complex::new(x, T::zero());
-        }
+        self.vecops
+            .real_to_complex(input, &mut scratch.buf_spectrum)?;
 
         // Forward FFT: packed input → spectrum in output.
         self.fwd.process(&scratch.buf_spectrum, output)?;

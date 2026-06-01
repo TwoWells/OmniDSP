@@ -4,8 +4,8 @@
 //! DCT module — Discrete Cosine Transform via FFT.
 //!
 //! [`OmniDct`] implements the [`Dct`] trait generically over any [`Dft`]
-//! implementation.  Supports DCT type II and type III with optional
-//! orthonormal normalization.
+//! and [`VecOps`] implementation.  Supports DCT type II and type III with
+//! optional orthonormal normalization.
 //!
 //! The algorithm uses symmetric extension to convert the real DCT into a
 //! complex FFT of twice the length, then extracts the result via twiddle
@@ -16,6 +16,7 @@
 
 use std::f64::consts::PI;
 use std::fmt;
+use std::ops::{AddAssign, MulAssign};
 use std::sync::Mutex;
 
 use num_complex::Complex;
@@ -24,24 +25,26 @@ use num_traits::Float;
 use crate::error::{Error, Result};
 use crate::traits::dct::{Dct, DctNorm, DctPlan, DctSpec, DctType};
 use crate::traits::dft::{Dft, DftNorm, DftPlan, DftSpec};
+use crate::traits::vecops::VecOps;
 use crate::types::Direction;
 
 // ─── Public types ──────────────────────────────────────────────────────
 
-/// Generic DCT factory backed by a [`Dft`] implementation.
+/// Generic DCT factory backed by [`Dft`] and [`VecOps`].
 ///
 /// Creates [`OmniDctPlan`]s for specific lengths and DCT types.  The factory
-/// owns the DFT factory; plans own their sub-plans.
+/// owns the DFT factory and `VecOps` instance; plans own their sub-plans.
 #[derive(Debug, Clone)]
-pub struct OmniDct<D> {
+pub struct OmniDct<D, V> {
     dft: D,
+    vecops: V,
 }
 
-impl<D> OmniDct<D> {
+impl<D, V> OmniDct<D, V> {
     /// Create a new DCT factory.
     #[must_use]
-    pub const fn new(dft: D) -> Self {
-        Self { dft }
+    pub const fn new(dft: D, vecops: V) -> Self {
+        Self { dft, vecops }
     }
 }
 
@@ -53,16 +56,17 @@ impl<D> OmniDct<D> {
 /// **Memory:** allocates `2 × 2N` complex values for scratch buffers
 /// (behind a [`Mutex`]) plus `N` complex values for precomputed twiddle
 /// factors.
-pub struct OmniDctPlan<T, P> {
+pub struct OmniDctPlan<T, P, V> {
     dft_plan: P,
     twiddles: Vec<Complex<T>>,
+    vecops: V,
     scratch: Mutex<DctScratch<T>>,
     length: usize,
     dct_type: DctType,
     norm: DctNorm,
 }
 
-impl<T, P> fmt::Debug for OmniDctPlan<T, P> {
+impl<T, P, V> fmt::Debug for OmniDctPlan<T, P, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("OmniDctPlan")
             .field("length", &self.length)
@@ -75,11 +79,17 @@ impl<T, P> fmt::Debug for OmniDctPlan<T, P> {
 // ─── Plan internals ───────────────────────────────────────────────────
 
 /// Scratch buffers for the DCT pipeline.
+#[allow(
+    clippy::struct_field_names,
+    reason = "buf_ prefix clarifies these are reusable buffers"
+)]
 struct DctScratch<T> {
     /// FFT/IFFT input buffer (length 2N).
     buf_in: Vec<Complex<T>>,
     /// FFT/IFFT output buffer (length 2N).
     buf_out: Vec<Complex<T>>,
+    /// Twiddle multiply result (length N, DCT-II only).
+    buf_tw: Vec<Complex<T>>,
 }
 
 // ─── Trait implementations ─────────────────────────────────────────────
@@ -88,10 +98,11 @@ struct DctScratch<T> {
     clippy::cast_precision_loss,
     reason = "DCT lengths are small enough that usize→f64 is exact"
 )]
-impl<T, P> DctPlan<T> for OmniDctPlan<T, P>
+impl<T, P, V> DctPlan<T> for OmniDctPlan<T, P, V>
 where
-    T: Float + Send + Sync,
+    T: Float + AddAssign + MulAssign + Send + Sync,
     P: DftPlan<T>,
+    V: VecOps<T>,
 {
     fn process(&self, input: &[T], output: &mut [T]) -> Result<()> {
         if input.len() != self.length {
@@ -118,12 +129,13 @@ where
     clippy::cast_precision_loss,
     reason = "DCT lengths are small enough that usize→f64 is exact"
 )]
-impl<T, P> OmniDctPlan<T, P>
+impl<T, P, V> OmniDctPlan<T, P, V>
 where
-    T: Float + Send + Sync,
+    T: Float + AddAssign + MulAssign + Send + Sync,
     P: DftPlan<T>,
+    V: VecOps<T>,
 {
-    /// DCT-II via symmetric extension → forward FFT → twiddle extract.
+    /// DCT-II via symmetric extension → forward FFT → twiddle multiply → extract real.
     #[allow(
         clippy::significant_drop_tightening,
         reason = "MutexGuard must live for the entire DCT pipeline"
@@ -135,7 +147,11 @@ where
             .lock()
             .map_err(|e| Error::Internal(format!("scratch buffer lock poisoned: {e}")))?;
 
-        let DctScratch { buf_in, buf_out } = &mut *guard;
+        let DctScratch {
+            buf_in,
+            buf_out,
+            buf_tw,
+        } = &mut *guard;
 
         // 1. Symmetric extension: y[i] = x[i], y[2N-1-i] = x[i]
         for (i, &x) in input.iter().enumerate() {
@@ -146,25 +162,18 @@ where
         // 2. Forward FFT (2N-point, no normalization)
         self.dft_plan.process(buf_in, buf_out)?;
 
-        // 3. Extract: output[k] = Re(Y[k] * twiddle[k])
-        for (k, o) in output.iter_mut().enumerate() {
-            let y = buf_out[k];
-            let tw = self.twiddles[k];
-            // Complex multiply then take real part: Re((a+bi)(c+di)) = ac - bd
-            *o = y.re * tw.re - y.im * tw.im;
-        }
+        // 3. Twiddle multiply: buf_tw[k] = Y[k] * twiddle[k], then extract real parts.
+        self.vecops.cmul(&buf_out[..n], &self.twiddles, buf_tw)?;
+        self.vecops.extract_real(buf_tw, output)?;
 
         // 4. Orthonormal scaling
         if self.norm == DctNorm::Ortho {
             let n_f = T::from(n).unwrap_or_else(T::zero);
             // output[0] *= sqrt(1/(4N))
-            output[0] =
-                output[0] * (T::one() / (T::from(2.0).unwrap_or_else(T::zero) * n_f.sqrt()));
+            output[0] *= T::one() / (T::from(2.0).unwrap_or_else(T::zero) * n_f.sqrt());
             // output[k>0] *= sqrt(1/(2N))
             let scale = T::one() / (T::from(2.0).unwrap_or_else(T::zero) * n_f).sqrt();
-            for o in &mut output[1..] {
-                *o = *o * scale;
-            }
+            self.vecops.scale(&mut output[1..], scale);
         }
 
         Ok(())
@@ -183,7 +192,9 @@ where
             .lock()
             .map_err(|e| Error::Internal(format!("scratch buffer lock poisoned: {e}")))?;
 
-        let DctScratch { buf_in, buf_out } = &mut *guard;
+        let DctScratch {
+            buf_in, buf_out, ..
+        } = &mut *guard;
 
         // For ortho normalization, pre-scale the input
         // input'[0] = input[0] * 2*sqrt(N), input'[k>0] = input[k] * sqrt(2N)
@@ -217,16 +228,12 @@ where
         self.dft_plan.process(buf_in, buf_out)?;
 
         // 3. Extract real parts
-        for (i, o) in output.iter_mut().enumerate() {
-            *o = buf_out[i].re;
-        }
+        self.vecops.extract_real(&buf_out[..n], output)?;
 
         // 4. Ortho: divide by 2N
         if self.norm == DctNorm::Ortho {
             let inv_two_n = T::one() / (T::from(2.0).unwrap_or_else(T::zero) * n_f);
-            for o in output.iter_mut() {
-                *o = *o * inv_two_n;
-            }
+            self.vecops.scale(output, inv_two_n);
         }
 
         Ok(())
@@ -239,12 +246,13 @@ where
     clippy::cast_precision_loss,
     reason = "DCT lengths are small enough that usize→f64 is exact"
 )]
-impl<T, D> Dct<T> for OmniDct<D>
+impl<T, D, V> Dct<T> for OmniDct<D, V>
 where
-    T: Float + Send + Sync,
+    T: Float + AddAssign + MulAssign + Send + Sync,
     D: Dft<T>,
+    V: VecOps<T>,
 {
-    type Plan = OmniDctPlan<T, D::Plan>;
+    type Plan = OmniDctPlan<T, D::Plan, V>;
 
     fn create_plan(&self, spec: &DctSpec<T>) -> Result<Self::Plan> {
         if spec.length == 0 {
@@ -278,11 +286,13 @@ where
         let scratch = DctScratch {
             buf_in: vec![zero; two_n],
             buf_out: vec![zero; two_n],
+            buf_tw: vec![zero; n],
         };
 
         Ok(OmniDctPlan {
             dft_plan,
             twiddles,
+            vecops: self.vecops.clone(),
             scratch: Mutex::new(scratch),
             length: n,
             dct_type: spec.dct_type,
@@ -301,7 +311,7 @@ where
 )]
 mod tests {
     use super::*;
-    use crate::test_utils::TestDft;
+    use crate::test_utils::{TestDft, TestVecOps};
 
     include!(testdata!("dct_scipy.rs"));
 
@@ -318,8 +328,8 @@ mod tests {
         }
     }
 
-    fn make_factory() -> OmniDct<TestDft> {
-        OmniDct::new(TestDft)
+    fn make_factory() -> OmniDct<TestDft, TestVecOps> {
+        OmniDct::new(TestDft, TestVecOps)
     }
 
     // ── Validation tests ─────────────────────────────────────────────

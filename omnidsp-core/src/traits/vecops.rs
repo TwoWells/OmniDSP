@@ -132,6 +132,22 @@ pub trait VecOps<T: Float + AddAssign + MulAssign>: Send + Sync + Clone {
         Ok(())
     }
 
+    /// Complex dot product (unconjugated): `sum(a[i] * b[i])`.
+    ///
+    /// Both slices must have the same length.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the slice lengths do not match.
+    fn cdot(&self, a: &[Complex<T>], b: &[Complex<T>]) -> Result<Complex<T>> {
+        check_lengths_2(a.len(), b.len())?;
+        Ok(a.iter()
+            .zip(b)
+            .fold(Complex::new(T::zero(), T::zero()), |acc, (&x, &y)| {
+                acc + x * y
+            }))
+    }
+
     /// In-place element-wise multiply: `data[i] *= other[i]`.
     ///
     /// Both slices must have the same length.
@@ -206,6 +222,64 @@ pub trait VecOps<T: Float + AddAssign + MulAssign>: Send + Sync + Clone {
         for (c, &s) in data.iter_mut().zip(scalars) {
             c.re *= s;
             c.im *= s;
+        }
+        Ok(())
+    }
+
+    /// Conjugate every element of a complex slice in-place.
+    ///
+    /// `data[i].im = -data[i].im`.
+    fn conj_inplace(&self, data: &mut [Complex<T>]) {
+        for c in data.iter_mut() {
+            c.im = T::zero() - c.im;
+        }
+    }
+
+    /// Pack real values into a complex buffer (imaginary parts set to zero).
+    ///
+    /// `out[i] = real[i] + 0i`.
+    ///
+    /// Both slices must have the same length.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the slice lengths do not match.
+    fn real_to_complex(&self, real: &[T], out: &mut [Complex<T>]) -> Result<()> {
+        check_lengths_2(real.len(), out.len())?;
+        for (c, &r) in out.iter_mut().zip(real) {
+            *c = Complex::new(r, T::zero());
+        }
+        Ok(())
+    }
+
+    /// Extract real parts from a complex buffer.
+    ///
+    /// `out[i] = input[i].re`.
+    ///
+    /// Both slices must have the same length.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the slice lengths do not match.
+    fn extract_real(&self, input: &[Complex<T>], out: &mut [T]) -> Result<()> {
+        check_lengths_2(input.len(), out.len())?;
+        for (o, c) in out.iter_mut().zip(input) {
+            *o = c.re;
+        }
+        Ok(())
+    }
+
+    /// Complex magnitude: `out[i] = sqrt(input[i].re² + input[i].im²)`.
+    ///
+    /// `input` and `out` must have the same length.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the slice lengths do not match.
+    fn mag(&self, input: &[Complex<T>], out: &mut [T]) -> Result<()> {
+        check_lengths_2(input.len(), out.len())?;
+        for (o, z) in out.iter_mut().zip(input) {
+            *o = z.re.mul_add(z.re, z.im * z.im).sqrt();
         }
         Ok(())
     }

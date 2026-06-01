@@ -180,13 +180,17 @@ macro_rules! impl_generic_backend {
             type Plan = $crate::modules::dct::OmniDctPlan<
                 $float,
                 <$dft as $crate::traits::dft::Dft<$float>>::Plan,
+                $vecops,
             >;
 
             fn create_plan(
                 &self,
                 spec: &$crate::traits::dct::DctSpec<$float>,
             ) -> $crate::error::Result<Self::Plan> {
-                let factory = $crate::modules::dct::OmniDct::new(self.dft.clone());
+                let factory = $crate::modules::dct::OmniDct::new(
+                    self.dft.clone(),
+                    self.vecops.clone(),
+                );
                 $crate::traits::dct::Dct::<$float>::create_plan(&factory, spec)
             }
         }
