@@ -34,6 +34,7 @@
 
 use std::f64::consts::TAU;
 use std::fmt;
+use std::ops::{AddAssign, MulAssign};
 use std::sync::Mutex;
 
 use num_complex::Complex;
@@ -128,7 +129,7 @@ struct FftScratch<T> {
 
 impl<T, P, V> OmniCqtPlan<T, P, V>
 where
-    T: Float + Send + Sync,
+    T: Float + AddAssign + MulAssign + Send + Sync,
     P: DftPlan<T>,
     V: VecOps<T>,
 {
@@ -255,8 +256,8 @@ where
             vecops.cmul(buf_spectrum, kernel, buf_product)?;
             let mut sum = Complex::new(T::zero(), T::zero());
             for c in buf_product.iter() {
-                sum.re = sum.re + c.re;
-                sum.im = sum.im + c.im;
+                sum.re += c.re;
+                sum.im += c.im;
             }
             output[k] = sum;
         }
@@ -307,7 +308,7 @@ impl<D, V> OmniCqt<D, V> {
     )]
     pub fn create_plan<T>(&self, spec: &CqtSpec<T>) -> Result<OmniCqtPlan<T, D::Plan, V>>
     where
-        T: Float + Send + Sync,
+        T: Float + AddAssign + MulAssign + Send + Sync,
         D: Dft<T>,
         V: VecOps<T>,
     {

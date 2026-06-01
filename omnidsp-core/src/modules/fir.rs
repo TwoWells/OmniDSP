@@ -14,6 +14,8 @@
 //! Plans are **mutable** — they hold a delay line that persists across calls
 //! so successive `process` calls form a continuous stream.
 
+use std::ops::{AddAssign, MulAssign};
+
 use num_complex::Complex;
 use num_traits::Float;
 
@@ -177,7 +179,7 @@ fn pad_real_to_complex<T: Float>(real: &[T], buf: &mut [Complex<T>]) {
 
 impl<T, P, V> FirPlan<T> for OmniFirPlan<T, P, V>
 where
-    T: Float + Send + Sync,
+    T: Float + AddAssign + MulAssign + Send + Sync,
     P: DftPlan<T>,
     V: VecOps<T>,
 {
@@ -214,7 +216,7 @@ where
 
 impl<T, P, V> OmniFirPlan<T, P, V>
 where
-    T: Float + Send + Sync,
+    T: Float + AddAssign + MulAssign + Send + Sync,
     P: DftPlan<T>,
     V: VecOps<T>,
 {
@@ -309,7 +311,7 @@ where
 
 impl<T, D, V> Fir<T> for OmniFir<D, V>
 where
-    T: Float + Send + Sync,
+    T: Float + AddAssign + MulAssign + Send + Sync,
     D: Dft<T>,
     V: VecOps<T>,
 {

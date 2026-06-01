@@ -3,146 +3,25 @@
 
 //! [`ScalarVecOps`] — scalar loop implementations of element-wise operations.
 
-use num_complex::Complex;
-
-use crate::error::{Error, Result};
 use crate::traits::vecops::VecOps;
 
 /// Scalar element-wise vector operations.
 ///
-/// Scalar loop implementations that LLVM auto-vectorizes.  Stateless unit
-/// struct — trivially `Send + Sync + Copy`.
+/// All methods use the scalar default implementations from the [`VecOps`] trait,
+/// which LLVM auto-vectorizes.  Stateless unit struct — trivially
+/// `Send + Sync + Copy`.
 #[derive(Debug, Clone, Copy)]
 pub struct ScalarVecOps;
 
-#[allow(
-    clippy::missing_const_for_fn,
-    reason = "Error construction is not const"
-)]
-fn check_lengths_3(a_len: usize, b_len: usize, out_len: usize) -> Result<()> {
-    if a_len != b_len {
-        return Err(Error::BufferMismatch {
-            expected: a_len,
-            actual: b_len,
-        });
-    }
-    if a_len != out_len {
-        return Err(Error::BufferMismatch {
-            expected: a_len,
-            actual: out_len,
-        });
-    }
-    Ok(())
-}
-
-#[allow(
-    clippy::missing_const_for_fn,
-    reason = "Error construction is not const"
-)]
-fn check_lengths_2(a_len: usize, b_len: usize) -> Result<()> {
-    if a_len != b_len {
-        return Err(Error::BufferMismatch {
-            expected: a_len,
-            actual: b_len,
-        });
-    }
-    Ok(())
-}
-
-macro_rules! impl_vecops {
-    ($t:ty) => {
-        impl VecOps<$t> for ScalarVecOps {
-            fn mul(&self, a: &[$t], b: &[$t], out: &mut [$t]) -> Result<()> {
-                check_lengths_3(a.len(), b.len(), out.len())?;
-                for ((o, x), y) in out.iter_mut().zip(a).zip(b) {
-                    *o = x * y;
-                }
-                Ok(())
-            }
-
-            fn add(&self, a: &[$t], b: &[$t], out: &mut [$t]) -> Result<()> {
-                check_lengths_3(a.len(), b.len(), out.len())?;
-                for ((o, x), y) in out.iter_mut().zip(a).zip(b) {
-                    *o = x + y;
-                }
-                Ok(())
-            }
-
-            fn scale(&self, data: &mut [$t], scalar: $t) {
-                for x in data.iter_mut() {
-                    *x *= scalar;
-                }
-            }
-
-            fn dot(&self, a: &[$t], b: &[$t]) -> Result<$t> {
-                check_lengths_2(a.len(), b.len())?;
-                Ok(a.iter().zip(b).map(|(x, y)| x * y).sum())
-            }
-
-            fn cmul(
-                &self,
-                a: &[Complex<$t>],
-                b: &[Complex<$t>],
-                out: &mut [Complex<$t>],
-            ) -> Result<()> {
-                check_lengths_3(a.len(), b.len(), out.len())?;
-                for ((o, x), y) in out.iter_mut().zip(a).zip(b) {
-                    *o = x * y;
-                }
-                Ok(())
-            }
-
-            fn mul_inplace(&self, data: &mut [$t], other: &[$t]) -> Result<()> {
-                check_lengths_2(data.len(), other.len())?;
-                for (x, y) in data.iter_mut().zip(other) {
-                    *x *= y;
-                }
-                Ok(())
-            }
-
-            fn add_inplace(&self, data: &mut [$t], other: &[$t]) -> Result<()> {
-                check_lengths_2(data.len(), other.len())?;
-                for (x, y) in data.iter_mut().zip(other) {
-                    *x += y;
-                }
-                Ok(())
-            }
-
-            fn cmul_inplace(&self, data: &mut [Complex<$t>], other: &[Complex<$t>]) -> Result<()> {
-                check_lengths_2(data.len(), other.len())?;
-                for (x, y) in data.iter_mut().zip(other) {
-                    *x *= y;
-                }
-                Ok(())
-            }
-
-            fn mag_sq(&self, input: &[Complex<$t>], out: &mut [$t]) -> Result<()> {
-                check_lengths_2(input.len(), out.len())?;
-                for (o, z) in out.iter_mut().zip(input) {
-                    *o = z.re.mul_add(z.re, z.im * z.im);
-                }
-                Ok(())
-            }
-
-            fn cscale_inplace(&self, data: &mut [Complex<$t>], scalars: &[$t]) -> Result<()> {
-                check_lengths_2(data.len(), scalars.len())?;
-                for (c, &s) in data.iter_mut().zip(scalars) {
-                    c.re *= s;
-                    c.im *= s;
-                }
-                Ok(())
-            }
-        }
-    };
-}
-
-impl_vecops!(f32);
-impl_vecops!(f64);
+impl VecOps<f32> for ScalarVecOps {}
+impl VecOps<f64> for ScalarVecOps {}
 
 #[cfg(test)]
 #[allow(clippy::expect_used, reason = "tests use expect for clarity")]
 #[allow(clippy::float_cmp, reason = "test values are exact small integers")]
 mod tests {
+    use num_complex::Complex;
+
     use super::*;
 
     const EPSILON_F32: f32 = 1e-6;

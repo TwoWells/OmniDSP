@@ -22,6 +22,7 @@
 
 use std::fmt;
 use std::marker::PhantomData;
+use std::ops::{AddAssign, MulAssign};
 use std::sync::Mutex;
 
 use num_complex::Complex;
@@ -135,7 +136,7 @@ struct HilbertScratch<T> {
 
 impl<T, P, V> OmniHilbertPlan<T, P, V>
 where
-    T: Float + FromPrimitive + Send + Sync + 'static,
+    T: Float + AddAssign + MulAssign + FromPrimitive + Send + Sync + 'static,
     P: DftPlan<T>,
     V: VecOps<T>,
 {
@@ -204,7 +205,7 @@ impl<D, V> OmniHilbert<D, V> {
     /// Returns an error if the length is zero or DFT plan creation fails.
     pub fn create_plan<T>(&self, spec: &HilbertSpec<T>) -> Result<OmniHilbertPlan<T, D::Plan, V>>
     where
-        T: Float + FromPrimitive + Send + Sync + 'static,
+        T: Float + AddAssign + MulAssign + FromPrimitive + Send + Sync + 'static,
         D: Dft<T>,
         V: VecOps<T>,
     {

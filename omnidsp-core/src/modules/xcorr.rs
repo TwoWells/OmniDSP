@@ -13,6 +13,7 @@
 
 use std::fmt;
 use std::marker::PhantomData;
+use std::ops::{AddAssign, MulAssign};
 use std::sync::Mutex;
 
 use num_complex::Complex;
@@ -167,7 +168,7 @@ fn conjugate_inplace<T: Float>(buf: &mut [Complex<T>]) {
 
 impl<T, P, V> OmniCrossCorrPlan<T, P, V>
 where
-    T: Float + Send + Sync,
+    T: Float + AddAssign + MulAssign + Send + Sync,
     P: DftPlan<T>,
     V: VecOps<T>,
 {
@@ -290,7 +291,7 @@ impl<D, V> OmniCrossCorr<D, V> {
         spec: &CrossCorrSpec<T>,
     ) -> Result<OmniCrossCorrPlan<T, D::Plan, V>>
     where
-        T: Float + Send + Sync,
+        T: Float + AddAssign + MulAssign + Send + Sync,
         D: Dft<T>,
         V: VecOps<T> + Clone,
     {

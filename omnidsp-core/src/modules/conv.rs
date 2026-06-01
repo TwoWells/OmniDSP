@@ -15,6 +15,7 @@
 //! uncontended in the common single-threaded case.
 
 use std::fmt;
+use std::ops::{AddAssign, MulAssign};
 use std::sync::Mutex;
 
 use num_complex::Complex;
@@ -156,7 +157,7 @@ fn pad_real_to_complex<T: Float>(real: &[T], buf: &mut [Complex<T>]) {
 
 impl<T, P, V> ConvPlan<T> for OmniConvPlan<T, P, V>
 where
-    T: Float + Send + Sync,
+    T: Float + AddAssign + MulAssign + Send + Sync,
     P: DftPlan<T>,
     V: VecOps<T>,
 {
@@ -192,7 +193,7 @@ where
 
 impl<T, P, V> OmniConvPlan<T, P, V>
 where
-    T: Float + Send + Sync,
+    T: Float + AddAssign + MulAssign + Send + Sync,
     P: DftPlan<T>,
     V: VecOps<T>,
 {
@@ -203,7 +204,7 @@ where
         }
         for (i, &ai) in a.iter().enumerate() {
             for (j, &bj) in b.iter().enumerate() {
-                output[i + j] = output[i + j] + ai * bj;
+                output[i + j] += ai * bj;
             }
         }
     }
@@ -251,7 +252,7 @@ where
 
 impl<T, D, V> Conv<T> for OmniConv<D, V>
 where
-    T: Float + Send + Sync,
+    T: Float + AddAssign + MulAssign + Send + Sync,
     D: Dft<T>,
     V: VecOps<T>,
 {

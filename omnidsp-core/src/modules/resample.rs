@@ -13,6 +13,8 @@
 //! counter that persist across calls so successive `process` calls
 //! form a continuous stream.
 
+use std::ops::{AddAssign, MulAssign};
+
 use num_traits::Float;
 
 use crate::design::resample::{ResampleMode, ResampleSpec};
@@ -99,7 +101,7 @@ impl<T: std::fmt::Debug, V> std::fmt::Debug for OmniResamplePlan<T, V> {
 
 impl<T, V> OmniResamplePlan<T, V>
 where
-    T: Float + Send + Sync,
+    T: Float + AddAssign + MulAssign + Send + Sync,
     V: VecOps<T>,
 {
     /// Resample `input`, writing to `output`.
@@ -243,7 +245,7 @@ impl<V> OmniResample<V> {
     /// zero factors).
     pub fn create_plan<T>(&self, spec: &ResampleSpec<T>) -> Result<OmniResamplePlan<T, V>>
     where
-        T: Float + Send + Sync,
+        T: Float + AddAssign + MulAssign + Send + Sync,
         V: VecOps<T>,
     {
         let up = spec.up_factor();
@@ -287,7 +289,7 @@ impl<V> OmniResample<V> {
         let scale = T::from(up)
             .ok_or_else(|| Error::Internal("failed to convert up_factor to T".into()))?;
         for coeff in &mut phases {
-            *coeff = *coeff * scale;
+            *coeff *= scale;
         }
 
         Ok(OmniResamplePlan {

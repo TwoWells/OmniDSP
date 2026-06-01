@@ -172,101 +172,10 @@ fn fft_radix2(data: &mut [Complex<f64>], sign: f64) {
     }
 }
 
-// ─── VecOps length helpers ──────────────────────────────────────────
-
-fn check2(a: usize, b: usize) -> Result<()> {
-    if a != b {
-        return Err(Error::BufferMismatch {
-            expected: a,
-            actual: b,
-        });
-    }
-    Ok(())
-}
-
-fn check3(a: usize, b: usize, out: usize) -> Result<()> {
-    check2(a, b)?;
-    check2(a, out)
-}
-
 /// Scalar loop `VecOps` for tests.
+///
+/// Uses all default implementations from the [`VecOps`] trait.
 #[derive(Debug, Clone)]
 pub struct TestVecOps;
 
-impl VecOps<f64> for TestVecOps {
-    fn mul(&self, a: &[f64], b: &[f64], out: &mut [f64]) -> Result<()> {
-        check3(a.len(), b.len(), out.len())?;
-        for ((o, &x), &y) in out.iter_mut().zip(a).zip(b) {
-            *o = x * y;
-        }
-        Ok(())
-    }
-
-    fn add(&self, a: &[f64], b: &[f64], out: &mut [f64]) -> Result<()> {
-        check3(a.len(), b.len(), out.len())?;
-        for ((o, &x), &y) in out.iter_mut().zip(a).zip(b) {
-            *o = x + y;
-        }
-        Ok(())
-    }
-
-    fn scale(&self, data: &mut [f64], scalar: f64) {
-        for x in data.iter_mut() {
-            *x *= scalar;
-        }
-    }
-
-    fn dot(&self, a: &[f64], b: &[f64]) -> Result<f64> {
-        check2(a.len(), b.len())?;
-        Ok(a.iter().zip(b).map(|(x, y)| x * y).sum())
-    }
-
-    fn cmul(&self, a: &[Complex<f64>], b: &[Complex<f64>], out: &mut [Complex<f64>]) -> Result<()> {
-        check3(a.len(), b.len(), out.len())?;
-        for ((o, x), y) in out.iter_mut().zip(a).zip(b) {
-            *o = x * y;
-        }
-        Ok(())
-    }
-
-    fn mul_inplace(&self, data: &mut [f64], other: &[f64]) -> Result<()> {
-        check2(data.len(), other.len())?;
-        for (x, &y) in data.iter_mut().zip(other) {
-            *x *= y;
-        }
-        Ok(())
-    }
-
-    fn add_inplace(&self, data: &mut [f64], other: &[f64]) -> Result<()> {
-        check2(data.len(), other.len())?;
-        for (x, &y) in data.iter_mut().zip(other) {
-            *x += y;
-        }
-        Ok(())
-    }
-
-    fn cmul_inplace(&self, data: &mut [Complex<f64>], other: &[Complex<f64>]) -> Result<()> {
-        check2(data.len(), other.len())?;
-        for (x, y) in data.iter_mut().zip(other) {
-            *x *= y;
-        }
-        Ok(())
-    }
-
-    fn mag_sq(&self, input: &[Complex<f64>], out: &mut [f64]) -> Result<()> {
-        check2(input.len(), out.len())?;
-        for (o, z) in out.iter_mut().zip(input) {
-            *o = z.re.mul_add(z.re, z.im * z.im);
-        }
-        Ok(())
-    }
-
-    fn cscale_inplace(&self, data: &mut [Complex<f64>], scalars: &[f64]) -> Result<()> {
-        check2(data.len(), scalars.len())?;
-        for (c, &s) in data.iter_mut().zip(scalars) {
-            c.re *= s;
-            c.im *= s;
-        }
-        Ok(())
-    }
-}
+impl VecOps<f64> for TestVecOps {}
