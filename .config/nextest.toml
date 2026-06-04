@@ -1,0 +1,12 @@
+# Nextest configuration. Docs: https://nexte.st/docs/configuration/
+
+[profile.default]
+# Hang backstop. Normal tests finish in well under a second; a test still
+# running after 120s is a runaway — e.g. an unbounded loop that never makes
+# forward progress. Mark it slow at 60s and terminate it at 120s so an
+# infinite loop fails the run instead of hanging it.
+slow-timeout = { period = "60s", terminate-after = 2 }
+
+# No silent retries: a failing test is a real, reproducible bug, not a flake.
+# Retrying must never turn a genuine failure green.
+retries = 0
