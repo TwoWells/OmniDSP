@@ -20,3 +20,7 @@ GEMINI.md
 .DS_Store
 *.swp
 *~
+
+# Agent / planning tooling
+.claude/
+.plans/
