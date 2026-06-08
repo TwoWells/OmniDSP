@@ -358,8 +358,8 @@ where
                         })?;
                 let valid_per_block = block_size - overlap_len;
 
-                let fwd_spec = DftC2cSpec::new(block_size, Direction::Forward, DftNorm::Inverse);
-                let inv_spec = DftC2cSpec::new(block_size, Direction::Inverse, DftNorm::Inverse);
+                let fwd_spec = DftC2cSpec::new(block_size, Direction::Forward, DftNorm::Inverse)?;
+                let inv_spec = DftC2cSpec::new(block_size, Direction::Inverse, DftNorm::Inverse)?;
                 let fwd = self.dft.create_plan(&fwd_spec)?;
                 let inv = self.dft.create_plan(&inv_spec)?;
 

@@ -98,13 +98,10 @@ impl DftC2c<f64> for TestDftC2c {
     type Plan = TestDftC2cPlan;
 
     fn create_plan(&self, spec: &DftC2cSpec<f64>) -> Result<Self::Plan> {
-        if spec.length == 0 {
-            return Err(Error::InvalidSpec("DFT length must be non-zero".to_owned()));
-        }
         Ok(TestDftC2cPlan {
-            length: spec.length,
-            direction: spec.direction,
-            norm: spec.norm,
+            length: spec.length(),
+            direction: spec.direction(),
+            norm: spec.norm(),
         })
     }
 }

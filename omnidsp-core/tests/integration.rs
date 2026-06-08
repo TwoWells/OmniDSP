@@ -784,7 +784,7 @@ mod pipeline {
             .expect("window apply");
 
         // Forward FFT with unitary normalization.
-        let dft_spec = DftC2cSpec::new(n, Direction::Forward, DftNorm::Ortho);
+        let dft_spec = DftC2cSpec::new(n, Direction::Forward, DftNorm::Ortho).expect("valid spec");
         let dft = RustDftC2c;
         let plan = DftC2c::<f64>::create_plan(&dft, &dft_spec).expect("DFT plan");
 

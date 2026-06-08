@@ -267,7 +267,7 @@ where
             DctType::II => Direction::Forward,
             DctType::III => Direction::Inverse,
         };
-        let dft_spec = DftC2cSpec::new(two_n, direction, DftNorm::None);
+        let dft_spec = DftC2cSpec::new(two_n, direction, DftNorm::None)?;
         let dft_plan = self.dft.create_plan(&dft_spec)?;
 
         // Precompute twiddle factors: exp(-jπk/(2N)) for k=0..N-1

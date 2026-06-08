@@ -51,7 +51,8 @@ mod tests {
 
     #[test]
     fn reexport_dft_spec() {
-        let spec = DftC2cSpec::<f64>::new(1024, Direction::Forward, DftNorm::Inverse);
-        assert_eq!(spec.length, 1024, "spec length should match");
+        let spec =
+            DftC2cSpec::<f64>::new(1024, Direction::Forward, DftNorm::Inverse).expect("valid spec");
+        assert_eq!(spec.length(), 1024, "spec length should match");
     }
 }

@@ -57,20 +57,12 @@ where
     B::Plan: DftC2cPlan<T>,
 {
     let n = 8;
-    let fwd = dsp
-        .dft(&DftC2cSpec::<T>::new(
-            n,
-            Direction::Forward,
-            DftNorm::Inverse,
-        ))
-        .expect("forward DFT plan");
-    let inv = dsp
-        .dft(&DftC2cSpec::<T>::new(
-            n,
-            Direction::Inverse,
-            DftNorm::Inverse,
-        ))
-        .expect("inverse DFT plan");
+    let fwd_spec =
+        DftC2cSpec::<T>::new(n, Direction::Forward, DftNorm::Inverse).expect("forward spec");
+    let fwd = dsp.dft(&fwd_spec).expect("forward DFT plan");
+    let inv_spec =
+        DftC2cSpec::<T>::new(n, Direction::Inverse, DftNorm::Inverse).expect("inverse spec");
+    let inv = dsp.dft(&inv_spec).expect("inverse DFT plan");
 
     let zero = Complex::new(T::zero(), T::zero());
     let input: Vec<Complex<T>> = (0..n)

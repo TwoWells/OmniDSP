@@ -120,22 +120,20 @@ macro_rules! impl_dft {
             type Plan = RustDftC2cPlan<$t>;
 
             fn create_plan(&self, spec: &DftC2cSpec<$t>) -> Result<Self::Plan> {
-                if spec.length == 0 {
-                    return Err(Error::InvalidSpec("DFT length must be non-zero".to_owned()));
-                }
+                let length = spec.length();
 
                 let mut planner = FftPlanner::<$t>::new();
-                let fft = match spec.direction {
-                    Direction::Forward => planner.plan_fft_forward(spec.length),
-                    Direction::Inverse => planner.plan_fft_inverse(spec.length),
+                let fft = match spec.direction() {
+                    Direction::Forward => planner.plan_fft_forward(length),
+                    Direction::Inverse => planner.plan_fft_inverse(length),
                 };
                 let scratch_len = fft.get_inplace_scratch_len();
 
                 Ok(RustDftC2cPlan {
                     engine: Box::new(fft),
-                    length: spec.length,
-                    direction: spec.direction,
-                    norm: spec.norm,
+                    length,
+                    direction: spec.direction(),
+                    norm: spec.norm(),
                     scratch: Mutex::new(vec![Complex::default(); scratch_len]),
                 })
             }
@@ -155,11 +153,11 @@ mod tests {
     const EPSILON_F64: f64 = 1e-12;
 
     fn fwd<T>(length: usize) -> DftC2cSpec<T> {
-        DftC2cSpec::new(length, Direction::Forward, DftNorm::Inverse)
+        DftC2cSpec::new(length, Direction::Forward, DftNorm::Inverse).expect("valid forward spec")
     }
 
     fn inv<T>(length: usize) -> DftC2cSpec<T> {
-        DftC2cSpec::new(length, Direction::Inverse, DftNorm::Inverse)
+        DftC2cSpec::new(length, Direction::Inverse, DftNorm::Inverse).expect("valid inverse spec")
     }
 
     fn assert_complex_slice_eq_f32(a: &[Complex<f32>], b: &[Complex<f32>], eps: f32) {
@@ -191,13 +189,12 @@ mod tests {
     }
 
     #[test]
-    fn zero_length_returns_error() {
-        let dft = RustDftC2c;
-        let result = DftC2c::<f32>::create_plan(
-            &dft,
-            &DftC2cSpec::new(0, Direction::Forward, DftNorm::None),
+    fn zero_length_spec_rejected() {
+        let result = DftC2cSpec::<f32>::new(0, Direction::Forward, DftNorm::None);
+        assert!(
+            result.is_err(),
+            "zero length should be rejected by the spec constructor"
         );
-        assert!(result.is_err(), "zero length should return error");
     }
 
     #[test]
@@ -334,11 +331,8 @@ mod tests {
     fn known_4point_f64() {
         let dft = RustDftC2c;
         // Use unnormalized forward to match numpy.fft.fft (which is unnormalized forward).
-        let plan = DftC2c::<f64>::create_plan(
-            &dft,
-            &DftC2cSpec::new(4, Direction::Forward, DftNorm::None),
-        )
-        .expect("plan creation should succeed");
+        let spec = DftC2cSpec::new(4, Direction::Forward, DftNorm::None).expect("valid spec");
+        let plan = DftC2c::<f64>::create_plan(&dft, &spec).expect("plan creation should succeed");
 
         let input = [
             Complex::new(1.0, 0.0),
@@ -365,16 +359,10 @@ mod tests {
     #[test]
     fn ortho_round_trip() {
         let dft = RustDftC2c;
-        let fwd_plan = DftC2c::<f64>::create_plan(
-            &dft,
-            &DftC2cSpec::new(4, Direction::Forward, DftNorm::Ortho),
-        )
-        .expect("forward ortho plan");
-        let inv_plan = DftC2c::<f64>::create_plan(
-            &dft,
-            &DftC2cSpec::new(4, Direction::Inverse, DftNorm::Ortho),
-        )
-        .expect("inverse ortho plan");
+        let fwd_spec = DftC2cSpec::new(4, Direction::Forward, DftNorm::Ortho).expect("valid spec");
+        let inv_spec = DftC2cSpec::new(4, Direction::Inverse, DftNorm::Ortho).expect("valid spec");
+        let fwd_plan = DftC2c::<f64>::create_plan(&dft, &fwd_spec).expect("forward ortho plan");
+        let inv_plan = DftC2c::<f64>::create_plan(&dft, &inv_spec).expect("inverse ortho plan");
 
         let input = [
             Complex::new(1.0, 0.0),
@@ -408,16 +396,10 @@ mod tests {
     fn unnormalized_round_trip_scales_by_n() {
         let dft = RustDftC2c;
         let n = 4;
-        let fwd_plan = DftC2c::<f64>::create_plan(
-            &dft,
-            &DftC2cSpec::new(n, Direction::Forward, DftNorm::None),
-        )
-        .expect("forward plan");
-        let inv_plan = DftC2c::<f64>::create_plan(
-            &dft,
-            &DftC2cSpec::new(n, Direction::Inverse, DftNorm::None),
-        )
-        .expect("inverse plan");
+        let fwd_spec = DftC2cSpec::new(n, Direction::Forward, DftNorm::None).expect("valid spec");
+        let inv_spec = DftC2cSpec::new(n, Direction::Inverse, DftNorm::None).expect("valid spec");
+        let fwd_plan = DftC2c::<f64>::create_plan(&dft, &fwd_spec).expect("forward plan");
+        let inv_plan = DftC2c::<f64>::create_plan(&dft, &inv_spec).expect("inverse plan");
 
         let input = [
             Complex::new(1.0, 0.0),

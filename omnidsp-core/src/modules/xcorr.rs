@@ -305,8 +305,8 @@ impl<D, V> OmniCrossCorr<D, V> {
 
         // Cross-correlation theorem: xcorr(a,b) = IFFT(FFT(a) · conj(FFT(b))).
         // DftNorm::Inverse gives IFFT(FFT(x)) = x (1/N on inverse only).
-        let fwd_spec = DftC2cSpec::new(fft_len, Direction::Forward, DftNorm::Inverse);
-        let inv_spec = DftC2cSpec::new(fft_len, Direction::Inverse, DftNorm::Inverse);
+        let fwd_spec = DftC2cSpec::new(fft_len, Direction::Forward, DftNorm::Inverse)?;
+        let inv_spec = DftC2cSpec::new(fft_len, Direction::Inverse, DftNorm::Inverse)?;
         let fwd = self.dft.create_plan(&fwd_spec)?;
         let inv = self.dft.create_plan(&inv_spec)?;
 

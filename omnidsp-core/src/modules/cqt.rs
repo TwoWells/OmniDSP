@@ -296,7 +296,7 @@ impl<D, V> OmniCqt<D, V> {
         V: VecOps<T>,
     {
         let fft_length = spec.fft_length();
-        let fwd_spec = DftC2cSpec::new(fft_length, Direction::Forward, DftNorm::None);
+        let fwd_spec = DftC2cSpec::new(fft_length, Direction::Forward, DftNorm::None)?;
         let fwd = self.dft.create_plan(&fwd_spec)?;
 
         let inv_n = T::from(fft_length)

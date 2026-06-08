@@ -217,8 +217,8 @@ impl<D, V> OmniHilbert<D, V> {
         let n = spec.length;
 
         // Create forward and inverse DFT plans.
-        let fwd_spec = DftC2cSpec::new(n, Direction::Forward, DftNorm::Inverse);
-        let inv_spec = DftC2cSpec::new(n, Direction::Inverse, DftNorm::Inverse);
+        let fwd_spec = DftC2cSpec::new(n, Direction::Forward, DftNorm::Inverse)?;
+        let inv_spec = DftC2cSpec::new(n, Direction::Inverse, DftNorm::Inverse)?;
         let fwd = self.dft.create_plan(&fwd_spec)?;
         let inv = self.dft.create_plan(&inv_spec)?;
 
