@@ -5,7 +5,7 @@
 //!
 //! This module contains filter design functions, window coefficient generation,
 //! and related utilities.  Nothing here depends on runtime primitives
-//! ([`Dft`](crate::traits::dft::Dft), [`VecOps`](crate::traits::vecops::VecOps))
+//! ([`DftC2c`](crate::traits::dft::DftC2c), [`VecOps`](crate::traits::vecops::VecOps))
 //! or any implementation crate.  All computation is plain arithmetic on
 //! `f32`/`f64` values, suitable for use at plan-creation time.
 

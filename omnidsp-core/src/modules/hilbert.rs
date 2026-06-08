@@ -3,7 +3,7 @@
 
 //! Hilbert transform module — analytic signal computation.
 //!
-//! [`OmniHilbert`] is a factory generic over [`Dft`] and [`VecOps`] that creates
+//! [`OmniHilbert`] is a factory generic over [`DftC2c`] and [`VecOps`] that creates
 //! [`OmniHilbertPlan`]s from a [`HilbertSpec`].
 //!
 //! The Hilbert transform produces the complex analytic signal from a real input.
@@ -29,7 +29,7 @@ use num_complex::Complex;
 use num_traits::{Float, FromPrimitive};
 
 use crate::error::{Error, Result};
-use crate::traits::dft::{Dft, DftNorm, DftPlan, DftSpec};
+use crate::traits::dft::{DftC2c, DftC2cPlan, DftC2cSpec, DftNorm};
 use crate::traits::vecops::VecOps;
 use crate::types::Direction;
 
@@ -77,7 +77,7 @@ impl<T> HilbertSpec<T> {
 
 // ─── Public types ──────────────────────────────────────────────────────
 
-/// Generic Hilbert transform factory backed by [`Dft`] and [`VecOps`].
+/// Generic Hilbert transform factory backed by [`DftC2c`] and [`VecOps`].
 ///
 /// Creates [`OmniHilbertPlan`]s for specific signal lengths.  The factory
 /// owns the DFT factory and `VecOps` instance; plans own their sub-plans.
@@ -137,7 +137,7 @@ struct HilbertScratch<T> {
 impl<T, P, V> OmniHilbertPlan<T, P, V>
 where
     T: Float + AddAssign + MulAssign + FromPrimitive + Send + Sync + 'static,
-    P: DftPlan<T>,
+    P: DftC2cPlan<T>,
     V: VecOps<T>,
 {
     /// Compute the analytic signal of a real input.
@@ -205,7 +205,7 @@ impl<D, V> OmniHilbert<D, V> {
     pub fn create_plan<T>(&self, spec: &HilbertSpec<T>) -> Result<OmniHilbertPlan<T, D::Plan, V>>
     where
         T: Float + AddAssign + MulAssign + FromPrimitive + Send + Sync + 'static,
-        D: Dft<T>,
+        D: DftC2c<T>,
         V: VecOps<T>,
     {
         if spec.length == 0 {
@@ -217,8 +217,8 @@ impl<D, V> OmniHilbert<D, V> {
         let n = spec.length;
 
         // Create forward and inverse DFT plans.
-        let fwd_spec = DftSpec::new(n, Direction::Forward, DftNorm::Inverse);
-        let inv_spec = DftSpec::new(n, Direction::Inverse, DftNorm::Inverse);
+        let fwd_spec = DftC2cSpec::new(n, Direction::Forward, DftNorm::Inverse);
+        let inv_spec = DftC2cSpec::new(n, Direction::Inverse, DftNorm::Inverse);
         let fwd = self.dft.create_plan(&fwd_spec)?;
         let inv = self.dft.create_plan(&inv_spec)?;
 
@@ -283,10 +283,10 @@ mod tests {
     use num_complex::Complex;
 
     use super::{HilbertSpec, OmniHilbert};
-    use crate::test_utils::{TestDft, TestVecOps};
+    use crate::test_utils::{TestDftC2c, TestVecOps};
 
-    fn make_factory() -> OmniHilbert<TestDft, TestVecOps> {
-        OmniHilbert::new(TestDft, TestVecOps)
+    fn make_factory() -> OmniHilbert<TestDftC2c, TestVecOps> {
+        OmniHilbert::new(TestDftC2c, TestVecOps)
     }
 
     #[test]

@@ -11,10 +11,10 @@ use omnidsp_core::modules::xcorr::CrossCorrSpec;
 use omnidsp_core::scalar::ScalarVecOps;
 use omnidsp_core::traits::conv::ConvSpec;
 use omnidsp_core::traits::dct::DctSpec;
-use omnidsp_core::traits::dft::DftSpec;
+use omnidsp_core::traits::dft::DftC2cSpec;
 use omnidsp_core::traits::fir::FirSpec;
 use omnidsp_core::traits::iir::IirSpec;
-use omnidsp_rustfft::RustDft;
+use omnidsp_rustfft::RustDftC2c;
 
 use omnidsp_core::create::CreatePlan;
 
@@ -22,13 +22,13 @@ use omnidsp_core::create::CreatePlan;
 
 /// Pure Rust fallback backend.
 ///
-/// Combines [`RustDft`] (wrapping `RustFFT`) with [`ScalarVecOps`]
+/// Combines [`RustDftC2c`] (wrapping `RustFFT`) with [`ScalarVecOps`]
 /// (scalar loops, LLVM auto-vectorized).  Builds on every platform
 /// with no external dependencies.
 #[derive(Debug, Clone, Copy)]
 pub struct RustBackend {
     /// DFT factory (`RustFFT` wrapper).
-    pub(crate) dft: RustDft,
+    pub(crate) dft: RustDftC2c,
     /// Vector operations (scalar fallback).
     pub(crate) vecops: ScalarVecOps,
 }
@@ -38,7 +38,7 @@ impl RustBackend {
     #[must_use]
     pub const fn new() -> Self {
         Self {
-            dft: RustDft,
+            dft: RustDftC2c,
             vecops: ScalarVecOps,
         }
     }
@@ -52,7 +52,7 @@ impl Default for RustBackend {
 
 omnidsp_macros::impl_generic_backend! {
     backend: RustBackend,
-    dft: RustDft,
+    dft: RustDftC2c,
     vecops: ScalarVecOps,
 }
 
@@ -156,9 +156,9 @@ impl<B> OmniDSP<B> {
     /// # Errors
     ///
     /// Returns an error if the spec is invalid or plan creation fails.
-    pub fn dft<T>(&self, spec: &DftSpec<T>) -> Result<<B as CreatePlan<DftSpec<T>>>::Plan>
+    pub fn dft<T>(&self, spec: &DftC2cSpec<T>) -> Result<<B as CreatePlan<DftC2cSpec<T>>>::Plan>
     where
-        B: CreatePlan<DftSpec<T>>,
+        B: CreatePlan<DftC2cSpec<T>>,
     {
         self.create_plan(spec)
     }
@@ -223,7 +223,7 @@ impl<B> OmniDSP<B> {
 impl OmniDSP<RustBackend> {
     /// Create an engine using the pure Rust fallback backend.
     ///
-    /// Uses [`RustDft`] (`RustFFT`) and [`ScalarVecOps`] (scalar loops,
+    /// Uses [`RustDftC2c`] (`RustFFT`) and [`ScalarVecOps`] (scalar loops,
     /// LLVM auto-vectorized).
     #[must_use]
     pub const fn rust() -> Self {

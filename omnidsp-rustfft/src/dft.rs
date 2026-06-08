@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Two Wells <contact@twowells.dev>
 
-//! [`RustDft`] — pure Rust DFT factory wrapping `RustFFT`.
+//! [`RustDftC2c`] — pure Rust DFT factory wrapping `RustFFT`.
 
 use std::sync::{Arc, Mutex};
 
@@ -9,22 +9,22 @@ use num_complex::Complex;
 use rustfft::{Fft, FftNum, FftPlanner};
 
 use omnidsp_core::error::{Error, Result};
-use omnidsp_core::traits::dft::{Dft, DftNorm, DftPlan, DftSpec};
+use omnidsp_core::traits::dft::{DftC2c, DftC2cPlan, DftC2cSpec, DftNorm};
 use omnidsp_core::types::{Direction, DspFloat};
 
 // ─── Type erasure ────────────────────────────────────────────────────
 
 /// Private trait that hides `rustfft::FftNum` from the public API.
 ///
-/// `RustDftPlan<T>` stores `Box<dyn DftEngine<T>>` instead of
+/// `RustDftC2cPlan<T>` stores `Box<dyn DftC2cEngine<T>>` instead of
 /// `Arc<dyn Fft<T>>`, so the `FftNum` bound stays on the impl block
 /// (inside `create_plan`) and doesn't leak into the struct definition
 /// or the dispatch layer.
-trait DftEngine<T>: Send + Sync {
+trait DftC2cEngine<T>: Send + Sync {
     fn process(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]);
 }
 
-impl<T: FftNum> DftEngine<T> for Arc<dyn Fft<T>> {
+impl<T: FftNum> DftC2cEngine<T> for Arc<dyn Fft<T>> {
     fn process(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
         Fft::process_with_scratch(&**self, buffer, scratch);
     }
@@ -34,18 +34,18 @@ impl<T: FftNum> DftEngine<T> for Arc<dyn Fft<T>> {
 
 /// Pure Rust DFT factory.
 ///
-/// Creates [`RustDftPlan`] instances backed by `RustFFT`.  Supports
+/// Creates [`RustDftC2cPlan`] instances backed by `RustFFT`.  Supports
 /// arbitrary lengths (not just power-of-2).
 #[derive(Debug, Clone, Copy)]
-pub struct RustDft;
+pub struct RustDftC2c;
 
 /// Execution plan for a DFT operation backed by `RustFFT`.
 ///
 /// Holds the precomputed FFT plan and a scratch buffer behind a `Mutex`
 /// so that `Send + Sync` is satisfied while keeping execution
 /// allocation-free.
-pub struct RustDftPlan<T> {
-    engine: Box<dyn DftEngine<T>>,
+pub struct RustDftC2cPlan<T> {
+    engine: Box<dyn DftC2cEngine<T>>,
     length: usize,
     direction: Direction,
     norm: DftNorm,
@@ -54,7 +54,7 @@ pub struct RustDftPlan<T> {
 
 // ─── Trait implementations ───────────────────────────────────────────
 
-impl<T: DspFloat> DftPlan<T> for RustDftPlan<T> {
+impl<T: DspFloat> DftC2cPlan<T> for RustDftC2cPlan<T> {
     fn process(&self, input: &[Complex<T>], output: &mut [Complex<T>]) -> Result<()> {
         if input.len() != self.length {
             return Err(Error::BufferMismatch {
@@ -89,7 +89,7 @@ impl<T: DspFloat> DftPlan<T> for RustDftPlan<T> {
     }
 }
 
-impl<T: DspFloat> RustDftPlan<T> {
+impl<T: DspFloat> RustDftC2cPlan<T> {
     /// Compute the scaling factor for the configured normalization, or `None`
     /// if no scaling is needed.
     fn compute_scale(&self) -> Result<Option<T>> {
@@ -116,10 +116,10 @@ impl<T: DspFloat> RustDftPlan<T> {
 
 macro_rules! impl_dft {
     ($t:ty) => {
-        impl Dft<$t> for RustDft {
-            type Plan = RustDftPlan<$t>;
+        impl DftC2c<$t> for RustDftC2c {
+            type Plan = RustDftC2cPlan<$t>;
 
-            fn create_plan(&self, spec: &DftSpec<$t>) -> Result<Self::Plan> {
+            fn create_plan(&self, spec: &DftC2cSpec<$t>) -> Result<Self::Plan> {
                 if spec.length == 0 {
                     return Err(Error::InvalidSpec("DFT length must be non-zero".to_owned()));
                 }
@@ -131,7 +131,7 @@ macro_rules! impl_dft {
                 };
                 let scratch_len = fft.get_inplace_scratch_len();
 
-                Ok(RustDftPlan {
+                Ok(RustDftC2cPlan {
                     engine: Box::new(fft),
                     length: spec.length,
                     direction: spec.direction,
@@ -154,12 +154,12 @@ mod tests {
     const EPSILON_F32: f32 = 1e-5;
     const EPSILON_F64: f64 = 1e-12;
 
-    fn fwd<T>(length: usize) -> DftSpec<T> {
-        DftSpec::new(length, Direction::Forward, DftNorm::Inverse)
+    fn fwd<T>(length: usize) -> DftC2cSpec<T> {
+        DftC2cSpec::new(length, Direction::Forward, DftNorm::Inverse)
     }
 
-    fn inv<T>(length: usize) -> DftSpec<T> {
-        DftSpec::new(length, Direction::Inverse, DftNorm::Inverse)
+    fn inv<T>(length: usize) -> DftC2cSpec<T> {
+        DftC2cSpec::new(length, Direction::Inverse, DftNorm::Inverse)
     }
 
     fn assert_complex_slice_eq_f32(a: &[Complex<f32>], b: &[Complex<f32>], eps: f32) {
@@ -192,16 +192,18 @@ mod tests {
 
     #[test]
     fn zero_length_returns_error() {
-        let dft = RustDft;
-        let result =
-            Dft::<f32>::create_plan(&dft, &DftSpec::new(0, Direction::Forward, DftNorm::None));
+        let dft = RustDftC2c;
+        let result = DftC2c::<f32>::create_plan(
+            &dft,
+            &DftC2cSpec::new(0, Direction::Forward, DftNorm::None),
+        );
         assert!(result.is_err(), "zero length should return error");
     }
 
     #[test]
     fn dc_signal_f32() {
-        let dft = RustDft;
-        let plan = Dft::<f32>::create_plan(&dft, &fwd(4)).expect("plan creation should succeed");
+        let dft = RustDftC2c;
+        let plan = DftC2c::<f32>::create_plan(&dft, &fwd(4)).expect("plan creation should succeed");
         let input = [Complex::new(1.0_f32, 0.0); 4];
         let mut output = [Complex::default(); 4];
         plan.process(&input, &mut output)
@@ -218,8 +220,8 @@ mod tests {
 
     #[test]
     fn dc_signal_f64() {
-        let dft = RustDft;
-        let plan = Dft::<f64>::create_plan(&dft, &fwd(4)).expect("plan creation should succeed");
+        let dft = RustDftC2c;
+        let plan = DftC2c::<f64>::create_plan(&dft, &fwd(4)).expect("plan creation should succeed");
         let input = [Complex::new(1.0_f64, 0.0); 4];
         let mut output = [Complex::default(); 4];
         plan.process(&input, &mut output)
@@ -236,9 +238,11 @@ mod tests {
 
     #[test]
     fn round_trip_f32() {
-        let dft = RustDft;
-        let fwd_plan = Dft::<f32>::create_plan(&dft, &fwd(4)).expect("forward plan should succeed");
-        let inv_plan = Dft::<f32>::create_plan(&dft, &inv(4)).expect("inverse plan should succeed");
+        let dft = RustDftC2c;
+        let fwd_plan =
+            DftC2c::<f32>::create_plan(&dft, &fwd(4)).expect("forward plan should succeed");
+        let inv_plan =
+            DftC2c::<f32>::create_plan(&dft, &inv(4)).expect("inverse plan should succeed");
 
         let input = [
             Complex::new(1.0_f32, 0.0),
@@ -261,9 +265,11 @@ mod tests {
 
     #[test]
     fn round_trip_f64() {
-        let dft = RustDft;
-        let fwd_plan = Dft::<f64>::create_plan(&dft, &fwd(8)).expect("forward plan should succeed");
-        let inv_plan = Dft::<f64>::create_plan(&dft, &inv(8)).expect("inverse plan should succeed");
+        let dft = RustDftC2c;
+        let fwd_plan =
+            DftC2c::<f64>::create_plan(&dft, &fwd(8)).expect("forward plan should succeed");
+        let inv_plan =
+            DftC2c::<f64>::create_plan(&dft, &inv(8)).expect("inverse plan should succeed");
 
         let input: Vec<Complex<f64>> = (0..8)
             .map(|i| Complex::new(f64::from(i), -f64::from(i)))
@@ -283,11 +289,11 @@ mod tests {
 
     #[test]
     fn non_power_of_two() {
-        let dft = RustDft;
+        let dft = RustDftC2c;
         let fwd_plan =
-            Dft::<f64>::create_plan(&dft, &fwd(7)).expect("non-power-of-2 plan should succeed");
+            DftC2c::<f64>::create_plan(&dft, &fwd(7)).expect("non-power-of-2 plan should succeed");
         let inv_plan =
-            Dft::<f64>::create_plan(&dft, &inv(7)).expect("non-power-of-2 plan should succeed");
+            DftC2c::<f64>::create_plan(&dft, &inv(7)).expect("non-power-of-2 plan should succeed");
 
         let input: Vec<Complex<f64>> = (0..7).map(|i| Complex::new(f64::from(i), 0.0)).collect();
         let mut freq = vec![Complex::default(); 7];
@@ -305,8 +311,8 @@ mod tests {
 
     #[test]
     fn buffer_length_mismatch() {
-        let dft = RustDft;
-        let plan = Dft::<f32>::create_plan(&dft, &fwd(4)).expect("plan creation should succeed");
+        let dft = RustDftC2c;
+        let plan = DftC2c::<f32>::create_plan(&dft, &fwd(4)).expect("plan creation should succeed");
 
         let input = [Complex::new(1.0_f32, 0.0); 3];
         let mut output = [Complex::default(); 4];
@@ -326,11 +332,13 @@ mod tests {
     /// 4-point FFT of [1, 2, 3, 4] — verified against numpy.fft.fft.
     #[test]
     fn known_4point_f64() {
-        let dft = RustDft;
+        let dft = RustDftC2c;
         // Use unnormalized forward to match numpy.fft.fft (which is unnormalized forward).
-        let plan =
-            Dft::<f64>::create_plan(&dft, &DftSpec::new(4, Direction::Forward, DftNorm::None))
-                .expect("plan creation should succeed");
+        let plan = DftC2c::<f64>::create_plan(
+            &dft,
+            &DftC2cSpec::new(4, Direction::Forward, DftNorm::None),
+        )
+        .expect("plan creation should succeed");
 
         let input = [
             Complex::new(1.0, 0.0),
@@ -356,13 +364,17 @@ mod tests {
     /// output should be scaled by 1/√N compared to unnormalized.
     #[test]
     fn ortho_round_trip() {
-        let dft = RustDft;
-        let fwd_plan =
-            Dft::<f64>::create_plan(&dft, &DftSpec::new(4, Direction::Forward, DftNorm::Ortho))
-                .expect("forward ortho plan");
-        let inv_plan =
-            Dft::<f64>::create_plan(&dft, &DftSpec::new(4, Direction::Inverse, DftNorm::Ortho))
-                .expect("inverse ortho plan");
+        let dft = RustDftC2c;
+        let fwd_plan = DftC2c::<f64>::create_plan(
+            &dft,
+            &DftC2cSpec::new(4, Direction::Forward, DftNorm::Ortho),
+        )
+        .expect("forward ortho plan");
+        let inv_plan = DftC2c::<f64>::create_plan(
+            &dft,
+            &DftC2cSpec::new(4, Direction::Inverse, DftNorm::Ortho),
+        )
+        .expect("inverse ortho plan");
 
         let input = [
             Complex::new(1.0, 0.0),
@@ -394,14 +406,18 @@ mod tests {
     /// Unnormalized: round-trip scales by N.
     #[test]
     fn unnormalized_round_trip_scales_by_n() {
-        let dft = RustDft;
+        let dft = RustDftC2c;
         let n = 4;
-        let fwd_plan =
-            Dft::<f64>::create_plan(&dft, &DftSpec::new(n, Direction::Forward, DftNorm::None))
-                .expect("forward plan");
-        let inv_plan =
-            Dft::<f64>::create_plan(&dft, &DftSpec::new(n, Direction::Inverse, DftNorm::None))
-                .expect("inverse plan");
+        let fwd_plan = DftC2c::<f64>::create_plan(
+            &dft,
+            &DftC2cSpec::new(n, Direction::Forward, DftNorm::None),
+        )
+        .expect("forward plan");
+        let inv_plan = DftC2c::<f64>::create_plan(
+            &dft,
+            &DftC2cSpec::new(n, Direction::Inverse, DftNorm::None),
+        )
+        .expect("inverse plan");
 
         let input = [
             Complex::new(1.0, 0.0),

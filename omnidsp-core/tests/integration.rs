@@ -4,7 +4,7 @@
 //! End-to-end integration tests: design layer → module factory → plan → process.
 //!
 //! These tests exercise the full pipeline using real primitive implementations
-//! (`RustDft` from `omnidsp-rustfft`, `ScalarVecOps` and `ScalarIir` from
+//! (`RustDftC2c` from `omnidsp-rustfft`, `ScalarVecOps` and `ScalarIir` from
 //! `omnidsp-core::scalar`), validating the public API surface as an external
 //! consumer would.
 
@@ -24,12 +24,12 @@ use omnidsp_core::modules::fir::OmniFir;
 use omnidsp_core::modules::resample::OmniResample;
 use omnidsp_core::modules::xcorr::{CrossCorrSpec, OmniCrossCorr};
 use omnidsp_core::scalar::{ScalarIir, ScalarVecOps};
-use omnidsp_core::traits::dft::{Dft, DftNorm, DftPlan, DftSpec};
+use omnidsp_core::traits::dft::{DftC2c, DftC2cPlan, DftC2cSpec, DftNorm};
 use omnidsp_core::traits::fir::{Fir, FirPlan, FirStrategy};
 use omnidsp_core::traits::iir::{Iir, IirPlan};
 use omnidsp_core::traits::vecops::VecOps;
 use omnidsp_core::types::{Direction, FilterType, Window};
-use omnidsp_rustfft::RustDft;
+use omnidsp_rustfft::RustDftC2c;
 
 // ─── Test data ─────────────────────────────────────────────────────────
 
@@ -69,7 +69,7 @@ mod fir_integration {
 
     include!(testdata!("fir_lfilter_scipy.rs"));
 
-    /// End-to-end: design LP FIR → create plan with RustDft+ScalarVecOps → process → compare scipy.
+    /// End-to-end: design LP FIR → create plan with RustDftC2c+ScalarVecOps → process → compare scipy.
     #[test]
     fn design_and_apply_lowpass() {
         // Design: lowpass, order 30, Hamming, fc=1000 Hz, fs=44100
@@ -93,7 +93,7 @@ mod fir_integration {
         );
 
         // Create plan with real primitives and process.
-        let factory = OmniFir::new(RustDft, ScalarVecOps);
+        let factory = OmniFir::new(RustDftC2c, ScalarVecOps);
 
         for &strategy in &[FirStrategy::Direct, FirStrategy::OverlapSave] {
             let plan_spec = spec.clone().with_strategy(strategy);
@@ -134,7 +134,7 @@ mod fir_integration {
         )
         .expect("FIR design");
 
-        let factory = OmniFir::new(RustDft, ScalarVecOps);
+        let factory = OmniFir::new(RustDftC2c, ScalarVecOps);
 
         for &strategy in &[FirStrategy::Direct, FirStrategy::OverlapSave] {
             let plan_spec = spec.clone().with_strategy(strategy);
@@ -184,7 +184,7 @@ mod fir_integration {
         )
         .expect("FIR design");
 
-        let factory = OmniFir::new(RustDft, ScalarVecOps);
+        let factory = OmniFir::new(RustDftC2c, ScalarVecOps);
 
         for &strategy in &[FirStrategy::Direct, FirStrategy::OverlapSave] {
             let plan_spec = spec.clone().with_strategy(strategy);
@@ -470,7 +470,7 @@ mod streaming_equivalence {
         )
         .expect("FIR design");
 
-        let factory = OmniFir::new(RustDft, ScalarVecOps);
+        let factory = OmniFir::new(RustDftC2c, ScalarVecOps);
         let input: Vec<f64> = (0..1024)
             .map(|i| (TAU * 400.0 * f64::from(i) / 44100.0).sin())
             .collect();
@@ -670,7 +670,7 @@ mod pipeline {
         )
         .expect("FIR design");
 
-        let fir_factory = OmniFir::new(RustDft, ScalarVecOps);
+        let fir_factory = OmniFir::new(RustDftC2c, ScalarVecOps);
         let mut fir_plan = Fir::<f64>::create_plan(&fir_factory, &fir_spec).expect("FIR plan");
 
         let mut filtered = vec![0.0; resampled.len()];
@@ -784,9 +784,9 @@ mod pipeline {
             .expect("window apply");
 
         // Forward FFT with unitary normalization.
-        let dft_spec = DftSpec::new(n, Direction::Forward, DftNorm::Ortho);
-        let dft = RustDft;
-        let plan = Dft::<f64>::create_plan(&dft, &dft_spec).expect("DFT plan");
+        let dft_spec = DftC2cSpec::new(n, Direction::Forward, DftNorm::Ortho);
+        let dft = RustDftC2c;
+        let plan = DftC2c::<f64>::create_plan(&dft, &dft_spec).expect("DFT plan");
 
         let input_c: Vec<Complex<f64>> = windowed.iter().map(|&r| Complex::new(r, 0.0)).collect();
         let mut spectrum = vec![Complex::new(0.0, 0.0); n];
@@ -818,9 +818,9 @@ mod cqt_integration {
     /// Helper: create a CQT plan with real primitives.
     fn make_plan(
         spec: &omnidsp_core::design::cqt::CqtSpec<f64>,
-    ) -> omnidsp_core::modules::cqt::OmniCqtPlan<f64, <RustDft as Dft<f64>>::Plan, ScalarVecOps>
+    ) -> omnidsp_core::modules::cqt::OmniCqtPlan<f64, <RustDftC2c as DftC2c<f64>>::Plan, ScalarVecOps>
     {
-        let factory = OmniCqt::new(RustDft, ScalarVecOps);
+        let factory = OmniCqt::new(RustDftC2c, ScalarVecOps);
         factory.create_plan(spec).expect("CQT plan creation")
     }
 
@@ -835,7 +835,7 @@ mod cqt_integration {
         .expect("CQT design")
     }
 
-    /// End-to-end: design CQT → create plan with RustDft+ScalarVecOps → process.
+    /// End-to-end: design CQT → create plan with RustDftC2c+ScalarVecOps → process.
     ///
     /// Verifies that a pure tone at A440 produces a peak at the correct bin.
     #[test]
@@ -960,8 +960,8 @@ mod xcorr_integration {
 
     include!(testdata!("xcorr_scipy.rs"));
 
-    const fn make_factory() -> OmniCrossCorr<RustDft, ScalarVecOps> {
-        OmniCrossCorr::new(RustDft, ScalarVecOps)
+    const fn make_factory() -> OmniCrossCorr<RustDftC2c, ScalarVecOps> {
+        OmniCrossCorr::new(RustDftC2c, ScalarVecOps)
     }
 
     /// Short asymmetric signals (len=16 × len=8) vs scipy.signal.correlate.

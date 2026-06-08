@@ -7,7 +7,7 @@
 //! real-valued signals using the frequency-domain method:
 //! `xcorr(a, b) = IFFT(FFT(a) · conj(FFT(b)))`.
 //!
-//! Generic over any [`Dft`] and [`VecOps`] implementation.  Internal scratch
+//! Generic over any [`DftC2c`] and [`VecOps`] implementation.  Internal scratch
 //! buffers are behind a [`Mutex`] so that the plan satisfies `Send + Sync`
 //! while taking `&self`.
 
@@ -20,7 +20,7 @@ use num_complex::Complex;
 use num_traits::Float;
 
 use crate::error::{Error, Result};
-use crate::traits::dft::{Dft, DftNorm, DftPlan, DftSpec};
+use crate::traits::dft::{DftC2c, DftC2cPlan, DftC2cSpec, DftNorm};
 use crate::traits::vecops::VecOps;
 use crate::types::Direction;
 
@@ -80,7 +80,7 @@ impl<T> CrossCorrSpec<T> {
 
 // ─── Factory ─────────────────────────────────────────────────────────────
 
-/// Generic cross-correlation factory backed by [`Dft`] and [`VecOps`].
+/// Generic cross-correlation factory backed by [`DftC2c`] and [`VecOps`].
 ///
 /// Creates [`OmniCrossCorrPlan`]s for specific input lengths.  The factory
 /// owns the DFT factory and `VecOps` instance; plans own their sub-plans.
@@ -166,7 +166,7 @@ fn pad_real_to_complex<T: Float + AddAssign + MulAssign, V: VecOps<T>>(
 impl<T, P, V> OmniCrossCorrPlan<T, P, V>
 where
     T: Float + AddAssign + MulAssign + Send + Sync,
-    P: DftPlan<T>,
+    P: DftC2cPlan<T>,
     V: VecOps<T>,
 {
     /// Compute the cross-correlation of `a` and `b`.
@@ -284,7 +284,7 @@ impl<D, V> OmniCrossCorr<D, V> {
     ) -> Result<OmniCrossCorrPlan<T, D::Plan, V>>
     where
         T: Float + AddAssign + MulAssign + Send + Sync,
-        D: Dft<T>,
+        D: DftC2c<T>,
         V: VecOps<T> + Clone,
     {
         if spec.a_len == 0 {
@@ -305,8 +305,8 @@ impl<D, V> OmniCrossCorr<D, V> {
 
         // Cross-correlation theorem: xcorr(a,b) = IFFT(FFT(a) · conj(FFT(b))).
         // DftNorm::Inverse gives IFFT(FFT(x)) = x (1/N on inverse only).
-        let fwd_spec = DftSpec::new(fft_len, Direction::Forward, DftNorm::Inverse);
-        let inv_spec = DftSpec::new(fft_len, Direction::Inverse, DftNorm::Inverse);
+        let fwd_spec = DftC2cSpec::new(fft_len, Direction::Forward, DftNorm::Inverse);
+        let inv_spec = DftC2cSpec::new(fft_len, Direction::Inverse, DftNorm::Inverse);
         let fwd = self.dft.create_plan(&fwd_spec)?;
         let inv = self.dft.create_plan(&inv_spec)?;
 
@@ -335,10 +335,10 @@ impl<D, V> OmniCrossCorr<D, V> {
 #[allow(clippy::expect_used, reason = "expect is the preferred idiom in tests")]
 mod tests {
     use super::*;
-    use crate::test_utils::{TestDft, TestVecOps};
+    use crate::test_utils::{TestDftC2c, TestVecOps};
 
-    fn make_factory() -> OmniCrossCorr<TestDft, TestVecOps> {
-        OmniCrossCorr::new(TestDft, TestVecOps)
+    fn make_factory() -> OmniCrossCorr<TestDftC2c, TestVecOps> {
+        OmniCrossCorr::new(TestDftC2c, TestVecOps)
     }
 
     #[test]

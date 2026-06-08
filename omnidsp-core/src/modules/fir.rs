@@ -3,7 +3,7 @@
 
 //! FIR filter module — direct and overlap-save streaming filter.
 //!
-//! [`OmniFir`] implements the [`Fir`] trait generically over any [`Dft`]
+//! [`OmniFir`] implements the [`Fir`] trait generically over any [`DftC2c`]
 //! and [`VecOps`] implementation.  Supports both time-domain (direct MAC
 //! loop) and frequency-domain (overlap-save) execution, selected via
 //! [`FirStrategy`].
@@ -20,7 +20,7 @@ use num_complex::Complex;
 use num_traits::Float;
 
 use crate::error::{Error, Result};
-use crate::traits::dft::{Dft, DftNorm, DftPlan, DftSpec};
+use crate::traits::dft::{DftC2c, DftC2cPlan, DftC2cSpec, DftNorm};
 use crate::traits::fir::{Fir, FirPlan, FirSpec, FirStrategy};
 use crate::traits::vecops::VecOps;
 use crate::types::Direction;
@@ -70,7 +70,7 @@ pub fn recommend_strategy(num_taps: usize) -> FirStrategy {
 
 // ─── Public types ──────────────────────────────────────────────────────
 
-/// Generic FIR filter factory backed by [`Dft`] and [`VecOps`].
+/// Generic FIR filter factory backed by [`DftC2c`] and [`VecOps`].
 ///
 /// Creates [`OmniFirPlan`]s for specific filter specifications.  The factory
 /// owns the DFT factory and `VecOps` instance; plans own their sub-plans.
@@ -187,7 +187,7 @@ fn pad_real_to_complex<T: Float + AddAssign + MulAssign, V: VecOps<T>>(
 impl<T, P, V> FirPlan<T> for OmniFirPlan<T, P, V>
 where
     T: Float + AddAssign + MulAssign + Send + Sync,
-    P: DftPlan<T>,
+    P: DftC2cPlan<T>,
     V: VecOps<T>,
 {
     fn process(&mut self, input: &[T], output: &mut [T]) -> Result<()> {
@@ -224,7 +224,7 @@ where
 impl<T, P, V> OmniFirPlan<T, P, V>
 where
     T: Float + AddAssign + MulAssign + Send + Sync,
-    P: DftPlan<T>,
+    P: DftC2cPlan<T>,
     V: VecOps<T>,
 {
     /// Direct (time-domain) FIR: doubled buffer + single dot product.
@@ -315,7 +315,7 @@ where
 impl<T, D, V> Fir<T> for OmniFir<D, V>
 where
     T: Float + AddAssign + MulAssign + Send + Sync,
-    D: Dft<T>,
+    D: DftC2c<T>,
     V: VecOps<T>,
 {
     type Plan = OmniFirPlan<T, D::Plan, V>;
@@ -358,8 +358,8 @@ where
                         })?;
                 let valid_per_block = block_size - overlap_len;
 
-                let fwd_spec = DftSpec::new(block_size, Direction::Forward, DftNorm::Inverse);
-                let inv_spec = DftSpec::new(block_size, Direction::Inverse, DftNorm::Inverse);
+                let fwd_spec = DftC2cSpec::new(block_size, Direction::Forward, DftNorm::Inverse);
+                let inv_spec = DftC2cSpec::new(block_size, Direction::Inverse, DftNorm::Inverse);
                 let fwd = self.dft.create_plan(&fwd_spec)?;
                 let inv = self.dft.create_plan(&inv_spec)?;
 
@@ -398,12 +398,12 @@ where
 #[allow(clippy::expect_used, reason = "tests use expect for clarity")]
 mod tests {
     use super::*;
-    use crate::test_utils::{TestDft, TestVecOps};
+    use crate::test_utils::{TestDftC2c, TestVecOps};
 
     const EPSILON: f64 = 1e-8;
 
-    fn make_factory() -> OmniFir<TestDft, TestVecOps> {
-        OmniFir::new(TestDft, TestVecOps)
+    fn make_factory() -> OmniFir<TestDftC2c, TestVecOps> {
+        OmniFir::new(TestDftC2c, TestVecOps)
     }
 
     fn assert_approx_eq(actual: &[f64], expected: &[f64], eps: f64, label: &str) {

@@ -3,7 +3,7 @@
 
 //! Convolution module — direct and FFT-based fast convolution.
 //!
-//! [`OmniConv`] implements the [`Conv`] trait generically over any [`Dft`]
+//! [`OmniConv`] implements the [`Conv`] trait generically over any [`DftC2c`]
 //! and [`VecOps`] implementation.  Supports both time-domain (direct) and
 //! frequency-domain (FFT) convolution, selected via [`ConvMethod`].
 //!
@@ -23,7 +23,7 @@ use num_traits::Float;
 
 use crate::error::{Error, Result};
 use crate::traits::conv::{Conv, ConvMethod, ConvPlan, ConvSpec};
-use crate::traits::dft::{Dft, DftNorm, DftPlan, DftSpec};
+use crate::traits::dft::{DftC2c, DftC2cPlan, DftC2cSpec, DftNorm};
 use crate::traits::vecops::VecOps;
 use crate::types::Direction;
 
@@ -62,7 +62,7 @@ pub fn recommend_method(a_len: usize, b_len: usize) -> ConvMethod {
 
 // ─── Public types ──────────────────────────────────────────────────────
 
-/// Generic convolution factory backed by [`Dft`] and [`VecOps`].
+/// Generic convolution factory backed by [`DftC2c`] and [`VecOps`].
 ///
 /// Creates [`OmniConvPlan`]s for specific input lengths.  The factory
 /// owns the DFT factory and `VecOps` instance; plans own their sub-plans.
@@ -162,7 +162,7 @@ fn pad_real_to_complex<T: Float + AddAssign + MulAssign, V: VecOps<T>>(
 impl<T, P, V> ConvPlan<T> for OmniConvPlan<T, P, V>
 where
     T: Float + AddAssign + MulAssign + Send + Sync,
-    P: DftPlan<T>,
+    P: DftC2cPlan<T>,
     V: VecOps<T>,
 {
     fn process(&self, a: &[T], b: &[T], output: &mut [T]) -> Result<()> {
@@ -198,7 +198,7 @@ where
 impl<T, P, V> OmniConvPlan<T, P, V>
 where
     T: Float + AddAssign + MulAssign + Send + Sync,
-    P: DftPlan<T>,
+    P: DftC2cPlan<T>,
     V: VecOps<T>,
 {
     /// Direct (time-domain) convolution: `O(a_len * b_len)`.
@@ -255,7 +255,7 @@ where
 impl<T, D, V> Conv<T> for OmniConv<D, V>
 where
     T: Float + AddAssign + MulAssign + Send + Sync,
-    D: Dft<T>,
+    D: DftC2c<T>,
     V: VecOps<T>,
 {
     type Plan = OmniConvPlan<T, D::Plan, V>;
@@ -289,8 +289,8 @@ where
                 // Convolution theorem: conv(a,b) = IFFT(FFT(a) · FFT(b)).
                 // This requires IFFT(FFT(x)) = x, which DftNorm::Inverse provides
                 // (1/N scaling on the inverse transform only).
-                let fwd_spec = DftSpec::new(fft_len, Direction::Forward, DftNorm::Inverse);
-                let inv_spec = DftSpec::new(fft_len, Direction::Inverse, DftNorm::Inverse);
+                let fwd_spec = DftC2cSpec::new(fft_len, Direction::Forward, DftNorm::Inverse);
+                let inv_spec = DftC2cSpec::new(fft_len, Direction::Inverse, DftNorm::Inverse);
                 let fwd = self.dft.create_plan(&fwd_spec)?;
                 let inv = self.dft.create_plan(&inv_spec)?;
 
@@ -327,7 +327,7 @@ where
 #[allow(clippy::expect_used, reason = "tests use expect for clarity")]
 mod tests {
     use super::*;
-    use crate::test_utils::{TestDft, TestVecOps};
+    use crate::test_utils::{TestDftC2c, TestVecOps};
 
     const EPSILON: f64 = 1e-8;
 
@@ -353,8 +353,8 @@ mod tests {
         }
     }
 
-    fn make_factory() -> OmniConv<TestDft, TestVecOps> {
-        OmniConv::new(TestDft, TestVecOps)
+    fn make_factory() -> OmniConv<TestDftC2c, TestVecOps> {
+        OmniConv::new(TestDftC2c, TestVecOps)
     }
 
     // ── Heuristic tests ───────────────────────────────────────────────

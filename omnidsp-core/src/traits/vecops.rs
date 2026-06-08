@@ -5,7 +5,7 @@
 //!
 //! [`VecOps`] is the second true primitive alongside DFT — the building block
 //! that composite modules (Window, Conv, FIR, IIR, CQT, resampling) use for
-//! the glue between FFT calls.  A vendor that provides [`Dft`](super::dft::Dft)
+//! the glue between FFT calls.  A vendor that provides [`DftC2c`](super::dft::DftC2c)
 //! and `VecOps` gets every composite module for free.
 //!
 //! Unlike DFT, vector operations are stateless — there is nothing to

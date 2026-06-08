@@ -3,7 +3,7 @@
 
 //! Constant-Q Transform module — log-frequency spectral analysis.
 //!
-//! [`OmniCqt`] is a factory generic over [`Dft`] and [`VecOps`] that creates
+//! [`OmniCqt`] is a factory generic over [`DftC2c`] and [`VecOps`] that creates
 //! [`OmniCqtPlan`]s from a [`CqtSpec`].
 //!
 //! The CQT computes log-frequency spectral coefficients using pre-FFT'd
@@ -42,13 +42,13 @@ use num_traits::Float;
 
 use crate::design::cqt::CqtSpec;
 use crate::error::{Error, Result};
-use crate::traits::dft::{Dft, DftNorm, DftPlan, DftSpec};
+use crate::traits::dft::{DftC2c, DftC2cPlan, DftC2cSpec, DftNorm};
 use crate::traits::vecops::VecOps;
 use crate::types::Direction;
 
 // ─── Public types ──────────────────────────────────────────────────────
 
-/// Generic CQT factory backed by [`Dft`] and [`VecOps`].
+/// Generic CQT factory backed by [`DftC2c`] and [`VecOps`].
 ///
 /// Creates [`OmniCqtPlan`]s for specific CQT configurations.  The factory
 /// owns the DFT factory and `VecOps` instance; plans own their sub-plans.
@@ -124,7 +124,7 @@ struct FftScratch<T> {
 impl<T, P, V> OmniCqtPlan<T, P, V>
 where
     T: Float + AddAssign + MulAssign + Send + Sync,
-    P: DftPlan<T>,
+    P: DftC2cPlan<T>,
     V: VecOps<T>,
 {
     /// Compute the CQT of one frame.
@@ -292,11 +292,11 @@ impl<D, V> OmniCqt<D, V> {
     pub fn create_plan<T>(&self, spec: &CqtSpec<T>) -> Result<OmniCqtPlan<T, D::Plan, V>>
     where
         T: Float + AddAssign + MulAssign + Send + Sync,
-        D: Dft<T>,
+        D: DftC2c<T>,
         V: VecOps<T>,
     {
         let fft_length = spec.fft_length();
-        let fwd_spec = DftSpec::new(fft_length, Direction::Forward, DftNorm::None);
+        let fwd_spec = DftC2cSpec::new(fft_length, Direction::Forward, DftNorm::None);
         let fwd = self.dft.create_plan(&fwd_spec)?;
 
         let inv_n = T::from(fft_length)
@@ -383,7 +383,7 @@ mod tests {
 
     use super::*;
     use crate::design::cqt;
-    use crate::test_utils::{TestDft, TestVecOps};
+    use crate::test_utils::{TestDftC2c, TestVecOps};
     use crate::types::Window;
 
     /// Small CQT spec for fast tests: one octave, 12 bins/octave.
@@ -392,8 +392,10 @@ mod tests {
     }
 
     /// Helper: create a CQT plan for the given spec.
-    fn make_plan(spec: &CqtSpec<f64>) -> OmniCqtPlan<f64, <TestDft as Dft<f64>>::Plan, TestVecOps> {
-        let factory = OmniCqt::new(TestDft, TestVecOps);
+    fn make_plan(
+        spec: &CqtSpec<f64>,
+    ) -> OmniCqtPlan<f64, <TestDftC2c as DftC2c<f64>>::Plan, TestVecOps> {
+        let factory = OmniCqt::new(TestDftC2c, TestVecOps);
         factory
             .create_plan(spec)
             .expect("plan creation should succeed")

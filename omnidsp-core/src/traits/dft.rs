@@ -3,8 +3,8 @@
 
 //! DFT (Discrete Fourier Transform) primitive traits.
 //!
-//! The [`Dft`] factory creates [`DftPlan`] execution objects configured from
-//! a [`DftSpec`].  Plans are immutable — a single plan can be reused across
+//! The [`DftC2c`] factory creates [`DftC2cPlan`] execution objects configured from
+//! a [`DftC2cSpec`].  Plans are immutable — a single plan can be reused across
 //! many calls and shared between threads.
 
 use std::marker::PhantomData;
@@ -45,15 +45,15 @@ pub enum DftNorm {
 /// # Examples
 ///
 /// ```
-/// use omnidsp_core::traits::dft::{DftSpec, DftNorm};
+/// use omnidsp_core::traits::dft::{DftC2cSpec, DftNorm};
 /// use omnidsp_core::types::Direction;
 ///
 /// // 1024-point forward FFT with inverse normalization (round-trip = identity)
-/// let spec = DftSpec::<f64>::new(1024, Direction::Forward, DftNorm::Inverse);
+/// let spec = DftC2cSpec::<f64>::new(1024, Direction::Forward, DftNorm::Inverse);
 /// assert_eq!(spec.length, 1024);
 /// ```
 #[derive(Debug, Clone, Copy)]
-pub struct DftSpec<T> {
+pub struct DftC2cSpec<T> {
     /// Number of complex samples for both input and output buffers.
     ///
     /// Determines the frequency resolution: each bin spans
@@ -69,15 +69,15 @@ pub struct DftSpec<T> {
     _marker: PhantomData<T>,
 }
 
-impl<T> PartialEq for DftSpec<T> {
+impl<T> PartialEq for DftC2cSpec<T> {
     fn eq(&self, other: &Self) -> bool {
         self.length == other.length && self.direction == other.direction && self.norm == other.norm
     }
 }
 
-impl<T> Eq for DftSpec<T> {}
+impl<T> Eq for DftC2cSpec<T> {}
 
-impl<T> DftSpec<T> {
+impl<T> DftC2cSpec<T> {
     /// Create a new DFT spec with the given length, direction, and normalization.
     #[must_use]
     pub const fn new(length: usize, direction: Direction, norm: DftNorm) -> Self {
@@ -94,10 +94,10 @@ impl<T> DftSpec<T> {
 
 /// Execution object for a configured DFT operation.
 ///
-/// A plan is created by a [`Dft`] factory and holds any precomputed state
+/// A plan is created by a [`DftC2c`] factory and holds any precomputed state
 /// (twiddle factors, scratch buffers, etc.) needed to execute the transform
 /// efficiently.  Plans are immutable and take `&self`.
-pub trait DftPlan<T>: Send + Sync {
+pub trait DftC2cPlan<T>: Send + Sync {
     /// Execute the DFT on `input`, writing the result to `output`.
     ///
     /// Both buffers must have the length the plan was created for.
@@ -108,15 +108,15 @@ pub trait DftPlan<T>: Send + Sync {
     fn process(&self, input: &[Complex<T>], output: &mut [Complex<T>]) -> Result<()>;
 }
 
-/// Factory for creating [`DftPlan`] execution objects.
+/// Factory for creating [`DftC2cPlan`] execution objects.
 ///
 /// `T` is a type parameter on the factory trait so that capability is expressed
-/// in the type system: `impl Dft<f32>` and `impl Dft<f64>` are independent
-/// capabilities.  The associated [`Plan`](Dft::Plan) type lets each implementor
+/// in the type system: `impl DftC2c<f32>` and `impl DftC2c<f64>` are independent
+/// capabilities.  The associated [`Plan`](DftC2c::Plan) type lets each implementor
 /// return a concrete plan — no `Box<dyn>`.
-pub trait Dft<T> {
+pub trait DftC2c<T> {
     /// The concrete plan type returned by this factory.
-    type Plan: DftPlan<T>;
+    type Plan: DftC2cPlan<T>;
 
     /// Create a plan for a DFT described by `spec`.
     ///
@@ -124,5 +124,5 @@ pub trait Dft<T> {
     ///
     /// Returns an error if the length is zero or otherwise unsupported by the
     /// implementation.
-    fn create_plan(&self, spec: &DftSpec<T>) -> Result<Self::Plan>;
+    fn create_plan(&self, spec: &DftC2cSpec<T>) -> Result<Self::Plan>;
 }

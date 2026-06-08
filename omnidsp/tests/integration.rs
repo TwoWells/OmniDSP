@@ -21,11 +21,11 @@ use omnidsp_core::design::cqt::{self, CqtBinSpec, CqtSpec};
 use omnidsp_core::design::resample::{ResampleMode, ResampleSpec};
 use omnidsp_core::scalar::ScalarVecOps;
 use omnidsp_core::traits::conv::{ConvMethod, ConvPlan, ConvSpec};
-use omnidsp_core::traits::dft::{DftNorm, DftPlan, DftSpec};
+use omnidsp_core::traits::dft::{DftC2cPlan, DftC2cSpec, DftNorm};
 use omnidsp_core::traits::fir::{FirPlan, FirSpec};
 use omnidsp_core::traits::iir::{IirPlan, IirSpec};
 use omnidsp_core::types::{BiquadSection, Direction, Window};
-use omnidsp_rustfft::RustDft;
+use omnidsp_rustfft::RustDftC2c;
 
 // ─── Helpers ───────────────────────────────────────────────────────────
 
@@ -53,15 +53,23 @@ fn assert_approx<T: Float + std::fmt::Debug>(actual: &[T], expected: &[T], tol: 
 fn dft_round_trip<T, B>(dsp: &OmniDSP<B>, tol: T)
 where
     T: Float + Send + Sync + std::fmt::Debug,
-    B: CreatePlan<DftSpec<T>>,
-    B::Plan: DftPlan<T>,
+    B: CreatePlan<DftC2cSpec<T>>,
+    B::Plan: DftC2cPlan<T>,
 {
     let n = 8;
     let fwd = dsp
-        .dft(&DftSpec::<T>::new(n, Direction::Forward, DftNorm::Inverse))
+        .dft(&DftC2cSpec::<T>::new(
+            n,
+            Direction::Forward,
+            DftNorm::Inverse,
+        ))
         .expect("forward DFT plan");
     let inv = dsp
-        .dft(&DftSpec::<T>::new(n, Direction::Inverse, DftNorm::Inverse))
+        .dft(&DftC2cSpec::<T>::new(
+            n,
+            Direction::Inverse,
+            DftNorm::Inverse,
+        ))
         .expect("inverse DFT plan");
 
     let zero = Complex::new(T::zero(), T::zero());
@@ -531,19 +539,19 @@ fn auto_constructor() {
 /// generates all `CreatePlan<S>` impls by delegating to `omnidsp-core`
 /// modules.
 struct MacroTestBackend {
-    dft: RustDft,
+    dft: RustDftC2c,
     vecops: ScalarVecOps,
 }
 
 omnidsp_macros::impl_generic_backend! {
     backend: MacroTestBackend,
-    dft: RustDft,
+    dft: RustDftC2c,
     vecops: ScalarVecOps,
 }
 
 const fn macro_backend() -> MacroTestBackend {
     MacroTestBackend {
-        dft: RustDft,
+        dft: RustDftC2c,
         vecops: ScalarVecOps,
     }
 }
@@ -693,13 +701,13 @@ fn macro_create_cqt_f64() {
 /// The backend can then hand-write `CreatePlan<ConvSpec<T>>` without
 /// conflicting with macro-generated impls.
 struct SkipConvBackend {
-    dft: RustDft,
+    dft: RustDftC2c,
     vecops: ScalarVecOps,
 }
 
 omnidsp_macros::impl_generic_backend! {
     backend: SkipConvBackend,
-    dft: RustDft,
+    dft: RustDftC2c,
     vecops: ScalarVecOps,
     skip: [conv],
 }
@@ -708,7 +716,7 @@ omnidsp_macros::impl_generic_backend! {
 impl CreatePlan<ConvSpec<f64>> for SkipConvBackend {
     type Plan = omnidsp_core::modules::conv::OmniConvPlan<
         f64,
-        <RustDft as omnidsp_core::traits::dft::Dft<f64>>::Plan,
+        <RustDftC2c as omnidsp_core::traits::dft::DftC2c<f64>>::Plan,
         ScalarVecOps,
     >;
 
@@ -722,7 +730,7 @@ impl CreatePlan<ConvSpec<f64>> for SkipConvBackend {
 impl CreatePlan<ConvSpec<f32>> for SkipConvBackend {
     type Plan = omnidsp_core::modules::conv::OmniConvPlan<
         f32,
-        <RustDft as omnidsp_core::traits::dft::Dft<f32>>::Plan,
+        <RustDftC2c as omnidsp_core::traits::dft::DftC2c<f32>>::Plan,
         ScalarVecOps,
     >;
 
@@ -735,7 +743,7 @@ impl CreatePlan<ConvSpec<f32>> for SkipConvBackend {
 #[test]
 fn skip_conv_backend_hand_written_conv() {
     let b = SkipConvBackend {
-        dft: RustDft,
+        dft: RustDftC2c,
         vecops: ScalarVecOps,
     };
     let spec = ConvSpec::<f64>::new(3, 2, ConvMethod::Direct);
@@ -751,7 +759,7 @@ fn skip_conv_backend_hand_written_conv() {
 #[test]
 fn skip_conv_backend_other_modules_work() {
     let b = SkipConvBackend {
-        dft: RustDft,
+        dft: RustDftC2c,
         vecops: ScalarVecOps,
     };
     let dsp = OmniDSP::new(b);

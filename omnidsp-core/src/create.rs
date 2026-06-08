@@ -13,7 +13,7 @@ use crate::error::Result;
 /// Factory trait parameterized by a spec type.
 ///
 /// A backend implements `CreatePlan<ConvSpec<f32>>`,
-/// `CreatePlan<DftSpec<f64>>`, etc.  The spec type drives compile-time
+/// `CreatePlan<DftC2cSpec<f64>>`, etc.  The spec type drives compile-time
 /// dispatch — the compiler monomorphizes each `OmniDSP<B>` instantiation.
 ///
 /// Use `omnidsp_macros::impl_generic_backend!` to generate impls for

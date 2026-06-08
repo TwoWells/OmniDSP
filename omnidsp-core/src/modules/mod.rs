@@ -3,7 +3,7 @@
 
 //! Composite modules (Layer 2).
 //!
-//! Modules are generic over [`Dft`](crate::traits::dft::Dft) and
+//! Modules are generic over [`DftC2c`](crate::traits::dft::DftC2c) and
 //! [`VecOps`](crate::traits::vecops::VecOps).  A vendor that provides just
 //! these two primitives gets every module for free.
 

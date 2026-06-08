@@ -3,7 +3,7 @@
 
 //! `RustFFT`-backed DFT for `OmniDSP`.
 //!
-//! [`RustDft`] wraps [RustFFT](https://crates.io/crates/rustfft) for
+//! [`RustDftC2c`] wraps [RustFFT](https://crates.io/crates/rustfft) for
 //! arbitrary-length DFTs.  This is the portable FFT fallback — no C++
 //! toolchain, no FFI, builds everywhere Rust builds.
 //!
@@ -12,4 +12,4 @@
 
 mod dft;
 
-pub use dft::{RustDft, RustDftPlan};
+pub use dft::{RustDftC2c, RustDftC2cPlan};

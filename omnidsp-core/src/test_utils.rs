@@ -10,7 +10,7 @@ use std::f64::consts::TAU;
 use num_complex::Complex;
 
 use crate::error::{Error, Result};
-use crate::traits::dft::{Dft, DftNorm, DftPlan, DftSpec};
+use crate::traits::dft::{DftC2c, DftC2cPlan, DftC2cSpec, DftNorm};
 use crate::traits::vecops::VecOps;
 use crate::types::Direction;
 
@@ -20,14 +20,14 @@ use crate::types::Direction;
 /// back to an O(N²) direct DFT for other lengths.  No external
 /// dependencies — just textbook algorithms.
 #[derive(Debug, Clone)]
-pub struct TestDft;
+pub struct TestDftC2c;
 
 /// DFT plan for tests.
 ///
 /// Respects [`DftNorm`] so that module tests exercising different
 /// normalization conventions get correct (or correctly wrong) results.
 #[derive(Debug)]
-pub struct TestDftPlan {
+pub struct TestDftC2cPlan {
     length: usize,
     direction: Direction,
     norm: DftNorm,
@@ -37,7 +37,7 @@ pub struct TestDftPlan {
     clippy::cast_precision_loss,
     reason = "test DFT operates on small sizes where usize→f64 is exact"
 )]
-impl DftPlan<f64> for TestDftPlan {
+impl DftC2cPlan<f64> for TestDftC2cPlan {
     fn process(&self, input: &[Complex<f64>], output: &mut [Complex<f64>]) -> Result<()> {
         if input.len() != self.length {
             return Err(Error::BufferMismatch {
@@ -79,7 +79,7 @@ impl DftPlan<f64> for TestDftPlan {
     clippy::cast_precision_loss,
     reason = "test DFT operates on small sizes where usize→f64 is exact"
 )]
-impl TestDftPlan {
+impl TestDftC2cPlan {
     /// Compute the scaling factor for the configured normalization.
     fn compute_scale(&self) -> Option<f64> {
         let n = self.length as f64;
@@ -94,14 +94,14 @@ impl TestDftPlan {
     }
 }
 
-impl Dft<f64> for TestDft {
-    type Plan = TestDftPlan;
+impl DftC2c<f64> for TestDftC2c {
+    type Plan = TestDftC2cPlan;
 
-    fn create_plan(&self, spec: &DftSpec<f64>) -> Result<Self::Plan> {
+    fn create_plan(&self, spec: &DftC2cSpec<f64>) -> Result<Self::Plan> {
         if spec.length == 0 {
             return Err(Error::InvalidSpec("DFT length must be non-zero".to_owned()));
         }
-        Ok(TestDftPlan {
+        Ok(TestDftC2cPlan {
             length: spec.length,
             direction: spec.direction,
             norm: spec.norm,

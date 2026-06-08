@@ -3,4 +3,4 @@
 
 //! DFT design types — re-exported from [`traits::dft`](crate::traits::dft).
 
-pub use crate::traits::dft::{DftNorm, DftSpec};
+pub use crate::traits::dft::{DftC2cSpec, DftNorm};

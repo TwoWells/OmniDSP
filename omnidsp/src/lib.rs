@@ -40,7 +40,7 @@ pub type Auto = OmniDSP<Best>;
 #[allow(clippy::expect_used, reason = "expect is the preferred idiom in tests")]
 mod tests {
     use super::Window;
-    use super::traits::dft::{DftNorm, DftSpec};
+    use super::traits::dft::{DftC2cSpec, DftNorm};
     use super::types::Direction;
 
     #[test]
@@ -51,7 +51,7 @@ mod tests {
 
     #[test]
     fn reexport_dft_spec() {
-        let spec = DftSpec::<f64>::new(1024, Direction::Forward, DftNorm::Inverse);
+        let spec = DftC2cSpec::<f64>::new(1024, Direction::Forward, DftNorm::Inverse);
         assert_eq!(spec.length, 1024, "spec length should match");
     }
 }

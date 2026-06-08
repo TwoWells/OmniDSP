@@ -155,7 +155,7 @@ fn gen_conv(input: &BackendInput) -> TokenStream2 {
             {
                 type Plan = ::omnidsp_core::modules::conv::OmniConvPlan<
                     #float,
-                    <#dft as ::omnidsp_core::traits::dft::Dft<#float>>::Plan,
+                    <#dft as ::omnidsp_core::traits::dft::DftC2c<#float>>::Plan,
                     #vecops,
                 >;
 
@@ -189,7 +189,7 @@ fn gen_fir(input: &BackendInput) -> TokenStream2 {
             {
                 type Plan = ::omnidsp_core::modules::fir::OmniFirPlan<
                     #float,
-                    <#dft as ::omnidsp_core::traits::dft::Dft<#float>>::Plan,
+                    <#dft as ::omnidsp_core::traits::dft::DftC2c<#float>>::Plan,
                     #vecops,
                 >;
 
@@ -252,7 +252,7 @@ fn gen_cqt(input: &BackendInput) -> TokenStream2 {
             {
                 type Plan = ::omnidsp_core::modules::cqt::OmniCqtPlan<
                     #float,
-                    <#dft as ::omnidsp_core::traits::dft::Dft<#float>>::Plan,
+                    <#dft as ::omnidsp_core::traits::dft::DftC2c<#float>>::Plan,
                     #vecops,
                 >;
 
@@ -280,16 +280,16 @@ fn gen_dft(input: &BackendInput) -> TokenStream2 {
 
     for float in float_idents() {
         tokens.extend(quote! {
-            impl ::omnidsp_core::create::CreatePlan<::omnidsp_core::traits::dft::DftSpec<#float>>
+            impl ::omnidsp_core::create::CreatePlan<::omnidsp_core::traits::dft::DftC2cSpec<#float>>
                 for #backend
             {
-                type Plan = <#dft as ::omnidsp_core::traits::dft::Dft<#float>>::Plan;
+                type Plan = <#dft as ::omnidsp_core::traits::dft::DftC2c<#float>>::Plan;
 
                 fn create_plan(
                     &self,
-                    spec: &::omnidsp_core::traits::dft::DftSpec<#float>,
+                    spec: &::omnidsp_core::traits::dft::DftC2cSpec<#float>,
                 ) -> ::omnidsp_core::error::Result<Self::Plan> {
-                    ::omnidsp_core::traits::dft::Dft::<#float>::create_plan(&self.dft, spec)
+                    ::omnidsp_core::traits::dft::DftC2c::<#float>::create_plan(&self.dft, spec)
                 }
             }
         });
@@ -339,7 +339,7 @@ fn gen_hilbert(input: &BackendInput) -> TokenStream2 {
             {
                 type Plan = ::omnidsp_core::modules::hilbert::OmniHilbertPlan<
                     #float,
-                    <#dft as ::omnidsp_core::traits::dft::Dft<#float>>::Plan,
+                    <#dft as ::omnidsp_core::traits::dft::DftC2c<#float>>::Plan,
                     #vecops,
                 >;
 
@@ -373,7 +373,7 @@ fn gen_dct(input: &BackendInput) -> TokenStream2 {
             {
                 type Plan = ::omnidsp_core::modules::dct::OmniDctPlan<
                     #float,
-                    <#dft as ::omnidsp_core::traits::dft::Dft<#float>>::Plan,
+                    <#dft as ::omnidsp_core::traits::dft::DftC2c<#float>>::Plan,
                     #vecops,
                 >;
 
@@ -408,7 +408,7 @@ fn gen_xcorr(input: &BackendInput) -> TokenStream2 {
             {
                 type Plan = ::omnidsp_core::modules::xcorr::OmniCrossCorrPlan<
                     #float,
-                    <#dft as ::omnidsp_core::traits::dft::Dft<#float>>::Plan,
+                    <#dft as ::omnidsp_core::traits::dft::DftC2c<#float>>::Plan,
                     #vecops,
                 >;
 
@@ -452,14 +452,14 @@ fn gen_xcorr(input: &BackendInput) -> TokenStream2 {
 /// // All modules (default)
 /// omnidsp_macros::impl_generic_backend! {
 ///     backend: RustBackend,
-///     dft: RustDft,
+///     dft: RustDftC2c,
 ///     vecops: ScalarVecOps,
 /// }
 ///
 /// // Skip modules with native overrides
 /// omnidsp_macros::impl_generic_backend! {
 ///     backend: IppBackend,
-///     dft: IppDft,
+///     dft: IppDftC2c,
 ///     vecops: IppVecOps,
 ///     skip: [conv, fir],
 /// }

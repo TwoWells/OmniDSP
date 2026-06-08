@@ -3,7 +3,7 @@
 
 //! DCT module — Discrete Cosine Transform via FFT.
 //!
-//! [`OmniDct`] implements the [`Dct`] trait generically over any [`Dft`]
+//! [`OmniDct`] implements the [`Dct`] trait generically over any [`DftC2c`]
 //! and [`VecOps`] implementation.  Supports DCT type II and type III with
 //! optional orthonormal normalization.
 //!
@@ -24,13 +24,13 @@ use num_traits::Float;
 
 use crate::error::{Error, Result};
 use crate::traits::dct::{Dct, DctNorm, DctPlan, DctSpec, DctType};
-use crate::traits::dft::{Dft, DftNorm, DftPlan, DftSpec};
+use crate::traits::dft::{DftC2c, DftC2cPlan, DftC2cSpec, DftNorm};
 use crate::traits::vecops::VecOps;
 use crate::types::Direction;
 
 // ─── Public types ──────────────────────────────────────────────────────
 
-/// Generic DCT factory backed by [`Dft`] and [`VecOps`].
+/// Generic DCT factory backed by [`DftC2c`] and [`VecOps`].
 ///
 /// Creates [`OmniDctPlan`]s for specific lengths and DCT types.  The factory
 /// owns the DFT factory and `VecOps` instance; plans own their sub-plans.
@@ -101,7 +101,7 @@ struct DctScratch<T> {
 impl<T, P, V> DctPlan<T> for OmniDctPlan<T, P, V>
 where
     T: Float + AddAssign + MulAssign + Send + Sync,
-    P: DftPlan<T>,
+    P: DftC2cPlan<T>,
     V: VecOps<T>,
 {
     fn process(&self, input: &[T], output: &mut [T]) -> Result<()> {
@@ -132,7 +132,7 @@ where
 impl<T, P, V> OmniDctPlan<T, P, V>
 where
     T: Float + AddAssign + MulAssign + Send + Sync,
-    P: DftPlan<T>,
+    P: DftC2cPlan<T>,
     V: VecOps<T>,
 {
     /// DCT-II via symmetric extension → forward FFT → twiddle multiply → extract real.
@@ -249,7 +249,7 @@ where
 impl<T, D, V> Dct<T> for OmniDct<D, V>
 where
     T: Float + AddAssign + MulAssign + Send + Sync,
-    D: Dft<T>,
+    D: DftC2c<T>,
     V: VecOps<T>,
 {
     type Plan = OmniDctPlan<T, D::Plan, V>;
@@ -267,7 +267,7 @@ where
             DctType::II => Direction::Forward,
             DctType::III => Direction::Inverse,
         };
-        let dft_spec = DftSpec::new(two_n, direction, DftNorm::None);
+        let dft_spec = DftC2cSpec::new(two_n, direction, DftNorm::None);
         let dft_plan = self.dft.create_plan(&dft_spec)?;
 
         // Precompute twiddle factors: exp(-jπk/(2N)) for k=0..N-1
@@ -311,7 +311,7 @@ where
 )]
 mod tests {
     use super::*;
-    use crate::test_utils::{TestDft, TestVecOps};
+    use crate::test_utils::{TestDftC2c, TestVecOps};
 
     include!(testdata!("dct_scipy.rs"));
 
@@ -328,8 +328,8 @@ mod tests {
         }
     }
 
-    fn make_factory() -> OmniDct<TestDft, TestVecOps> {
-        OmniDct::new(TestDft, TestVecOps)
+    fn make_factory() -> OmniDct<TestDftC2c, TestVecOps> {
+        OmniDct::new(TestDftC2c, TestVecOps)
     }
 
     // ── Validation tests ─────────────────────────────────────────────
