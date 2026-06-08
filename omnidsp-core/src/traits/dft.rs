@@ -35,21 +35,46 @@ use crate::types::Direction;
 
 // ─── Normalization (family-level) ────────────────────────────────────
 
-/// Normalization convention for the DFT.
+/// Normalization convention for the DFT, shared family-level by all three
+/// primitives ([`DftC2c`], [`DftR2c`], [`DftC2r`]).
 ///
-/// Shared by all three primitives ([`DftC2c`], [`DftR2c`], [`DftC2r`]).
-/// Controls the scaling factor applied during forward and inverse transforms.
-/// A forward+inverse round-trip must use the same convention to get
-/// predictable results.
+/// A convention names the scaling applied per *direction*.  Each primitive
+/// applies the slice that matches its fixed direction:
+///
+/// - [`DftR2c`] is forward-only — it scales like a [`DftC2c`] **forward** plan.
+/// - [`DftC2r`] is inverse-only — it scales like a [`DftC2c`] **inverse** plan.
+///
+/// So the per-direction factors are (where `N` is the **real** signal length —
+/// `length` for r2c/c2r, the transform length for c2c):
+///
+/// | convention | forward (c2c fwd / r2c) | inverse (c2c inv / c2r) |
+/// |------------|-------------------------|-------------------------|
+/// | [`None`](Self::None)       | ×1      | ×1      |
+/// | [`Inverse`](Self::Inverse) | ×1      | ×(1/N)  |
+/// | [`Ortho`](Self::Ortho)     | ×(1/√N) | ×(1/√N) |
+///
+/// A forward+inverse round-trip must use the same convention: `Inverse` and
+/// `Ortho` recover the input, `None` scales it by `N`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DftNorm {
-    /// No normalization on either direction — `IFFT(FFT(x)) = N·x`.
-    None,
-    /// Divide by N on the inverse transform — `IFFT(FFT(x)) = x`.
+    /// No scaling in either direction — the raw transform; `IFFT(FFT(x)) = N·x`.
     ///
-    /// This is the convention used by the convolution and FIR modules.
+    /// This is what the underlying kernels (`rustfft` / `realfft`) compute
+    /// natively; the `1/N` is left to the caller.
+    None,
+    /// Scale the inverse by `1/N`, leave the forward unscaled; `IFFT(FFT(x)) = x`.
+    ///
+    /// The standard "backward" convention — the default in `numpy`, `scipy`,
+    /// and MATLAB — and the one the convolution, FIR, Hilbert, and
+    /// cross-correlation modules use (the convolution theorem needs a
+    /// round-trip identity).
     Inverse,
-    /// Divide by √N on both transforms — unitary (energy-preserving).
+    /// Scale both directions by `1/√N` (per element).
+    ///
+    /// Unitary / energy-preserving for c2c (Parseval holds with no extra
+    /// factor).  For r2c/c2r it is the same per-element `1/√N` scaling — not a
+    /// claim that the real half-spectrum operator is literally unitary (it is
+    /// not square, and the DC/Nyquist bins are not doubled).
     Ortho,
 }
 
