@@ -14,3 +14,4 @@ workspace = true
 omnidsp-core = { path = "../omnidsp-core" }
 num-complex = "0.4"
 rustfft = "6"
+realfft = "3"

@@ -93,25 +93,39 @@ impl<T: DspFloat> RustDftC2cPlan<T> {
     /// Compute the scaling factor for the configured normalization, or `None`
     /// if no scaling is needed.
     fn compute_scale(&self) -> Result<Option<T>> {
-        #[allow(
-            clippy::cast_precision_loss,
-            reason = "DFT lengths are well within f64 mantissa range"
-        )]
-        let n = self.length as f64;
-
-        let factor = match self.norm {
-            DftNorm::None => return Ok(None),
-            DftNorm::Inverse => match self.direction {
-                Direction::Inverse => 1.0 / n,
-                Direction::Forward => return Ok(None),
-            },
-            DftNorm::Ortho => 1.0 / n.sqrt(),
-        };
-
-        let scale = T::from_f64(factor)
-            .ok_or_else(|| Error::Internal("failed to convert scale factor".to_owned()))?;
-        Ok(Some(scale))
+        norm_scale::<T>(self.norm, self.direction, self.length)
     }
+}
+
+/// Scaling factor a [`DftNorm`] convention applies to a transform of real
+/// length `n` running in `direction`, or `None` when no scaling is needed.
+///
+/// Shared by all three primitives so that the forward-only [`RustDftR2c`] and
+/// inverse-only [`RustDftC2r`] apply exactly the c2c per-direction factors (see
+/// [`DftNorm`]): r2c scales like a c2c **forward** plan, c2r like a c2c
+/// **inverse** plan.
+///
+/// [`RustDftR2c`]: crate::RustDftR2c
+/// [`RustDftC2r`]: crate::RustDftC2r
+pub fn norm_scale<T: DspFloat>(norm: DftNorm, direction: Direction, n: usize) -> Result<Option<T>> {
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "DFT lengths are well within f64 mantissa range"
+    )]
+    let nf = n as f64;
+
+    let factor = match norm {
+        DftNorm::None => return Ok(None),
+        DftNorm::Inverse => match direction {
+            Direction::Inverse => 1.0 / nf,
+            Direction::Forward => return Ok(None),
+        },
+        DftNorm::Ortho => 1.0 / nf.sqrt(),
+    };
+
+    let scale = T::from_f64(factor)
+        .ok_or_else(|| Error::Internal("failed to convert scale factor".to_owned()))?;
+    Ok(Some(scale))
 }
 
 macro_rules! impl_dft {

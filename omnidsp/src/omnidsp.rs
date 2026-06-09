@@ -14,7 +14,7 @@ use omnidsp_core::traits::dct::DctSpec;
 use omnidsp_core::traits::dft::DftC2cSpec;
 use omnidsp_core::traits::fir::FirSpec;
 use omnidsp_core::traits::iir::IirSpec;
-use omnidsp_rustfft::RustDftC2c;
+use omnidsp_rustfft::{RustDftC2c, RustDftC2r, RustDftR2c};
 
 use omnidsp_core::create::CreatePlan;
 
@@ -22,13 +22,26 @@ use omnidsp_core::create::CreatePlan;
 
 /// Pure Rust fallback backend.
 ///
-/// Combines [`RustDftC2c`] (wrapping `RustFFT`) with [`ScalarVecOps`]
-/// (scalar loops, LLVM auto-vectorized).  Builds on every platform
-/// with no external dependencies.
+/// Combines [`RustDftC2c`] (wrapping `RustFFT`) and [`RustDftR2c`] /
+/// [`RustDftC2r`] (wrapping `realfft`) with [`ScalarVecOps`] (scalar loops,
+/// LLVM auto-vectorized).  Builds on every platform with no external
+/// dependencies.
 #[derive(Debug, Clone, Copy)]
 pub struct RustBackend {
-    /// DFT factory (`RustFFT` wrapper).
+    /// Complex-to-complex DFT factory (`RustFFT` wrapper).
     pub(crate) dft: RustDftC2c,
+    /// Real-to-complex DFT factory (`realfft` wrapper).
+    #[allow(
+        dead_code,
+        reason = "wired into the real-input module CreatePlan impls by the macro in 05f / item 4"
+    )]
+    pub(crate) dftr2c: RustDftR2c,
+    /// Complex-to-real DFT factory (`realfft` wrapper).
+    #[allow(
+        dead_code,
+        reason = "wired into the real-input module CreatePlan impls by the macro in 05f / item 4"
+    )]
+    pub(crate) dftc2r: RustDftC2r,
     /// Vector operations (scalar fallback).
     pub(crate) vecops: ScalarVecOps,
 }
@@ -39,6 +52,8 @@ impl RustBackend {
     pub const fn new() -> Self {
         Self {
             dft: RustDftC2c,
+            dftr2c: RustDftR2c,
+            dftc2r: RustDftC2r,
             vecops: ScalarVecOps,
         }
     }
