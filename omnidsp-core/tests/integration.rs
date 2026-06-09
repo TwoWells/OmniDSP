@@ -29,7 +29,7 @@ use omnidsp_core::traits::fir::{Fir, FirPlan, FirStrategy};
 use omnidsp_core::traits::iir::{Iir, IirPlan};
 use omnidsp_core::traits::vecops::VecOps;
 use omnidsp_core::types::{Direction, FilterType, Window};
-use omnidsp_rustfft::RustDftC2c;
+use omnidsp_rustfft::{RustDftC2c, RustDftC2r, RustDftR2c};
 
 // ─── Test data ─────────────────────────────────────────────────────────
 
@@ -93,7 +93,7 @@ mod fir_integration {
         );
 
         // Create plan with real primitives and process.
-        let factory = OmniFir::new(RustDftC2c, ScalarVecOps);
+        let factory = OmniFir::new(RustDftR2c, RustDftC2r, ScalarVecOps);
 
         for &strategy in &[FirStrategy::Direct, FirStrategy::OverlapSave] {
             let plan_spec = spec.clone().with_strategy(strategy);
@@ -134,7 +134,7 @@ mod fir_integration {
         )
         .expect("FIR design");
 
-        let factory = OmniFir::new(RustDftC2c, ScalarVecOps);
+        let factory = OmniFir::new(RustDftR2c, RustDftC2r, ScalarVecOps);
 
         for &strategy in &[FirStrategy::Direct, FirStrategy::OverlapSave] {
             let plan_spec = spec.clone().with_strategy(strategy);
@@ -184,7 +184,7 @@ mod fir_integration {
         )
         .expect("FIR design");
 
-        let factory = OmniFir::new(RustDftC2c, ScalarVecOps);
+        let factory = OmniFir::new(RustDftR2c, RustDftC2r, ScalarVecOps);
 
         for &strategy in &[FirStrategy::Direct, FirStrategy::OverlapSave] {
             let plan_spec = spec.clone().with_strategy(strategy);
@@ -470,7 +470,7 @@ mod streaming_equivalence {
         )
         .expect("FIR design");
 
-        let factory = OmniFir::new(RustDftC2c, ScalarVecOps);
+        let factory = OmniFir::new(RustDftR2c, RustDftC2r, ScalarVecOps);
         let input: Vec<f64> = (0..1024)
             .map(|i| (TAU * 400.0 * f64::from(i) / 44100.0).sin())
             .collect();
@@ -670,7 +670,7 @@ mod pipeline {
         )
         .expect("FIR design");
 
-        let fir_factory = OmniFir::new(RustDftC2c, ScalarVecOps);
+        let fir_factory = OmniFir::new(RustDftR2c, RustDftC2r, ScalarVecOps);
         let mut fir_plan = Fir::<f64>::create_plan(&fir_factory, &fir_spec).expect("FIR plan");
 
         let mut filtered = vec![0.0; resampled.len()];

@@ -197,7 +197,8 @@ fn gen_conv(input: &BackendInput) -> TokenStream2 {
 
 fn gen_fir(input: &BackendInput) -> TokenStream2 {
     let backend = &input.backend;
-    let dft = &input.dft;
+    let dftr2c = &input.dftr2c;
+    let dftc2r = &input.dftc2r;
     let vecops = &input.vecops;
     let mut tokens = TokenStream2::new();
 
@@ -206,18 +207,18 @@ fn gen_fir(input: &BackendInput) -> TokenStream2 {
             impl ::omnidsp_core::create::CreatePlan<::omnidsp_core::traits::fir::FirSpec<#float>>
                 for #backend
             {
-                type Plan = ::omnidsp_core::modules::fir::OmniFirPlan<
-                    #float,
-                    <#dft as ::omnidsp_core::traits::dft::DftC2c<#float>>::Plan,
-                    #vecops,
-                >;
+                type Plan = <
+                    ::omnidsp_core::modules::fir::OmniFir<#dftr2c, #dftc2r, #vecops>
+                    as ::omnidsp_core::traits::fir::Fir<#float>
+                >::Plan;
 
                 fn create_plan(
                     &self,
                     spec: &::omnidsp_core::traits::fir::FirSpec<#float>,
                 ) -> ::omnidsp_core::error::Result<Self::Plan> {
                     let factory = ::omnidsp_core::modules::fir::OmniFir::new(
-                        self.dft.clone(),
+                        self.dftr2c.clone(),
+                        self.dftc2r.clone(),
                         self.vecops.clone(),
                     );
                     ::omnidsp_core::traits::fir::Fir::<#float>::create_plan(&factory, spec)

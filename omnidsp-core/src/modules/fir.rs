@@ -3,10 +3,16 @@
 
 //! FIR filter module — direct and overlap-save streaming filter.
 //!
-//! [`OmniFir`] implements the [`Fir`] trait generically over any [`DftC2c`]
-//! and [`VecOps`] implementation.  Supports both time-domain (direct MAC
-//! loop) and frequency-domain (overlap-save) execution, selected via
-//! [`FirStrategy`].
+//! [`OmniFir`] implements the [`Fir`] trait generically over any [`DftR2c`] /
+//! [`DftC2r`] and [`VecOps`] implementation.  Supports both time-domain
+//! (direct MAC loop) and frequency-domain (overlap-save) execution, selected
+//! via [`FirStrategy`].
+//!
+//! The overlap-save path transforms each real block through the real-DFT
+//! primitives ([`DftR2c`] forward, [`DftC2r`] inverse) rather than a complex
+//! transform (ADR-009 §6).  The inverse c2r factory is Hermitian-shaped
+//! ([`HermitianC2r`]) so the DC/Nyquist boundary is projected before the
+//! transform (ADR-010 §2/§5).
 //!
 //! The [`recommend_strategy`] function provides an operation-count heuristic
 //! for the `Auto` case.
@@ -20,10 +26,11 @@ use num_complex::Complex;
 use num_traits::Float;
 
 use crate::error::{Error, Result};
-use crate::traits::dft::{DftC2c, DftC2cPlan, DftC2cSpec, DftNorm};
+use crate::hermitian::{HermitianC2r, HermitianC2rPlan};
+use crate::traits::dft::{DftC2r, DftC2rPlan, DftC2rSpec, DftNorm, DftR2c, DftR2cPlan, DftR2cSpec};
 use crate::traits::fir::{Fir, FirPlan, FirSpec, FirStrategy};
 use crate::traits::vecops::VecOps;
-use crate::types::Direction;
+use crate::types::DspFloat;
 
 // ─── Public heuristic ─────────────────────────────────────────────────
 
@@ -70,21 +77,25 @@ pub fn recommend_strategy(num_taps: usize) -> FirStrategy {
 
 // ─── Public types ──────────────────────────────────────────────────────
 
-/// Generic FIR filter factory backed by [`DftC2c`] and [`VecOps`].
+/// Generic FIR filter factory backed by [`DftR2c`] / [`DftC2r`] and
+/// [`VecOps`].
 ///
 /// Creates [`OmniFirPlan`]s for specific filter specifications.  The factory
-/// owns the DFT factory and `VecOps` instance; plans own their sub-plans.
+/// owns the real-DFT factories (`r2c` forward, `c2r` inverse) and the `VecOps`
+/// instance; plans own their sub-plans.  The c2r factory is Hermitian-shaped
+/// internally (ADR-010 §5).
 #[derive(Debug, Clone)]
-pub struct OmniFir<D, V> {
-    dft: D,
+pub struct OmniFir<R, C, V> {
+    r2c: R,
+    c2r: C,
     vecops: V,
 }
 
-impl<D, V> OmniFir<D, V> {
+impl<R, C, V> OmniFir<R, C, V> {
     /// Create a new FIR filter factory.
     #[must_use]
-    pub const fn new(dft: D, vecops: V) -> Self {
-        Self { dft, vecops }
+    pub const fn new(r2c: R, c2r: C, vecops: V) -> Self {
+        Self { r2c, c2r, vecops }
     }
 }
 
@@ -96,13 +107,17 @@ impl<D, V> OmniFir<D, V> {
 /// delay line without recreating the plan.
 ///
 /// **Memory:** the direct path allocates `2 × num_taps` for the doubled
-/// delay buffer.  The overlap-save path allocates 3 × `block_size` complex
-/// values for FFT scratch plus `num_taps − 1` for the overlap buffer.
-pub struct OmniFirPlan<T, P, V> {
-    inner: PlanInner<T, P, V>,
+/// delay buffer.  The overlap-save path allocates two real buffers of
+/// `block_size` (FFT input + IFFT output) plus a complex half-spectrum buffer
+/// of `block_size / 2 + 1`, and `num_taps − 1` for the overlap buffer.
+///
+/// `RP` is the forward [`DftR2cPlan`]; `CP` is the inverse [`DftC2rPlan`]
+/// (in practice a [`HermitianC2rPlan`]).  Neither is ever named by users.
+pub struct OmniFirPlan<T, RP, CP, V> {
+    inner: PlanInner<T, RP, CP, V>,
 }
 
-impl<T, P, V> std::fmt::Debug for OmniFirPlan<T, P, V> {
+impl<T, RP, CP, V> std::fmt::Debug for OmniFirPlan<T, RP, CP, V> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let method = match &self.inner {
             PlanInner::Direct { .. } => "Direct",
@@ -120,9 +135,13 @@ impl<T, P, V> std::fmt::Debug for OmniFirPlan<T, P, V> {
     clippy::large_enum_variant,
     reason = "only one variant is constructed per plan"
 )]
-enum PlanInner<T, P, V> {
-    Direct { state: DirectState<T, V> },
-    OverlapSave { state: OverlapSaveState<T, P, V> },
+enum PlanInner<T, RP, CP, V> {
+    Direct {
+        state: DirectState<T, V>,
+    },
+    OverlapSave {
+        state: OverlapSaveState<T, RP, CP, V>,
+    },
 }
 
 /// State for the direct (time-domain) path.
@@ -142,52 +161,36 @@ struct DirectState<T, V> {
 }
 
 /// State for the overlap-save (frequency-domain) path.
-struct OverlapSaveState<T, P, V> {
+struct OverlapSaveState<T, RP, CP, V> {
     /// Number of filter taps.
     num_taps: usize,
     /// Valid output samples per block: `block_size - (num_taps - 1)`.
     valid_per_block: usize,
-    /// Pre-computed frequency-domain coefficients `H[k]`.
+    /// Pre-computed frequency-domain coefficients `H[k]` (half-spectrum).
     freq_coeffs: Vec<Complex<T>>,
     /// Overlap buffer: last `num_taps - 1` input samples from previous call.
     overlap: Vec<T>,
-    /// Forward DFT plan.
-    fwd: P,
-    /// Inverse DFT plan.
-    inv: P,
+    /// Forward real-to-complex DFT plan.
+    fwd: RP,
+    /// Inverse complex-to-real DFT plan (Hermitian-shaped).
+    inv: CP,
     /// `VecOps` handle.
     vecops: V,
-    /// Scratch: FFT input (`block_size` complex samples).
-    buf_time: Vec<Complex<T>>,
-    /// Scratch: FFT output / complex multiply workspace.
+    /// Scratch: FFT input (`block_size` real samples; consumed by r2c).
+    buf_time: Vec<T>,
+    /// Scratch: half-spectrum FFT output / complex multiply workspace.
     buf_freq: Vec<Complex<T>>,
-    /// Scratch: IFFT output.
-    buf_ifft: Vec<Complex<T>>,
-}
-
-/// Zero-pad a real slice into a pre-allocated complex buffer via `VecOps`.
-///
-/// First `real.len()` elements are converted via [`VecOps::real_to_complex`];
-/// the remainder is zeroed.
-fn pad_real_to_complex<T: Float + AddAssign + MulAssign, V: VecOps<T>>(
-    vecops: &V,
-    real: &[T],
-    buf: &mut [Complex<T>],
-) -> Result<()> {
-    let n = real.len();
-    vecops.real_to_complex(real, &mut buf[..n])?;
-    for c in &mut buf[n..] {
-        *c = Complex::new(T::zero(), T::zero());
-    }
-    Ok(())
+    /// Scratch: IFFT output (`block_size` real samples).
+    buf_ifft: Vec<T>,
 }
 
 // ─── Trait implementations ─────────────────────────────────────────────
 
-impl<T, P, V> FirPlan<T> for OmniFirPlan<T, P, V>
+impl<T, RP, CP, V> FirPlan<T> for OmniFirPlan<T, RP, CP, V>
 where
     T: Float + AddAssign + MulAssign + Send + Sync,
-    P: DftC2cPlan<T>,
+    RP: DftR2cPlan<T>,
+    CP: DftC2rPlan<T>,
     V: VecOps<T>,
 {
     fn process(&mut self, input: &[T], output: &mut [T]) -> Result<()> {
@@ -221,10 +224,11 @@ where
     }
 }
 
-impl<T, P, V> OmniFirPlan<T, P, V>
+impl<T, RP, CP, V> OmniFirPlan<T, RP, CP, V>
 where
     T: Float + AddAssign + MulAssign + Send + Sync,
-    P: DftC2cPlan<T>,
+    RP: DftR2cPlan<T>,
+    CP: DftC2rPlan<T>,
     V: VecOps<T>,
 {
     /// Direct (time-domain) FIR: doubled buffer + single dot product.
@@ -251,7 +255,7 @@ where
 
     /// Overlap-save (frequency-domain) FIR.
     fn process_overlap_save(
-        state: &mut OverlapSaveState<T, P, V>,
+        state: &mut OverlapSaveState<T, RP, CP, V>,
         input: &[T],
         output: &mut [T],
     ) -> Result<()> {
@@ -263,35 +267,33 @@ where
             let remaining_input = input.len() - input_pos;
             let new_samples = remaining_input.min(state.valid_per_block);
 
-            // Build the block: overlap prefix + new input + zero-pad.
-            state
-                .vecops
-                .real_to_complex(&state.overlap, &mut state.buf_time[..overlap_len])?;
-            state.vecops.real_to_complex(
-                &input[input_pos..input_pos + new_samples],
-                &mut state.buf_time[overlap_len..overlap_len + new_samples],
-            )?;
-            for c in &mut state.buf_time[overlap_len + new_samples..] {
-                *c = Complex::new(T::zero(), T::zero());
+            // Build the real block: overlap prefix + new input + zero-pad.
+            state.buf_time[..overlap_len].copy_from_slice(&state.overlap);
+            state.buf_time[overlap_len..overlap_len + new_samples]
+                .copy_from_slice(&input[input_pos..input_pos + new_samples]);
+            for x in &mut state.buf_time[overlap_len + new_samples..] {
+                *x = T::zero();
             }
 
-            // Forward FFT.
-            state.fwd.process(&state.buf_time, &mut state.buf_freq)?;
+            // Forward r2c (block_size real → half-spectrum); buf_time consumed.
+            state
+                .fwd
+                .process(&mut state.buf_time, &mut state.buf_freq)?;
 
-            // Complex multiply with pre-computed H[k].
+            // Complex multiply with pre-computed H[k] on the half-spectrum.
             state
                 .vecops
                 .cmul_inplace(&mut state.buf_freq, &state.freq_coeffs)?;
 
-            // Inverse FFT.
-            state.inv.process(&state.buf_freq, &mut state.buf_ifft)?;
+            // Inverse c2r (half-spectrum → block_size real); buf_freq consumed.
+            state
+                .inv
+                .process(&mut state.buf_freq, &mut state.buf_ifft)?;
 
-            // Extract valid output: skip first overlap_len samples.
+            // Extract valid output (already real): skip first overlap_len.
             let valid_start = overlap_len;
-            state.vecops.extract_real(
-                &state.buf_ifft[valid_start..valid_start + new_samples],
-                &mut output[output_pos..output_pos + new_samples],
-            )?;
+            output[output_pos..output_pos + new_samples]
+                .copy_from_slice(&state.buf_ifft[valid_start..valid_start + new_samples]);
 
             // Update overlap buffer with the last overlap_len input samples.
             if new_samples >= overlap_len {
@@ -312,13 +314,14 @@ where
     }
 }
 
-impl<T, D, V> Fir<T> for OmniFir<D, V>
+impl<T, R, C, V> Fir<T> for OmniFir<R, C, V>
 where
-    T: Float + AddAssign + MulAssign + Send + Sync,
-    D: DftC2c<T>,
+    T: DspFloat + AddAssign + MulAssign,
+    R: DftR2c<T>,
+    C: DftC2r<T> + Clone,
     V: VecOps<T>,
 {
-    type Plan = OmniFirPlan<T, D::Plan, V>;
+    type Plan = OmniFirPlan<T, R::Plan, HermitianC2rPlan<C::Plan>, V>;
 
     fn create_plan(&self, spec: &FirSpec<T>) -> Result<Self::Plan> {
         if spec.coefficients.is_empty() {
@@ -357,19 +360,21 @@ where
                             Error::InvalidSpec("FIR overlap-save block size overflow".to_owned())
                         })?;
                 let valid_per_block = block_size - overlap_len;
+                let bins = block_size / 2 + 1;
 
-                let fwd_spec = DftC2cSpec::new(block_size, Direction::Forward, DftNorm::Inverse)?;
-                let inv_spec = DftC2cSpec::new(block_size, Direction::Inverse, DftNorm::Inverse)?;
-                let fwd = self.dft.create_plan(&fwd_spec)?;
-                let inv = self.dft.create_plan(&inv_spec)?;
+                let fwd_spec = DftR2cSpec::new(block_size, DftNorm::Inverse)?;
+                let fwd = self.r2c.create_plan(&fwd_spec)?;
+                // Hermitian-shaped inverse c2r (ADR-010 §2/§5).
+                let inv_spec = DftC2rSpec::new(block_size, DftNorm::Inverse)?;
+                let inv = HermitianC2r::new(self.c2r.clone()).create_plan(&inv_spec)?;
 
-                // Pre-compute frequency-domain coefficients.
+                // Pre-compute the half-spectrum filter coefficients `H[k]`.
                 let zero = Complex::new(T::zero(), T::zero());
-                let mut buf_time = vec![zero; block_size];
-                let mut freq_coeffs = vec![zero; block_size];
+                let mut buf_time = vec![T::zero(); block_size];
+                let mut freq_coeffs = vec![zero; bins];
 
-                pad_real_to_complex(&self.vecops, &spec.coefficients, &mut buf_time)?;
-                fwd.process(&buf_time, &mut freq_coeffs)?;
+                buf_time[..num_taps].copy_from_slice(&spec.coefficients);
+                fwd.process(&mut buf_time, &mut freq_coeffs)?;
 
                 PlanInner::OverlapSave {
                     state: OverlapSaveState {
@@ -381,8 +386,8 @@ where
                         inv,
                         vecops: self.vecops.clone(),
                         buf_time,
-                        buf_freq: vec![zero; block_size],
-                        buf_ifft: vec![zero; block_size],
+                        buf_freq: vec![zero; bins],
+                        buf_ifft: vec![T::zero(); block_size],
                     },
                 }
             }
@@ -398,12 +403,12 @@ where
 #[allow(clippy::expect_used, reason = "tests use expect for clarity")]
 mod tests {
     use super::*;
-    use crate::test_utils::{TestDftC2c, TestVecOps};
+    use crate::test_utils::{TestDftC2r, TestDftR2c, TestVecOps};
 
     const EPSILON: f64 = 1e-8;
 
-    fn make_factory() -> OmniFir<TestDftC2c, TestVecOps> {
-        OmniFir::new(TestDftC2c, TestVecOps)
+    fn make_factory() -> OmniFir<TestDftR2c, TestDftC2r, TestVecOps> {
+        OmniFir::new(TestDftR2c, TestDftC2r, TestVecOps)
     }
 
     fn assert_approx_eq(actual: &[f64], expected: &[f64], eps: f64, label: &str) {
