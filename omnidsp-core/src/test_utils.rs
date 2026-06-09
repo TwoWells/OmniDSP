@@ -119,6 +119,10 @@ impl DftC2c<f64> for TestDftC2c {
 /// apply identical per-direction factors: the forward-only [`TestDftR2c`] scales
 /// like a c2c forward plan, the inverse-only [`TestDftC2r`] like a c2c inverse
 /// plan (see [`DftNorm`]).
+///
+/// The duplication is intentional: `omnidsp-core` cannot depend on
+/// `omnidsp-rustfft` (the dependency runs the other way), so the two `norm_scale`
+/// bodies are kept deliberately identical rather than shared.
 #[allow(
     clippy::cast_precision_loss,
     reason = "test DFT operates on small sizes where usize→f64 is exact"
