@@ -382,7 +382,8 @@ fn gen_hilbert(input: &BackendInput) -> TokenStream2 {
 
 fn gen_dct(input: &BackendInput) -> TokenStream2 {
     let backend = &input.backend;
-    let dft = &input.dft;
+    let dftr2c = &input.dftr2c;
+    let dftc2r = &input.dftc2r;
     let vecops = &input.vecops;
     let mut tokens = TokenStream2::new();
 
@@ -391,18 +392,18 @@ fn gen_dct(input: &BackendInput) -> TokenStream2 {
             impl ::omnidsp_core::create::CreatePlan<::omnidsp_core::traits::dct::DctSpec<#float>>
                 for #backend
             {
-                type Plan = ::omnidsp_core::modules::dct::OmniDctPlan<
-                    #float,
-                    <#dft as ::omnidsp_core::traits::dft::DftC2c<#float>>::Plan,
-                    #vecops,
-                >;
+                type Plan = <
+                    ::omnidsp_core::modules::dct::OmniDct<#dftr2c, #dftc2r, #vecops>
+                    as ::omnidsp_core::traits::dct::Dct<#float>
+                >::Plan;
 
                 fn create_plan(
                     &self,
                     spec: &::omnidsp_core::traits::dct::DctSpec<#float>,
                 ) -> ::omnidsp_core::error::Result<Self::Plan> {
                     let factory = ::omnidsp_core::modules::dct::OmniDct::new(
-                        self.dft.clone(),
+                        self.dftr2c.clone(),
+                        self.dftc2r.clone(),
                         self.vecops.clone(),
                     );
                     ::omnidsp_core::traits::dct::Dct::<#float>::create_plan(&factory, spec)

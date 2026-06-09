@@ -1,15 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Two Wells <contact@twowells.dev>
 
-//! DCT module — Discrete Cosine Transform via FFT.
+//! DCT module — Discrete Cosine Transform via the real-DFT primitives.
 //!
-//! [`OmniDct`] implements the [`Dct`] trait generically over any [`DftC2c`]
-//! and [`VecOps`] implementation.  Supports DCT type II and type III with
-//! optional orthonormal normalization.
+//! [`OmniDct`] implements the [`Dct`] trait generically over any [`DftR2c`] /
+//! [`DftC2r`] and [`VecOps`] implementation.  Supports DCT type II and type III
+//! with optional orthonormal normalization.
 //!
 //! The algorithm uses symmetric extension to convert the real DCT into a
-//! complex FFT of twice the length, then extracts the result via twiddle
-//! factor multiplication.
+//! transform of twice the length (ADR-009 §6).  DCT-II runs the real `2N`-point
+//! symmetric extension through a forward [`DftR2c`] (taking the first `N` of the
+//! `N + 1` half-spectrum bins) and a twiddle multiply; DCT-III builds the
+//! `N + 1`-bin Hermitian half-spectrum and runs it through a [`HermitianC2r`]-
+//! shaped inverse [`DftC2r`] (ADR-010 §2/§5).
 //!
 //! Internal scratch buffers are behind a [`Mutex`] so that the plan
 //! satisfies `Send + Sync` while taking `&self`.
@@ -23,28 +26,32 @@ use num_complex::Complex;
 use num_traits::Float;
 
 use crate::error::{Error, Result};
+use crate::hermitian::{HermitianC2r, HermitianC2rPlan};
 use crate::traits::dct::{Dct, DctNorm, DctPlan, DctSpec, DctType};
-use crate::traits::dft::{DftC2c, DftC2cPlan, DftC2cSpec, DftNorm};
+use crate::traits::dft::{DftC2r, DftC2rPlan, DftC2rSpec, DftNorm, DftR2c, DftR2cPlan, DftR2cSpec};
 use crate::traits::vecops::VecOps;
-use crate::types::Direction;
+use crate::types::DspFloat;
 
 // ─── Public types ──────────────────────────────────────────────────────
 
-/// Generic DCT factory backed by [`DftC2c`] and [`VecOps`].
+/// Generic DCT factory backed by [`DftR2c`] / [`DftC2r`] and [`VecOps`].
 ///
 /// Creates [`OmniDctPlan`]s for specific lengths and DCT types.  The factory
-/// owns the DFT factory and `VecOps` instance; plans own their sub-plans.
+/// owns the real-DFT factories (`r2c` for DCT-II forward, `c2r` for DCT-III
+/// inverse) and the `VecOps` instance; plans own their sub-plans.  The c2r
+/// factory is Hermitian-shaped internally (ADR-010 §5).
 #[derive(Debug, Clone)]
-pub struct OmniDct<D, V> {
-    dft: D,
+pub struct OmniDct<R, C, V> {
+    r2c: R,
+    c2r: C,
     vecops: V,
 }
 
-impl<D, V> OmniDct<D, V> {
+impl<R, C, V> OmniDct<R, C, V> {
     /// Create a new DCT factory.
     #[must_use]
-    pub const fn new(dft: D, vecops: V) -> Self {
-        Self { dft, vecops }
+    pub const fn new(r2c: R, c2r: C, vecops: V) -> Self {
+        Self { r2c, c2r, vecops }
     }
 }
 
@@ -53,11 +60,15 @@ impl<D, V> OmniDct<D, V> {
 /// Created by [`OmniDct::create_plan`](Dct::create_plan).  Immutable and
 /// thread-safe (`Send + Sync`).
 ///
-/// **Memory:** allocates `2 × 2N` complex values for scratch buffers
-/// (behind a [`Mutex`]) plus `N` complex values for precomputed twiddle
-/// factors.
-pub struct OmniDctPlan<T, P, V> {
-    dft_plan: P,
+/// **Memory:** allocates a `2N` real buffer plus an `N + 1` complex
+/// half-spectrum buffer (behind a [`Mutex`]), an `N` complex twiddle-product
+/// buffer (DCT-II), and `N` complex precomputed twiddle factors.
+///
+/// `RP` is the DCT-II forward [`DftR2cPlan`]; `CP` is the DCT-III inverse
+/// [`DftC2rPlan`] (in practice a [`HermitianC2rPlan`]).  Only one is populated
+/// per plan; neither is ever named by users.
+pub struct OmniDctPlan<T, RP, CP, V> {
+    transform: DctTransform<RP, CP>,
     twiddles: Vec<Complex<T>>,
     vecops: V,
     scratch: Mutex<DctScratch<T>>,
@@ -66,7 +77,7 @@ pub struct OmniDctPlan<T, P, V> {
     norm: DctNorm,
 }
 
-impl<T, P, V> fmt::Debug for OmniDctPlan<T, P, V> {
+impl<T, RP, CP, V> fmt::Debug for OmniDctPlan<T, RP, CP, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("OmniDctPlan")
             .field("length", &self.length)
@@ -78,18 +89,24 @@ impl<T, P, V> fmt::Debug for OmniDctPlan<T, P, V> {
 
 // ─── Plan internals ───────────────────────────────────────────────────
 
+/// The transform sub-plan a DCT plan holds: a forward [`DftR2cPlan`] for
+/// DCT-II, or a Hermitian-shaped inverse [`DftC2rPlan`] for DCT-III.  Exactly
+/// one is constructed per [`OmniDctPlan`], chosen by [`DctType`].
+enum DctTransform<RP, CP> {
+    /// DCT-II: forward real-to-complex transform of the symmetric extension.
+    Forward(RP),
+    /// DCT-III: inverse complex-to-real transform of the built half-spectrum.
+    Inverse(CP),
+}
+
 /// Scratch buffers for the DCT pipeline.
-#[allow(
-    clippy::struct_field_names,
-    reason = "buf_ prefix clarifies these are reusable buffers"
-)]
 struct DctScratch<T> {
-    /// FFT/IFFT input buffer (length 2N).
-    buf_in: Vec<Complex<T>>,
-    /// FFT/IFFT output buffer (length 2N).
-    buf_out: Vec<Complex<T>>,
-    /// Twiddle multiply result (length N, DCT-II only).
-    buf_tw: Vec<Complex<T>>,
+    /// `2N` real buffer: symmetric extension (DCT-II) / c2r output (DCT-III).
+    real: Vec<T>,
+    /// `N + 1` complex half-spectrum: r2c output (DCT-II) / c2r input (DCT-III).
+    half: Vec<Complex<T>>,
+    /// `N` complex twiddle-multiply result (DCT-II only).
+    twiddle_prod: Vec<Complex<T>>,
 }
 
 // ─── Trait implementations ─────────────────────────────────────────────
@@ -98,10 +115,11 @@ struct DctScratch<T> {
     clippy::cast_precision_loss,
     reason = "DCT lengths are small enough that usize→f64 is exact"
 )]
-impl<T, P, V> DctPlan<T> for OmniDctPlan<T, P, V>
+impl<T, RP, CP, V> DctPlan<T> for OmniDctPlan<T, RP, CP, V>
 where
     T: Float + AddAssign + MulAssign + Send + Sync,
-    P: DftC2cPlan<T>,
+    RP: DftR2cPlan<T>,
+    CP: DftC2rPlan<T>,
     V: VecOps<T>,
 {
     fn process(&self, input: &[T], output: &mut [T]) -> Result<()> {
@@ -129,42 +147,49 @@ where
     clippy::cast_precision_loss,
     reason = "DCT lengths are small enough that usize→f64 is exact"
 )]
-impl<T, P, V> OmniDctPlan<T, P, V>
+impl<T, RP, CP, V> OmniDctPlan<T, RP, CP, V>
 where
     T: Float + AddAssign + MulAssign + Send + Sync,
-    P: DftC2cPlan<T>,
+    RP: DftR2cPlan<T>,
+    CP: DftC2rPlan<T>,
     V: VecOps<T>,
 {
-    /// DCT-II via symmetric extension → forward FFT → twiddle multiply → extract real.
+    /// DCT-II via symmetric extension → forward r2c → twiddle multiply → extract real.
     #[allow(
         clippy::significant_drop_tightening,
         reason = "MutexGuard must live for the entire DCT pipeline"
     )]
     fn process_dct2(&self, input: &[T], output: &mut [T]) -> Result<()> {
         let n = self.length;
+        let two_n = 2 * n;
+        let DctTransform::Forward(fwd) = &self.transform else {
+            return Err(Error::Internal(
+                "DCT-II plan is missing its forward transform".to_owned(),
+            ));
+        };
         let mut guard = self
             .scratch
             .lock()
             .map_err(|e| Error::Internal(format!("scratch buffer lock poisoned: {e}")))?;
 
         let DctScratch {
-            buf_in,
-            buf_out,
-            buf_tw,
+            real,
+            half,
+            twiddle_prod,
         } = &mut *guard;
 
         // 1. Symmetric extension: y[i] = x[i], y[2N-1-i] = x[i]
         for (i, &x) in input.iter().enumerate() {
-            buf_in[i] = Complex::new(x, T::zero());
-            buf_in[2 * n - 1 - i] = Complex::new(x, T::zero());
+            real[i] = x;
+            real[two_n - 1 - i] = x;
         }
 
-        // 2. Forward FFT (2N-point, no normalization)
-        self.dft_plan.process(buf_in, buf_out)?;
+        // 2. Forward r2c (2N real → N+1 half-spectrum; real is consumed)
+        fwd.process(real, half)?;
 
-        // 3. Twiddle multiply: buf_tw[k] = Y[k] * twiddle[k], then extract real parts.
-        self.vecops.cmul(&buf_out[..n], &self.twiddles, buf_tw)?;
-        self.vecops.extract_real(buf_tw, output)?;
+        // 3. Twiddle multiply the first N bins, then extract real parts.
+        self.vecops.cmul(&half[..n], &self.twiddles, twiddle_prod)?;
+        self.vecops.extract_real(twiddle_prod, output)?;
 
         // 4. Orthonormal scaling
         if self.norm == DctNorm::Ortho {
@@ -179,22 +204,18 @@ where
         Ok(())
     }
 
-    /// DCT-III via spectrum construction → inverse FFT → extract real.
+    /// DCT-III via half-spectrum construction → inverse c2r → extract real.
     #[allow(
         clippy::significant_drop_tightening,
         reason = "MutexGuard must live for the entire DCT pipeline"
     )]
     fn process_dct3(&self, input: &[T], output: &mut [T]) -> Result<()> {
         let n = self.length;
-        let two_n = 2 * n;
-        let mut guard = self
-            .scratch
-            .lock()
-            .map_err(|e| Error::Internal(format!("scratch buffer lock poisoned: {e}")))?;
-
-        let DctScratch {
-            buf_in, buf_out, ..
-        } = &mut *guard;
+        let DctTransform::Inverse(inv) = &self.transform else {
+            return Err(Error::Internal(
+                "DCT-III plan is missing its inverse transform".to_owned(),
+            ));
+        };
 
         // For ortho normalization, pre-scale the input
         // input'[0] = input[0] * 2*sqrt(N), input'[k>0] = input[k] * sqrt(2N)
@@ -208,27 +229,30 @@ where
             (T::one(), T::one())
         };
 
-        // 1. Build spectrum: Z[k] = input[k] * conj(twiddle[k])
-        //    twiddle[k] = exp(-jπk/(2N)), so conj(twiddle[k]) = exp(+jπk/(2N))
+        let mut guard = self
+            .scratch
+            .lock()
+            .map_err(|e| Error::Internal(format!("scratch buffer lock poisoned: {e}")))?;
+
+        let DctScratch { real, half, .. } = &mut *guard;
+
+        // 1. Build the half-spectrum: Z[k] = input[k] * conj(twiddle[k])
+        //    twiddle[k] = exp(-jπk/(2N)), so conj(twiddle[k]) = exp(+jπk/(2N)).
+        //    The upper half is the c2r's job (Z is Hermitian by construction).
         for (k, &tw) in self.twiddles.iter().enumerate() {
             let scale = if k == 0 { scale_0 } else { scale_k };
             let x = input[k] * scale;
-            buf_in[k] = Complex::new(x * tw.re, x * (-tw.im));
+            half[k] = Complex::new(x * tw.re, x * (-tw.im));
         }
 
-        // Z[N] = 0
-        buf_in[n] = Complex::new(T::zero(), T::zero());
+        // Z[N] = 0 (Nyquist of the 2N-point real signal).
+        half[n] = Complex::new(T::zero(), T::zero());
 
-        // Hermitian symmetry: Z[2N-k] = conj(Z[k]) for k=1..N-1
-        for k in 1..n {
-            buf_in[two_n - k] = buf_in[k].conj();
-        }
+        // 2. Inverse c2r (N+1 half-spectrum → 2N real; half is consumed).
+        inv.process(half, real)?;
 
-        // 2. Inverse FFT (2N-point, no normalization)
-        self.dft_plan.process(buf_in, buf_out)?;
-
-        // 3. Extract real parts
-        self.vecops.extract_real(&buf_out[..n], output)?;
+        // 3. Extract the first N real samples.
+        output.copy_from_slice(&real[..n]);
 
         // 4. Ortho: divide by 2N
         if self.norm == DctNorm::Ortho {
@@ -246,13 +270,14 @@ where
     clippy::cast_precision_loss,
     reason = "DCT lengths are small enough that usize→f64 is exact"
 )]
-impl<T, D, V> Dct<T> for OmniDct<D, V>
+impl<T, R, C, V> Dct<T> for OmniDct<R, C, V>
 where
-    T: Float + AddAssign + MulAssign + Send + Sync,
-    D: DftC2c<T>,
+    T: DspFloat + AddAssign + MulAssign,
+    R: DftR2c<T>,
+    C: DftC2r<T> + Clone,
     V: VecOps<T>,
 {
-    type Plan = OmniDctPlan<T, D::Plan, V>;
+    type Plan = OmniDctPlan<T, R::Plan, HermitianC2rPlan<C::Plan>, V>;
 
     fn create_plan(&self, spec: &DctSpec<T>) -> Result<Self::Plan> {
         if spec.length == 0 {
@@ -262,13 +287,20 @@ where
         let n = spec.length;
         let two_n = 2 * n;
 
-        // Create DFT sub-plan: forward for DCT-II, inverse for DCT-III.
-        let direction = match spec.dct_type {
-            DctType::II => Direction::Forward,
-            DctType::III => Direction::Inverse,
+        // Create the real-DFT sub-plan over the 2N-point real signal: a forward
+        // r2c for DCT-II, a Hermitian-shaped inverse c2r for DCT-III.  Both use
+        // DftNorm::None — the ortho factors are applied explicitly below.
+        let transform = match spec.dct_type {
+            DctType::II => {
+                let fwd_spec = DftR2cSpec::new(two_n, DftNorm::None)?;
+                DctTransform::Forward(self.r2c.create_plan(&fwd_spec)?)
+            }
+            DctType::III => {
+                let inv_spec = DftC2rSpec::new(two_n, DftNorm::None)?;
+                let inv = HermitianC2r::new(self.c2r.clone()).create_plan(&inv_spec)?;
+                DctTransform::Inverse(inv)
+            }
         };
-        let dft_spec = DftC2cSpec::new(two_n, direction, DftNorm::None)?;
-        let dft_plan = self.dft.create_plan(&dft_spec)?;
 
         // Precompute twiddle factors: exp(-jπk/(2N)) for k=0..N-1
         let twiddles: Vec<Complex<T>> = (0..n)
@@ -281,16 +313,17 @@ where
             })
             .collect();
 
-        // Allocate scratch buffers
+        // Allocate scratch buffers: a 2N real buffer, an N+1 half-spectrum, and
+        // an N twiddle-product buffer (DCT-II).
         let zero = Complex::new(T::zero(), T::zero());
         let scratch = DctScratch {
-            buf_in: vec![zero; two_n],
-            buf_out: vec![zero; two_n],
-            buf_tw: vec![zero; n],
+            real: vec![T::zero(); two_n],
+            half: vec![zero; n + 1],
+            twiddle_prod: vec![zero; n],
         };
 
         Ok(OmniDctPlan {
-            dft_plan,
+            transform,
             twiddles,
             vecops: self.vecops.clone(),
             scratch: Mutex::new(scratch),
@@ -311,7 +344,7 @@ where
 )]
 mod tests {
     use super::*;
-    use crate::test_utils::{TestDftC2c, TestVecOps};
+    use crate::test_utils::{TestDftC2r, TestDftR2c, TestVecOps};
 
     include!(testdata!("dct_scipy.rs"));
 
@@ -328,8 +361,8 @@ mod tests {
         }
     }
 
-    fn make_factory() -> OmniDct<TestDftC2c, TestVecOps> {
-        OmniDct::new(TestDftC2c, TestVecOps)
+    fn make_factory() -> OmniDct<TestDftR2c, TestDftC2r, TestVecOps> {
+        OmniDct::new(TestDftR2c, TestDftC2r, TestVecOps)
     }
 
     // ── Validation tests ─────────────────────────────────────────────
