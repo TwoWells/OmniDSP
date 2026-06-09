@@ -3,8 +3,9 @@
 
 //! Hilbert transform module — analytic signal computation.
 //!
-//! [`OmniHilbert`] is a factory generic over [`DftC2c`] and [`VecOps`] that creates
-//! [`OmniHilbertPlan`]s from a [`HilbertSpec`].
+//! [`OmniHilbert`] is a factory generic over [`DftR2c`] (forward), [`DftC2c`]
+//! (inverse), and [`VecOps`] that creates [`OmniHilbertPlan`]s from a
+//! [`HilbertSpec`].
 //!
 //! The Hilbert transform produces the complex analytic signal from a real input.
 //! The real part of the output equals the input; the imaginary part is the
@@ -12,10 +13,16 @@
 //!
 //! # Algorithm
 //!
-//! 1. Forward FFT of the real input.
-//! 2. Apply a spectral mask: DC and Nyquist unchanged, positive frequencies
-//!    doubled, negative frequencies zeroed.
-//! 3. Inverse FFT → complex analytic signal.
+//! 1. Forward [`DftR2c`] of the real input → the `N/2 + 1` half-spectrum.
+//! 2. Apply the analytic half-mask: DC and (even-`N`) Nyquist unchanged,
+//!    positive frequencies doubled.
+//! 3. Zero-extend to the full `N` bins (negative frequencies dropped) and run a
+//!    [`DftC2c`] inverse → the complex analytic signal.
+//!
+//! Hilbert is the one real-input module that mixes a real forward transform with
+//! a *complex* inverse (its output is complex, not real), so it composes
+//! [`DftR2c`] + bare [`DftC2c`] — no [`HermitianC2r`](crate::hermitian::HermitianC2r)
+//! shaping is involved (ADR-009 §6; ADR-010 §3b).
 //!
 //! Internal scratch buffers are behind a [`Mutex`] so that the plan satisfies
 //! `Send + Sync` while taking `&self`.
@@ -29,7 +36,7 @@ use num_complex::Complex;
 use num_traits::{Float, FromPrimitive};
 
 use crate::error::{Error, Result};
-use crate::traits::dft::{DftC2c, DftC2cPlan, DftC2cSpec, DftNorm};
+use crate::traits::dft::{DftC2c, DftC2cPlan, DftC2cSpec, DftNorm, DftR2c, DftR2cPlan, DftR2cSpec};
 use crate::traits::vecops::VecOps;
 use crate::types::Direction;
 
@@ -77,21 +84,25 @@ impl<T> HilbertSpec<T> {
 
 // ─── Public types ──────────────────────────────────────────────────────
 
-/// Generic Hilbert transform factory backed by [`DftC2c`] and [`VecOps`].
+/// Generic Hilbert transform factory backed by [`DftR2c`] (forward),
+/// [`DftC2c`] (inverse), and [`VecOps`].
 ///
-/// Creates [`OmniHilbertPlan`]s for specific signal lengths.  The factory
-/// owns the DFT factory and `VecOps` instance; plans own their sub-plans.
+/// Creates [`OmniHilbertPlan`]s for specific signal lengths.  The factory owns
+/// the forward `r2c` and inverse `c2c` factories and the `VecOps` instance;
+/// plans own their sub-plans.  Unlike the other real-input modules, the inverse
+/// is a bare [`DftC2c`] (the analytic output is complex) — no Hermitian shaping.
 #[derive(Debug, Clone)]
-pub struct OmniHilbert<D, V> {
-    dft: D,
+pub struct OmniHilbert<R, C, V> {
+    r2c: R,
+    c2c: C,
     vecops: V,
 }
 
-impl<D, V> OmniHilbert<D, V> {
+impl<R, C, V> OmniHilbert<R, C, V> {
     /// Create a new Hilbert transform factory.
     #[must_use]
-    pub const fn new(dft: D, vecops: V) -> Self {
-        Self { dft, vecops }
+    pub const fn new(r2c: R, c2c: C, vecops: V) -> Self {
+        Self { r2c, c2c, vecops }
     }
 }
 
@@ -101,13 +112,16 @@ impl<D, V> OmniHilbert<D, V> {
 /// (`Send + Sync`).  Each call to [`process`](Self::process) computes the
 /// analytic signal of one input independently — no state between calls.
 ///
-/// **Memory:** one buffer of `length` complex values for scratch.
-pub struct OmniHilbertPlan<T, P, V> {
-    /// Forward DFT plan.
-    fwd: P,
-    /// Inverse DFT plan.
-    inv: P,
-    /// Pre-computed spectral mask (real-valued, length N).
+/// **Memory:** one real buffer and one complex buffer, each of `length`.
+///
+/// `RP` is the forward [`DftR2cPlan`]; `CP` is the inverse [`DftC2cPlan`].
+/// Neither is ever named by users.
+pub struct OmniHilbertPlan<T, RP, CP, V> {
+    /// Forward real-to-complex DFT plan.
+    fwd: RP,
+    /// Inverse complex-to-complex DFT plan.
+    inv: CP,
+    /// Pre-computed analytic half-mask (real-valued, length `N/2 + 1`).
     mask: Vec<T>,
     /// `VecOps` handle for spectral mask application.
     vecops: V,
@@ -117,7 +131,7 @@ pub struct OmniHilbertPlan<T, P, V> {
     scratch: Mutex<HilbertScratch<T>>,
 }
 
-impl<T, P, V> fmt::Debug for OmniHilbertPlan<T, P, V> {
+impl<T, RP, CP, V> fmt::Debug for OmniHilbertPlan<T, RP, CP, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("OmniHilbertPlan")
             .field("length", &self.length)
@@ -128,16 +142,20 @@ impl<T, P, V> fmt::Debug for OmniHilbertPlan<T, P, V> {
 // ─── Plan internals ──────────────────────────────────────────────────
 
 struct HilbertScratch<T> {
-    /// Working buffer for FFT output / masked spectrum.
-    buf_spectrum: Vec<Complex<T>>,
+    /// Real input copy (length `N`), consumed by the forward r2c.
+    real: Vec<T>,
+    /// Full-length analytic spectrum (length `N`): masked half-spectrum in the
+    /// lower bins, zeroed negative frequencies above.
+    spectrum: Vec<Complex<T>>,
 }
 
 // ─── Plan methods ────────────────────────────────────────────────────
 
-impl<T, P, V> OmniHilbertPlan<T, P, V>
+impl<T, RP, CP, V> OmniHilbertPlan<T, RP, CP, V>
 where
     T: Float + AddAssign + MulAssign + FromPrimitive + Send + Sync + 'static,
-    P: DftC2cPlan<T>,
+    RP: DftR2cPlan<T>,
+    CP: DftC2cPlan<T>,
     V: VecOps<T>,
 {
     /// Compute the analytic signal of a real input.
@@ -163,25 +181,34 @@ where
             });
         }
 
+        let n = self.length;
+        let bins = n / 2 + 1;
+
         let mut scratch = self
             .scratch
             .lock()
             .map_err(|_| Error::Internal("hilbert scratch mutex poisoned".to_owned()))?;
 
-        // Pack real input into complex buffer (imaginary = 0).
+        let HilbertScratch { real, spectrum } = &mut *scratch;
+
+        // 1. Copy the real input into scratch (the forward r2c consumes it).
+        real.copy_from_slice(input);
+
+        // 2. Forward r2c → the lower `bins` of the spectrum buffer.
+        self.fwd.process(real, &mut spectrum[..bins])?;
+
+        // 3. Apply the analytic half-mask in place (DC ×1, positive ×2,
+        //    even-N Nyquist ×1).
         self.vecops
-            .real_to_complex(input, &mut scratch.buf_spectrum)?;
+            .cscale_inplace(&mut spectrum[..bins], &self.mask)?;
 
-        // Forward FFT: packed input → spectrum in output.
-        self.fwd.process(&scratch.buf_spectrum, output)?;
+        // 4. Zero the upper half (negative frequencies dropped by the mask).
+        for c in &mut spectrum[bins..] {
+            *c = Complex::new(T::zero(), T::zero());
+        }
 
-        // Apply spectral mask in-place on output (which holds the spectrum).
-        self.vecops.cscale_inplace(output, &self.mask)?;
-
-        // Inverse FFT: masked spectrum → analytic signal.
-        // Copy masked spectrum to scratch, then IFFT into output.
-        scratch.buf_spectrum.copy_from_slice(output);
-        self.inv.process(&scratch.buf_spectrum, output)?;
+        // 5. Inverse c2c: analytic spectrum → complex analytic signal.
+        self.inv.process(spectrum, output)?;
         drop(scratch);
 
         Ok(())
@@ -196,16 +223,20 @@ where
 
 // ─── Factory ─────────────────────────────────────────────────────────
 
-impl<D, V> OmniHilbert<D, V> {
+impl<R, C, V> OmniHilbert<R, C, V> {
     /// Create a Hilbert transform plan from a [`HilbertSpec`].
     ///
     /// # Errors
     ///
     /// Returns an error if the length is zero or DFT plan creation fails.
-    pub fn create_plan<T>(&self, spec: &HilbertSpec<T>) -> Result<OmniHilbertPlan<T, D::Plan, V>>
+    pub fn create_plan<T>(
+        &self,
+        spec: &HilbertSpec<T>,
+    ) -> Result<OmniHilbertPlan<T, R::Plan, C::Plan, V>>
     where
         T: Float + AddAssign + MulAssign + FromPrimitive + Send + Sync + 'static,
-        D: DftC2c<T>,
+        R: DftR2c<T>,
+        C: DftC2c<T>,
         V: VecOps<T>,
     {
         if spec.length == 0 {
@@ -215,42 +246,45 @@ impl<D, V> OmniHilbert<D, V> {
         }
 
         let n = spec.length;
+        let bins = n / 2 + 1;
 
-        // Create forward and inverse DFT plans.
-        let fwd_spec = DftC2cSpec::new(n, Direction::Forward, DftNorm::Inverse)?;
+        // Forward r2c, inverse c2c.  DftNorm::Inverse gives the round-trip
+        // identity (1/N on the inverse only).
+        let fwd_spec = DftR2cSpec::new(n, DftNorm::Inverse)?;
+        let fwd = self.r2c.create_plan(&fwd_spec)?;
         let inv_spec = DftC2cSpec::new(n, Direction::Inverse, DftNorm::Inverse)?;
-        let fwd = self.dft.create_plan(&fwd_spec)?;
-        let inv = self.dft.create_plan(&inv_spec)?;
+        let inv = self.c2c.create_plan(&inv_spec)?;
 
-        // Build the spectral mask.
+        // Build the analytic *half*-mask (length `N/2 + 1`): the negative
+        // frequencies are dropped by zero-extension, so only the lower bins
+        // carry a factor.
         let two =
             T::from(2.0).ok_or_else(|| Error::Internal("cannot convert 2.0 to T".to_owned()))?;
         let one = T::one();
         let zero = T::zero();
 
-        let mut mask = vec![zero; n];
+        let mut mask = vec![zero; bins];
         // DC is always passed through unchanged.
         mask[0] = one;
         if n > 1 && n.is_multiple_of(2) {
             // Even length:
             //   H[1..N/2] = 2 (positive frequencies)
             //   H[N/2] = 1 (Nyquist)
-            //   H[N/2+1..N] = 0 (negative frequencies)
             for m in mask.iter_mut().take(n / 2).skip(1) {
                 *m = two;
             }
             mask[n / 2] = one;
         } else if n > 1 {
-            // Odd length:
-            //   H[1..ceil(N/2)] = 2 (positive frequencies)
-            //   H[ceil(N/2)..N] = 0 (negative frequencies)
-            for m in mask.iter_mut().take(n.div_ceil(2)).skip(1) {
+            // Odd length: every non-DC half-spectrum bin is a positive
+            //   frequency → H[1..bins] = 2 (no Nyquist bin).
+            for m in mask.iter_mut().skip(1) {
                 *m = two;
             }
         }
 
         let scratch = HilbertScratch {
-            buf_spectrum: vec![Complex::new(zero, zero); n],
+            real: vec![zero; n],
+            spectrum: vec![Complex::new(zero, zero); n],
         };
 
         Ok(OmniHilbertPlan {
@@ -283,10 +317,10 @@ mod tests {
     use num_complex::Complex;
 
     use super::{HilbertSpec, OmniHilbert};
-    use crate::test_utils::{TestDftC2c, TestVecOps};
+    use crate::test_utils::{TestDftC2c, TestDftR2c, TestVecOps};
 
-    fn make_factory() -> OmniHilbert<TestDftC2c, TestVecOps> {
-        OmniHilbert::new(TestDftC2c, TestVecOps)
+    fn make_factory() -> OmniHilbert<TestDftR2c, TestDftC2c, TestVecOps> {
+        OmniHilbert::new(TestDftR2c, TestDftC2c, TestVecOps)
     }
 
     #[test]

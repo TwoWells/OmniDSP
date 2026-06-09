@@ -348,6 +348,7 @@ fn gen_iir(input: &BackendInput) -> TokenStream2 {
 fn gen_hilbert(input: &BackendInput) -> TokenStream2 {
     let backend = &input.backend;
     let dft = &input.dft;
+    let dftr2c = &input.dftr2c;
     let vecops = &input.vecops;
     let mut tokens = TokenStream2::new();
 
@@ -357,8 +358,11 @@ fn gen_hilbert(input: &BackendInput) -> TokenStream2 {
                 ::omnidsp_core::modules::hilbert::HilbertSpec<#float>,
             > for #backend
             {
+                // Hilbert mixes a real forward (r2c) with a complex inverse
+                // (c2c) — its analytic output is complex (ADR-009 §6).
                 type Plan = ::omnidsp_core::modules::hilbert::OmniHilbertPlan<
                     #float,
+                    <#dftr2c as ::omnidsp_core::traits::dft::DftR2c<#float>>::Plan,
                     <#dft as ::omnidsp_core::traits::dft::DftC2c<#float>>::Plan,
                     #vecops,
                 >;
@@ -368,6 +372,7 @@ fn gen_hilbert(input: &BackendInput) -> TokenStream2 {
                     spec: &::omnidsp_core::modules::hilbert::HilbertSpec<#float>,
                 ) -> ::omnidsp_core::error::Result<Self::Plan> {
                     let factory = ::omnidsp_core::modules::hilbert::OmniHilbert::new(
+                        self.dftr2c.clone(),
                         self.dft.clone(),
                         self.vecops.clone(),
                     );
