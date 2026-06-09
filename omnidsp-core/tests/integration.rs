@@ -960,8 +960,8 @@ mod xcorr_integration {
 
     include!(testdata!("xcorr_scipy.rs"));
 
-    const fn make_factory() -> OmniCrossCorr<RustDftC2c, ScalarVecOps> {
-        OmniCrossCorr::new(RustDftC2c, ScalarVecOps)
+    const fn make_factory() -> OmniCrossCorr<RustDftR2c, RustDftC2r, ScalarVecOps> {
+        OmniCrossCorr::new(RustDftR2c, RustDftC2r, ScalarVecOps)
     }
 
     /// Short asymmetric signals (len=16 × len=8) vs scipy.signal.correlate.

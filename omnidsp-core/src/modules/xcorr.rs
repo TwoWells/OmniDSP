@@ -5,11 +5,15 @@
 //!
 //! [`OmniCrossCorr`] computes the full linear cross-correlation of two
 //! real-valued signals using the frequency-domain method:
-//! `xcorr(a, b) = IFFT(FFT(a) · conj(FFT(b)))`.
+//! `xcorr(a, b) = c2r(r2c(a) · conj(r2c(b)))`.
 //!
-//! Generic over any [`DftC2c`] and [`VecOps`] implementation.  Internal scratch
-//! buffers are behind a [`Mutex`] so that the plan satisfies `Send + Sync`
-//! while taking `&self`.
+//! Generic over any [`DftR2c`] / [`DftC2r`] and [`VecOps`] implementation
+//! (ADR-009 §6): `r2c(a)` and `conj(r2c(b))` are both Hermitian, so their
+//! product is the half-spectrum of the (real) cross-correlation.  The inverse
+//! c2r factory is Hermitian-shaped ([`HermitianC2r`]) so the DC/Nyquist
+//! boundary is projected before the transform (ADR-010 §2/§5).  Internal
+//! scratch buffers are behind a [`Mutex`] so that the plan satisfies
+//! `Send + Sync` while taking `&self`.
 
 use std::fmt;
 use std::marker::PhantomData;
@@ -20,9 +24,10 @@ use num_complex::Complex;
 use num_traits::Float;
 
 use crate::error::{Error, Result};
-use crate::traits::dft::{DftC2c, DftC2cPlan, DftC2cSpec, DftNorm};
+use crate::hermitian::{HermitianC2r, HermitianC2rPlan};
+use crate::traits::dft::{DftC2r, DftC2rPlan, DftC2rSpec, DftNorm, DftR2c, DftR2cPlan, DftR2cSpec};
 use crate::traits::vecops::VecOps;
-use crate::types::Direction;
+use crate::types::DspFloat;
 
 // ─── Spec ────────────────────────────────────────────────────────────────
 
@@ -80,21 +85,25 @@ impl<T> CrossCorrSpec<T> {
 
 // ─── Factory ─────────────────────────────────────────────────────────────
 
-/// Generic cross-correlation factory backed by [`DftC2c`] and [`VecOps`].
+/// Generic cross-correlation factory backed by [`DftR2c`] / [`DftC2r`] and
+/// [`VecOps`].
 ///
-/// Creates [`OmniCrossCorrPlan`]s for specific input lengths.  The factory
-/// owns the DFT factory and `VecOps` instance; plans own their sub-plans.
+/// Creates [`OmniCrossCorrPlan`]s for specific input lengths.  The factory owns
+/// the real-DFT factories (`r2c` forward, `c2r` inverse) and the `VecOps`
+/// instance; plans own their sub-plans.  The c2r factory is Hermitian-shaped
+/// internally (ADR-010 §5).
 #[derive(Debug, Clone)]
-pub struct OmniCrossCorr<D, V> {
-    dft: D,
+pub struct OmniCrossCorr<R, C, V> {
+    r2c: R,
+    c2r: C,
     vecops: V,
 }
 
-impl<D, V> OmniCrossCorr<D, V> {
+impl<R, C, V> OmniCrossCorr<R, C, V> {
     /// Create a new cross-correlation factory.
     #[must_use]
-    pub const fn new(dft: D, vecops: V) -> Self {
-        Self { dft, vecops }
+    pub const fn new(r2c: R, c2r: C, vecops: V) -> Self {
+        Self { r2c, c2r, vecops }
     }
 }
 
@@ -108,11 +117,15 @@ impl<D, V> OmniCrossCorr<D, V> {
 /// Output length is `a_len + b_len - 1` (full linear cross-correlation).
 /// The output represents lag values from `-(b_len-1)` to `+(a_len-1)`.
 ///
-/// **Memory:** allocates 3 × `fft_length` complex values for scratch
-/// buffers (behind a [`Mutex`] for thread safety).
-pub struct OmniCrossCorrPlan<T, P, V> {
-    fwd: P,
-    inv: P,
+/// **Memory:** allocates one real buffer of `fft_length` plus two complex
+/// half-spectrum buffers of `fft_length / 2 + 1` (behind a [`Mutex`] for
+/// thread safety).
+///
+/// `RP` is the forward [`DftR2cPlan`]; `CP` is the inverse [`DftC2rPlan`]
+/// (in practice a [`HermitianC2rPlan`]).  Neither is ever named by users.
+pub struct OmniCrossCorrPlan<T, RP, CP, V> {
+    fwd: RP,
+    inv: CP,
     vecops: V,
     scratch: Mutex<Scratch<T>>,
     a_len: usize,
@@ -120,7 +133,7 @@ pub struct OmniCrossCorrPlan<T, P, V> {
     output_len: usize,
 }
 
-impl<T, P, V> fmt::Debug for OmniCrossCorrPlan<T, P, V> {
+impl<T, RP, CP, V> fmt::Debug for OmniCrossCorrPlan<T, RP, CP, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("OmniCrossCorrPlan")
             .field("a_len", &self.a_len)
@@ -131,42 +144,23 @@ impl<T, P, V> fmt::Debug for OmniCrossCorrPlan<T, P, V> {
 }
 
 /// Scratch buffers for the FFT cross-correlation pipeline.
-#[allow(
-    clippy::struct_field_names,
-    reason = "buf_ prefix clarifies these are reusable buffers"
-)]
 struct Scratch<T> {
-    /// Padding / FFT input / IFFT output.
-    buf_a: Vec<Complex<T>>,
-    /// FFT output for first input → holds frequency-domain product.
-    buf_b: Vec<Complex<T>>,
-    /// FFT output for second input (conjugated in-place).
-    buf_c: Vec<Complex<T>>,
-}
-
-/// Zero-pad a real slice into a pre-allocated complex buffer via `VecOps`.
-///
-/// First `real.len()` elements are converted via [`VecOps::real_to_complex`];
-/// the remainder is zeroed.
-fn pad_real_to_complex<T: Float + AddAssign + MulAssign, V: VecOps<T>>(
-    vecops: &V,
-    real: &[T],
-    buf: &mut [Complex<T>],
-) -> Result<()> {
-    let n = real.len();
-    vecops.real_to_complex(real, &mut buf[..n])?;
-    for c in &mut buf[n..] {
-        *c = Complex::new(T::zero(), T::zero());
-    }
-    Ok(())
+    /// Real pad buffer (`fft_len`): holds each zero-padded input before the
+    /// forward r2c consumes it, then receives the c2r real output.
+    real: Vec<T>,
+    /// Half-spectrum of the first input → holds the frequency-domain product.
+    half_a: Vec<Complex<T>>,
+    /// Half-spectrum of the second input (conjugated in-place).
+    half_b: Vec<Complex<T>>,
 }
 
 // ─── Plan implementation ─────────────────────────────────────────────────
 
-impl<T, P, V> OmniCrossCorrPlan<T, P, V>
+impl<T, RP, CP, V> OmniCrossCorrPlan<T, RP, CP, V>
 where
     T: Float + AddAssign + MulAssign + Send + Sync,
-    P: DftC2cPlan<T>,
+    RP: DftR2cPlan<T>,
+    CP: DftC2rPlan<T>,
     V: VecOps<T>,
 {
     /// Compute the cross-correlation of `a` and `b`.
@@ -210,39 +204,37 @@ where
             .map_err(|e| Error::Internal(format!("scratch buffer lock poisoned: {e}")))?;
 
         let Scratch {
-            buf_a,
-            buf_b,
-            buf_c,
+            real,
+            half_a,
+            half_b,
         } = &mut *guard;
 
-        // 1. Zero-pad a → buf_a, then forward FFT → buf_b.
-        pad_real_to_complex(&self.vecops, a, buf_a)?;
-        self.fwd.process(buf_a, buf_b)?;
+        // 1. Zero-pad a → real, then forward r2c → half_a (real is consumed).
+        pad_real(a, real);
+        self.fwd.process(real, half_a)?;
 
-        // 2. Zero-pad b → buf_a (reuse), then forward FFT → buf_c.
-        pad_real_to_complex(&self.vecops, b, buf_a)?;
-        self.fwd.process(buf_a, buf_c)?;
+        // 2. Zero-pad b → real (reuse), then forward r2c → half_b.
+        pad_real(b, real);
+        self.fwd.process(real, half_b)?;
 
-        // 3. Conjugate buf_c in-place: conj(FFT(b)).
-        self.vecops.conj_inplace(buf_c);
+        // 3. Conjugate the half-spectrum of b in place: conj(r2c(b)).
+        self.vecops.conj_inplace(half_b);
 
-        // 4. Complex element-wise multiply: buf_b = FFT(a) · conj(FFT(b)).
-        self.vecops.cmul_inplace(buf_b, buf_c)?;
+        // 4. Half-spectrum element-wise multiply: half_a = r2c(a) · conj(r2c(b)).
+        self.vecops.cmul_inplace(half_a, half_b)?;
 
-        // 5. Inverse FFT: buf_b → buf_a.
-        self.inv.process(buf_b, buf_a)?;
+        // 5. Inverse c2r: half_a → real (HermitianC2r projects DC/Nyquist).
+        self.inv.process(half_a, real)?;
 
-        // 6. Extract real parts in full cross-correlation order.
+        // 6. Extract real output in full cross-correlation order.
         //    The IFFT produces circular correlation in wrap-around order:
         //      indices 0..a_len → non-negative lags (lag 0 to lag a_len-1)
         //      indices fft_len-(b_len-1)..fft_len → negative lags
         //    Full output order: negative lags first, then non-negative.
         let neg_lags = self.b_len - 1;
-        let fft_len = buf_a.len();
-        self.vecops
-            .extract_real(&buf_a[fft_len - neg_lags..fft_len], &mut output[..neg_lags])?;
-        self.vecops
-            .extract_real(&buf_a[..self.a_len], &mut output[neg_lags..])?;
+        let fft_len = real.len();
+        output[..neg_lags].copy_from_slice(&real[fft_len - neg_lags..fft_len]);
+        output[neg_lags..].copy_from_slice(&real[..self.a_len]);
 
         Ok(())
     }
@@ -268,24 +260,27 @@ where
 
 // ─── Factory implementation ──────────────────────────────────────────────
 
-impl<D, V> OmniCrossCorr<D, V> {
+/// The plan [`OmniCrossCorr::create_plan`] returns: the forward [`DftR2c`] plan
+/// plus the Hermitian-shaped inverse [`DftC2r`] plan, over `VecOps` `V`.
+type ShapedCrossCorrPlan<T, R, C, V> =
+    OmniCrossCorrPlan<T, <R as DftR2c<T>>::Plan, HermitianC2rPlan<<C as DftC2r<T>>::Plan>, V>;
+
+impl<R, C, V> OmniCrossCorr<R, C, V> {
     /// Create a cross-correlation plan from the given specification.
     ///
-    /// The plan preallocates FFT sub-plans and scratch buffers so that
+    /// The plan preallocates real-DFT sub-plans and scratch buffers so that
     /// execution is allocation-free.
     ///
     /// # Errors
     ///
     /// Returns an error if either length is zero, the FFT length overflows,
     /// or DFT plan creation fails.
-    pub fn create_plan<T>(
-        &self,
-        spec: &CrossCorrSpec<T>,
-    ) -> Result<OmniCrossCorrPlan<T, D::Plan, V>>
+    pub fn create_plan<T>(&self, spec: &CrossCorrSpec<T>) -> Result<ShapedCrossCorrPlan<T, R, C, V>>
     where
-        T: Float + AddAssign + MulAssign + Send + Sync,
-        D: DftC2c<T>,
-        V: VecOps<T> + Clone,
+        T: DspFloat + AddAssign + MulAssign,
+        R: DftR2c<T>,
+        C: DftC2r<T> + Clone,
+        V: VecOps<T>,
     {
         if spec.a_len == 0 {
             return Err(Error::InvalidSpec(
@@ -302,19 +297,23 @@ impl<D, V> OmniCrossCorr<D, V> {
         let fft_len = output_len.checked_next_power_of_two().ok_or_else(|| {
             Error::InvalidSpec("cross-correlation FFT length overflow".to_owned())
         })?;
+        let bins = fft_len / 2 + 1;
 
-        // Cross-correlation theorem: xcorr(a,b) = IFFT(FFT(a) · conj(FFT(b))).
-        // DftNorm::Inverse gives IFFT(FFT(x)) = x (1/N on inverse only).
-        let fwd_spec = DftC2cSpec::new(fft_len, Direction::Forward, DftNorm::Inverse)?;
-        let inv_spec = DftC2cSpec::new(fft_len, Direction::Inverse, DftNorm::Inverse)?;
-        let fwd = self.dft.create_plan(&fwd_spec)?;
-        let inv = self.dft.create_plan(&inv_spec)?;
+        // Cross-correlation theorem: xcorr(a,b) = c2r(r2c(a) · conj(r2c(b))).
+        // DftNorm::Inverse gives c2r(r2c(x)) = x (1/N on inverse only).
+        let fwd_spec = DftR2cSpec::new(fft_len, DftNorm::Inverse)?;
+        let fwd = self.r2c.create_plan(&fwd_spec)?;
+        // Hermitian-shaped inverse: the product of two Hermitian half-spectra
+        // is Hermitian, but float drift leaves ~epsilon imaginary at DC/Nyquist
+        // that the projection clears before the inverse (ADR-010 §2/§5).
+        let inv_spec = DftC2rSpec::new(fft_len, DftNorm::Inverse)?;
+        let inv = HermitianC2r::new(self.c2r.clone()).create_plan(&inv_spec)?;
 
         let zero = Complex::new(T::zero(), T::zero());
         let scratch = Scratch {
-            buf_a: vec![zero; fft_len],
-            buf_b: vec![zero; fft_len],
-            buf_c: vec![zero; fft_len],
+            real: vec![T::zero(); fft_len],
+            half_a: vec![zero; bins],
+            half_b: vec![zero; bins],
         };
 
         Ok(OmniCrossCorrPlan {
@@ -329,16 +328,27 @@ impl<D, V> OmniCrossCorr<D, V> {
     }
 }
 
+/// Zero-pad a real slice into a pre-allocated real buffer.
+///
+/// The first `input.len()` elements are copied; the remainder is zeroed.
+fn pad_real<T: Float>(input: &[T], buf: &mut [T]) {
+    let n = input.len();
+    buf[..n].copy_from_slice(input);
+    for x in &mut buf[n..] {
+        *x = T::zero();
+    }
+}
+
 // ─── Tests ───────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 #[allow(clippy::expect_used, reason = "expect is the preferred idiom in tests")]
 mod tests {
     use super::*;
-    use crate::test_utils::{TestDftC2c, TestVecOps};
+    use crate::test_utils::{TestDftC2r, TestDftR2c, TestVecOps};
 
-    fn make_factory() -> OmniCrossCorr<TestDftC2c, TestVecOps> {
-        OmniCrossCorr::new(TestDftC2c, TestVecOps)
+    fn make_factory() -> OmniCrossCorr<TestDftR2c, TestDftC2r, TestVecOps> {
+        OmniCrossCorr::new(TestDftR2c, TestDftC2r, TestVecOps)
     }
 
     #[test]

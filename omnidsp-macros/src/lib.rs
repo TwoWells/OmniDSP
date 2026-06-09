@@ -416,7 +416,8 @@ fn gen_dct(input: &BackendInput) -> TokenStream2 {
 
 fn gen_xcorr(input: &BackendInput) -> TokenStream2 {
     let backend = &input.backend;
-    let dft = &input.dft;
+    let dftr2c = &input.dftr2c;
+    let dftc2r = &input.dftc2r;
     let vecops = &input.vecops;
     let mut tokens = TokenStream2::new();
 
@@ -428,7 +429,10 @@ fn gen_xcorr(input: &BackendInput) -> TokenStream2 {
             {
                 type Plan = ::omnidsp_core::modules::xcorr::OmniCrossCorrPlan<
                     #float,
-                    <#dft as ::omnidsp_core::traits::dft::DftC2c<#float>>::Plan,
+                    <#dftr2c as ::omnidsp_core::traits::dft::DftR2c<#float>>::Plan,
+                    ::omnidsp_core::hermitian::HermitianC2rPlan<
+                        <#dftc2r as ::omnidsp_core::traits::dft::DftC2r<#float>>::Plan,
+                    >,
                     #vecops,
                 >;
 
@@ -437,7 +441,8 @@ fn gen_xcorr(input: &BackendInput) -> TokenStream2 {
                     spec: &::omnidsp_core::modules::xcorr::CrossCorrSpec<#float>,
                 ) -> ::omnidsp_core::error::Result<Self::Plan> {
                     let factory = ::omnidsp_core::modules::xcorr::OmniCrossCorr::new(
-                        self.dft.clone(),
+                        self.dftr2c.clone(),
+                        self.dftc2r.clone(),
                         self.vecops.clone(),
                     );
                     factory.create_plan(spec)
