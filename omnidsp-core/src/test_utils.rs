@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Two Wells <contact@twowells.dev>
 
-//! Test utilities: naive DFT and scalar `VecOps` for unit tests.
+//! Test utilities: naive c2c/r2c/c2r DFT doubles and scalar `VecOps` for unit
+//! tests.
 //!
 //! Only compiled when `cfg(test)` is active.
 
@@ -10,7 +11,10 @@ use std::f64::consts::TAU;
 use num_complex::Complex;
 
 use crate::error::{Error, Result};
-use crate::traits::dft::{DftC2c, DftC2cPlan, DftC2cSpec, DftNorm};
+use crate::traits::dft::{
+    DftC2c, DftC2cPlan, DftC2cSpec, DftC2r, DftC2rPlan, DftC2rSpec, DftNorm, DftR2c, DftR2cPlan,
+    DftR2cSpec,
+};
 use crate::traits::vecops::VecOps;
 use crate::types::Direction;
 
@@ -106,6 +110,181 @@ impl DftC2c<f64> for TestDftC2c {
     }
 }
 
+// ─── r2c / c2r doubles ───────────────────────────────────────────────
+
+/// Scaling factor a [`DftNorm`] convention applies to a transform of real
+/// length `n` running in `direction`, or `None` when no scaling is needed.
+///
+/// Mirrors `omnidsp-rustfft`'s `norm_scale` so the doubles and the realfft floor
+/// apply identical per-direction factors: the forward-only [`TestDftR2c`] scales
+/// like a c2c forward plan, the inverse-only [`TestDftC2r`] like a c2c inverse
+/// plan (see [`DftNorm`]).
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "test DFT operates on small sizes where usize→f64 is exact"
+)]
+fn norm_scale(norm: DftNorm, direction: Direction, n: usize) -> Option<f64> {
+    let n = n as f64;
+    match norm {
+        DftNorm::None => None,
+        DftNorm::Inverse => match direction {
+            Direction::Inverse => Some(1.0 / n),
+            Direction::Forward => None,
+        },
+        DftNorm::Ortho => Some(1.0 / n.sqrt()),
+    }
+}
+
+/// Real-to-complex DFT factory for tests.
+///
+/// Runs the same radix-2 / naive transform as [`TestDftC2c`] on the real input
+/// (embedded as complex) and keeps the first `length / 2 + 1` bins — the
+/// half-spectrum.  Forward-only.
+#[derive(Debug, Clone)]
+pub struct TestDftR2c;
+
+/// Real-to-complex DFT plan for tests.  Respects [`DftNorm`] (forward slice).
+#[derive(Debug)]
+pub struct TestDftR2cPlan {
+    length: usize,
+    norm: DftNorm,
+}
+
+impl DftR2cPlan<f64> for TestDftR2cPlan {
+    fn process(&self, input: &[f64], output: &mut [Complex<f64>]) -> Result<()> {
+        let bins = self.length / 2 + 1;
+        if input.len() != self.length {
+            return Err(Error::BufferMismatch {
+                expected: self.length,
+                actual: input.len(),
+            });
+        }
+        if output.len() != bins {
+            return Err(Error::BufferMismatch {
+                expected: bins,
+                actual: output.len(),
+            });
+        }
+
+        // Embed the real input as complex and run the full forward FFT, then
+        // keep the lower half-spectrum.
+        let embedded: Vec<Complex<f64>> = input.iter().map(|&v| Complex::new(v, 0.0)).collect();
+        let mut full = vec![Complex::new(0.0, 0.0); self.length];
+        if self.length.is_power_of_two() {
+            full.copy_from_slice(&embedded);
+            fft_radix2(&mut full, -1.0);
+        } else {
+            dft_naive(&embedded, &mut full, -1.0);
+        }
+
+        output.copy_from_slice(&full[..bins]);
+
+        // r2c is forward-only — it scales like a c2c forward plan.
+        if let Some(scale) = norm_scale(self.norm, Direction::Forward, self.length) {
+            for c in output.iter_mut() {
+                *c = Complex::new(c.re * scale, c.im * scale);
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl DftR2c<f64> for TestDftR2c {
+    type Plan = TestDftR2cPlan;
+
+    fn create_plan(&self, spec: &DftR2cSpec<f64>) -> Result<Self::Plan> {
+        Ok(TestDftR2cPlan {
+            length: spec.length(),
+            norm: spec.norm(),
+        })
+    }
+}
+
+/// Complex-to-real DFT factory for tests.
+///
+/// Hermitian-extends the `length / 2 + 1` half-spectrum back to the full
+/// `length` bins, runs the inverse radix-2 / naive transform, and takes the real
+/// part.  Inverse-only.
+#[derive(Debug, Clone)]
+pub struct TestDftC2r;
+
+/// Complex-to-real DFT plan for tests.  Respects [`DftNorm`] (inverse slice).
+///
+/// The DC bin — and, for even `length`, the Nyquist bin — are forced purely real
+/// before the inverse transform, matching `RustDftC2r`'s documented Hermitian
+/// convention so the double and the floor agree on any input.
+#[derive(Debug)]
+pub struct TestDftC2rPlan {
+    length: usize,
+    norm: DftNorm,
+}
+
+impl DftC2rPlan<f64> for TestDftC2rPlan {
+    fn process(&self, input: &[Complex<f64>], output: &mut [f64]) -> Result<()> {
+        let n = self.length;
+        let bins = n / 2 + 1;
+        if input.len() != bins {
+            return Err(Error::BufferMismatch {
+                expected: bins,
+                actual: input.len(),
+            });
+        }
+        if output.len() != n {
+            return Err(Error::BufferMismatch {
+                expected: n,
+                actual: output.len(),
+            });
+        }
+
+        let mut full = vec![Complex::new(0.0, 0.0); n];
+        full[..bins].copy_from_slice(input);
+
+        // Enforce the Hermitian DC / Nyquist convention (matching the floor):
+        // the DC bin, and the Nyquist bin for even lengths, are purely real.
+        full[0].im = 0.0;
+        if n.is_multiple_of(2) {
+            full[bins - 1].im = 0.0;
+        }
+        // Mirror the lower half into the conjugate-symmetric upper half.
+        for k in bins..n {
+            full[k] = full[n - k].conj();
+        }
+
+        let mut time = vec![Complex::new(0.0, 0.0); n];
+        if n.is_power_of_two() {
+            time.copy_from_slice(&full);
+            fft_radix2(&mut time, 1.0);
+        } else {
+            dft_naive(&full, &mut time, 1.0);
+        }
+
+        for (o, c) in output.iter_mut().zip(time.iter()) {
+            *o = c.re;
+        }
+
+        // c2r is inverse-only — it scales like a c2c inverse plan.
+        if let Some(scale) = norm_scale(self.norm, Direction::Inverse, n) {
+            for o in output.iter_mut() {
+                *o *= scale;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl DftC2r<f64> for TestDftC2r {
+    type Plan = TestDftC2rPlan;
+
+    fn create_plan(&self, spec: &DftC2rSpec<f64>) -> Result<Self::Plan> {
+        Ok(TestDftC2rPlan {
+            length: spec.length(),
+            norm: spec.norm(),
+        })
+    }
+}
+
 // ─── FFT internals ───────────────────────────────────────────────────
 
 /// O(N²) direct DFT — fallback for non-power-of-2 lengths.
@@ -176,3 +355,169 @@ fn fft_radix2(data: &mut [Complex<f64>], sign: f64) {
 pub struct TestVecOps;
 
 impl VecOps<f64> for TestVecOps {}
+
+#[cfg(test)]
+#[allow(
+    clippy::expect_used,
+    clippy::cast_precision_loss,
+    reason = "tests use expect for clarity and small exact usize→f64 casts"
+)]
+mod tests {
+    use num_complex::Complex;
+
+    use super::{TestDftC2c, TestDftC2r, TestDftR2c};
+    use crate::traits::dft::{
+        DftC2c, DftC2cPlan, DftC2cSpec, DftC2r, DftC2rPlan, DftC2rSpec, DftNorm, DftR2c,
+        DftR2cPlan, DftR2cSpec,
+    };
+    use crate::types::Direction;
+
+    const EPS: f64 = 1e-9;
+
+    /// The ramp `[1, 2, …, n]` as a real signal.
+    fn ramp(n: usize) -> Vec<f64> {
+        (0..n).map(|i| (i + 1) as f64).collect()
+    }
+
+    fn r2c(n: usize, norm: DftNorm, input: &[f64]) -> Vec<Complex<f64>> {
+        let spec = DftR2cSpec::<f64>::new(n, norm).expect("valid r2c spec");
+        let plan = DftR2c::<f64>::create_plan(&TestDftR2c, &spec).expect("r2c plan");
+        let mut out = vec![Complex::new(0.0, 0.0); n / 2 + 1];
+        plan.process(input, &mut out).expect("r2c process");
+        out
+    }
+
+    fn c2r(n: usize, norm: DftNorm, input: &[Complex<f64>]) -> Vec<f64> {
+        let spec = DftC2rSpec::<f64>::new(n, norm).expect("valid c2r spec");
+        let plan = DftC2r::<f64>::create_plan(&TestDftC2r, &spec).expect("c2r plan");
+        let mut out = vec![0.0_f64; n];
+        plan.process(input, &mut out).expect("c2r process");
+        out
+    }
+
+    /// Full forward c2c spectrum of a real signal, via the [`TestDftC2c`] double
+    /// — the in-crate oracle the r2c double is validated against.
+    fn c2c_forward(n: usize, input: &[f64]) -> Vec<Complex<f64>> {
+        let embedded: Vec<Complex<f64>> = input.iter().map(|&v| Complex::new(v, 0.0)).collect();
+        let spec = DftC2cSpec::<f64>::new(n, Direction::Forward, DftNorm::None).expect("c2c spec");
+        let plan = DftC2c::<f64>::create_plan(&TestDftC2c, &spec).expect("c2c plan");
+        let mut out = vec![Complex::new(0.0, 0.0); n];
+        plan.process(&embedded, &mut out).expect("c2c process");
+        out
+    }
+
+    fn assert_complex_close(got: &[Complex<f64>], want: &[Complex<f64>]) {
+        assert_eq!(got.len(), want.len(), "complex slice lengths differ");
+        for (i, (x, y)) in got.iter().zip(want).enumerate() {
+            assert!(
+                (x.re - y.re).abs() < EPS && (x.im - y.im).abs() < EPS,
+                "complex mismatch at {i}: got ({}, {}), want ({}, {})",
+                x.re,
+                x.im,
+                y.re,
+                y.im,
+            );
+        }
+    }
+
+    fn assert_real_close(got: &[f64], want: &[f64]) {
+        assert_eq!(got.len(), want.len(), "real slice lengths differ");
+        for (i, (x, y)) in got.iter().zip(want).enumerate() {
+            assert!(
+                (x - y).abs() < EPS,
+                "real mismatch at {i}: got {x}, want {y}",
+            );
+        }
+    }
+
+    /// `r2c(x)` equals the first `N/2+1` bins of the full c2c spectrum — the
+    /// double matches its in-crate oracle across parities (the floor's
+    /// `r2c == c2c[..N/2+1]` check, mirrored here without crossing the crate
+    /// boundary to the realfft floor).
+    #[test]
+    fn r2c_matches_c2c_half_spectrum() {
+        for n in [1_usize, 2, 7, 8, 16] {
+            let x = ramp(n);
+            let half = r2c(n, DftNorm::None, &x);
+            let full = c2c_forward(n, &x);
+            assert_complex_close(&half, &full[..=n / 2]);
+        }
+    }
+
+    /// `c2r(r2c(x)) ≈ x` under `DftNorm::Inverse` for every parity.
+    #[test]
+    fn round_trip_identity() {
+        for n in [1_usize, 2, 7, 8, 16] {
+            let x = ramp(n);
+            let spectrum = r2c(n, DftNorm::Inverse, &x);
+            let recovered = c2r(n, DftNorm::Inverse, &spectrum);
+            assert_real_close(&recovered, &x);
+        }
+    }
+
+    /// Ortho r2c output is the unnormalized output scaled by `1/√N`.
+    #[test]
+    fn r2c_ortho_scaling() {
+        for n in [7_usize, 8] {
+            let x = ramp(n);
+            let none = r2c(n, DftNorm::None, &x);
+            let ortho = r2c(n, DftNorm::Ortho, &x);
+            let s = 1.0 / (n as f64).sqrt();
+            let expected: Vec<Complex<f64>> = none
+                .iter()
+                .map(|c| Complex::new(c.re * s, c.im * s))
+                .collect();
+            assert_complex_close(&ortho, &expected);
+        }
+    }
+
+    /// `Inverse` and `Ortho` c2r outputs are the unnormalized output scaled by
+    /// `1/N` and `1/√N` respectively.
+    #[test]
+    fn c2r_norm_scaling() {
+        for n in [7_usize, 8] {
+            let x = ramp(n);
+            let half = r2c(n, DftNorm::None, &x);
+            let none = c2r(n, DftNorm::None, &half);
+            let inverse = c2r(n, DftNorm::Inverse, &half);
+            let ortho = c2r(n, DftNorm::Ortho, &half);
+            let inv_n = 1.0 / n as f64;
+            let inv_sqrt = 1.0 / (n as f64).sqrt();
+            let exp_inverse: Vec<f64> = none.iter().map(|&v| v * inv_n).collect();
+            let exp_ortho: Vec<f64> = none.iter().map(|&v| v * inv_sqrt).collect();
+            assert_real_close(&inverse, &exp_inverse);
+            assert_real_close(&ortho, &exp_ortho);
+        }
+    }
+
+    #[test]
+    fn buffer_mismatch_errors() {
+        let r_spec = DftR2cSpec::<f64>::new(8, DftNorm::None).expect("valid r2c spec");
+        let r_plan = DftR2c::<f64>::create_plan(&TestDftR2c, &r_spec).expect("r2c plan");
+        let mut half = vec![Complex::new(0.0, 0.0); 5];
+        assert!(
+            r_plan.process(&[0.0_f64; 7], &mut half).is_err(),
+            "wrong r2c input length must error",
+        );
+        let mut short_half = vec![Complex::new(0.0, 0.0); 4];
+        assert!(
+            r_plan.process(&[0.0_f64; 8], &mut short_half).is_err(),
+            "wrong r2c output length must error",
+        );
+
+        let c_spec = DftC2rSpec::<f64>::new(8, DftNorm::None).expect("valid c2r spec");
+        let c_plan = DftC2r::<f64>::create_plan(&TestDftC2r, &c_spec).expect("c2r plan");
+        let short_in = vec![Complex::new(0.0, 0.0); 4];
+        let mut real_out = [0.0_f64; 8];
+        assert!(
+            c_plan.process(&short_in, &mut real_out).is_err(),
+            "wrong c2r input length must error",
+        );
+        let good_in = vec![Complex::new(0.0, 0.0); 5];
+        let mut short_out = [0.0_f64; 7];
+        assert!(
+            c_plan.process(&good_in, &mut short_out).is_err(),
+            "wrong c2r output length must error",
+        );
+    }
+}
