@@ -494,6 +494,33 @@ mod tests {
         }
     }
 
+    /// c2r tolerates a non-Hermitian DC / (even-`N`) Nyquist bin: a spectrum
+    /// whose DC and Nyquist imaginary parts are non-zero must not error and must
+    /// reconstruct the same real signal as the clean Hermitian input — the
+    /// drift-tolerant contract `RustDftC2r` documents (ADR-009 §4), pinned at the
+    /// double level so the double can never grow stricter than the floor (which
+    /// the `r2c → multiply → c2r` module chains in 05e rely on).
+    #[test]
+    fn c2r_tolerates_dc_nyquist_drift() {
+        for n in [7_usize, 8] {
+            let x = ramp(n);
+            let clean = r2c(n, DftNorm::None, &x);
+
+            // Perturb DC (and, for even N, Nyquist) imaginary parts well above
+            // EPS, so a double that honored Hermitian-ness strictly would diverge.
+            let mut dirty = clean.clone();
+            dirty[0].im = 2.5;
+            if n.is_multiple_of(2) {
+                let nyquist = dirty.len() - 1;
+                dirty[nyquist].im = 2.5;
+            }
+
+            let from_clean = c2r(n, DftNorm::Inverse, &clean);
+            let from_dirty = c2r(n, DftNorm::Inverse, &dirty);
+            assert_real_close(&from_dirty, &from_clean);
+        }
+    }
+
     #[test]
     fn buffer_mismatch_errors() {
         let r_spec = DftR2cSpec::<f64>::new(8, DftNorm::None).expect("valid r2c spec");
