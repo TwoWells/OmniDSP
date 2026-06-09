@@ -25,7 +25,7 @@ use omnidsp_core::traits::dft::{DftC2cPlan, DftC2cSpec, DftNorm};
 use omnidsp_core::traits::fir::{FirPlan, FirSpec};
 use omnidsp_core::traits::iir::{IirPlan, IirSpec};
 use omnidsp_core::types::{BiquadSection, Direction, Window};
-use omnidsp_rustfft::RustDftC2c;
+use omnidsp_rustfft::{RustDftC2c, RustDftC2r, RustDftR2c};
 
 // ─── Helpers ───────────────────────────────────────────────────────────
 
@@ -532,18 +532,24 @@ fn auto_constructor() {
 /// modules.
 struct MacroTestBackend {
     dft: RustDftC2c,
+    dftr2c: RustDftR2c,
+    dftc2r: RustDftC2r,
     vecops: ScalarVecOps,
 }
 
 omnidsp_macros::impl_generic_backend! {
     backend: MacroTestBackend,
     dft: RustDftC2c,
+    dftr2c: RustDftR2c,
+    dftc2r: RustDftC2r,
     vecops: ScalarVecOps,
 }
 
 const fn macro_backend() -> MacroTestBackend {
     MacroTestBackend {
         dft: RustDftC2c,
+        dftr2c: RustDftR2c,
+        dftc2r: RustDftC2r,
         vecops: ScalarVecOps,
     }
 }
@@ -694,40 +700,46 @@ fn macro_create_cqt_f64() {
 /// conflicting with macro-generated impls.
 struct SkipConvBackend {
     dft: RustDftC2c,
+    dftr2c: RustDftR2c,
+    dftc2r: RustDftC2r,
     vecops: ScalarVecOps,
 }
 
 omnidsp_macros::impl_generic_backend! {
     backend: SkipConvBackend,
     dft: RustDftC2c,
+    dftr2c: RustDftR2c,
+    dftc2r: RustDftC2r,
     vecops: ScalarVecOps,
     skip: [conv],
 }
 
-// Hand-written override for ConvSpec<f64> — proves no conflict.
+// Hand-written override for ConvSpec<f64> — proves no conflict.  Composes the
+// real-DFT triple exactly as the macro would (r2c forward + Hermitian-shaped
+// c2r inverse).
 impl CreatePlan<ConvSpec<f64>> for SkipConvBackend {
-    type Plan = omnidsp_core::modules::conv::OmniConvPlan<
-        f64,
-        <RustDftC2c as omnidsp_core::traits::dft::DftC2c<f64>>::Plan,
-        ScalarVecOps,
-    >;
+    type Plan = <
+        omnidsp_core::modules::conv::OmniConv<RustDftR2c, RustDftC2r, ScalarVecOps>
+        as omnidsp_core::traits::conv::Conv<f64>
+    >::Plan;
 
     fn create_plan(&self, spec: &ConvSpec<f64>) -> omnidsp_core::error::Result<Self::Plan> {
-        let factory = omnidsp_core::modules::conv::OmniConv::new(self.dft, self.vecops);
+        let factory =
+            omnidsp_core::modules::conv::OmniConv::new(self.dftr2c, self.dftc2r, self.vecops);
         omnidsp_core::traits::conv::Conv::<f64>::create_plan(&factory, spec)
     }
 }
 
 // Hand-written override for ConvSpec<f32> — proves no conflict.
 impl CreatePlan<ConvSpec<f32>> for SkipConvBackend {
-    type Plan = omnidsp_core::modules::conv::OmniConvPlan<
-        f32,
-        <RustDftC2c as omnidsp_core::traits::dft::DftC2c<f32>>::Plan,
-        ScalarVecOps,
-    >;
+    type Plan = <
+        omnidsp_core::modules::conv::OmniConv<RustDftR2c, RustDftC2r, ScalarVecOps>
+        as omnidsp_core::traits::conv::Conv<f32>
+    >::Plan;
 
     fn create_plan(&self, spec: &ConvSpec<f32>) -> omnidsp_core::error::Result<Self::Plan> {
-        let factory = omnidsp_core::modules::conv::OmniConv::new(self.dft, self.vecops);
+        let factory =
+            omnidsp_core::modules::conv::OmniConv::new(self.dftr2c, self.dftc2r, self.vecops);
         omnidsp_core::traits::conv::Conv::<f32>::create_plan(&factory, spec)
     }
 }
@@ -736,6 +748,8 @@ impl CreatePlan<ConvSpec<f32>> for SkipConvBackend {
 fn skip_conv_backend_hand_written_conv() {
     let b = SkipConvBackend {
         dft: RustDftC2c,
+        dftr2c: RustDftR2c,
+        dftc2r: RustDftC2r,
         vecops: ScalarVecOps,
     };
     let spec = ConvSpec::<f64>::new(3, 2, ConvMethod::Direct);
@@ -752,6 +766,8 @@ fn skip_conv_backend_hand_written_conv() {
 fn skip_conv_backend_other_modules_work() {
     let b = SkipConvBackend {
         dft: RustDftC2c,
+        dftr2c: RustDftR2c,
+        dftc2r: RustDftC2r,
         vecops: ScalarVecOps,
     };
     let dsp = OmniDSP::new(b);

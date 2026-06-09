@@ -40,6 +40,8 @@ fn float_idents() -> [Ident; 2] {
 struct BackendInput {
     backend: Type,
     dft: Type,
+    dftr2c: Type,
+    dftc2r: Type,
     vecops: Type,
     skip: Vec<String>,
 }
@@ -48,6 +50,8 @@ impl Parse for BackendInput {
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
         let mut backend: Option<Type> = None;
         let mut dft: Option<Type> = None;
+        let mut dftr2c: Option<Type> = None;
+        let mut dftc2r: Option<Type> = None;
         let mut vecops: Option<Type> = None;
         let mut skip: Vec<String> = Vec::new();
 
@@ -61,6 +65,12 @@ impl Parse for BackendInput {
                 }
                 "dft" => {
                     dft = Some(input.parse()?);
+                }
+                "dftr2c" => {
+                    dftr2c = Some(input.parse()?);
+                }
+                "dftc2r" => {
+                    dftc2r = Some(input.parse()?);
                 }
                 "vecops" => {
                     vecops = Some(input.parse()?);
@@ -87,7 +97,8 @@ impl Parse for BackendInput {
                     return Err(syn::Error::new(
                         key.span(),
                         format!(
-                            "unknown field `{other}`, expected `backend`, `dft`, `vecops`, or `skip`"
+                            "unknown field `{other}`, expected `backend`, `dft`, `dftr2c`, \
+                             `dftc2r`, `vecops`, or `skip`"
                         ),
                     ));
                 }
@@ -99,11 +110,15 @@ impl Parse for BackendInput {
 
         let backend = backend.ok_or_else(|| input.error("missing required field `backend`"))?;
         let dft = dft.ok_or_else(|| input.error("missing required field `dft`"))?;
+        let dftr2c = dftr2c.ok_or_else(|| input.error("missing required field `dftr2c`"))?;
+        let dftc2r = dftc2r.ok_or_else(|| input.error("missing required field `dftc2r`"))?;
         let vecops = vecops.ok_or_else(|| input.error("missing required field `vecops`"))?;
 
         Ok(Self {
             backend,
             dft,
+            dftr2c,
+            dftc2r,
             vecops,
             skip,
         })
@@ -144,7 +159,8 @@ fn generate_impls(input: &BackendInput) -> TokenStream2 {
 
 fn gen_conv(input: &BackendInput) -> TokenStream2 {
     let backend = &input.backend;
-    let dft = &input.dft;
+    let dftr2c = &input.dftr2c;
+    let dftc2r = &input.dftc2r;
     let vecops = &input.vecops;
     let mut tokens = TokenStream2::new();
 
@@ -153,18 +169,21 @@ fn gen_conv(input: &BackendInput) -> TokenStream2 {
             impl ::omnidsp_core::create::CreatePlan<::omnidsp_core::traits::conv::ConvSpec<#float>>
                 for #backend
             {
-                type Plan = ::omnidsp_core::modules::conv::OmniConvPlan<
-                    #float,
-                    <#dft as ::omnidsp_core::traits::dft::DftC2c<#float>>::Plan,
-                    #vecops,
-                >;
+                // The composite plan type (which embeds the internal Hermitian
+                // shaping) is named via the module's own `Conv::Plan` so this
+                // impl stays decoupled from the module's internal composition.
+                type Plan = <
+                    ::omnidsp_core::modules::conv::OmniConv<#dftr2c, #dftc2r, #vecops>
+                    as ::omnidsp_core::traits::conv::Conv<#float>
+                >::Plan;
 
                 fn create_plan(
                     &self,
                     spec: &::omnidsp_core::traits::conv::ConvSpec<#float>,
                 ) -> ::omnidsp_core::error::Result<Self::Plan> {
                     let factory = ::omnidsp_core::modules::conv::OmniConv::new(
-                        self.dft.clone(),
+                        self.dftr2c.clone(),
+                        self.dftc2r.clone(),
                         self.vecops.clone(),
                     );
                     ::omnidsp_core::traits::conv::Conv::<#float>::create_plan(&factory, spec)
@@ -434,9 +453,9 @@ fn gen_xcorr(input: &BackendInput) -> TokenStream2 {
 /// Generate `CreatePlan<S>` implementations for all known spec types
 /// using generic composition.
 ///
-/// The backend struct must have `dft` and `vecops` fields of the specified
-/// types.  The macro delegates to `omnidsp-core` modules internally,
-/// producing composition-based plans.
+/// The backend struct must have `dft`, `dftr2c`, `dftc2r`, and `vecops` fields
+/// of the specified types.  The macro delegates to `omnidsp-core` modules
+/// internally, producing composition-based plans.
 ///
 /// Use `skip: [...]` to exclude modules that the backend overrides with
 /// native implementations.  The backend can then hand-write
@@ -453,6 +472,8 @@ fn gen_xcorr(input: &BackendInput) -> TokenStream2 {
 /// omnidsp_macros::impl_generic_backend! {
 ///     backend: RustBackend,
 ///     dft: RustDftC2c,
+///     dftr2c: RustDftR2c,
+///     dftc2r: RustDftC2r,
 ///     vecops: ScalarVecOps,
 /// }
 ///
@@ -460,6 +481,8 @@ fn gen_xcorr(input: &BackendInput) -> TokenStream2 {
 /// omnidsp_macros::impl_generic_backend! {
 ///     backend: IppBackend,
 ///     dft: IppDftC2c,
+///     dftr2c: IppDftR2c,
+///     dftc2r: IppDftC2r,
 ///     vecops: IppVecOps,
 ///     skip: [conv, fir],
 /// }

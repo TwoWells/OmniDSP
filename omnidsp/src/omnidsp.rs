@@ -31,16 +31,8 @@ pub struct RustBackend {
     /// Complex-to-complex DFT factory (`RustFFT` wrapper).
     pub(crate) dft: RustDftC2c,
     /// Real-to-complex DFT factory (`realfft` wrapper).
-    #[allow(
-        dead_code,
-        reason = "wired into the real-input module CreatePlan impls by the macro in 05f / item 4"
-    )]
     pub(crate) dftr2c: RustDftR2c,
     /// Complex-to-real DFT factory (`realfft` wrapper).
-    #[allow(
-        dead_code,
-        reason = "wired into the real-input module CreatePlan impls by the macro in 05f / item 4"
-    )]
     pub(crate) dftc2r: RustDftC2r,
     /// Vector operations (scalar fallback).
     pub(crate) vecops: ScalarVecOps,
@@ -68,6 +60,8 @@ impl Default for RustBackend {
 omnidsp_macros::impl_generic_backend! {
     backend: RustBackend,
     dft: RustDftC2c,
+    dftr2c: RustDftR2c,
+    dftc2r: RustDftC2r,
     vecops: ScalarVecOps,
 }
 

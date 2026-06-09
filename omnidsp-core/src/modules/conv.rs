@@ -3,9 +3,18 @@
 
 //! Convolution module — direct and FFT-based fast convolution.
 //!
-//! [`OmniConv`] implements the [`Conv`] trait generically over any [`DftC2c`]
-//! and [`VecOps`] implementation.  Supports both time-domain (direct) and
-//! frequency-domain (FFT) convolution, selected via [`ConvMethod`].
+//! [`OmniConv`] implements the [`Conv`] trait generically over any [`DftR2c`]
+//! / [`DftC2r`] and [`VecOps`] implementation.  Supports both time-domain
+//! (direct) and frequency-domain (FFT) convolution, selected via
+//! [`ConvMethod`].
+//!
+//! The FFT path transforms the real inputs through the real-DFT primitives
+//! ([`DftR2c`] forward, [`DftC2r`] inverse) rather than embedding them in a
+//! complex transform (ADR-009 §6), so it pays no ~2× complex-embedding tax.
+//! The inverse c2r factory is wrapped in [`HermitianC2r`] so the DC/Nyquist
+//! boundary is projected onto the nearest valid Hermitian spectrum before the
+//! transform (ADR-010 §2/§5) — the round-trip drift every `r2c → ⊙ → c2r`
+//! chain accumulates cannot reach the kernel.
 //!
 //! The [`recommend_method`] function provides an operation-count heuristic
 //! for the `Auto` case.
@@ -22,10 +31,11 @@ use num_complex::Complex;
 use num_traits::Float;
 
 use crate::error::{Error, Result};
+use crate::hermitian::{HermitianC2r, HermitianC2rPlan};
 use crate::traits::conv::{Conv, ConvMethod, ConvPlan, ConvSpec};
-use crate::traits::dft::{DftC2c, DftC2cPlan, DftC2cSpec, DftNorm};
+use crate::traits::dft::{DftC2r, DftC2rPlan, DftC2rSpec, DftNorm, DftR2c, DftR2cPlan, DftR2cSpec};
 use crate::traits::vecops::VecOps;
-use crate::types::Direction;
+use crate::types::DspFloat;
 
 // ─── Public heuristic ─────────────────────────────────────────────────
 
@@ -62,21 +72,25 @@ pub fn recommend_method(a_len: usize, b_len: usize) -> ConvMethod {
 
 // ─── Public types ──────────────────────────────────────────────────────
 
-/// Generic convolution factory backed by [`DftC2c`] and [`VecOps`].
+/// Generic convolution factory backed by [`DftR2c`] / [`DftC2r`] and
+/// [`VecOps`].
 ///
-/// Creates [`OmniConvPlan`]s for specific input lengths.  The factory
-/// owns the DFT factory and `VecOps` instance; plans own their sub-plans.
+/// Creates [`OmniConvPlan`]s for specific input lengths.  The factory owns the
+/// real-DFT factories (`r2c` forward, `c2r` inverse) and the `VecOps` instance;
+/// plans own their sub-plans.  The c2r factory is Hermitian-shaped internally
+/// (ADR-010 §5), so any backend that reuses `OmniConv` inherits the projection.
 #[derive(Debug, Clone)]
-pub struct OmniConv<D, V> {
-    dft: D,
+pub struct OmniConv<R, C, V> {
+    r2c: R,
+    c2r: C,
     vecops: V,
 }
 
-impl<D, V> OmniConv<D, V> {
+impl<R, C, V> OmniConv<R, C, V> {
     /// Create a new convolution factory.
     #[must_use]
-    pub const fn new(dft: D, vecops: V) -> Self {
-        Self { dft, vecops }
+    pub const fn new(r2c: R, c2r: C, vecops: V) -> Self {
+        Self { r2c, c2r, vecops }
     }
 }
 
@@ -88,16 +102,20 @@ impl<D, V> OmniConv<D, V> {
 /// Output length is `a_len + b_len - 1` (full convolution).
 ///
 /// **Memory:** the direct path allocates nothing beyond the plan struct.
-/// The FFT path allocates 3 × `fft_length` complex values for scratch
-/// buffers (behind a [`Mutex`] for thread safety).
-pub struct OmniConvPlan<T, P, V> {
-    inner: PlanInner<T, P, V>,
+/// The FFT path allocates one real buffer of `fft_length` plus two complex
+/// half-spectrum buffers of `fft_length / 2 + 1` (behind a [`Mutex`] for
+/// thread safety) — roughly half the complex-DFT path's footprint.
+///
+/// `RP` is the forward [`DftR2cPlan`]; `CP` is the inverse [`DftC2rPlan`]
+/// (in practice a [`HermitianC2rPlan`]).  Neither is ever named by users.
+pub struct OmniConvPlan<T, RP, CP, V> {
+    inner: PlanInner<T, RP, CP, V>,
     a_len: usize,
     b_len: usize,
     output_len: usize,
 }
 
-impl<T, P, V> fmt::Debug for OmniConvPlan<T, P, V> {
+impl<T, RP, CP, V> fmt::Debug for OmniConvPlan<T, RP, CP, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let method = match &self.inner {
             PlanInner::Direct => "Direct",
@@ -114,55 +132,38 @@ impl<T, P, V> fmt::Debug for OmniConvPlan<T, P, V> {
 
 // ─── Plan internals ───────────────────────────────────────────────────
 
-enum PlanInner<T, P, V> {
+enum PlanInner<T, RP, CP, V> {
     Direct,
-    Fft { state: FftState<T, P, V> },
+    Fft { state: FftState<T, RP, CP, V> },
 }
 
-struct FftState<T, P, V> {
-    fwd: P,
-    inv: P,
+struct FftState<T, RP, CP, V> {
+    /// Forward real-to-complex transform, reused for both inputs.
+    fwd: RP,
+    /// Inverse complex-to-real transform (Hermitian-shaped).
+    inv: CP,
     vecops: V,
     scratch: Mutex<FftScratch<T>>,
 }
 
 /// Scratch buffers for the FFT convolution pipeline.
-#[allow(
-    clippy::struct_field_names,
-    reason = "buf_ prefix clarifies these are reusable buffers"
-)]
 struct FftScratch<T> {
-    /// Padding / FFT input / IFFT output.
-    buf_a: Vec<Complex<T>>,
-    /// FFT output for first input → holds frequency-domain product.
-    buf_b: Vec<Complex<T>>,
-    /// FFT output for second input.
-    buf_c: Vec<Complex<T>>,
-}
-
-/// Zero-pad a real slice into a pre-allocated complex buffer via `VecOps`.
-///
-/// First `real.len()` elements are converted via [`VecOps::real_to_complex`];
-/// the remainder is zeroed.
-fn pad_real_to_complex<T: Float + AddAssign + MulAssign, V: VecOps<T>>(
-    vecops: &V,
-    real: &[T],
-    buf: &mut [Complex<T>],
-) -> Result<()> {
-    let n = real.len();
-    vecops.real_to_complex(real, &mut buf[..n])?;
-    for c in &mut buf[n..] {
-        *c = Complex::new(T::zero(), T::zero());
-    }
-    Ok(())
+    /// Real pad buffer (`fft_len`): holds each zero-padded input before the
+    /// forward r2c consumes it, then receives the c2r real output.
+    real: Vec<T>,
+    /// Half-spectrum of the first input → holds the frequency-domain product.
+    half_a: Vec<Complex<T>>,
+    /// Half-spectrum of the second input.
+    half_b: Vec<Complex<T>>,
 }
 
 // ─── Trait implementations ─────────────────────────────────────────────
 
-impl<T, P, V> ConvPlan<T> for OmniConvPlan<T, P, V>
+impl<T, RP, CP, V> ConvPlan<T> for OmniConvPlan<T, RP, CP, V>
 where
     T: Float + AddAssign + MulAssign + Send + Sync,
-    P: DftC2cPlan<T>,
+    RP: DftR2cPlan<T>,
+    CP: DftC2rPlan<T>,
     V: VecOps<T>,
 {
     fn process(&self, a: &[T], b: &[T], output: &mut [T]) -> Result<()> {
@@ -195,10 +196,11 @@ where
     }
 }
 
-impl<T, P, V> OmniConvPlan<T, P, V>
+impl<T, RP, CP, V> OmniConvPlan<T, RP, CP, V>
 where
     T: Float + AddAssign + MulAssign + Send + Sync,
-    P: DftC2cPlan<T>,
+    RP: DftR2cPlan<T>,
+    CP: DftC2rPlan<T>,
     V: VecOps<T>,
 {
     /// Direct (time-domain) convolution: `O(a_len * b_len)`.
@@ -213,52 +215,62 @@ where
         }
     }
 
-    /// FFT-based (frequency-domain) convolution.
+    /// FFT-based (frequency-domain) convolution over the real-DFT primitives.
+    ///
+    /// `conv(a,b) = c2r(r2c(a) ⊙ r2c(b))`: the product of two Hermitian
+    /// half-spectra is the half-spectrum of the (real) convolution, so the
+    /// element-wise multiply runs on the `fft_len / 2 + 1` bins directly.
     #[allow(
         clippy::significant_drop_tightening,
         reason = "MutexGuard must live for the entire FFT pipeline"
     )]
-    fn process_fft(state: &FftState<T, P, V>, a: &[T], b: &[T], output: &mut [T]) -> Result<()> {
+    fn process_fft(
+        state: &FftState<T, RP, CP, V>,
+        a: &[T],
+        b: &[T],
+        output: &mut [T],
+    ) -> Result<()> {
         let mut guard = state
             .scratch
             .lock()
             .map_err(|e| Error::Internal(format!("scratch buffer lock poisoned: {e}")))?;
 
         let FftScratch {
-            buf_a,
-            buf_b,
-            buf_c,
+            real,
+            half_a,
+            half_b,
         } = &mut *guard;
 
-        // 1. Zero-pad a → buf_a, then forward FFT → buf_b.
-        pad_real_to_complex(&state.vecops, a, buf_a)?;
-        state.fwd.process(buf_a, buf_b)?;
+        // 1. Zero-pad a → real, then forward r2c → half_a (real is consumed).
+        pad_real(a, real);
+        state.fwd.process(real, half_a)?;
 
-        // 2. Zero-pad b → buf_a (reuse), then forward FFT → buf_c.
-        pad_real_to_complex(&state.vecops, b, buf_a)?;
-        state.fwd.process(buf_a, buf_c)?;
+        // 2. Zero-pad b → real (reuse), then forward r2c → half_b.
+        pad_real(b, real);
+        state.fwd.process(real, half_b)?;
 
-        // 3. Complex element-wise multiply: buf_b *= buf_c.
-        state.vecops.cmul_inplace(buf_b, buf_c)?;
+        // 3. Half-spectrum element-wise multiply: half_a *= half_b.
+        state.vecops.cmul_inplace(half_a, half_b)?;
 
-        // 4. Inverse FFT: buf_b → buf_a.
-        state.inv.process(buf_b, buf_a)?;
+        // 4. Inverse c2r: half_a → real (HermitianC2r projects DC/Nyquist).
+        state.inv.process(half_a, real)?;
 
-        // 5. Extract real parts of the first output_len samples.
+        // 5. The c2r output is already real — copy the first output_len samples.
         let out_len = output.len();
-        state.vecops.extract_real(&buf_a[..out_len], output)?;
+        output.copy_from_slice(&real[..out_len]);
 
         Ok(())
     }
 }
 
-impl<T, D, V> Conv<T> for OmniConv<D, V>
+impl<T, R, C, V> Conv<T> for OmniConv<R, C, V>
 where
-    T: Float + AddAssign + MulAssign + Send + Sync,
-    D: DftC2c<T>,
+    T: DspFloat + AddAssign + MulAssign,
+    R: DftR2c<T>,
+    C: DftC2r<T> + Clone,
     V: VecOps<T>,
 {
-    type Plan = OmniConvPlan<T, D::Plan, V>;
+    type Plan = OmniConvPlan<T, R::Plan, HermitianC2rPlan<C::Plan>, V>;
 
     fn create_plan(&self, spec: &ConvSpec<T>) -> Result<Self::Plan> {
         if spec.a_len == 0 {
@@ -285,20 +297,27 @@ where
                 let fft_len = output_len.checked_next_power_of_two().ok_or_else(|| {
                     Error::InvalidSpec("convolution FFT length overflow".to_owned())
                 })?;
+                let bins = fft_len / 2 + 1;
 
-                // Convolution theorem: conv(a,b) = IFFT(FFT(a) · FFT(b)).
-                // This requires IFFT(FFT(x)) = x, which DftNorm::Inverse provides
-                // (1/N scaling on the inverse transform only).
-                let fwd_spec = DftC2cSpec::new(fft_len, Direction::Forward, DftNorm::Inverse)?;
-                let inv_spec = DftC2cSpec::new(fft_len, Direction::Inverse, DftNorm::Inverse)?;
-                let fwd = self.dft.create_plan(&fwd_spec)?;
-                let inv = self.dft.create_plan(&inv_spec)?;
+                // Convolution theorem: conv(a,b) = c2r(r2c(a) · r2c(b)).
+                // This requires c2r(r2c(x)) = x, which DftNorm::Inverse provides
+                // (1/N scaling on the inverse transform only).  The forward r2c
+                // plan is reused for both inputs.
+                let fwd_spec = DftR2cSpec::new(fft_len, DftNorm::Inverse)?;
+                let fwd = self.r2c.create_plan(&fwd_spec)?;
+
+                // The c2r factory is Hermitian-shaped (ADR-010 §2/§5): the
+                // product of two Hermitian half-spectra is Hermitian, but float
+                // drift leaves ~epsilon imaginary at DC/Nyquist that the
+                // projection clears before the inverse transform.
+                let inv_spec = DftC2rSpec::new(fft_len, DftNorm::Inverse)?;
+                let inv = HermitianC2r::new(self.c2r.clone()).create_plan(&inv_spec)?;
 
                 let zero = Complex::new(T::zero(), T::zero());
                 let scratch = FftScratch {
-                    buf_a: vec![zero; fft_len],
-                    buf_b: vec![zero; fft_len],
-                    buf_c: vec![zero; fft_len],
+                    real: vec![T::zero(); fft_len],
+                    half_a: vec![zero; bins],
+                    half_b: vec![zero; bins],
                 };
 
                 PlanInner::Fft {
@@ -321,13 +340,24 @@ where
     }
 }
 
+/// Zero-pad a real slice into a pre-allocated real buffer.
+///
+/// The first `real.len()` elements are copied; the remainder is zeroed.
+fn pad_real<T: Float>(input: &[T], buf: &mut [T]) {
+    let n = input.len();
+    buf[..n].copy_from_slice(input);
+    for x in &mut buf[n..] {
+        *x = T::zero();
+    }
+}
+
 // ─── Tests ─────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 #[allow(clippy::expect_used, reason = "tests use expect for clarity")]
 mod tests {
     use super::*;
-    use crate::test_utils::{TestDftC2c, TestVecOps};
+    use crate::test_utils::{TestDftC2r, TestDftR2c, TestVecOps};
 
     const EPSILON: f64 = 1e-8;
 
@@ -353,8 +383,8 @@ mod tests {
         }
     }
 
-    fn make_factory() -> OmniConv<TestDftC2c, TestVecOps> {
-        OmniConv::new(TestDftC2c, TestVecOps)
+    fn make_factory() -> OmniConv<TestDftR2c, TestDftC2r, TestVecOps> {
+        OmniConv::new(TestDftR2c, TestDftC2r, TestVecOps)
     }
 
     // ── Heuristic tests ───────────────────────────────────────────────
