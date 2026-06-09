@@ -269,11 +269,16 @@ pub trait DftR2cPlan<T>: Send + Sync {
     /// `input` must have the spec's `length` real samples; `output` must have
     /// `length / 2 + 1` complex bins (the half-spectrum).
     ///
+    /// **Input is consumed** (ADR-010 §1): the transform may overwrite `input`
+    /// with scratch (the `realfft` floor hands it straight to the kernel as
+    /// working memory).  Copy it first if you still need the time-domain
+    /// samples afterwards.
+    ///
     /// # Errors
     ///
     /// Returns [`Error::BufferMismatch`] if either buffer length does not
     /// match the plan's contract.
-    fn process(&self, input: &[T], output: &mut [Complex<T>]) -> Result<()>;
+    fn process(&self, input: &mut [T], output: &mut [Complex<T>]) -> Result<()>;
 }
 
 /// Factory for creating [`DftR2cPlan`] execution objects.
@@ -373,11 +378,22 @@ pub trait DftC2rPlan<T>: Send + Sync {
     /// `input` must have `length / 2 + 1` complex bins (the half-spectrum);
     /// `output` must have `length` real samples.
     ///
+    /// **Input is consumed** (ADR-010 §1): the transform may overwrite `input`
+    /// with scratch.  Copy it first if you still need the half-spectrum
+    /// afterwards.
+    ///
+    /// The bare primitive assumes a **clean Hermitian** half-spectrum — DC, and
+    /// for even `length` Nyquist, purely real.  Drift-tolerant projection onto
+    /// the nearest valid spectrum is the job of the
+    /// [`HermitianC2r`](crate::hermitian::HermitianC2r) shaping decorator
+    /// (ADR-010 §2), not of the primitive: a direct call with a dirty DC/Nyquist
+    /// surfaces the kernel's native behavior.
+    ///
     /// # Errors
     ///
     /// Returns [`Error::BufferMismatch`] if either buffer length does not
     /// match the plan's contract.
-    fn process(&self, input: &[Complex<T>], output: &mut [T]) -> Result<()>;
+    fn process(&self, input: &mut [Complex<T>], output: &mut [T]) -> Result<()>;
 }
 
 /// Factory for creating [`DftC2rPlan`] execution objects.

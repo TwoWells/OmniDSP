@@ -9,10 +9,11 @@
 //! real kernel inherits them (ADR-009 §4).  `realfft` is pure safe Rust, so
 //! `#![forbid(unsafe_code)]` still holds.
 //!
-//! Both plans hold the `realfft` scratch — and, because the `realfft`
-//! `process_with_scratch` API consumes its input as scratch, a private copy of
-//! the input — behind a [`Mutex`], matching the `RustFFT` scratch pattern in
-//! [`RustDftC2cPlan`](crate::RustDftC2cPlan).
+//! Both plans hold the `realfft` scratch behind a [`Mutex`], matching the
+//! `RustFFT` scratch pattern in [`RustDftC2cPlan`](crate::RustDftC2cPlan).  The
+//! `realfft` `process_with_scratch` API consumes its input as working memory, so
+//! the plans take their input by `&mut` and hand the caller's buffer straight to
+//! the kernel — no internal copy (ADR-010 §1).
 //!
 //! Normalization follows the family-level [`DftNorm`] convention via the shared
 //! [`norm_scale`] helper, so module round-trips compose identically across c2c
@@ -91,27 +92,19 @@ pub struct RustDftR2c;
 
 /// Execution plan for a real-to-complex DFT backed by `realfft`.
 ///
-/// Holds the precomputed transform plus, behind a single [`Mutex`], the
-/// `realfft` scratch and a private mutable copy of the input (the
-/// `process_with_scratch` API destroys its input buffer).  This keeps
-/// `Send + Sync` while leaving execution allocation-free.
+/// Holds the precomputed transform plus the `realfft` scratch behind a single
+/// [`Mutex`] (keeping `Send + Sync` with allocation-free execution).  The
+/// caller's `&mut` input is handed straight to `realfft`, which consumes it as
+/// working memory (ADR-010 §1) — there is no internal input copy.
 pub struct RustDftR2cPlan<T> {
     engine: Box<dyn DftR2cEngine<T>>,
     length: usize,
     norm: DftNorm,
-    scratch: Mutex<R2cScratch<T>>,
-}
-
-/// Reusable per-call buffers for [`RustDftR2cPlan`].
-struct R2cScratch<T> {
-    /// Mutable copy of the real input (consumed as scratch by `realfft`).
-    input: Vec<T>,
-    /// `realfft`'s own scratch buffer.
-    work: Vec<Complex<T>>,
+    scratch: Mutex<Vec<Complex<T>>>,
 }
 
 impl<T: DspFloat> DftR2cPlan<T> for RustDftR2cPlan<T> {
-    fn process(&self, input: &[T], output: &mut [Complex<T>]) -> Result<()> {
+    fn process(&self, input: &mut [T], output: &mut [Complex<T>]) -> Result<()> {
         let bins = self.length / 2 + 1;
         if input.len() != self.length {
             return Err(Error::BufferMismatch {
@@ -126,16 +119,13 @@ impl<T: DspFloat> DftR2cPlan<T> for RustDftR2cPlan<T> {
             });
         }
 
-        let mut guard = self
+        let mut work = self
             .scratch
             .lock()
             .map_err(|e| Error::Internal(format!("scratch buffer lock poisoned: {e}")))?;
-        let R2cScratch { input: buf, work } = &mut *guard;
-        buf.copy_from_slice(input);
-        self.engine
-            .process(buf.as_mut_slice(), output, work.as_mut_slice())?;
+        self.engine.process(input, output, work.as_mut_slice())?;
         // Release the scratch lock before scaling `output` (caller-owned).
-        drop(guard);
+        drop(work);
 
         // r2c is forward-only — it scales like a c2c forward plan.
         if let Some(s) = norm_scale::<T>(self.norm, Direction::Forward, self.length)? {
@@ -159,36 +149,31 @@ pub struct RustDftC2r;
 
 /// Execution plan for a complex-to-real DFT backed by `realfft`.
 ///
-/// Holds the precomputed transform plus, behind a single [`Mutex`], the
-/// `realfft` scratch and a private mutable copy of the input (the
-/// `process_with_scratch` API destroys its input buffer).
+/// Holds the precomputed transform plus the `realfft` scratch behind a single
+/// [`Mutex`].  The caller's `&mut` half-spectrum is handed straight to
+/// `realfft`, which consumes it as working memory (ADR-010 §1) — there is no
+/// internal input copy.
 ///
 /// # DC / Nyquist convention
 ///
-/// A half-spectrum that is the transform of a real signal is Hermitian: its DC
-/// bin (index 0), and — when `length` is even — its Nyquist bin (index
-/// `length / 2`), are purely real.  `realfft` flags non-zero imaginary parts
-/// there as an error.  This plan instead **zeroes** those imaginary parts
-/// before transforming, projecting any malformed input onto the nearest valid
-/// Hermitian spectrum rather than erroring.  A genuine half-spectrum is
-/// unaffected; this is the documented convention (ADR-009 §4).
+/// This is the **raw** primitive (ADR-010 §2): it performs **no** DC/Nyquist
+/// projection.  A half-spectrum that is the transform of a real signal is
+/// Hermitian — its DC bin (index 0), and, when `length` is even, its Nyquist
+/// bin (index `length / 2`), are purely real — and `realfft` flags non-zero
+/// imaginary parts there as an error.  Drift-tolerant projection onto the
+/// nearest valid Hermitian spectrum is the job of the
+/// [`HermitianC2r`](omnidsp_core::hermitian::HermitianC2r) shaping decorator,
+/// not of this primitive: a direct call with a dirty DC/Nyquist surfaces
+/// `realfft`'s native behavior (the documented §1 escape hatch).
 pub struct RustDftC2rPlan<T> {
     engine: Box<dyn DftC2rEngine<T>>,
     length: usize,
     norm: DftNorm,
-    scratch: Mutex<C2rScratch<T>>,
-}
-
-/// Reusable per-call buffers for [`RustDftC2rPlan`].
-struct C2rScratch<T> {
-    /// Mutable copy of the complex half-spectrum (consumed by `realfft`).
-    input: Vec<Complex<T>>,
-    /// `realfft`'s own scratch buffer.
-    work: Vec<Complex<T>>,
+    scratch: Mutex<Vec<Complex<T>>>,
 }
 
 impl<T: DspFloat> DftC2rPlan<T> for RustDftC2rPlan<T> {
-    fn process(&self, input: &[Complex<T>], output: &mut [T]) -> Result<()> {
+    fn process(&self, input: &mut [Complex<T>], output: &mut [T]) -> Result<()> {
         let bins = self.length / 2 + 1;
         if input.len() != bins {
             return Err(Error::BufferMismatch {
@@ -203,24 +188,13 @@ impl<T: DspFloat> DftC2rPlan<T> for RustDftC2rPlan<T> {
             });
         }
 
-        let mut guard = self
+        let mut work = self
             .scratch
             .lock()
             .map_err(|e| Error::Internal(format!("scratch buffer lock poisoned: {e}")))?;
-        let C2rScratch { input: buf, work } = &mut *guard;
-        buf.copy_from_slice(input);
-
-        // Enforce the Hermitian DC / Nyquist convention (see struct docs):
-        // the DC bin, and the Nyquist bin for even lengths, are purely real.
-        buf[0].im = T::zero();
-        if self.length.is_multiple_of(2) {
-            buf[bins - 1].im = T::zero();
-        }
-
-        self.engine
-            .process(buf.as_mut_slice(), output, work.as_mut_slice())?;
+        self.engine.process(input, output, work.as_mut_slice())?;
         // Release the scratch lock before scaling `output` (caller-owned).
-        drop(guard);
+        drop(work);
 
         // c2r is inverse-only — it scales like a c2c inverse plan.
         if let Some(s) = norm_scale::<T>(self.norm, Direction::Inverse, self.length)? {
@@ -257,10 +231,7 @@ macro_rules! impl_real_dft {
                     engine: Box::new(fft),
                     length,
                     norm: spec.norm(),
-                    scratch: Mutex::new(R2cScratch {
-                        input: vec![<$t>::default(); length],
-                        work: vec![Complex::default(); scratch_len],
-                    }),
+                    scratch: Mutex::new(vec![Complex::default(); scratch_len]),
                 })
             }
         }
@@ -270,7 +241,6 @@ macro_rules! impl_real_dft {
 
             fn create_plan(&self, spec: &DftC2rSpec<$t>) -> Result<Self::Plan> {
                 let length = spec.length();
-                let bins = length / 2 + 1;
 
                 let mut planner = RealFftPlanner::<$t>::new();
                 let fft = planner.plan_fft_inverse(length);
@@ -280,10 +250,7 @@ macro_rules! impl_real_dft {
                     engine: Box::new(fft),
                     length,
                     norm: spec.norm(),
-                    scratch: Mutex::new(C2rScratch {
-                        input: vec![Complex::default(); bins],
-                        work: vec![Complex::default(); scratch_len],
-                    }),
+                    scratch: Mutex::new(vec![Complex::default(); scratch_len]),
                 })
             }
         }
@@ -353,8 +320,10 @@ mod tests {
     {
         let spec = DftR2cSpec::<T>::new(n, norm).expect("valid r2c spec");
         let plan = DftR2c::<T>::create_plan(&RustDftR2c, &spec).expect("r2c plan");
+        // r2c consumes its input (ADR-010 §1) — hand it a throwaway copy.
+        let mut scratch = input.to_vec();
         let mut out = czeros::<T>(n / 2 + 1);
-        plan.process(input, &mut out).expect("r2c process");
+        plan.process(&mut scratch, &mut out).expect("r2c process");
         out
     }
 
@@ -364,8 +333,10 @@ mod tests {
     {
         let spec = DftC2rSpec::<T>::new(n, norm).expect("valid c2r spec");
         let plan = DftC2r::<T>::create_plan(&RustDftC2r, &spec).expect("c2r plan");
+        // c2r consumes its input (ADR-010 §1) — hand it a throwaway copy.
+        let mut scratch = input.to_vec();
         let mut out = vec![T::zero(); n];
-        plan.process(input, &mut out).expect("c2r process");
+        plan.process(&mut scratch, &mut out).expect("c2r process");
         out
     }
 
@@ -485,17 +456,17 @@ mod tests {
         let spec = DftR2cSpec::<f64>::new(8, DftNorm::None).expect("valid spec");
         let plan = DftR2c::<f64>::create_plan(&RustDftR2c, &spec).expect("plan");
 
-        let short_input = [0.0_f64; 7];
+        let mut short_input = [0.0_f64; 7];
         let mut out = czeros::<f64>(5);
         assert!(
-            plan.process(&short_input, &mut out).is_err(),
+            plan.process(&mut short_input, &mut out).is_err(),
             "wrong input length should error",
         );
 
-        let input = [0.0_f64; 8];
+        let mut input = [0.0_f64; 8];
         let mut short_out = czeros::<f64>(4);
         assert!(
-            plan.process(&input, &mut short_out).is_err(),
+            plan.process(&mut input, &mut short_out).is_err(),
             "wrong output length should error",
         );
     }
@@ -505,17 +476,17 @@ mod tests {
         let spec = DftC2rSpec::<f64>::new(8, DftNorm::None).expect("valid spec");
         let plan = DftC2r::<f64>::create_plan(&RustDftC2r, &spec).expect("plan");
 
-        let short_input = czeros::<f64>(4);
+        let mut short_input = czeros::<f64>(4);
         let mut out = [0.0_f64; 8];
         assert!(
-            plan.process(&short_input, &mut out).is_err(),
+            plan.process(&mut short_input, &mut out).is_err(),
             "wrong input length should error",
         );
 
-        let input = czeros::<f64>(5);
+        let mut input = czeros::<f64>(5);
         let mut short_out = [0.0_f64; 7];
         assert!(
-            plan.process(&input, &mut short_out).is_err(),
+            plan.process(&mut input, &mut short_out).is_err(),
             "wrong output length should error",
         );
     }

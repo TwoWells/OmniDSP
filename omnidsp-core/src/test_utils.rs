@@ -155,7 +155,7 @@ pub struct TestDftR2cPlan {
 }
 
 impl DftR2cPlan<f64> for TestDftR2cPlan {
-    fn process(&self, input: &[f64], output: &mut [Complex<f64>]) -> Result<()> {
+    fn process(&self, input: &mut [f64], output: &mut [Complex<f64>]) -> Result<()> {
         let bins = self.length / 2 + 1;
         if input.len() != self.length {
             return Err(Error::BufferMismatch {
@@ -215,9 +215,12 @@ pub struct TestDftC2r;
 
 /// Complex-to-real DFT plan for tests.  Respects [`DftNorm`] (inverse slice).
 ///
-/// The DC bin — and, for even `length`, the Nyquist bin — are forced purely real
-/// before the inverse transform, matching `RustDftC2r`'s documented Hermitian
-/// convention so the double and the floor agree on any input.
+/// A **raw, bare primitive** (ADR-010 §1/§2): it assumes a clean Hermitian
+/// half-spectrum and does **no** DC/Nyquist projection — that shaping lives in
+/// [`HermitianC2r`](crate::hermitian::HermitianC2r), matching `RustDftC2r`'s
+/// post-05de floor.  Taking the real part of the inverse transform already
+/// discards any DC/Nyquist imaginary drift, so it is harmless here but is not
+/// the double's responsibility to clean.
 #[derive(Debug)]
 pub struct TestDftC2rPlan {
     length: usize,
@@ -225,7 +228,7 @@ pub struct TestDftC2rPlan {
 }
 
 impl DftC2rPlan<f64> for TestDftC2rPlan {
-    fn process(&self, input: &[Complex<f64>], output: &mut [f64]) -> Result<()> {
+    fn process(&self, input: &mut [Complex<f64>], output: &mut [f64]) -> Result<()> {
         let n = self.length;
         let bins = n / 2 + 1;
         if input.len() != bins {
@@ -241,16 +244,12 @@ impl DftC2rPlan<f64> for TestDftC2rPlan {
             });
         }
 
+        // Raw bare primitive (ADR-010 §2): no DC/Nyquist projection here — the
+        // input is assumed clean-Hermitian, and any drift is shaped upstream by
+        // `HermitianC2r`.  Mirror the lower half into the conjugate-symmetric
+        // upper half and take the real part of the inverse transform.
         let mut full = vec![Complex::new(0.0, 0.0); n];
         full[..bins].copy_from_slice(input);
-
-        // Enforce the Hermitian DC / Nyquist convention (matching the floor):
-        // the DC bin, and the Nyquist bin for even lengths, are purely real.
-        full[0].im = 0.0;
-        if n.is_multiple_of(2) {
-            full[bins - 1].im = 0.0;
-        }
-        // Mirror the lower half into the conjugate-symmetric upper half.
         for k in bins..n {
             full[k] = full[n - k].conj();
         }
@@ -386,16 +385,20 @@ mod tests {
     fn r2c(n: usize, norm: DftNorm, input: &[f64]) -> Vec<Complex<f64>> {
         let spec = DftR2cSpec::<f64>::new(n, norm).expect("valid r2c spec");
         let plan = DftR2c::<f64>::create_plan(&TestDftR2c, &spec).expect("r2c plan");
+        // r2c consumes its input (ADR-010 §1) — hand it a throwaway copy.
+        let mut scratch = input.to_vec();
         let mut out = vec![Complex::new(0.0, 0.0); n / 2 + 1];
-        plan.process(input, &mut out).expect("r2c process");
+        plan.process(&mut scratch, &mut out).expect("r2c process");
         out
     }
 
     fn c2r(n: usize, norm: DftNorm, input: &[Complex<f64>]) -> Vec<f64> {
         let spec = DftC2rSpec::<f64>::new(n, norm).expect("valid c2r spec");
         let plan = DftC2r::<f64>::create_plan(&TestDftC2r, &spec).expect("c2r plan");
+        // c2r consumes its input (ADR-010 §1) — hand it a throwaway copy.
+        let mut scratch = input.to_vec();
         let mut out = vec![0.0_f64; n];
-        plan.process(input, &mut out).expect("c2r process");
+        plan.process(&mut scratch, &mut out).expect("c2r process");
         out
     }
 
@@ -494,32 +497,10 @@ mod tests {
         }
     }
 
-    /// c2r tolerates a non-Hermitian DC / (even-`N`) Nyquist bin: a spectrum
-    /// whose DC and Nyquist imaginary parts are non-zero must not error and must
-    /// reconstruct the same real signal as the clean Hermitian input — the
-    /// drift-tolerant contract `RustDftC2r` documents (ADR-009 §4), pinned at the
-    /// double level so the double can never grow stricter than the floor (which
-    /// the `r2c → multiply → c2r` module chains in 05e rely on).
-    #[test]
-    fn c2r_tolerates_dc_nyquist_drift() {
-        for n in [7_usize, 8] {
-            let x = ramp(n);
-            let clean = r2c(n, DftNorm::None, &x);
-
-            // Perturb DC (and, for even N, Nyquist) imaginary parts well above
-            // EPS, so a double that honored Hermitian-ness strictly would diverge.
-            let mut dirty = clean.clone();
-            dirty[0].im = 2.5;
-            if n.is_multiple_of(2) {
-                let nyquist = dirty.len() - 1;
-                dirty[nyquist].im = 2.5;
-            }
-
-            let from_clean = c2r(n, DftNorm::Inverse, &clean);
-            let from_dirty = c2r(n, DftNorm::Inverse, &dirty);
-            assert_real_close(&from_dirty, &from_clean);
-        }
-    }
+    // The c2r DC/(even-`N`)Nyquist drift-tolerance test moved to
+    // `crate::hermitian` in 05de: drift projection is now a property of the
+    // `HermitianC2r` shaping decorator, not of the bare `TestDftC2r` primitive
+    // (ADR-010 §1/§2).
 
     #[test]
     fn buffer_mismatch_errors() {
@@ -527,27 +508,27 @@ mod tests {
         let r_plan = DftR2c::<f64>::create_plan(&TestDftR2c, &r_spec).expect("r2c plan");
         let mut half = vec![Complex::new(0.0, 0.0); 5];
         assert!(
-            r_plan.process(&[0.0_f64; 7], &mut half).is_err(),
+            r_plan.process(&mut [0.0_f64; 7], &mut half).is_err(),
             "wrong r2c input length must error",
         );
         let mut short_half = vec![Complex::new(0.0, 0.0); 4];
         assert!(
-            r_plan.process(&[0.0_f64; 8], &mut short_half).is_err(),
+            r_plan.process(&mut [0.0_f64; 8], &mut short_half).is_err(),
             "wrong r2c output length must error",
         );
 
         let c_spec = DftC2rSpec::<f64>::new(8, DftNorm::None).expect("valid c2r spec");
         let c_plan = DftC2r::<f64>::create_plan(&TestDftC2r, &c_spec).expect("c2r plan");
-        let short_in = vec![Complex::new(0.0, 0.0); 4];
+        let mut short_in = vec![Complex::new(0.0, 0.0); 4];
         let mut real_out = [0.0_f64; 8];
         assert!(
-            c_plan.process(&short_in, &mut real_out).is_err(),
+            c_plan.process(&mut short_in, &mut real_out).is_err(),
             "wrong c2r input length must error",
         );
-        let good_in = vec![Complex::new(0.0, 0.0); 5];
+        let mut good_in = vec![Complex::new(0.0, 0.0); 5];
         let mut short_out = [0.0_f64; 7];
         assert!(
-            c_plan.process(&good_in, &mut short_out).is_err(),
+            c_plan.process(&mut good_in, &mut short_out).is_err(),
             "wrong c2r output length must error",
         );
     }
