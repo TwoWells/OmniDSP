@@ -80,7 +80,7 @@ pub enum FilterFamily {
 ///     FilterFamily::Butterworth,
 ///     FilterType::Lowpass, 4, 44100.0, 1000.0, None,
 /// ).unwrap();
-/// assert_eq!(spec.sections.len(), 2);
+/// assert_eq!(spec.sections().len(), 2);
 /// ```
 pub fn design<T: Float>(
     family: FilterFamily,
@@ -102,7 +102,7 @@ pub fn design<T: Float>(
 
     let sections = design_from_prototype(prototype, &validated, sr);
     let sections = sections.iter().map(biquad_to_t).collect::<Result<_>>()?;
-    Ok(IirSpec::new(sections))
+    IirSpec::new(sections)
 }
 
 fn design_from_prototype(
@@ -598,7 +598,9 @@ mod tests {
         c1: f64,
         c2: Option<f64>,
     ) -> Result<Vec<BiquadSection<f64>>> {
-        Ok(design(FilterFamily::Butterworth, ft, order, sr, c1, c2)?.sections)
+        Ok(design(FilterFamily::Butterworth, ft, order, sr, c1, c2)?
+            .sections()
+            .to_vec())
     }
 
     fn butter_f32(
@@ -608,7 +610,9 @@ mod tests {
         c1: f32,
         c2: Option<f32>,
     ) -> Result<Vec<BiquadSection<f32>>> {
-        Ok(design(FilterFamily::Butterworth, ft, order, sr, c1, c2)?.sections)
+        Ok(design(FilterFamily::Butterworth, ft, order, sr, c1, c2)?
+            .sections()
+            .to_vec())
     }
 
     /// Evaluate the SOS cascade magnitude at a given frequency in Hz.

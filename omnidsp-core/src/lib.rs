@@ -22,6 +22,7 @@ pub mod error;
 pub mod hermitian;
 pub mod modules;
 pub mod scalar;
+pub mod spec;
 pub mod traits;
 pub mod types;
 

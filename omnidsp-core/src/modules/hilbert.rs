@@ -46,20 +46,20 @@ use crate::types::Direction;
 ///
 /// Describes the signal length for the analytic signal computation.
 /// The type parameter `T` ties the spec to a specific float type for
-/// dispatch-layer integration.
+/// dispatch-layer integration.  The field is private and the spec is
+/// valid-by-construction (ADR-006 §4).
 ///
 /// # Examples
 ///
 /// ```
 /// use omnidsp_core::modules::hilbert::HilbertSpec;
 ///
-/// let spec = HilbertSpec::<f64>::new(1024);
-/// assert_eq!(spec.length, 1024);
+/// let spec = HilbertSpec::<f64>::new(1024).unwrap();
+/// assert_eq!(spec.length(), 1024);
 /// ```
 #[derive(Debug, Clone, Copy)]
 pub struct HilbertSpec<T> {
-    /// Signal length (and FFT length).
-    pub length: usize,
+    length: usize,
     _marker: PhantomData<T>,
 }
 
@@ -73,12 +73,26 @@ impl<T> Eq for HilbertSpec<T> {}
 
 impl<T> HilbertSpec<T> {
     /// Create a new Hilbert transform spec for the given signal length.
-    #[must_use]
-    pub const fn new(length: usize) -> Self {
-        Self {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidSpec`] if `length` is zero.
+    pub fn new(length: usize) -> Result<Self> {
+        if length == 0 {
+            return Err(Error::InvalidSpec(
+                "Hilbert transform length must be non-zero".into(),
+            ));
+        }
+        Ok(Self {
             length,
             _marker: PhantomData,
-        }
+        })
+    }
+
+    /// Signal length (and FFT length).
+    #[must_use]
+    pub const fn length(&self) -> usize {
+        self.length
     }
 }
 
@@ -228,7 +242,8 @@ impl<R, C, V> OmniHilbert<R, C, V> {
     ///
     /// # Errors
     ///
-    /// Returns an error if the length is zero or DFT plan creation fails.
+    /// Returns an error if DFT plan creation fails.  The length invariant is
+    /// enforced by [`HilbertSpec::new`] (ADR-006 §4), so it is not re-checked here.
     pub fn create_plan<T>(
         &self,
         spec: &HilbertSpec<T>,
@@ -239,13 +254,7 @@ impl<R, C, V> OmniHilbert<R, C, V> {
         C: DftC2c<T>,
         V: VecOps<T>,
     {
-        if spec.length == 0 {
-            return Err(Error::InvalidSpec(
-                "Hilbert transform length must be non-zero".to_owned(),
-            ));
-        }
-
-        let n = spec.length;
+        let n = spec.length();
         let bins = n / 2 + 1;
 
         // Forward r2c, inverse c2c.  DftNorm::Inverse gives the round-trip
@@ -325,25 +334,25 @@ mod tests {
 
     #[test]
     fn spec_equality() {
-        let a = HilbertSpec::<f64>::new(256);
-        let b = HilbertSpec::<f64>::new(256);
-        let c = HilbertSpec::<f64>::new(512);
+        let a = HilbertSpec::<f64>::new(256).expect("valid hilbert spec");
+        let b = HilbertSpec::<f64>::new(256).expect("valid hilbert spec");
+        let c = HilbertSpec::<f64>::new(512).expect("valid hilbert spec");
         assert_eq!(a, b, "same-length specs should be equal");
         assert_ne!(a, c, "different-length specs should differ");
     }
 
     #[test]
     fn zero_length_rejected() {
-        let factory = make_factory();
-        let spec = HilbertSpec::<f64>::new(0);
-        let result = factory.create_plan(&spec);
-        assert!(result.is_err(), "zero-length spec should be rejected");
+        assert!(
+            HilbertSpec::<f64>::new(0).is_err(),
+            "zero-length spec should be rejected by the spec constructor"
+        );
     }
 
     #[test]
     fn length_one() {
         let factory = make_factory();
-        let spec = HilbertSpec::<f64>::new(1);
+        let spec = HilbertSpec::<f64>::new(1).expect("valid hilbert spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -368,7 +377,7 @@ mod tests {
     fn dc_signal_has_zero_imaginary() {
         let factory = make_factory();
         let n = 64;
-        let spec = HilbertSpec::<f64>::new(n);
+        let spec = HilbertSpec::<f64>::new(n).expect("valid hilbert spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -396,7 +405,7 @@ mod tests {
         // for a single positive frequency.
         let factory = make_factory();
         let n = 128;
-        let spec = HilbertSpec::<f64>::new(n);
+        let spec = HilbertSpec::<f64>::new(n).expect("valid hilbert spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -431,7 +440,7 @@ mod tests {
     fn pure_cosine_odd_length() {
         let factory = make_factory();
         let n = 127;
-        let spec = HilbertSpec::<f64>::new(n);
+        let spec = HilbertSpec::<f64>::new(n).expect("valid hilbert spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -466,7 +475,7 @@ mod tests {
         // |z[n]|² should be constant for a pure cosine.
         let factory = make_factory();
         let n = 256;
-        let spec = HilbertSpec::<f64>::new(n);
+        let spec = HilbertSpec::<f64>::new(n).expect("valid hilbert spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -494,7 +503,7 @@ mod tests {
     fn linearity() {
         let factory = make_factory();
         let n = 64;
-        let spec = HilbertSpec::<f64>::new(n);
+        let spec = HilbertSpec::<f64>::new(n).expect("valid hilbert spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -543,7 +552,7 @@ mod tests {
     fn plan_reuse() {
         let factory = make_factory();
         let n = 32;
-        let spec = HilbertSpec::<f64>::new(n);
+        let spec = HilbertSpec::<f64>::new(n).expect("valid hilbert spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -574,7 +583,7 @@ mod tests {
     #[test]
     fn buffer_mismatch_input() {
         let factory = make_factory();
-        let spec = HilbertSpec::<f64>::new(16);
+        let spec = HilbertSpec::<f64>::new(16).expect("valid hilbert spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -588,7 +597,7 @@ mod tests {
     #[test]
     fn buffer_mismatch_output() {
         let factory = make_factory();
-        let spec = HilbertSpec::<f64>::new(16);
+        let spec = HilbertSpec::<f64>::new(16).expect("valid hilbert spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -605,7 +614,7 @@ mod tests {
         // So analytic signal of sin should have imag = -cos.
         let factory = make_factory();
         let n = 128;
-        let spec = HilbertSpec::<f64>::new(n);
+        let spec = HilbertSpec::<f64>::new(n).expect("valid hilbert spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -641,7 +650,7 @@ mod tests {
         // unchanged (mask = 1 at Nyquist).
         let factory = make_factory();
         let n = 64;
-        let spec = HilbertSpec::<f64>::new(n);
+        let spec = HilbertSpec::<f64>::new(n).expect("valid hilbert spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -676,7 +685,7 @@ mod tests {
         // own complex exponential in the analytic signal.
         let factory = make_factory();
         let n = 256;
-        let spec = HilbertSpec::<f64>::new(n);
+        let spec = HilbertSpec::<f64>::new(n).expect("valid hilbert spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -725,7 +734,7 @@ mod tests {
         // For any input, real part of analytic signal must equal the input.
         let factory = make_factory();
         let n = 64;
-        let spec = HilbertSpec::<f64>::new(n);
+        let spec = HilbertSpec::<f64>::new(n).expect("valid hilbert spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -755,7 +764,7 @@ mod tests {
     #[test]
     fn accessor_length() {
         let factory = make_factory();
-        let spec = HilbertSpec::<f64>::new(512);
+        let spec = HilbertSpec::<f64>::new(512).expect("valid hilbert spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");

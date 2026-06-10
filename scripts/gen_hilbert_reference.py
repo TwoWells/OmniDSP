@@ -65,7 +65,7 @@ def main():
 #[test]
 fn scipy_chirp() {
     let factory = make_factory();
-    let spec = HilbertSpec::<f64>::new(CHIRP_INPUT.len());
+    let spec = HilbertSpec::<f64>::new(CHIRP_INPUT.len()).expect("valid hilbert spec");
     let plan = factory.create_plan(&spec).expect("plan creation should succeed");
 
     let mut output = vec![Complex::new(0.0, 0.0); CHIRP_INPUT.len()];
@@ -89,7 +89,7 @@ fn scipy_chirp() {
 #[test]
 fn scipy_two_tones() {
     let factory = make_factory();
-    let spec = HilbertSpec::<f64>::new(TWO_TONES_INPUT.len());
+    let spec = HilbertSpec::<f64>::new(TWO_TONES_INPUT.len()).expect("valid hilbert spec");
     let plan = factory.create_plan(&spec).expect("plan creation should succeed");
 
     let mut output = vec![Complex::new(0.0, 0.0); TWO_TONES_INPUT.len()];
@@ -113,7 +113,7 @@ fn scipy_two_tones() {
 #[test]
 fn scipy_random() {
     let factory = make_factory();
-    let spec = HilbertSpec::<f64>::new(RANDOM_INPUT.len());
+    let spec = HilbertSpec::<f64>::new(RANDOM_INPUT.len()).expect("valid hilbert spec");
     let plan = factory.create_plan(&spec).expect("plan creation should succeed");
 
     let mut output = vec![Complex::new(0.0, 0.0); RANDOM_INPUT.len()];

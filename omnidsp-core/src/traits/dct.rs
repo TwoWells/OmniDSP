@@ -12,7 +12,7 @@
 
 use std::marker::PhantomData;
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -52,6 +52,7 @@ pub enum DctNorm {
 /// The type parameter `T` ties the spec to a specific float type, making
 /// specs fully self-describing for the dispatch layer's `CreatePlan<S>` trait.
 /// `T` is carried via [`PhantomData`] and hidden behind the constructor.
+/// Fields are private and the spec is valid-by-construction (ADR-006 §4).
 ///
 /// # Examples
 ///
@@ -59,17 +60,14 @@ pub enum DctNorm {
 /// use omnidsp_core::traits::dct::{DctSpec, DctType, DctNorm};
 ///
 /// // 1024-point DCT-II with orthonormal normalization
-/// let spec = DctSpec::<f64>::new(1024, DctType::II, DctNorm::Ortho);
-/// assert_eq!(spec.length, 1024);
+/// let spec = DctSpec::<f64>::new(1024, DctType::II, DctNorm::Ortho).unwrap();
+/// assert_eq!(spec.length(), 1024);
 /// ```
 #[derive(Debug, Clone, Copy)]
 pub struct DctSpec<T> {
-    /// Number of real samples for both input and output.
-    pub length: usize,
-    /// DCT variant (II or III).
-    pub dct_type: DctType,
-    /// Normalization convention.
-    pub norm: DctNorm,
+    length: usize,
+    dct_type: DctType,
+    norm: DctNorm,
     _marker: PhantomData<T>,
 }
 
@@ -83,14 +81,38 @@ impl<T> Eq for DctSpec<T> {}
 
 impl<T> DctSpec<T> {
     /// Create a new DCT spec with the given length, type, and normalization.
-    #[must_use]
-    pub const fn new(length: usize, dct_type: DctType, norm: DctNorm) -> Self {
-        Self {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidSpec`] if `length` is zero.
+    pub fn new(length: usize, dct_type: DctType, norm: DctNorm) -> Result<Self> {
+        if length == 0 {
+            return Err(Error::InvalidSpec("DCT length must be non-zero".into()));
+        }
+        Ok(Self {
             length,
             dct_type,
             norm,
             _marker: PhantomData,
-        }
+        })
+    }
+
+    /// Number of real samples for both input and output.
+    #[must_use]
+    pub const fn length(&self) -> usize {
+        self.length
+    }
+
+    /// DCT variant (II or III).
+    #[must_use]
+    pub const fn dct_type(&self) -> DctType {
+        self.dct_type
+    }
+
+    /// Normalization convention.
+    #[must_use]
+    pub const fn norm(&self) -> DctNorm {
+        self.norm
     }
 }
 

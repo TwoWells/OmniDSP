@@ -127,7 +127,7 @@ impl ResampleQuality {
 /// assert_eq!(spec.down_factor(), 147);
 ///
 /// // Or directly from pre-computed data:
-/// let spec = ResampleSpec::new(2, 1, vec![0.5_f64, 1.0, 0.5], ResampleMode::Streaming);
+/// let spec = ResampleSpec::new(2, 1, vec![0.5_f64, 1.0, 0.5], ResampleMode::Streaming).unwrap();
 /// assert_eq!(spec.up_factor(), 2);
 /// ```
 #[derive(Debug, Clone)]
@@ -146,19 +146,33 @@ pub const MAX_PHASES_LIMIT: usize = 1024;
 
 impl<T> ResampleSpec<T> {
     /// Create a spec from pre-computed polyphase data.
-    #[must_use]
-    pub const fn new(
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidSpec`] if `up_factor` or `down_factor` is zero,
+    /// or if `prototype_filter` is empty.
+    pub fn new(
         up_factor: usize,
         down_factor: usize,
         prototype_filter: Vec<T>,
         mode: ResampleMode,
-    ) -> Self {
-        Self {
+    ) -> Result<Self> {
+        if up_factor == 0 || down_factor == 0 {
+            return Err(Error::InvalidSpec(
+                "resample up_factor and down_factor must be positive".into(),
+            ));
+        }
+        if prototype_filter.is_empty() {
+            return Err(Error::InvalidSpec(
+                "resample prototype filter must not be empty".into(),
+            ));
+        }
+        Ok(Self {
             up_factor,
             down_factor,
             prototype_filter,
             mode,
-        }
+        })
     }
 
     /// Upsampling factor L (number of polyphase phases).
@@ -270,12 +284,12 @@ pub fn design<T: Float>(
         window,
     )?;
 
-    Ok(ResampleSpec {
-        up_factor: up as usize,
-        down_factor: down as usize,
-        prototype_filter: fir_result.coefficients,
+    ResampleSpec::new(
+        up as usize,
+        down as usize,
+        fir_result.coefficients().to_vec(),
         mode,
-    })
+    )
 }
 
 // ─── Internals ───────────────────────────────────────────────────────
@@ -512,7 +526,8 @@ mod tests {
             2,
             vec![0.25, 0.5, 1.0, 0.5, 0.25],
             ResampleMode::Streaming,
-        );
+        )
+        .expect("valid resample spec");
         assert_eq!(spec.up_factor(), 3, "up_factor");
         assert_eq!(spec.down_factor(), 2, "down_factor");
         assert_eq!(spec.prototype_filter().len(), 5, "prototype length");
@@ -522,11 +537,36 @@ mod tests {
     #[test]
     fn spec_with_mode() {
         let spec = ResampleSpec::new(2, 1, vec![1.0_f64], ResampleMode::Streaming)
+            .expect("valid resample spec")
             .with_mode(ResampleMode::Batch);
         assert_eq!(
             spec.mode(),
             ResampleMode::Batch,
             "mode should be overridden"
+        );
+    }
+
+    #[test]
+    fn spec_rejects_zero_up_factor() {
+        assert!(
+            ResampleSpec::new(0, 1, vec![1.0_f64], ResampleMode::Streaming).is_err(),
+            "zero up_factor should be rejected"
+        );
+    }
+
+    #[test]
+    fn spec_rejects_zero_down_factor() {
+        assert!(
+            ResampleSpec::new(1, 0, vec![1.0_f64], ResampleMode::Streaming).is_err(),
+            "zero down_factor should be rejected"
+        );
+    }
+
+    #[test]
+    fn spec_rejects_empty_prototype() {
+        assert!(
+            ResampleSpec::<f64>::new(1, 1, vec![], ResampleMode::Streaming).is_err(),
+            "empty prototype filter should be rejected"
         );
     }
 

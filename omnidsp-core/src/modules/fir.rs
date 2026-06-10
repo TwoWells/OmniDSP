@@ -323,7 +323,9 @@ impl<R, C, V> OmniFir<R, C, V> {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::InvalidSpec`] if the coefficients are empty.
+    /// Returns [`Error::InvalidSpec`] if the overlap-save block size overflows.
+    /// The non-empty-coefficients invariant is enforced by [`FirSpec::new`]
+    /// (ADR-006 §4), so it is not re-checked here.
     #[allow(
         clippy::type_complexity,
         reason = "composite real-DFT plan type (r2c forward + Hermitian-shaped c2r \
@@ -339,22 +341,16 @@ impl<R, C, V> OmniFir<R, C, V> {
         C: DftC2r<T> + Clone,
         V: VecOps<T>,
     {
-        if spec.coefficients.is_empty() {
-            return Err(Error::InvalidSpec(
-                "FIR coefficients must not be empty".to_owned(),
-            ));
-        }
+        let num_taps = spec.coefficients().len();
 
-        let num_taps = spec.coefficients.len();
-
-        let strategy = match spec.strategy {
+        let strategy = match spec.strategy() {
             FirStrategy::Auto => recommend_strategy(num_taps),
             other => other,
         };
 
         let inner = match strategy {
             FirStrategy::Direct | FirStrategy::Auto => {
-                let mut coeffs = spec.coefficients.clone();
+                let mut coeffs = spec.coefficients().to_vec();
                 coeffs.reverse();
 
                 PlanInner::Direct {
@@ -388,7 +384,7 @@ impl<R, C, V> OmniFir<R, C, V> {
                 let mut buf_time = vec![T::zero(); block_size];
                 let mut freq_coeffs = vec![zero; bins];
 
-                buf_time[..num_taps].copy_from_slice(&spec.coefficients);
+                buf_time[..num_taps].copy_from_slice(spec.coefficients());
                 fwd.process(&mut buf_time, &mut freq_coeffs)?;
 
                 PlanInner::OverlapSave {
@@ -477,7 +473,9 @@ mod tests {
     fn test_impulse_response(strategy: FirStrategy) {
         let factory = make_factory();
         let coeffs = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let spec = FirSpec::new(coeffs.clone()).with_strategy(strategy);
+        let spec = FirSpec::new(coeffs.clone())
+            .expect("valid fir spec")
+            .with_strategy(strategy);
         let mut plan = factory.create_plan(&spec).expect("plan creation");
 
         let mut input = vec![0.0; coeffs.len() + 4];
@@ -517,7 +515,9 @@ mod tests {
         let factory = make_factory();
         let coeffs = vec![0.1, 0.2, 0.4, 0.2, 0.1];
         let expected_gain: f64 = coeffs.iter().sum();
-        let spec = FirSpec::new(coeffs.clone()).with_strategy(strategy);
+        let spec = FirSpec::new(coeffs.clone())
+            .expect("valid fir spec")
+            .with_strategy(strategy);
         let mut plan = factory.create_plan(&spec).expect("plan creation");
 
         let input_val = 3.0;
@@ -551,7 +551,9 @@ mod tests {
     fn test_streaming_continuity(strategy: FirStrategy) {
         let factory = make_factory();
         let coeffs = vec![1.0, -0.5, 0.25, -0.125, 0.0625];
-        let spec = FirSpec::new(coeffs).with_strategy(strategy);
+        let spec = FirSpec::new(coeffs)
+            .expect("valid fir spec")
+            .with_strategy(strategy);
 
         let mut plan_ref = factory.create_plan(&spec).expect("ref plan");
         let input: Vec<f64> = (0..20).map(|i| (f64::from(i)) * 0.1).collect();
@@ -593,7 +595,9 @@ mod tests {
     fn test_reset(strategy: FirStrategy) {
         let factory = make_factory();
         let coeffs = vec![1.0, 0.5, 0.25];
-        let spec = FirSpec::new(coeffs).with_strategy(strategy);
+        let spec = FirSpec::new(coeffs)
+            .expect("valid fir spec")
+            .with_strategy(strategy);
         let mut plan = factory.create_plan(&spec).expect("plan creation");
 
         let input = vec![1.0, 2.0, 3.0, 4.0, 5.0];
@@ -629,8 +633,12 @@ mod tests {
         let factory = make_factory();
         let coeffs = vec![0.1, 0.15, 0.2, 0.3, 0.2, 0.15, 0.1];
 
-        let spec_d = FirSpec::new(coeffs.clone()).with_strategy(FirStrategy::Direct);
-        let spec_o = FirSpec::new(coeffs).with_strategy(FirStrategy::OverlapSave);
+        let spec_d = FirSpec::new(coeffs.clone())
+            .expect("valid fir spec")
+            .with_strategy(FirStrategy::Direct);
+        let spec_o = FirSpec::new(coeffs)
+            .expect("valid fir spec")
+            .with_strategy(FirStrategy::OverlapSave);
 
         let mut plan_d = factory.create_plan(&spec_d).expect("direct plan");
         let mut plan_o = factory.create_plan(&spec_o).expect("ols plan");
@@ -650,7 +658,9 @@ mod tests {
     fn test_plan_reuse(strategy: FirStrategy) {
         let factory = make_factory();
         let coeffs = vec![1.0, 0.0, 0.0];
-        let spec = FirSpec::new(coeffs).with_strategy(strategy);
+        let spec = FirSpec::new(coeffs)
+            .expect("valid fir spec")
+            .with_strategy(strategy);
         let mut plan = factory.create_plan(&spec).expect("plan creation");
 
         let input1 = vec![1.0, 2.0, 3.0];
@@ -691,7 +701,9 @@ mod tests {
     fn forced_direct_long_filter() {
         let factory = make_factory();
         let coeffs: Vec<f64> = (0..32).map(|i: i32| 1.0 / (f64::from(i) + 1.0)).collect();
-        let spec = FirSpec::new(coeffs.clone()).with_strategy(FirStrategy::Direct);
+        let spec = FirSpec::new(coeffs.clone())
+            .expect("valid fir spec")
+            .with_strategy(FirStrategy::Direct);
         let mut plan = factory.create_plan(&spec).expect("plan creation");
 
         let mut input = vec![0.0; 64];
@@ -712,7 +724,9 @@ mod tests {
     fn forced_overlap_save_short_filter() {
         let factory = make_factory();
         let coeffs = vec![1.0, 2.0, 3.0];
-        let spec = FirSpec::new(coeffs.clone()).with_strategy(FirStrategy::OverlapSave);
+        let spec = FirSpec::new(coeffs.clone())
+            .expect("valid fir spec")
+            .with_strategy(FirStrategy::OverlapSave);
         let mut plan = factory.create_plan(&spec).expect("plan creation");
 
         let mut input = vec![0.0; 16];
@@ -733,16 +747,16 @@ mod tests {
 
     #[test]
     fn empty_coefficients_returns_error() {
-        let factory = make_factory();
-        let spec = FirSpec::new(vec![]);
-        let result = factory.create_plan(&spec);
-        assert!(result.is_err(), "empty coefficients should return error");
+        assert!(
+            FirSpec::<f64>::new(vec![]).is_err(),
+            "empty coefficients should be rejected by the spec constructor"
+        );
     }
 
     #[test]
     fn buffer_length_mismatch_returns_error() {
         let factory = make_factory();
-        let spec = FirSpec::new(vec![1.0, 2.0]);
+        let spec = FirSpec::new(vec![1.0, 2.0]).expect("valid fir spec");
         let mut plan = factory.create_plan(&spec).expect("plan creation");
 
         let input = vec![1.0, 2.0, 3.0];
@@ -759,8 +773,12 @@ mod tests {
     fn overlap_save_multi_block() {
         let factory = make_factory();
         let coeffs = vec![0.2, 0.3, 0.3, 0.2];
-        let spec_d = FirSpec::new(coeffs.clone()).with_strategy(FirStrategy::Direct);
-        let spec_o = FirSpec::new(coeffs).with_strategy(FirStrategy::OverlapSave);
+        let spec_d = FirSpec::new(coeffs.clone())
+            .expect("valid fir spec")
+            .with_strategy(FirStrategy::Direct);
+        let spec_o = FirSpec::new(coeffs)
+            .expect("valid fir spec")
+            .with_strategy(FirStrategy::OverlapSave);
 
         let mut plan_d = factory.create_plan(&spec_d).expect("direct plan");
         let mut plan_o = factory.create_plan(&spec_o).expect("ols plan");
@@ -780,8 +798,12 @@ mod tests {
         let factory = make_factory();
         let coeffs = vec![1.0, -0.5, 0.25, -0.125];
 
-        let spec_ref = FirSpec::new(coeffs.clone()).with_strategy(FirStrategy::Direct);
-        let spec_ols = FirSpec::new(coeffs).with_strategy(FirStrategy::OverlapSave);
+        let spec_ref = FirSpec::new(coeffs.clone())
+            .expect("valid fir spec")
+            .with_strategy(FirStrategy::Direct);
+        let spec_ols = FirSpec::new(coeffs)
+            .expect("valid fir spec")
+            .with_strategy(FirStrategy::OverlapSave);
 
         let mut plan_ref = factory.create_plan(&spec_ref).expect("ref plan");
         let mut plan_ols = factory.create_plan(&spec_ols).expect("ols plan");
@@ -819,7 +841,9 @@ mod tests {
     fn test_scipy_lfilter(taps: &[f64], input: &[f64], expected: &[f64], tol: f64, label: &str) {
         for &strategy in &[FirStrategy::Direct, FirStrategy::OverlapSave] {
             let factory = make_factory();
-            let spec = FirSpec::new(taps.to_vec()).with_strategy(strategy);
+            let spec = FirSpec::new(taps.to_vec())
+                .expect("valid fir spec")
+                .with_strategy(strategy);
             let mut plan = factory.create_plan(&spec).expect("plan creation");
 
             let mut output = vec![0.0; input.len()];
@@ -856,7 +880,9 @@ mod tests {
         // Process the long signal in chunks, compare against single-shot scipy.
         for &strategy in &[FirStrategy::Direct, FirStrategy::OverlapSave] {
             let factory = make_factory();
-            let spec = FirSpec::new(LFILTER_LP30_HAMMING_TAPS.to_vec()).with_strategy(strategy);
+            let spec = FirSpec::new(LFILTER_LP30_HAMMING_TAPS.to_vec())
+                .expect("valid fir spec")
+                .with_strategy(strategy);
             let mut plan = factory.create_plan(&spec).expect("plan creation");
 
             let mut output = vec![0.0; LFILTER_LONG_INPUT.len()];

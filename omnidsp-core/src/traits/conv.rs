@@ -12,7 +12,7 @@
 
 use std::marker::PhantomData;
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 
 // ─── Spec ────────────────────────────────────────────────────────────
 
@@ -40,6 +40,7 @@ pub enum ConvMethod {
 /// The type parameter `T` ties the spec to a specific float type, making
 /// specs fully self-describing for the dispatch layer's `CreatePlan<S>` trait.
 /// `T` is carried via [`PhantomData`] and hidden behind the constructor.
+/// Fields are private and the spec is valid-by-construction (ADR-006 §4).
 ///
 /// # Examples
 ///
@@ -47,18 +48,14 @@ pub enum ConvMethod {
 /// use omnidsp_core::traits::conv::{ConvSpec, ConvMethod};
 ///
 /// // Let the backend pick direct vs. FFT
-/// let spec = ConvSpec::<f64>::new(1024, 64, ConvMethod::Auto);
-/// assert_eq!(spec.a_len, 1024);
+/// let spec = ConvSpec::<f64>::new(1024, 64, ConvMethod::Auto).unwrap();
+/// assert_eq!(spec.a_len(), 1024);
 /// ```
 #[derive(Debug, Clone, Copy)]
 pub struct ConvSpec<T> {
-    /// Length of the first input signal.
-    pub a_len: usize,
-    /// Length of the second input (often the shorter kernel).
-    pub b_len: usize,
-    /// Preferred implementation method.  [`ConvMethod::Auto`] is resolved
-    /// at plan creation time; the plan itself always uses a concrete method.
-    pub method: ConvMethod,
+    a_len: usize,
+    b_len: usize,
+    method: ConvMethod,
     _marker: PhantomData<T>,
 }
 
@@ -72,14 +69,41 @@ impl<T> Eq for ConvSpec<T> {}
 
 impl<T> ConvSpec<T> {
     /// Create a new convolution spec with the given input lengths and method.
-    #[must_use]
-    pub const fn new(a_len: usize, b_len: usize, method: ConvMethod) -> Self {
-        Self {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidSpec`] if either `a_len` or `b_len` is zero.
+    pub fn new(a_len: usize, b_len: usize, method: ConvMethod) -> Result<Self> {
+        if a_len == 0 || b_len == 0 {
+            return Err(Error::InvalidSpec(
+                "convolution input lengths must be non-zero".into(),
+            ));
+        }
+        Ok(Self {
             a_len,
             b_len,
             method,
             _marker: PhantomData,
-        }
+        })
+    }
+
+    /// Length of the first input signal.
+    #[must_use]
+    pub const fn a_len(&self) -> usize {
+        self.a_len
+    }
+
+    /// Length of the second input (often the shorter kernel).
+    #[must_use]
+    pub const fn b_len(&self) -> usize {
+        self.b_len
+    }
+
+    /// Preferred implementation method.  [`ConvMethod::Auto`] is resolved
+    /// at plan creation time; the plan itself always uses a concrete method.
+    #[must_use]
+    pub const fn method(&self) -> ConvMethod {
+        self.method
     }
 }
 

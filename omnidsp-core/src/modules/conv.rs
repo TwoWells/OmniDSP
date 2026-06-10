@@ -273,7 +273,9 @@ impl<R, C, V> OmniConv<R, C, V> {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::InvalidSpec`] if either input length is zero.
+    /// Returns [`Error::InvalidSpec`] if the FFT length overflows.  The input
+    /// length invariants are enforced by [`ConvSpec::new`] (ADR-006 §4), so
+    /// they are not re-checked here.
     #[allow(
         clippy::type_complexity,
         reason = "composite real-DFT plan type (r2c forward + Hermitian-shaped c2r \
@@ -289,21 +291,10 @@ impl<R, C, V> OmniConv<R, C, V> {
         C: DftC2r<T> + Clone,
         V: VecOps<T>,
     {
-        if spec.a_len == 0 {
-            return Err(Error::InvalidSpec(
-                "convolution input a_len must be non-zero".to_owned(),
-            ));
-        }
-        if spec.b_len == 0 {
-            return Err(Error::InvalidSpec(
-                "convolution input b_len must be non-zero".to_owned(),
-            ));
-        }
+        let output_len = spec.a_len() + spec.b_len() - 1;
 
-        let output_len = spec.a_len + spec.b_len - 1;
-
-        let method = match spec.method {
-            ConvMethod::Auto => recommend_method(spec.a_len, spec.b_len),
+        let method = match spec.method() {
+            ConvMethod::Auto => recommend_method(spec.a_len(), spec.b_len()),
             other => other,
         };
 
@@ -349,8 +340,8 @@ impl<R, C, V> OmniConv<R, C, V> {
 
         Ok(OmniConvPlan {
             inner,
-            a_len: spec.a_len,
-            b_len: spec.b_len,
+            a_len: spec.a_len(),
+            b_len: spec.b_len(),
             output_len,
         })
     }
@@ -378,15 +369,15 @@ mod tests {
     const EPSILON: f64 = 1e-8;
 
     fn spec(a_len: usize, b_len: usize) -> ConvSpec<f64> {
-        ConvSpec::new(a_len, b_len, ConvMethod::Auto)
+        ConvSpec::new(a_len, b_len, ConvMethod::Auto).expect("valid conv spec")
     }
 
     fn spec_direct(a_len: usize, b_len: usize) -> ConvSpec<f64> {
-        ConvSpec::new(a_len, b_len, ConvMethod::Direct)
+        ConvSpec::new(a_len, b_len, ConvMethod::Direct).expect("valid conv spec")
     }
 
     fn spec_fft(a_len: usize, b_len: usize) -> ConvSpec<f64> {
-        ConvSpec::new(a_len, b_len, ConvMethod::Fft)
+        ConvSpec::new(a_len, b_len, ConvMethod::Fft).expect("valid conv spec")
     }
 
     fn assert_approx_eq(actual: &[f64], expected: &[f64], eps: f64) {
@@ -606,16 +597,18 @@ mod tests {
 
     #[test]
     fn zero_a_len_returns_error() {
-        let factory = make_factory();
-        let result = factory.create_plan(&spec(0, 3));
-        assert!(result.is_err(), "zero a_len should return error");
+        assert!(
+            ConvSpec::<f64>::new(0, 3, ConvMethod::Auto).is_err(),
+            "zero a_len should be rejected by the spec constructor"
+        );
     }
 
     #[test]
     fn zero_b_len_returns_error() {
-        let factory = make_factory();
-        let result = factory.create_plan(&spec(3, 0));
-        assert!(result.is_err(), "zero b_len should return error");
+        assert!(
+            ConvSpec::<f64>::new(3, 0, ConvMethod::Auto).is_err(),
+            "zero b_len should be rejected by the spec constructor"
+        );
     }
 
     #[test]

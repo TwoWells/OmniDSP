@@ -84,7 +84,8 @@ omnidsp_macros::impl_generic_backend! {
 /// use omnidsp::traits::conv::{ConvSpec, ConvMethod};
 ///
 /// let dsp = OmniDSP::rust();
-/// let plan = dsp.create_plan(&ConvSpec::<f64>::new(3, 2, ConvMethod::Direct)).unwrap();
+/// let spec = ConvSpec::<f64>::new(3, 2, ConvMethod::Direct).unwrap();
+/// let plan = dsp.create_plan(&spec).unwrap();
 /// ```
 #[derive(Debug, Clone)]
 pub struct OmniDSP<B> {

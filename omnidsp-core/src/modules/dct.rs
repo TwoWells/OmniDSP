@@ -278,7 +278,8 @@ impl<R, C, V> OmniDct<R, C, V> {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::InvalidSpec`] if the length is zero.
+    /// Returns an error if DFT plan creation fails.  The length invariant is
+    /// enforced by [`DctSpec::new`] (ADR-006 §4), so it is not re-checked here.
     #[allow(
         clippy::type_complexity,
         reason = "composite real-DFT plan type (r2c forward + Hermitian-shaped c2r \
@@ -294,17 +295,13 @@ impl<R, C, V> OmniDct<R, C, V> {
         C: DftC2r<T> + Clone,
         V: VecOps<T>,
     {
-        if spec.length == 0 {
-            return Err(Error::InvalidSpec("DCT length must be non-zero".to_owned()));
-        }
-
-        let n = spec.length;
+        let n = spec.length();
         let two_n = 2 * n;
 
         // Create the real-DFT sub-plan over the 2N-point real signal: a forward
         // r2c for DCT-II, a Hermitian-shaped inverse c2r for DCT-III.  Both use
         // DftNorm::None — the ortho factors are applied explicitly below.
-        let transform = match spec.dct_type {
+        let transform = match spec.dct_type() {
             DctType::II => {
                 let fwd_spec = DftR2cSpec::new(two_n, DftNorm::None)?;
                 DctTransform::Forward(self.r2c.create_plan(&fwd_spec)?)
@@ -342,8 +339,8 @@ impl<R, C, V> OmniDct<R, C, V> {
             vecops: self.vecops.clone(),
             scratch: Mutex::new(scratch),
             length: n,
-            dct_type: spec.dct_type,
-            norm: spec.norm,
+            dct_type: spec.dct_type(),
+            norm: spec.norm(),
         })
     }
 }
@@ -383,18 +380,16 @@ mod tests {
 
     #[test]
     fn rejects_zero_length() {
-        let factory = make_factory();
-        let spec = DctSpec::<f64>::new(0, DctType::II, DctNorm::None);
         assert!(
-            factory.create_plan(&spec).is_err(),
-            "zero length should be rejected"
+            DctSpec::<f64>::new(0, DctType::II, DctNorm::None).is_err(),
+            "zero length should be rejected by the spec constructor"
         );
     }
 
     #[test]
     fn rejects_input_length_mismatch() {
         let factory = make_factory();
-        let spec = DctSpec::<f64>::new(4, DctType::II, DctNorm::None);
+        let spec = DctSpec::<f64>::new(4, DctType::II, DctNorm::None).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -409,7 +404,7 @@ mod tests {
     #[test]
     fn rejects_output_length_mismatch() {
         let factory = make_factory();
-        let spec = DctSpec::<f64>::new(4, DctType::II, DctNorm::None);
+        let spec = DctSpec::<f64>::new(4, DctType::II, DctNorm::None).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -426,7 +421,7 @@ mod tests {
     #[test]
     fn dct2_length_1() {
         let factory = make_factory();
-        let spec = DctSpec::<f64>::new(1, DctType::II, DctNorm::None);
+        let spec = DctSpec::<f64>::new(1, DctType::II, DctNorm::None).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -443,7 +438,7 @@ mod tests {
         // DCT-II of constant signal concentrates energy at bin 0
         let factory = make_factory();
         let n = 8;
-        let spec = DctSpec::<f64>::new(n, DctType::II, DctNorm::None);
+        let spec = DctSpec::<f64>::new(n, DctType::II, DctNorm::None).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -471,7 +466,7 @@ mod tests {
     fn dct2_impulse() {
         // DCT-II of [1, 0, 0, 0]: X[k] = 2 * cos(πk/(2N))
         let factory = make_factory();
-        let spec = DctSpec::<f64>::new(4, DctType::II, DctNorm::None);
+        let spec = DctSpec::<f64>::new(4, DctType::II, DctNorm::None).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -491,7 +486,7 @@ mod tests {
     #[test]
     fn dct3_length_1() {
         let factory = make_factory();
-        let spec = DctSpec::<f64>::new(1, DctType::III, DctNorm::None);
+        let spec = DctSpec::<f64>::new(1, DctType::III, DctNorm::None).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -512,8 +507,8 @@ mod tests {
         let n = 8;
         let input = [1.0, -2.0, 3.0, -4.0, 5.0, -6.0, 7.0, -8.0];
 
-        let spec_ii = DctSpec::<f64>::new(n, DctType::II, DctNorm::None);
-        let spec_iii = DctSpec::<f64>::new(n, DctType::III, DctNorm::None);
+        let spec_ii = DctSpec::<f64>::new(n, DctType::II, DctNorm::None).expect("valid dct spec");
+        let spec_iii = DctSpec::<f64>::new(n, DctType::III, DctNorm::None).expect("valid dct spec");
         let plan_ii = factory
             .create_plan(&spec_ii)
             .expect("DCT-II plan creation should succeed");
@@ -543,8 +538,9 @@ mod tests {
         let n = 16;
         let input = DCT_INPUT_SINE16;
 
-        let spec_ii = DctSpec::<f64>::new(n, DctType::II, DctNorm::Ortho);
-        let spec_iii = DctSpec::<f64>::new(n, DctType::III, DctNorm::Ortho);
+        let spec_ii = DctSpec::<f64>::new(n, DctType::II, DctNorm::Ortho).expect("valid dct spec");
+        let spec_iii =
+            DctSpec::<f64>::new(n, DctType::III, DctNorm::Ortho).expect("valid dct spec");
         let plan_ii = factory
             .create_plan(&spec_ii)
             .expect("DCT-II ortho plan creation should succeed");
@@ -572,8 +568,9 @@ mod tests {
         let n = 17;
         let input = DCT_INPUT_COS17;
 
-        let spec_ii = DctSpec::<f64>::new(n, DctType::II, DctNorm::Ortho);
-        let spec_iii = DctSpec::<f64>::new(n, DctType::III, DctNorm::Ortho);
+        let spec_ii = DctSpec::<f64>::new(n, DctType::II, DctNorm::Ortho).expect("valid dct spec");
+        let spec_iii =
+            DctSpec::<f64>::new(n, DctType::III, DctNorm::Ortho).expect("valid dct spec");
         let plan_ii = factory
             .create_plan(&spec_ii)
             .expect("plan creation should succeed");
@@ -600,7 +597,7 @@ mod tests {
     fn dct2_scipy_ramp8() {
         let factory = make_factory();
         let n = DCT_INPUT_RAMP8.len();
-        let spec = DctSpec::<f64>::new(n, DctType::II, DctNorm::None);
+        let spec = DctSpec::<f64>::new(n, DctType::II, DctNorm::None).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -614,7 +611,7 @@ mod tests {
     fn dct2_ortho_scipy_ramp8() {
         let factory = make_factory();
         let n = DCT_INPUT_RAMP8.len();
-        let spec = DctSpec::<f64>::new(n, DctType::II, DctNorm::Ortho);
+        let spec = DctSpec::<f64>::new(n, DctType::II, DctNorm::Ortho).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -628,7 +625,7 @@ mod tests {
     fn dct3_scipy_ramp8() {
         let factory = make_factory();
         let n = DCT_INPUT_RAMP8.len();
-        let spec = DctSpec::<f64>::new(n, DctType::III, DctNorm::None);
+        let spec = DctSpec::<f64>::new(n, DctType::III, DctNorm::None).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -642,7 +639,7 @@ mod tests {
     fn dct3_ortho_scipy_ramp8() {
         let factory = make_factory();
         let n = DCT_INPUT_RAMP8.len();
-        let spec = DctSpec::<f64>::new(n, DctType::III, DctNorm::Ortho);
+        let spec = DctSpec::<f64>::new(n, DctType::III, DctNorm::Ortho).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -656,7 +653,7 @@ mod tests {
     fn dct2_scipy_sine16() {
         let factory = make_factory();
         let n = DCT_INPUT_SINE16.len();
-        let spec = DctSpec::<f64>::new(n, DctType::II, DctNorm::None);
+        let spec = DctSpec::<f64>::new(n, DctType::II, DctNorm::None).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -670,7 +667,7 @@ mod tests {
     fn dct2_ortho_scipy_sine16() {
         let factory = make_factory();
         let n = DCT_INPUT_SINE16.len();
-        let spec = DctSpec::<f64>::new(n, DctType::II, DctNorm::Ortho);
+        let spec = DctSpec::<f64>::new(n, DctType::II, DctNorm::Ortho).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -684,7 +681,7 @@ mod tests {
     fn dct3_scipy_sine16() {
         let factory = make_factory();
         let n = DCT_INPUT_SINE16.len();
-        let spec = DctSpec::<f64>::new(n, DctType::III, DctNorm::None);
+        let spec = DctSpec::<f64>::new(n, DctType::III, DctNorm::None).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -698,7 +695,7 @@ mod tests {
     fn dct3_ortho_scipy_sine16() {
         let factory = make_factory();
         let n = DCT_INPUT_SINE16.len();
-        let spec = DctSpec::<f64>::new(n, DctType::III, DctNorm::Ortho);
+        let spec = DctSpec::<f64>::new(n, DctType::III, DctNorm::Ortho).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -712,7 +709,7 @@ mod tests {
     fn dct2_scipy_cos17_non_power_of_two() {
         let factory = make_factory();
         let n = DCT_INPUT_COS17.len();
-        let spec = DctSpec::<f64>::new(n, DctType::II, DctNorm::None);
+        let spec = DctSpec::<f64>::new(n, DctType::II, DctNorm::None).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -726,7 +723,7 @@ mod tests {
     fn dct2_ortho_scipy_cos17() {
         let factory = make_factory();
         let n = DCT_INPUT_COS17.len();
-        let spec = DctSpec::<f64>::new(n, DctType::II, DctNorm::Ortho);
+        let spec = DctSpec::<f64>::new(n, DctType::II, DctNorm::Ortho).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -740,7 +737,7 @@ mod tests {
     fn dct3_scipy_cos17_non_power_of_two() {
         let factory = make_factory();
         let n = DCT_INPUT_COS17.len();
-        let spec = DctSpec::<f64>::new(n, DctType::III, DctNorm::None);
+        let spec = DctSpec::<f64>::new(n, DctType::III, DctNorm::None).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -754,7 +751,7 @@ mod tests {
     fn dct3_ortho_scipy_cos17() {
         let factory = make_factory();
         let n = DCT_INPUT_COS17.len();
-        let spec = DctSpec::<f64>::new(n, DctType::III, DctNorm::Ortho);
+        let spec = DctSpec::<f64>::new(n, DctType::III, DctNorm::Ortho).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -768,7 +765,7 @@ mod tests {
     fn dct2_scipy_random64() {
         let factory = make_factory();
         let n = DCT_INPUT_RANDOM64.len();
-        let spec = DctSpec::<f64>::new(n, DctType::II, DctNorm::None);
+        let spec = DctSpec::<f64>::new(n, DctType::II, DctNorm::None).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -782,7 +779,7 @@ mod tests {
     fn dct2_ortho_scipy_random64() {
         let factory = make_factory();
         let n = DCT_INPUT_RANDOM64.len();
-        let spec = DctSpec::<f64>::new(n, DctType::II, DctNorm::Ortho);
+        let spec = DctSpec::<f64>::new(n, DctType::II, DctNorm::Ortho).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -796,7 +793,7 @@ mod tests {
     fn dct3_scipy_random64() {
         let factory = make_factory();
         let n = DCT_INPUT_RANDOM64.len();
-        let spec = DctSpec::<f64>::new(n, DctType::III, DctNorm::None);
+        let spec = DctSpec::<f64>::new(n, DctType::III, DctNorm::None).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -810,7 +807,7 @@ mod tests {
     fn dct3_ortho_scipy_random64() {
         let factory = make_factory();
         let n = DCT_INPUT_RANDOM64.len();
-        let spec = DctSpec::<f64>::new(n, DctType::III, DctNorm::Ortho);
+        let spec = DctSpec::<f64>::new(n, DctType::III, DctNorm::Ortho).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");

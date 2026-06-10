@@ -7,7 +7,7 @@
 //! an [`IirSpec`].  Plans are mutable — they maintain state across calls
 //! and take `&mut self`.
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::types::BiquadSection;
 
 // ─── Spec ────────────────────────────────────────────────────────────
@@ -30,24 +30,39 @@ use crate::types::BiquadSection;
 ///
 /// let spec = IirSpec::new(vec![
 ///     BiquadSection { b0: 0.5, b1: 0.5, b2: 0.0, a1: 0.0, a2: 0.0 },
-/// ]);
-/// assert_eq!(spec.sections.len(), 1);
+/// ]).unwrap();
+/// assert_eq!(spec.sections().len(), 1);
 /// ```
+///
+/// The field is private and the spec is valid-by-construction (ADR-006 §4).
 #[derive(Debug, Clone)]
 pub struct IirSpec<T> {
-    /// Second-order sections applied in series, first to last.
-    ///
-    /// The output of `sections[0]` feeds `sections[1]`, and so on.
-    /// The total filter order is `2 × sections.len()` (or less if
-    /// any section is first-order with `b2 = a2 = 0`).
-    pub sections: Vec<BiquadSection<T>>,
+    sections: Vec<BiquadSection<T>>,
 }
 
 impl<T> IirSpec<T> {
     /// Create a new IIR spec from biquad sections.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidSpec`] if `sections` is empty.
+    pub fn new(sections: Vec<BiquadSection<T>>) -> Result<Self> {
+        if sections.is_empty() {
+            return Err(Error::InvalidSpec(
+                "IIR filter requires at least one biquad section".into(),
+            ));
+        }
+        Ok(Self { sections })
+    }
+
+    /// Second-order sections applied in series, first to last.
+    ///
+    /// The output of `sections()[0]` feeds `sections()[1]`, and so on.
+    /// The total filter order is `2 × sections().len()` (or less if
+    /// any section is first-order with `b2 = a2 = 0`).
     #[must_use]
-    pub const fn new(sections: Vec<BiquadSection<T>>) -> Self {
-        Self { sections }
+    pub fn sections(&self) -> &[BiquadSection<T>] {
+        &self.sections
     }
 }
 

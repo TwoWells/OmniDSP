@@ -103,7 +103,7 @@ where
     B: CreatePlan<ConvSpec<T>>,
     B::Plan: ConvPlan<T>,
 {
-    let spec = ConvSpec::<T>::new(3, 2, ConvMethod::Direct);
+    let spec = ConvSpec::<T>::new(3, 2, ConvMethod::Direct).expect("valid conv spec");
     let plan = dsp.conv(&spec).expect("conv plan");
 
     let one = T::one();
@@ -143,7 +143,7 @@ where
     let quarter = T::from(0.25).expect("0.25");
     let half = T::from(0.5).expect("0.5");
     let coeffs = vec![quarter, half, quarter];
-    let spec = FirSpec::new(coeffs.clone());
+    let spec = FirSpec::new(coeffs.clone()).expect("valid fir spec");
     let mut plan = dsp.fir(&spec).expect("FIR plan");
 
     let mut input = vec![T::zero(); 8];
@@ -188,7 +188,8 @@ where
         b2: T::zero(),
         a1: T::zero(),
         a2: T::zero(),
-    }]);
+    }])
+    .expect("valid iir spec");
     let mut plan = dsp.iir(&spec).expect("IIR plan");
 
     let input: Vec<T> = (0..8).map(|i| T::from(i).expect("from usize")).collect();
@@ -213,7 +214,8 @@ where
         b2: T::zero(),
         a1: T::zero(),
         a2: T::zero(),
-    }]);
+    }])
+    .expect("valid iir spec");
     let mut plan = dsp.iir(&spec).expect("IIR plan");
 
     let mut input = vec![T::zero(); 8];
@@ -268,7 +270,8 @@ fn rust_iir_first_order_f32() {
 /// 2× upsample with a simple prototype filter: output count should be
 /// exactly 2× input count (streaming mode).
 fn resample_upsample_f64(dsp: &OmniDSP<RustBackend>) {
-    let spec = ResampleSpec::<f64>::new(2, 1, vec![0.5, 1.0, 0.5], ResampleMode::Streaming);
+    let spec = ResampleSpec::<f64>::new(2, 1, vec![0.5, 1.0, 0.5], ResampleMode::Streaming)
+        .expect("valid resample spec");
     let mut plan = dsp.resample(&spec).expect("resample plan");
 
     let input: Vec<f64> = (0..16).map(f64::from).collect();
@@ -282,7 +285,8 @@ fn resample_upsample_f64(dsp: &OmniDSP<RustBackend>) {
     reason = "small test indices fit in f32 mantissa"
 )]
 fn resample_upsample_f32(dsp: &OmniDSP<RustBackend>) {
-    let spec = ResampleSpec::<f32>::new(2, 1, vec![0.5, 1.0, 0.5], ResampleMode::Streaming);
+    let spec = ResampleSpec::<f32>::new(2, 1, vec![0.5, 1.0, 0.5], ResampleMode::Streaming)
+        .expect("valid resample spec");
     let mut plan = dsp.resample(&spec).expect("resample plan f32");
 
     let input: Vec<f32> = (0..16).map(|i| i as f32).collect();
@@ -561,7 +565,7 @@ const fn macro_backend() -> MacroTestBackend {
 #[test]
 fn macro_create_conv_f64() {
     let b = macro_backend();
-    let spec = ConvSpec::<f64>::new(3, 2, ConvMethod::Direct);
+    let spec = ConvSpec::<f64>::new(3, 2, ConvMethod::Direct).expect("valid conv spec");
     let plan = CreatePlan::create_plan(&b, &spec).expect("macro conv plan");
 
     let a = [1.0, 2.0, 3.0];
@@ -574,7 +578,7 @@ fn macro_create_conv_f64() {
 #[test]
 fn macro_create_conv_f32() {
     let b = macro_backend();
-    let spec = ConvSpec::<f32>::new(3, 2, ConvMethod::Direct);
+    let spec = ConvSpec::<f32>::new(3, 2, ConvMethod::Direct).expect("valid conv spec");
     let plan = CreatePlan::create_plan(&b, &spec).expect("macro conv plan f32");
 
     let a = [1.0_f32, 2.0, 3.0];
@@ -601,7 +605,7 @@ fn macro_create_dft_f32() {
 #[test]
 fn macro_create_fir_f64() {
     let b = macro_backend();
-    let spec = FirSpec::new(vec![0.25_f64, 0.5, 0.25]);
+    let spec = FirSpec::new(vec![0.25_f64, 0.5, 0.25]).expect("valid fir spec");
     let mut plan = CreatePlan::create_plan(&b, &spec).expect("macro FIR plan");
 
     let mut input = vec![0.0; 8];
@@ -614,7 +618,7 @@ fn macro_create_fir_f64() {
 #[test]
 fn macro_create_fir_f32() {
     let b = macro_backend();
-    let spec = FirSpec::new(vec![0.25_f32, 0.5, 0.25]);
+    let spec = FirSpec::new(vec![0.25_f32, 0.5, 0.25]).expect("valid fir spec");
     let mut plan = CreatePlan::create_plan(&b, &spec).expect("macro FIR plan f32");
 
     let mut input = vec![0.0_f32; 8];
@@ -633,7 +637,8 @@ fn macro_create_iir_f64() {
         b2: 0.0,
         a1: 0.0,
         a2: 0.0,
-    }]);
+    }])
+    .expect("valid iir spec");
     let mut plan = CreatePlan::create_plan(&b, &spec).expect("macro IIR plan");
 
     let input: Vec<f64> = (0..8).map(f64::from).collect();
@@ -655,7 +660,8 @@ fn macro_create_iir_f32() {
         b2: 0.0,
         a1: 0.0,
         a2: 0.0,
-    }]);
+    }])
+    .expect("valid iir spec");
     let mut plan = CreatePlan::create_plan(&b, &spec).expect("macro IIR plan f32");
 
     let input: Vec<f32> = (0..8).map(|i| i as f32).collect();
@@ -667,7 +673,8 @@ fn macro_create_iir_f32() {
 #[test]
 fn macro_create_resample_f64() {
     let b = macro_backend();
-    let spec = ResampleSpec::<f64>::new(2, 1, vec![0.5, 1.0, 0.5], ResampleMode::Streaming);
+    let spec = ResampleSpec::<f64>::new(2, 1, vec![0.5, 1.0, 0.5], ResampleMode::Streaming)
+        .expect("valid resample spec");
     let mut plan = CreatePlan::create_plan(&b, &spec).expect("macro resample plan");
 
     let input: Vec<f64> = (0..16).map(f64::from).collect();
@@ -760,7 +767,7 @@ fn skip_conv_backend_hand_written_conv() {
         dftc2r: RustDftC2r,
         vecops: ScalarVecOps,
     };
-    let spec = ConvSpec::<f64>::new(3, 2, ConvMethod::Direct);
+    let spec = ConvSpec::<f64>::new(3, 2, ConvMethod::Direct).expect("valid conv spec");
     let plan = CreatePlan::create_plan(&b, &spec).expect("skip-conv hand-written plan");
 
     let a = [1.0, 2.0, 3.0];

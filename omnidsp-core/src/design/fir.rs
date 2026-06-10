@@ -73,7 +73,7 @@ use crate::types::{FilterType, Window};
 /// let spec = design(
 ///     FilterType::Lowpass, 30, 44100.0, 1000.0, None, &Window::Hamming,
 /// ).unwrap();
-/// assert_eq!(spec.coefficients.len(), 31);
+/// assert_eq!(spec.coefficients().len(), 31);
 /// ```
 pub fn design<T: Float>(
     filter_type: FilterType,
@@ -125,7 +125,7 @@ pub fn design<T: Float>(
     // Convert to target type
     let coefficients: Result<Vec<T>> = normalized.iter().map(|&v| from_f64(v)).collect();
 
-    Ok(FirSpec::new(coefficients?))
+    FirSpec::new(coefficients?)
 }
 
 /// Estimate FIR filter order using Kaiser's formula.
@@ -363,7 +363,8 @@ mod tests {
             &Window::Hamming,
         )
         .expect("LP design")
-        .coefficients
+        .coefficients()
+        .to_vec()
     }
 
     fn hp(order: usize, fc: f64) -> Vec<f64> {
@@ -376,7 +377,8 @@ mod tests {
             &Window::Hamming,
         )
         .expect("HP design")
-        .coefficients
+        .coefficients()
+        .to_vec()
     }
 
     fn bp(order: usize, fc1: f64, fc2: f64) -> Vec<f64> {
@@ -389,7 +391,8 @@ mod tests {
             &Window::Hamming,
         )
         .expect("BP design")
-        .coefficients
+        .coefficients()
+        .to_vec()
     }
 
     fn bs(order: usize, fc1: f64, fc2: f64) -> Vec<f64> {
@@ -402,7 +405,8 @@ mod tests {
             &Window::Hamming,
         )
         .expect("BS design")
-        .coefficients
+        .coefficients()
+        .to_vec()
     }
 
     // ── Lowpass ──────────────────────────────────────────────────
@@ -429,7 +433,8 @@ mod tests {
             &Window::Hann,
         )
         .expect("lowpass design")
-        .coefficients;
+        .coefficients()
+        .to_vec();
         assert_eq!(taps.len(), order + 1, "should have order+1 taps");
     }
 
@@ -456,7 +461,8 @@ mod tests {
             &Window::Rectangular,
         )
         .expect("lowpass design")
-        .coefficients;
+        .coefficients()
+        .to_vec();
 
         assert_eq!(taps.len(), 5, "should have 5 taps");
         assert!(
@@ -693,8 +699,8 @@ mod tests {
             &Window::Hamming,
         )
         .expect("f32 lowpass");
-        assert_eq!(spec.coefficients.len(), 31, "should have 31 taps");
-        let dc: f32 = spec.coefficients.iter().sum();
+        assert_eq!(spec.coefficients().len(), 31, "should have 31 taps");
+        let dc: f32 = spec.coefficients().iter().sum();
         assert!(
             (dc - 1.0).abs() < 1e-5,
             "f32 lowpass DC gain should be ≈1.0, got {dc}"
@@ -742,7 +748,8 @@ mod tests {
             &Window::Hann,
         )
         .expect("HP30 Hann design")
-        .coefficients;
+        .coefficients()
+        .to_vec();
         assert_response_match(&ours, HP_ORDER30_HANN, 44100.0, 1e-10, "HP30 Hann");
     }
 
@@ -769,7 +776,8 @@ mod tests {
             &Window::Rectangular,
         )
         .expect("LP4 rect design")
-        .coefficients;
+        .coefficients()
+        .to_vec();
         assert_response_match(&ours, LP_ORDER4_RECT, 2.0, 1e-10, "LP4 rect");
     }
 }

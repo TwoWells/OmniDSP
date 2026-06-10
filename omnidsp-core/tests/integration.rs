@@ -86,7 +86,7 @@ mod fir_integration {
 
         // Verify our design matches scipy's taps.
         assert_approx_eq(
-            &spec.coefficients,
+            spec.coefficients(),
             LFILTER_LP30_HAMMING_TAPS,
             1e-14,
             "FIR taps vs scipy firwin",
@@ -243,7 +243,7 @@ mod iir_integration {
 
         // Section count should match (ceil(order/2) = 2 for LP order 4).
         assert_eq!(
-            spec.sections.len(),
+            spec.sections().len(),
             SOSFILT_LP4_SOS.len(),
             "IIR LP4: section count mismatch"
         );
@@ -273,7 +273,7 @@ mod iir_integration {
         .expect("IIR design");
 
         assert_eq!(
-            spec.sections.len(),
+            spec.sections().len(),
             SOSFILT_HP4_SOS.len(),
             "IIR HP4: section count mismatch"
         );
@@ -302,7 +302,7 @@ mod iir_integration {
         .expect("IIR design");
 
         assert_eq!(
-            spec.sections.len(),
+            spec.sections().len(),
             SOSFILT_BP4_SOS.len(),
             "IIR BP4: section count mismatch"
         );
@@ -963,7 +963,8 @@ mod xcorr_integration {
     #[test]
     fn scipy_short_asymmetric() {
         let factory = make_factory();
-        let spec = CrossCorrSpec::<f64>::new(XCORR_SHORT_A.len(), XCORR_SHORT_B.len());
+        let spec = CrossCorrSpec::<f64>::new(XCORR_SHORT_A.len(), XCORR_SHORT_B.len())
+            .expect("valid xcorr spec");
         let plan = factory.create_plan(&spec).expect("plan creation");
 
         let mut output = vec![0.0; spec.output_len()];
@@ -982,7 +983,8 @@ mod xcorr_integration {
     #[test]
     fn scipy_equal_length() {
         let factory = make_factory();
-        let spec = CrossCorrSpec::<f64>::new(XCORR_EQUAL_A.len(), XCORR_EQUAL_B.len());
+        let spec = CrossCorrSpec::<f64>::new(XCORR_EQUAL_A.len(), XCORR_EQUAL_B.len())
+            .expect("valid xcorr spec");
         let plan = factory.create_plan(&spec).expect("plan creation");
 
         let mut output = vec![0.0; spec.output_len()];
@@ -1001,7 +1003,8 @@ mod xcorr_integration {
     #[test]
     fn scipy_delay_sinusoids() {
         let factory = make_factory();
-        let spec = CrossCorrSpec::<f64>::new(XCORR_DELAY_A.len(), XCORR_DELAY_B.len());
+        let spec = CrossCorrSpec::<f64>::new(XCORR_DELAY_A.len(), XCORR_DELAY_B.len())
+            .expect("valid xcorr spec");
         let plan = factory.create_plan(&spec).expect("plan creation");
 
         let mut output = vec![0.0; spec.output_len()];

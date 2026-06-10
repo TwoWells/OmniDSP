@@ -94,16 +94,12 @@ impl<T: DspFloat> Iir<T> for ScalarIir {
     type Plan = ScalarIirPlan<T>;
 
     fn create_plan(&self, spec: &IirSpec<T>) -> Result<Self::Plan> {
-        if spec.sections.is_empty() {
-            return Err(Error::InvalidSpec(
-                "IIR filter requires at least one biquad section".to_owned(),
-            ));
-        }
-
-        let state = vec![[T::zero(); 2]; spec.sections.len()];
+        // The non-empty-sections invariant is enforced by `IirSpec::new`
+        // (ADR-006 §4), so it is not re-checked here.
+        let state = vec![[T::zero(); 2]; spec.sections().len()];
 
         Ok(ScalarIirPlan {
-            sections: spec.sections.clone(),
+            sections: spec.sections().to_vec(),
             state,
         })
     }
@@ -124,7 +120,7 @@ mod tests {
     }
 
     fn spec(sections: Vec<BiquadSection<f64>>) -> IirSpec<f64> {
-        IirSpec::new(sections)
+        IirSpec::new(sections).expect("valid iir spec")
     }
 
     fn assert_approx_eq(actual: &[f64], expected: &[f64], eps: f64, label: &str) {
@@ -423,9 +419,10 @@ mod tests {
 
     #[test]
     fn empty_sections_returns_error() {
-        let factory = make_factory();
-        let result = Iir::<f64>::create_plan(&factory, &spec(vec![]));
-        assert!(result.is_err(), "empty sections should return error");
+        assert!(
+            IirSpec::<f64>::new(vec![]).is_err(),
+            "empty sections should be rejected by the spec constructor"
+        );
     }
 
     #[test]

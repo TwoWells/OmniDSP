@@ -38,7 +38,7 @@ const HAND_N8_COS2_EXPECTED: &[(f64, f64)] = &[
 #[test]
 fn hand_computed_n4() {
     let factory = make_factory();
-    let spec = HilbertSpec::<f64>::new(HAND_N4_INPUT.len());
+    let spec = HilbertSpec::<f64>::new(HAND_N4_INPUT.len()).expect("valid hilbert spec");
     let plan = factory.create_plan(&spec).expect("plan creation should succeed");
 
     let mut output = vec![Complex::new(0.0, 0.0); HAND_N4_INPUT.len()];
@@ -62,7 +62,7 @@ fn hand_computed_n4() {
 #[test]
 fn hand_computed_n8_cos2() {
     let factory = make_factory();
-    let spec = HilbertSpec::<f64>::new(HAND_N8_COS2_INPUT.len());
+    let spec = HilbertSpec::<f64>::new(HAND_N8_COS2_INPUT.len()).expect("valid hilbert spec");
     let plan = factory.create_plan(&spec).expect("plan creation should succeed");
 
     let mut output = vec![Complex::new(0.0, 0.0); HAND_N8_COS2_INPUT.len()];

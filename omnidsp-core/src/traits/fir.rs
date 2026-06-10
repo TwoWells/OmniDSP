@@ -9,7 +9,7 @@
 //! inherent `create_plan` — the `Fir` factory trait was dropped (ADR-006 §1;
 //! nothing was generic over it).
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 
 // ─── Spec ────────────────────────────────────────────────────────────
 
@@ -47,31 +47,34 @@ pub enum FirStrategy {
 /// use omnidsp_core::traits::fir::{FirSpec, FirStrategy};
 ///
 /// // 3-tap moving average, force direct strategy
-/// let spec = FirSpec::new(vec![1.0 / 3.0; 3])
+/// let spec = FirSpec::new(vec![1.0 / 3.0; 3]).unwrap()
 ///     .with_strategy(FirStrategy::Direct);
-/// assert_eq!(spec.coefficients.len(), 3);
+/// assert_eq!(spec.coefficients().len(), 3);
 /// ```
+///
+/// Fields are private and the spec is valid-by-construction (ADR-006 §4).
 #[derive(Debug, Clone)]
 pub struct FirSpec<T> {
-    /// Filter tap coefficients in time-domain order: `h[0], h[1], …, h[N-1]`.
-    ///
-    /// The number of taps (`coefficients.len()`) determines the filter order
-    /// (`N - 1`), group delay (`(N - 1) / 2` samples for linear phase), and
-    /// the direct/overlap-save crossover point.
-    pub coefficients: Vec<T>,
-    /// Preferred implementation strategy.  [`FirStrategy::Auto`] is resolved
-    /// at plan creation time based on the number of taps.
-    pub strategy: FirStrategy,
+    coefficients: Vec<T>,
+    strategy: FirStrategy,
 }
 
 impl<T> FirSpec<T> {
     /// Create a new FIR spec with the given coefficients and [`FirStrategy::Auto`].
-    #[must_use]
-    pub const fn new(coefficients: Vec<T>) -> Self {
-        Self {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidSpec`] if `coefficients` is empty.
+    pub fn new(coefficients: Vec<T>) -> Result<Self> {
+        if coefficients.is_empty() {
+            return Err(Error::InvalidSpec(
+                "FIR filter requires at least one coefficient".into(),
+            ));
+        }
+        Ok(Self {
             coefficients,
             strategy: FirStrategy::Auto,
-        }
+        })
     }
 
     /// Override the implementation strategy.
@@ -79,6 +82,23 @@ impl<T> FirSpec<T> {
     pub const fn with_strategy(mut self, strategy: FirStrategy) -> Self {
         self.strategy = strategy;
         self
+    }
+
+    /// Filter tap coefficients in time-domain order: `h[0], h[1], …, h[N-1]`.
+    ///
+    /// The number of taps (`coefficients().len()`) determines the filter order
+    /// (`N - 1`), group delay (`(N - 1) / 2` samples for linear phase), and
+    /// the direct/overlap-save crossover point.
+    #[must_use]
+    pub fn coefficients(&self) -> &[T] {
+        &self.coefficients
+    }
+
+    /// Preferred implementation strategy.  [`FirStrategy::Auto`] is resolved
+    /// at plan creation time based on the number of taps.
+    #[must_use]
+    pub const fn strategy(&self) -> FirStrategy {
+        self.strategy
     }
 }
 

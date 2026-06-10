@@ -241,8 +241,10 @@ impl<V> OmniResample<V> {
     ///
     /// # Errors
     ///
-    /// Returns an error if the spec is invalid (empty prototype filter,
-    /// zero factors).
+    /// Returns an error if the up-factor cannot be represented in `T`.  The
+    /// spec invariants (positive factors, non-empty prototype) are enforced by
+    /// [`ResampleSpec::new`](crate::design::resample::ResampleSpec::new)
+    /// (ADR-006 §4), so they are not re-checked here.
     pub fn create_plan<T>(&self, spec: &ResampleSpec<T>) -> Result<OmniResamplePlan<T, V>>
     where
         T: Float + AddAssign + MulAssign + Send + Sync,
@@ -251,17 +253,6 @@ impl<V> OmniResample<V> {
         let up = spec.up_factor();
         let down = spec.down_factor();
         let proto = spec.prototype_filter();
-
-        if proto.is_empty() {
-            return Err(Error::InvalidSpec(
-                "prototype filter must not be empty".into(),
-            ));
-        }
-        if up == 0 || down == 0 {
-            return Err(Error::InvalidSpec(
-                "up_factor and down_factor must be positive".into(),
-            ));
-        }
 
         let taps_per_phase = proto.len().div_ceil(up);
 
