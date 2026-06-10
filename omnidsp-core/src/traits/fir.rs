@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Two Wells <contact@twowells.dev>
 
-//! FIR (Finite Impulse Response) filter primitive traits.
+//! FIR (Finite Impulse Response) filter primitive types.
 //!
-//! The [`Fir`] factory creates [`FirPlan`] execution objects configured from
-//! a [`FirSpec`].  Plans are mutable — they maintain state across calls
-//! and take `&mut self`.
+//! [`FirPlan`] is the execution object configured from a [`FirSpec`].  Plans
+//! are mutable — they maintain state across calls and take `&mut self`.  The
+//! generic [`OmniFir`](crate::modules::fir::OmniFir) module builds plans via an
+//! inherent `create_plan` — the `Fir` factory trait was dropped (ADR-006 §1;
+//! nothing was generic over it).
 
 use crate::error::Result;
 
@@ -84,7 +86,8 @@ impl<T> FirSpec<T> {
 
 /// Execution object for a configured FIR filter.
 ///
-/// A plan is created by a [`Fir`] factory and holds the filter coefficients
+/// A plan is created by the [`OmniFir`](crate::modules::fir::OmniFir) module
+/// (or a vendor override) and holds the filter coefficients
 /// and internal delay line.  Plans are mutable and take `&mut self` — each
 /// call to [`process`](FirPlan::process) continues from where the previous
 /// call left off.
@@ -101,22 +104,4 @@ pub trait FirPlan<T> {
 
     /// Reset internal state (delay line) to zero without recreating the plan.
     fn reset(&mut self);
-}
-
-/// Factory for creating [`FirPlan`] execution objects.
-///
-/// `T` is a type parameter on the factory trait so that capability is expressed
-/// in the type system.  The associated [`Plan`](Fir::Plan) type lets each
-/// implementor return a concrete plan — no `Box<dyn>`.
-pub trait Fir<T> {
-    /// The concrete plan type returned by this factory.
-    type Plan: FirPlan<T>;
-
-    /// Create a plan for a FIR filter described by `spec`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the coefficients are empty or otherwise
-    /// unsupported by the implementation.
-    fn create_plan(&self, spec: &FirSpec<T>) -> Result<Self::Plan>;
 }

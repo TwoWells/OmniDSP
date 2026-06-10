@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Two Wells <contact@twowells.dev>
 
-//! Convolution primitive traits.
+//! Convolution primitive types.
 //!
-//! The [`Conv`] factory creates [`ConvPlan`] execution objects configured from
-//! a [`ConvSpec`].  Plans are immutable and take `&self`.  This is a one-shot
-//! (full) convolution — for streaming convolution, see the FIR filter primitive.
+//! [`ConvPlan`] is the execution object for a one-shot (full) convolution,
+//! configured from a [`ConvSpec`].  Plans are immutable and take `&self`.  The
+//! generic [`OmniConv`](crate::modules::conv::OmniConv) module builds plans via
+//! an inherent `create_plan` — the `Conv` factory trait was dropped (ADR-006
+//! §1; nothing was generic over it).  For streaming convolution, see the FIR
+//! filter primitive.
 
 use std::marker::PhantomData;
 
@@ -84,7 +87,8 @@ impl<T> ConvSpec<T> {
 
 /// Execution object for a configured convolution operation.
 ///
-/// A plan is created by a [`Conv`] factory and holds any preallocated state
+/// A plan is created by the [`OmniConv`](crate::modules::conv::OmniConv) module
+/// (or a vendor override) and holds any preallocated state
 /// (FFT plans, scratch buffers, etc.) needed to execute the convolution
 /// efficiently.  Plans are immutable and take `&self`.
 pub trait ConvPlan<T>: Send + Sync {
@@ -97,25 +101,4 @@ pub trait ConvPlan<T>: Send + Sync {
     ///
     /// Returns an error if any buffer length does not match the expected size.
     fn process(&self, a: &[T], b: &[T], output: &mut [T]) -> Result<()>;
-}
-
-/// Factory for creating [`ConvPlan`] execution objects.
-///
-/// `T` is a type parameter on the factory trait so that capability is expressed
-/// in the type system.  The associated [`Plan`](Conv::Plan) type lets each
-/// implementor return a concrete plan — no `Box<dyn>`.
-pub trait Conv<T> {
-    /// The concrete plan type returned by this factory.
-    type Plan: ConvPlan<T>;
-
-    /// Create a plan for a convolution described by `spec`.
-    ///
-    /// The plan preallocates any internal buffers so that execution is
-    /// allocation-free.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if either length is zero or otherwise unsupported by
-    /// the implementation.
-    fn create_plan(&self, spec: &ConvSpec<T>) -> Result<Self::Plan>;
 }

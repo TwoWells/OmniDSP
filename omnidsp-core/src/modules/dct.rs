@@ -3,9 +3,9 @@
 
 //! DCT module — Discrete Cosine Transform via the real-DFT primitives.
 //!
-//! [`OmniDct`] implements the [`Dct`] trait generically over any [`DftR2c`] /
-//! [`DftC2r`] and [`VecOps`] implementation.  Supports DCT type II and type III
-//! with optional orthonormal normalization.
+//! [`OmniDct`] builds DCT plans via an inherent `create_plan`, generic over any
+//! [`DftR2c`] / [`DftC2r`] and [`VecOps`] implementation.  Supports DCT type II
+//! and type III with optional orthonormal normalization.
 //!
 //! The algorithm uses symmetric extension to convert the real DCT into a
 //! transform of twice the length (ADR-009 §6).  DCT-II runs the real `2N`-point
@@ -27,7 +27,7 @@ use num_traits::Float;
 
 use crate::error::{Error, Result};
 use crate::hermitian::{HermitianC2r, HermitianC2rPlan};
-use crate::traits::dct::{Dct, DctNorm, DctPlan, DctSpec, DctType};
+use crate::traits::dct::{DctNorm, DctPlan, DctSpec, DctType};
 use crate::traits::dft::{DftC2r, DftC2rPlan, DftC2rSpec, DftNorm, DftR2c, DftR2cPlan, DftR2cSpec};
 use crate::traits::vecops::VecOps;
 use crate::types::DspFloat;
@@ -57,8 +57,8 @@ impl<R, C, V> OmniDct<R, C, V> {
 
 /// Execution plan for a DCT operation.
 ///
-/// Created by [`OmniDct::create_plan`](Dct::create_plan).  Immutable and
-/// thread-safe (`Send + Sync`).
+/// Created by [`OmniDct::create_plan`].  Immutable and thread-safe
+/// (`Send + Sync`).
 ///
 /// **Memory:** allocates a `2N` real buffer plus an `N + 1` complex
 /// half-spectrum buffer (behind a [`Mutex`]), an `N` complex twiddle-product
@@ -264,22 +264,36 @@ where
     }
 }
 
-// ─── Factory implementation ───────────────────────────────────────────
+// ─── Plan construction ────────────────────────────────────────────────
 
 #[allow(
     clippy::cast_precision_loss,
     reason = "DCT lengths are small enough that usize→f64 is exact"
 )]
-impl<T, R, C, V> Dct<T> for OmniDct<R, C, V>
-where
-    T: DspFloat + AddAssign + MulAssign,
-    R: DftR2c<T>,
-    C: DftC2r<T> + Clone,
-    V: VecOps<T>,
-{
-    type Plan = OmniDctPlan<T, R::Plan, HermitianC2rPlan<C::Plan>, V>;
-
-    fn create_plan(&self, spec: &DctSpec<T>) -> Result<Self::Plan> {
+impl<R, C, V> OmniDct<R, C, V> {
+    /// Create a plan for a DCT described by `spec`.
+    ///
+    /// DCT-II runs a forward [`DftR2c`]; DCT-III runs a [`HermitianC2r`]-shaped
+    /// inverse [`DftC2r`] (ADR-010 §2/§5).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidSpec`] if the length is zero.
+    #[allow(
+        clippy::type_complexity,
+        reason = "composite real-DFT plan type (r2c forward + Hermitian-shaped c2r \
+                  inverse); the dispatch layer names it via `type Plan` aliases"
+    )]
+    pub fn create_plan<T>(
+        &self,
+        spec: &DctSpec<T>,
+    ) -> Result<OmniDctPlan<T, <R as DftR2c<T>>::Plan, HermitianC2rPlan<<C as DftC2r<T>>::Plan>, V>>
+    where
+        T: DspFloat + AddAssign + MulAssign,
+        R: DftR2c<T>,
+        C: DftC2r<T> + Clone,
+        V: VecOps<T>,
+    {
         if spec.length == 0 {
             return Err(Error::InvalidSpec("DCT length must be non-zero".to_owned()));
         }

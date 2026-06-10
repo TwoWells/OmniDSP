@@ -21,7 +21,9 @@ use omnidsp_core::design::cqt::{self, CqtBinSpec, CqtSpec};
 use omnidsp_core::design::resample::{ResampleMode, ResampleSpec};
 use omnidsp_core::scalar::ScalarVecOps;
 use omnidsp_core::traits::conv::{ConvMethod, ConvPlan, ConvSpec};
-use omnidsp_core::traits::dft::{DftC2cPlan, DftC2cSpec, DftNorm};
+use omnidsp_core::traits::dft::{
+    DftC2cPlan, DftC2cSpec, DftC2rPlan, DftC2rSpec, DftNorm, DftR2cPlan, DftR2cSpec,
+};
 use omnidsp_core::traits::fir::{FirPlan, FirSpec};
 use omnidsp_core::traits::iir::{IirPlan, IirSpec};
 use omnidsp_core::types::{BiquadSection, Direction, Window};
@@ -531,15 +533,17 @@ fn auto_constructor() {
 /// generates all `CreatePlan<S>` impls by delegating to `omnidsp-core`
 /// modules.
 struct MacroTestBackend {
-    dft: RustDftC2c,
+    dftc2c: RustDftC2c,
     dftr2c: RustDftR2c,
     dftc2r: RustDftC2r,
     vecops: ScalarVecOps,
 }
 
+// Omits `iir:` — the macro materializes the `ScalarIir` default inline, with
+// no backing struct field (ADR-011 §3).
 omnidsp_macros::impl_generic_backend! {
     backend: MacroTestBackend,
-    dft: RustDftC2c,
+    dftc2c: RustDftC2c,
     dftr2c: RustDftR2c,
     dftc2r: RustDftC2r,
     vecops: ScalarVecOps,
@@ -547,7 +551,7 @@ omnidsp_macros::impl_generic_backend! {
 
 const fn macro_backend() -> MacroTestBackend {
     MacroTestBackend {
-        dft: RustDftC2c,
+        dftc2c: RustDftC2c,
         dftr2c: RustDftR2c,
         dftc2r: RustDftC2r,
         vecops: ScalarVecOps,
@@ -699,7 +703,7 @@ fn macro_create_cqt_f64() {
 /// The backend can then hand-write `CreatePlan<ConvSpec<T>>` without
 /// conflicting with macro-generated impls.
 struct SkipConvBackend {
-    dft: RustDftC2c,
+    dftc2c: RustDftC2c,
     dftr2c: RustDftR2c,
     dftc2r: RustDftC2r,
     vecops: ScalarVecOps,
@@ -707,47 +711,51 @@ struct SkipConvBackend {
 
 omnidsp_macros::impl_generic_backend! {
     backend: SkipConvBackend,
-    dft: RustDftC2c,
+    dftc2c: RustDftC2c,
     dftr2c: RustDftR2c,
     dftc2r: RustDftC2r,
     vecops: ScalarVecOps,
     skip: [conv],
 }
 
-// Hand-written override for ConvSpec<f64> — proves no conflict.  Composes the
-// real-DFT triple exactly as the macro would (r2c forward + Hermitian-shaped
-// c2r inverse).
+/// The composite plan type the hand-written conv override returns — the same
+/// shape the macro would emit (r2c forward + Hermitian-shaped c2r inverse).
+/// The `Conv` factory trait was dropped (SL-01), so the type is spelled out.
+type SkipConvPlan<T> = omnidsp_core::modules::conv::OmniConvPlan<
+    T,
+    <RustDftR2c as omnidsp_core::traits::dft::DftR2c<T>>::Plan,
+    omnidsp_core::hermitian::HermitianC2rPlan<
+        <RustDftC2r as omnidsp_core::traits::dft::DftC2r<T>>::Plan,
+    >,
+    ScalarVecOps,
+>;
+
+// Hand-written override for ConvSpec<f64> — proves no conflict.
 impl CreatePlan<ConvSpec<f64>> for SkipConvBackend {
-    type Plan = <
-        omnidsp_core::modules::conv::OmniConv<RustDftR2c, RustDftC2r, ScalarVecOps>
-        as omnidsp_core::traits::conv::Conv<f64>
-    >::Plan;
+    type Plan = SkipConvPlan<f64>;
 
     fn create_plan(&self, spec: &ConvSpec<f64>) -> omnidsp_core::error::Result<Self::Plan> {
         let factory =
             omnidsp_core::modules::conv::OmniConv::new(self.dftr2c, self.dftc2r, self.vecops);
-        omnidsp_core::traits::conv::Conv::<f64>::create_plan(&factory, spec)
+        factory.create_plan(spec)
     }
 }
 
 // Hand-written override for ConvSpec<f32> — proves no conflict.
 impl CreatePlan<ConvSpec<f32>> for SkipConvBackend {
-    type Plan = <
-        omnidsp_core::modules::conv::OmniConv<RustDftR2c, RustDftC2r, ScalarVecOps>
-        as omnidsp_core::traits::conv::Conv<f32>
-    >::Plan;
+    type Plan = SkipConvPlan<f32>;
 
     fn create_plan(&self, spec: &ConvSpec<f32>) -> omnidsp_core::error::Result<Self::Plan> {
         let factory =
             omnidsp_core::modules::conv::OmniConv::new(self.dftr2c, self.dftc2r, self.vecops);
-        omnidsp_core::traits::conv::Conv::<f32>::create_plan(&factory, spec)
+        factory.create_plan(spec)
     }
 }
 
 #[test]
 fn skip_conv_backend_hand_written_conv() {
     let b = SkipConvBackend {
-        dft: RustDftC2c,
+        dftc2c: RustDftC2c,
         dftr2c: RustDftR2c,
         dftc2r: RustDftC2r,
         vecops: ScalarVecOps,
@@ -765,7 +773,7 @@ fn skip_conv_backend_hand_written_conv() {
 #[test]
 fn skip_conv_backend_other_modules_work() {
     let b = SkipConvBackend {
-        dft: RustDftC2c,
+        dftc2c: RustDftC2c,
         dftr2c: RustDftR2c,
         dftc2r: RustDftC2r,
         vecops: ScalarVecOps,
@@ -774,4 +782,60 @@ fn skip_conv_backend_other_modules_work() {
     dft_round_trip(&dsp, 1e-12);
     fir_impulse(&dsp, 1e-12);
     iir_passthrough(&dsp, 1e-12);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// impl_generic_backend! minimal — only `dftc2c:`, everything else defaulted
+// ═══════════════════════════════════════════════════════════════════════
+
+/// A backend declaring **only** `dftc2c:` — `dftr2c`/`dftc2r`/`vecops`/`iir`
+/// take their realfft/scalar defaults (ADR-009 §3, ADR-011 §3).  It carries a
+/// single field; the macro materializes the omitted floors inline, so no
+/// backing struct field is needed for them.
+struct MinimalBackend {
+    dftc2c: RustDftC2c,
+}
+
+omnidsp_macros::impl_generic_backend! {
+    backend: MinimalBackend,
+    dftc2c: RustDftC2c,
+}
+
+#[test]
+fn minimal_backend_defaults_materialize() {
+    let dsp = OmniDSP::new(MinimalBackend { dftc2c: RustDftC2c });
+
+    // c2c via the bare blanket (ADR-010 §3b); the rest compose the defaulted
+    // realfft floor / ScalarVecOps / ScalarIir.
+    dft_round_trip(&dsp, 1e-12);
+    conv_verify(&dsp, 1e-12);
+    fir_impulse(&dsp, 1e-12);
+    iir_passthrough(&dsp, 1e-12);
+}
+
+#[test]
+fn minimal_backend_shaped_direct_r2c_c2r() {
+    let b = MinimalBackend { dftc2c: RustDftC2c };
+
+    // Direct r2c/c2r dispatch goes through the core blanket: shaped plans over
+    // the defaulted realfft floor (ADR-011 §2).
+    let original = vec![1.0_f64, -2.0, 3.0, 0.5, -1.5, 2.0, 0.0, 4.0];
+    let n = original.len();
+    let r2c_spec = DftR2cSpec::<f64>::new(n, DftNorm::Inverse).expect("r2c spec");
+    let r2c = CreatePlan::create_plan(&b, &r2c_spec).expect("r2c plan");
+    let c2r_spec = DftC2rSpec::<f64>::new(n, DftNorm::Inverse).expect("c2r spec");
+    let c2r = CreatePlan::create_plan(&b, &c2r_spec).expect("c2r plan");
+
+    let mut time = original.clone();
+    let mut spectrum = vec![Complex::new(0.0, 0.0); n / 2 + 1];
+    r2c.process(&mut time, &mut spectrum).expect("r2c process");
+    let mut recovered = vec![0.0_f64; n];
+    c2r.process(&mut spectrum, &mut recovered)
+        .expect("c2r process");
+    assert_approx(
+        &recovered,
+        &original,
+        1e-12,
+        "minimal shaped r2c→c2r round-trip",
+    );
 }

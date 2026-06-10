@@ -17,6 +17,7 @@ macro_rules! testdata {
 
 pub mod create;
 pub mod design;
+pub mod dispatch;
 pub mod error;
 pub mod hermitian;
 pub mod modules;

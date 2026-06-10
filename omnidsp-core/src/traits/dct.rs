@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Two Wells <contact@twowells.dev>
 
-//! Discrete Cosine Transform (DCT) primitive traits.
+//! Discrete Cosine Transform (DCT) primitive types.
 //!
-//! The [`Dct`] factory creates [`DctPlan`] execution objects configured from
-//! a [`DctSpec`].  Plans are immutable and take `&self` — DCT is a stateless
-//! transform with no delay line or streaming state.
+//! [`DctPlan`] is the execution object configured from a [`DctSpec`].  Plans
+//! are immutable and take `&self` — DCT is a stateless transform with no delay
+//! line or streaming state.  The generic
+//! [`OmniDct`](crate::modules::dct::OmniDct) module builds plans via an
+//! inherent `create_plan` — the `Dct` factory trait was dropped (ADR-006 §1;
+//! nothing was generic over it).
 
 use std::marker::PhantomData;
 
@@ -95,7 +98,8 @@ impl<T> DctSpec<T> {
 
 /// Execution object for a configured DCT operation.
 ///
-/// A plan is created by a [`Dct`] factory and holds any precomputed state
+/// A plan is created by the [`OmniDct`](crate::modules::dct::OmniDct) module
+/// (or a vendor override) and holds any precomputed state
 /// (DFT sub-plans, twiddle factors, scratch buffers) needed to execute the
 /// transform efficiently.  Plans are immutable and take `&self`.
 pub trait DctPlan<T>: Send + Sync {
@@ -107,23 +111,4 @@ pub trait DctPlan<T>: Send + Sync {
     ///
     /// Returns an error if the buffer lengths do not match the plan length.
     fn process(&self, input: &[T], output: &mut [T]) -> Result<()>;
-}
-
-/// Factory for creating [`DctPlan`] execution objects.
-///
-/// `T` is a type parameter on the factory trait so that capability is expressed
-/// in the type system: `impl Dct<f32>` and `impl Dct<f64>` are independent
-/// capabilities.  The associated [`Plan`](Dct::Plan) type lets each implementor
-/// return a concrete plan — no `Box<dyn>`.
-pub trait Dct<T> {
-    /// The concrete plan type returned by this factory.
-    type Plan: DctPlan<T>;
-
-    /// Create a plan for a DCT described by `spec`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the length is zero or otherwise unsupported by the
-    /// implementation.
-    fn create_plan(&self, spec: &DctSpec<T>) -> Result<Self::Plan>;
 }

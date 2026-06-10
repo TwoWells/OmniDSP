@@ -25,7 +25,7 @@ use omnidsp_core::modules::resample::OmniResample;
 use omnidsp_core::modules::xcorr::{CrossCorrSpec, OmniCrossCorr};
 use omnidsp_core::scalar::{ScalarIir, ScalarVecOps};
 use omnidsp_core::traits::dft::{DftC2c, DftC2cPlan, DftC2cSpec, DftNorm};
-use omnidsp_core::traits::fir::{Fir, FirPlan, FirStrategy};
+use omnidsp_core::traits::fir::{FirPlan, FirStrategy};
 use omnidsp_core::traits::iir::{Iir, IirPlan};
 use omnidsp_core::traits::vecops::VecOps;
 use omnidsp_core::types::{Direction, FilterType, Window};
@@ -97,8 +97,7 @@ mod fir_integration {
 
         for &strategy in &[FirStrategy::Direct, FirStrategy::OverlapSave] {
             let plan_spec = spec.clone().with_strategy(strategy);
-            let mut plan =
-                Fir::<f64>::create_plan(&factory, &plan_spec).expect("FIR plan creation");
+            let mut plan = factory.create_plan(&plan_spec).expect("FIR plan creation");
 
             let mut output = vec![0.0; LFILTER_INPUT.len()];
             plan.process(LFILTER_INPUT, &mut output)
@@ -138,8 +137,7 @@ mod fir_integration {
 
         for &strategy in &[FirStrategy::Direct, FirStrategy::OverlapSave] {
             let plan_spec = spec.clone().with_strategy(strategy);
-            let mut plan =
-                Fir::<f64>::create_plan(&factory, &plan_spec).expect("FIR plan creation");
+            let mut plan = factory.create_plan(&plan_spec).expect("FIR plan creation");
 
             // Input: 400 Hz (below cutoff, should be rejected) + 15 kHz (above cutoff, should pass).
             let n = 512;
@@ -188,8 +186,7 @@ mod fir_integration {
 
         for &strategy in &[FirStrategy::Direct, FirStrategy::OverlapSave] {
             let plan_spec = spec.clone().with_strategy(strategy);
-            let mut plan =
-                Fir::<f64>::create_plan(&factory, &plan_spec).expect("FIR plan creation");
+            let mut plan = factory.create_plan(&plan_spec).expect("FIR plan creation");
 
             let mut output = vec![0.0; LFILTER_LONG_INPUT.len()];
 
@@ -478,16 +475,14 @@ mod streaming_equivalence {
         for &strategy in &[FirStrategy::Direct, FirStrategy::OverlapSave] {
             // Single-shot.
             let plan_spec = spec.clone().with_strategy(strategy);
-            let mut plan_single =
-                Fir::<f64>::create_plan(&factory, &plan_spec).expect("single plan");
+            let mut plan_single = factory.create_plan(&plan_spec).expect("single plan");
             let mut single_out = vec![0.0; input.len()];
             plan_single
                 .process(&input, &mut single_out)
                 .expect("single process");
 
             // Chunked with varied sizes.
-            let mut plan_chunks =
-                Fir::<f64>::create_plan(&factory, &plan_spec).expect("chunks plan");
+            let mut plan_chunks = factory.create_plan(&plan_spec).expect("chunks plan");
             let mut chunks_out = vec![0.0; input.len()];
             let chunk_sizes = [37, 100, 63, 200, 11, 256, 357];
             let mut pos = 0;
@@ -671,7 +666,7 @@ mod pipeline {
         .expect("FIR design");
 
         let fir_factory = OmniFir::new(RustDftR2c, RustDftC2r, ScalarVecOps);
-        let mut fir_plan = Fir::<f64>::create_plan(&fir_factory, &fir_spec).expect("FIR plan");
+        let mut fir_plan = fir_factory.create_plan(&fir_spec).expect("FIR plan");
 
         let mut filtered = vec![0.0; resampled.len()];
         fir_plan

@@ -17,7 +17,7 @@
 //! are converted to the target type `T`.
 //!
 //! The returned [`FirSpec`] is ready to pass to
-//! [`Fir::create_plan`](crate::traits::fir::Fir::create_plan).
+//! [`OmniFir::create_plan`](crate::modules::fir::OmniFir::create_plan).
 
 #![allow(
     clippy::cast_precision_loss,

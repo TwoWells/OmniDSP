@@ -3,9 +3,20 @@
 
 //! Proc macros for `OmniDSP` backend generation.
 //!
-//! Provides [`impl_generic_backend!`], which generates `CreatePlan<S>`
-//! implementations for all known spec types using generic composition
-//! from `omnidsp-core` modules.
+//! Provides [`impl_generic_backend!`], which generates the per-module
+//! `CreatePlan<S>` implementations (via generic composition from `omnidsp-core`
+//! modules) plus the `RawDft` accessor that
+//! lets core's blanket impls expose the backend's shaped direct r2c/c2r and
+//! bare c2c plans (ADR-009 §6, ADR-010 §5, ADR-011 §2).
+//!
+//! The macro params mirror the **primitive** taxonomy (`dftc2c` required;
+//! `dftr2c`/`dftc2r`/`vecops`/`iir` optional with realfft/scalar defaults), and
+//! `skip` lists **modules** only.
+
+#![allow(
+    clippy::similar_names,
+    reason = "DFT codegen uses systematically similar short names (c2c / r2c / c2r)"
+)]
 
 use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
@@ -14,18 +25,12 @@ use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::{Token, Type, parse_macro_input};
 
-/// Known module names accepted by the `skip` list.
-const KNOWN_MODULES: &[&str] = &[
-    "conv",
-    "fir",
-    "resampler",
-    "cqt",
-    "dft",
-    "iir",
-    "hilbert",
-    "dct",
-    "xcorr",
-];
+/// Module names accepted by the `skip` list.
+///
+/// `skip` is **modules-only**: the primitives (`dftc2c`/`dftr2c`/`dftc2r`/
+/// `vecops`/`iir`) are configured by their params, never skipped.  A primitive
+/// name here is a compile error.
+const KNOWN_MODULES: &[&str] = &["conv", "fir", "resampler", "cqt", "hilbert", "dct", "xcorr"];
 
 /// Return `f32` and `f64` idents for codegen iteration.
 fn float_idents() -> [Ident; 2] {
@@ -39,20 +44,27 @@ fn float_idents() -> [Ident; 2] {
 
 struct BackendInput {
     backend: Type,
-    dft: Type,
-    dftr2c: Type,
-    dftc2r: Type,
-    vecops: Type,
+    /// Required: the complex-to-complex DFT base (ADR-009 §3).
+    dftc2c: Type,
+    /// Optional: native r2c; defaults to the realfft floor `RustDftR2c`.
+    dftr2c: Option<Type>,
+    /// Optional: native c2r; defaults to the realfft floor `RustDftC2r`.
+    dftc2r: Option<Type>,
+    /// Optional: native `VecOps`; defaults to `ScalarVecOps`.
+    vecops: Option<Type>,
+    /// Optional: native IIR; defaults to `ScalarIir`.
+    iir: Option<Type>,
     skip: Vec<String>,
 }
 
 impl Parse for BackendInput {
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
         let mut backend: Option<Type> = None;
-        let mut dft: Option<Type> = None;
+        let mut dftc2c: Option<Type> = None;
         let mut dftr2c: Option<Type> = None;
         let mut dftc2r: Option<Type> = None;
         let mut vecops: Option<Type> = None;
+        let mut iir: Option<Type> = None;
         let mut skip: Vec<String> = Vec::new();
 
         while !input.is_empty() {
@@ -60,21 +72,12 @@ impl Parse for BackendInput {
             input.parse::<Token![:]>()?;
 
             match key.to_string().as_str() {
-                "backend" => {
-                    backend = Some(input.parse()?);
-                }
-                "dft" => {
-                    dft = Some(input.parse()?);
-                }
-                "dftr2c" => {
-                    dftr2c = Some(input.parse()?);
-                }
-                "dftc2r" => {
-                    dftc2r = Some(input.parse()?);
-                }
-                "vecops" => {
-                    vecops = Some(input.parse()?);
-                }
+                "backend" => backend = Some(input.parse()?),
+                "dftc2c" => dftc2c = Some(input.parse()?),
+                "dftr2c" => dftr2c = Some(input.parse()?),
+                "dftc2r" => dftc2r = Some(input.parse()?),
+                "vecops" => vecops = Some(input.parse()?),
+                "iir" => iir = Some(input.parse()?),
                 "skip" => {
                     let content;
                     syn::bracketed!(content in input);
@@ -85,7 +88,10 @@ impl Parse for BackendInput {
                             return Err(syn::Error::new(
                                 name.span(),
                                 format!(
-                                    "unknown module `{s}`, expected one of: {}",
+                                    "`{s}` is not a skippable module: `skip` lists modules \
+                                     only (primitives are configured by the `dftc2c`/`dftr2c`/\
+                                     `dftc2r`/`vecops`/`iir` params, not skipped). Expected one \
+                                     of: {}",
                                     KNOWN_MODULES.join(", "),
                                 ),
                             ));
@@ -97,8 +103,8 @@ impl Parse for BackendInput {
                     return Err(syn::Error::new(
                         key.span(),
                         format!(
-                            "unknown field `{other}`, expected `backend`, `dft`, `dftr2c`, \
-                             `dftc2r`, `vecops`, or `skip`"
+                            "unknown field `{other}`, expected `backend`, `dftc2c`, `dftr2c`, \
+                             `dftc2r`, `vecops`, `iir`, or `skip`"
                         ),
                     ));
                 }
@@ -109,19 +115,81 @@ impl Parse for BackendInput {
         }
 
         let backend = backend.ok_or_else(|| input.error("missing required field `backend`"))?;
-        let dft = dft.ok_or_else(|| input.error("missing required field `dft`"))?;
-        let dftr2c = dftr2c.ok_or_else(|| input.error("missing required field `dftr2c`"))?;
-        let dftc2r = dftc2r.ok_or_else(|| input.error("missing required field `dftc2r`"))?;
-        let vecops = vecops.ok_or_else(|| input.error("missing required field `vecops`"))?;
+        let dftc2c = dftc2c.ok_or_else(|| {
+            input.error(
+                "missing required field `dftc2c` (the complex-to-complex DFT base; a backend \
+                 with no native FFT writes `dftc2c: RustDftC2c`)",
+            )
+        })?;
 
         Ok(Self {
             backend,
-            dft,
+            dftc2c,
             dftr2c,
             dftc2r,
             vecops,
+            iir,
             skip,
         })
+    }
+}
+
+impl BackendInput {
+    /// Resolve an optional primitive slot to `(type, value)` token pairs.
+    ///
+    /// Provided → read `self.<field>.clone()`; omitted → materialize the
+    /// `default` floor inline (a unit struct usable as both type and value),
+    /// so an omitting backend needs no backing struct field (ADR-011 §3).
+    fn optional_handle(
+        field: &str,
+        ty: Option<&Type>,
+        default: &TokenStream2,
+    ) -> (TokenStream2, TokenStream2) {
+        ty.map_or_else(
+            || (default.clone(), default.clone()),
+            |t| {
+                let ident = Ident::new(field, Span::call_site());
+                (quote! { #t }, quote! { self.#ident.clone() })
+            },
+        )
+    }
+
+    /// The required c2c base: type and `self.dftc2c.clone()` value.
+    fn c2c_handle(&self) -> (TokenStream2, TokenStream2) {
+        let ty = &self.dftc2c;
+        (quote! { #ty }, quote! { self.dftc2c.clone() })
+    }
+
+    fn r2c_handle(&self) -> (TokenStream2, TokenStream2) {
+        Self::optional_handle(
+            "dftr2c",
+            self.dftr2c.as_ref(),
+            &quote! { ::omnidsp_rustfft::RustDftR2c },
+        )
+    }
+
+    fn c2r_handle(&self) -> (TokenStream2, TokenStream2) {
+        Self::optional_handle(
+            "dftc2r",
+            self.dftc2r.as_ref(),
+            &quote! { ::omnidsp_rustfft::RustDftC2r },
+        )
+    }
+
+    fn vecops_handle(&self) -> (TokenStream2, TokenStream2) {
+        Self::optional_handle(
+            "vecops",
+            self.vecops.as_ref(),
+            &quote! { ::omnidsp_core::scalar::ScalarVecOps },
+        )
+    }
+
+    fn iir_handle(&self) -> (TokenStream2, TokenStream2) {
+        Self::optional_handle(
+            "iir",
+            self.iir.as_ref(),
+            &quote! { ::omnidsp_core::scalar::ScalarIir },
+        )
     }
 }
 
@@ -129,17 +197,21 @@ impl Parse for BackendInput {
 
 type ModuleGenerator = fn(&BackendInput) -> TokenStream2;
 
-/// Generate all `CreatePlan<S>` impls for a backend, skipping modules in
-/// the `skip` list.
+/// Generate the `RawDft` accessor plus every module `CreatePlan<S>` impl,
+/// skipping modules in the `skip` list.
+///
+/// The direct DFT-primitive `CreatePlan<Dft*Spec>` impls are **not** emitted
+/// here: core's blanket impls over `RawDft`
+/// provide them, wrapping r2c/c2r in the Hermitian shaping (ADR-011 §2).  `iir`
+/// is always emitted (it is overridden via the `iir:` param, not via `skip`).
 fn generate_impls(input: &BackendInput) -> TokenStream2 {
-    let mut tokens = TokenStream2::new();
+    let mut tokens = gen_raw_dft_accessor(input);
 
     let modules: &[(&str, ModuleGenerator)] = &[
         ("conv", gen_conv),
         ("fir", gen_fir),
         ("resampler", gen_resampler),
         ("cqt", gen_cqt),
-        ("dft", gen_dft),
         ("iir", gen_iir),
         ("hilbert", gen_hilbert),
         ("dct", gen_dct),
@@ -155,13 +227,48 @@ fn generate_impls(input: &BackendInput) -> TokenStream2 {
     tokens
 }
 
+// ─── Direct-primitive dispatch (ADR-011 §2) ─────────────────────────────
+
+/// Emit the `RawDft` accessor impls (one per
+/// float), exposing the backend's **raw** c2c/r2c/c2r factories.  Core's
+/// blanket `CreatePlan<Dft*Spec>` impls wrap these in the Hermitian shaping.
+fn gen_raw_dft_accessor(input: &BackendInput) -> TokenStream2 {
+    let backend = &input.backend;
+    let (c2c_ty, c2c_val) = input.c2c_handle();
+    let (r2c_ty, r2c_val) = input.r2c_handle();
+    let (c2r_ty, c2r_val) = input.c2r_handle();
+    let mut tokens = TokenStream2::new();
+
+    for float in float_idents() {
+        tokens.extend(quote! {
+            impl ::omnidsp_core::dispatch::RawDft<#float> for #backend {
+                type C2c = #c2c_ty;
+                type R2c = #r2c_ty;
+                type C2r = #c2r_ty;
+
+                fn raw_dftc2c(&self) -> Self::C2c {
+                    #c2c_val
+                }
+                fn raw_dftr2c(&self) -> Self::R2c {
+                    #r2c_val
+                }
+                fn raw_dftc2r(&self) -> Self::C2r {
+                    #c2r_val
+                }
+            }
+        });
+    }
+
+    tokens
+}
+
 // ─── Per-module generators ─────────────────────────────────────────────
 
 fn gen_conv(input: &BackendInput) -> TokenStream2 {
     let backend = &input.backend;
-    let dftr2c = &input.dftr2c;
-    let dftc2r = &input.dftc2r;
-    let vecops = &input.vecops;
+    let (r2c_ty, r2c_val) = input.r2c_handle();
+    let (c2r_ty, c2r_val) = input.c2r_handle();
+    let (vecops_ty, vecops_val) = input.vecops_handle();
     let mut tokens = TokenStream2::new();
 
     for float in float_idents() {
@@ -169,24 +276,25 @@ fn gen_conv(input: &BackendInput) -> TokenStream2 {
             impl ::omnidsp_core::create::CreatePlan<::omnidsp_core::traits::conv::ConvSpec<#float>>
                 for #backend
             {
-                // The composite plan type (which embeds the internal Hermitian
-                // shaping) is named via the module's own `Conv::Plan` so this
-                // impl stays decoupled from the module's internal composition.
-                type Plan = <
-                    ::omnidsp_core::modules::conv::OmniConv<#dftr2c, #dftc2r, #vecops>
-                    as ::omnidsp_core::traits::conv::Conv<#float>
-                >::Plan;
+                type Plan = ::omnidsp_core::modules::conv::OmniConvPlan<
+                    #float,
+                    <#r2c_ty as ::omnidsp_core::traits::dft::DftR2c<#float>>::Plan,
+                    ::omnidsp_core::hermitian::HermitianC2rPlan<
+                        <#c2r_ty as ::omnidsp_core::traits::dft::DftC2r<#float>>::Plan,
+                    >,
+                    #vecops_ty,
+                >;
 
                 fn create_plan(
                     &self,
                     spec: &::omnidsp_core::traits::conv::ConvSpec<#float>,
                 ) -> ::omnidsp_core::error::Result<Self::Plan> {
                     let factory = ::omnidsp_core::modules::conv::OmniConv::new(
-                        self.dftr2c.clone(),
-                        self.dftc2r.clone(),
-                        self.vecops.clone(),
+                        #r2c_val,
+                        #c2r_val,
+                        #vecops_val,
                     );
-                    ::omnidsp_core::traits::conv::Conv::<#float>::create_plan(&factory, spec)
+                    factory.create_plan(spec)
                 }
             }
         });
@@ -197,9 +305,9 @@ fn gen_conv(input: &BackendInput) -> TokenStream2 {
 
 fn gen_fir(input: &BackendInput) -> TokenStream2 {
     let backend = &input.backend;
-    let dftr2c = &input.dftr2c;
-    let dftc2r = &input.dftc2r;
-    let vecops = &input.vecops;
+    let (r2c_ty, r2c_val) = input.r2c_handle();
+    let (c2r_ty, c2r_val) = input.c2r_handle();
+    let (vecops_ty, vecops_val) = input.vecops_handle();
     let mut tokens = TokenStream2::new();
 
     for float in float_idents() {
@@ -207,21 +315,25 @@ fn gen_fir(input: &BackendInput) -> TokenStream2 {
             impl ::omnidsp_core::create::CreatePlan<::omnidsp_core::traits::fir::FirSpec<#float>>
                 for #backend
             {
-                type Plan = <
-                    ::omnidsp_core::modules::fir::OmniFir<#dftr2c, #dftc2r, #vecops>
-                    as ::omnidsp_core::traits::fir::Fir<#float>
-                >::Plan;
+                type Plan = ::omnidsp_core::modules::fir::OmniFirPlan<
+                    #float,
+                    <#r2c_ty as ::omnidsp_core::traits::dft::DftR2c<#float>>::Plan,
+                    ::omnidsp_core::hermitian::HermitianC2rPlan<
+                        <#c2r_ty as ::omnidsp_core::traits::dft::DftC2r<#float>>::Plan,
+                    >,
+                    #vecops_ty,
+                >;
 
                 fn create_plan(
                     &self,
                     spec: &::omnidsp_core::traits::fir::FirSpec<#float>,
                 ) -> ::omnidsp_core::error::Result<Self::Plan> {
                     let factory = ::omnidsp_core::modules::fir::OmniFir::new(
-                        self.dftr2c.clone(),
-                        self.dftc2r.clone(),
-                        self.vecops.clone(),
+                        #r2c_val,
+                        #c2r_val,
+                        #vecops_val,
                     );
-                    ::omnidsp_core::traits::fir::Fir::<#float>::create_plan(&factory, spec)
+                    factory.create_plan(spec)
                 }
             }
         });
@@ -232,7 +344,7 @@ fn gen_fir(input: &BackendInput) -> TokenStream2 {
 
 fn gen_resampler(input: &BackendInput) -> TokenStream2 {
     let backend = &input.backend;
-    let vecops = &input.vecops;
+    let (vecops_ty, vecops_val) = input.vecops_handle();
     let mut tokens = TokenStream2::new();
 
     for float in float_idents() {
@@ -241,15 +353,13 @@ fn gen_resampler(input: &BackendInput) -> TokenStream2 {
                 ::omnidsp_core::design::resample::ResampleSpec<#float>,
             > for #backend
             {
-                type Plan = ::omnidsp_core::modules::resample::OmniResamplePlan<#float, #vecops>;
+                type Plan = ::omnidsp_core::modules::resample::OmniResamplePlan<#float, #vecops_ty>;
 
                 fn create_plan(
                     &self,
                     spec: &::omnidsp_core::design::resample::ResampleSpec<#float>,
                 ) -> ::omnidsp_core::error::Result<Self::Plan> {
-                    let factory = ::omnidsp_core::modules::resample::OmniResample::new(
-                        self.vecops.clone(),
-                    );
+                    let factory = ::omnidsp_core::modules::resample::OmniResample::new(#vecops_val);
                     factory.create_plan(spec)
                 }
             }
@@ -261,19 +371,22 @@ fn gen_resampler(input: &BackendInput) -> TokenStream2 {
 
 fn gen_cqt(input: &BackendInput) -> TokenStream2 {
     let backend = &input.backend;
-    let dft = &input.dft;
-    let vecops = &input.vecops;
+    let (c2c_ty, c2c_val) = input.c2c_handle();
+    let (vecops_ty, vecops_val) = input.vecops_handle();
     let mut tokens = TokenStream2::new();
 
     for float in float_idents() {
+        // Single-FFT c2c oracle (ADR-009 §5).  At capstone 05L this generator
+        // is rewritten to thread `dftr2c`, `vecops` + the backend itself as the
+        // `CreatePlan<ResampleSpec>` sub-plan factory (option A).
         tokens.extend(quote! {
             impl ::omnidsp_core::create::CreatePlan<::omnidsp_core::design::cqt::CqtSpec<#float>>
                 for #backend
             {
                 type Plan = ::omnidsp_core::modules::cqt::OmniCqtPlan<
                     #float,
-                    <#dft as ::omnidsp_core::traits::dft::DftC2c<#float>>::Plan,
-                    #vecops,
+                    <#c2c_ty as ::omnidsp_core::traits::dft::DftC2c<#float>>::Plan,
+                    #vecops_ty,
                 >;
 
                 fn create_plan(
@@ -281,8 +394,8 @@ fn gen_cqt(input: &BackendInput) -> TokenStream2 {
                     spec: &::omnidsp_core::design::cqt::CqtSpec<#float>,
                 ) -> ::omnidsp_core::error::Result<Self::Plan> {
                     let factory = ::omnidsp_core::modules::cqt::OmniCqt::new(
-                        self.dft.clone(),
-                        self.vecops.clone(),
+                        #c2c_val,
+                        #vecops_val,
                     );
                     factory.create_plan(spec)
                 }
@@ -293,33 +406,9 @@ fn gen_cqt(input: &BackendInput) -> TokenStream2 {
     tokens
 }
 
-fn gen_dft(input: &BackendInput) -> TokenStream2 {
-    let backend = &input.backend;
-    let dft = &input.dft;
-    let mut tokens = TokenStream2::new();
-
-    for float in float_idents() {
-        tokens.extend(quote! {
-            impl ::omnidsp_core::create::CreatePlan<::omnidsp_core::traits::dft::DftC2cSpec<#float>>
-                for #backend
-            {
-                type Plan = <#dft as ::omnidsp_core::traits::dft::DftC2c<#float>>::Plan;
-
-                fn create_plan(
-                    &self,
-                    spec: &::omnidsp_core::traits::dft::DftC2cSpec<#float>,
-                ) -> ::omnidsp_core::error::Result<Self::Plan> {
-                    ::omnidsp_core::traits::dft::DftC2c::<#float>::create_plan(&self.dft, spec)
-                }
-            }
-        });
-    }
-
-    tokens
-}
-
 fn gen_iir(input: &BackendInput) -> TokenStream2 {
     let backend = &input.backend;
+    let (iir_ty, iir_val) = input.iir_handle();
     let mut tokens = TokenStream2::new();
 
     for float in float_idents() {
@@ -327,16 +416,14 @@ fn gen_iir(input: &BackendInput) -> TokenStream2 {
             impl ::omnidsp_core::create::CreatePlan<::omnidsp_core::traits::iir::IirSpec<#float>>
                 for #backend
             {
-                type Plan = ::omnidsp_core::scalar::ScalarIirPlan<#float>;
+                type Plan = <#iir_ty as ::omnidsp_core::traits::iir::Iir<#float>>::Plan;
 
                 fn create_plan(
                     &self,
                     spec: &::omnidsp_core::traits::iir::IirSpec<#float>,
                 ) -> ::omnidsp_core::error::Result<Self::Plan> {
-                    ::omnidsp_core::traits::iir::Iir::<#float>::create_plan(
-                        &::omnidsp_core::scalar::ScalarIir,
-                        spec,
-                    )
+                    let factory = #iir_val;
+                    ::omnidsp_core::traits::iir::Iir::<#float>::create_plan(&factory, spec)
                 }
             }
         });
@@ -347,9 +434,9 @@ fn gen_iir(input: &BackendInput) -> TokenStream2 {
 
 fn gen_hilbert(input: &BackendInput) -> TokenStream2 {
     let backend = &input.backend;
-    let dft = &input.dft;
-    let dftr2c = &input.dftr2c;
-    let vecops = &input.vecops;
+    let (c2c_ty, c2c_val) = input.c2c_handle();
+    let (r2c_ty, r2c_val) = input.r2c_handle();
+    let (vecops_ty, vecops_val) = input.vecops_handle();
     let mut tokens = TokenStream2::new();
 
     for float in float_idents() {
@@ -362,9 +449,9 @@ fn gen_hilbert(input: &BackendInput) -> TokenStream2 {
                 // (c2c) — its analytic output is complex (ADR-009 §6).
                 type Plan = ::omnidsp_core::modules::hilbert::OmniHilbertPlan<
                     #float,
-                    <#dftr2c as ::omnidsp_core::traits::dft::DftR2c<#float>>::Plan,
-                    <#dft as ::omnidsp_core::traits::dft::DftC2c<#float>>::Plan,
-                    #vecops,
+                    <#r2c_ty as ::omnidsp_core::traits::dft::DftR2c<#float>>::Plan,
+                    <#c2c_ty as ::omnidsp_core::traits::dft::DftC2c<#float>>::Plan,
+                    #vecops_ty,
                 >;
 
                 fn create_plan(
@@ -372,9 +459,9 @@ fn gen_hilbert(input: &BackendInput) -> TokenStream2 {
                     spec: &::omnidsp_core::modules::hilbert::HilbertSpec<#float>,
                 ) -> ::omnidsp_core::error::Result<Self::Plan> {
                     let factory = ::omnidsp_core::modules::hilbert::OmniHilbert::new(
-                        self.dftr2c.clone(),
-                        self.dft.clone(),
-                        self.vecops.clone(),
+                        #r2c_val,
+                        #c2c_val,
+                        #vecops_val,
                     );
                     factory.create_plan(spec)
                 }
@@ -387,9 +474,9 @@ fn gen_hilbert(input: &BackendInput) -> TokenStream2 {
 
 fn gen_dct(input: &BackendInput) -> TokenStream2 {
     let backend = &input.backend;
-    let dftr2c = &input.dftr2c;
-    let dftc2r = &input.dftc2r;
-    let vecops = &input.vecops;
+    let (r2c_ty, r2c_val) = input.r2c_handle();
+    let (c2r_ty, c2r_val) = input.c2r_handle();
+    let (vecops_ty, vecops_val) = input.vecops_handle();
     let mut tokens = TokenStream2::new();
 
     for float in float_idents() {
@@ -397,21 +484,25 @@ fn gen_dct(input: &BackendInput) -> TokenStream2 {
             impl ::omnidsp_core::create::CreatePlan<::omnidsp_core::traits::dct::DctSpec<#float>>
                 for #backend
             {
-                type Plan = <
-                    ::omnidsp_core::modules::dct::OmniDct<#dftr2c, #dftc2r, #vecops>
-                    as ::omnidsp_core::traits::dct::Dct<#float>
-                >::Plan;
+                type Plan = ::omnidsp_core::modules::dct::OmniDctPlan<
+                    #float,
+                    <#r2c_ty as ::omnidsp_core::traits::dft::DftR2c<#float>>::Plan,
+                    ::omnidsp_core::hermitian::HermitianC2rPlan<
+                        <#c2r_ty as ::omnidsp_core::traits::dft::DftC2r<#float>>::Plan,
+                    >,
+                    #vecops_ty,
+                >;
 
                 fn create_plan(
                     &self,
                     spec: &::omnidsp_core::traits::dct::DctSpec<#float>,
                 ) -> ::omnidsp_core::error::Result<Self::Plan> {
                     let factory = ::omnidsp_core::modules::dct::OmniDct::new(
-                        self.dftr2c.clone(),
-                        self.dftc2r.clone(),
-                        self.vecops.clone(),
+                        #r2c_val,
+                        #c2r_val,
+                        #vecops_val,
                     );
-                    ::omnidsp_core::traits::dct::Dct::<#float>::create_plan(&factory, spec)
+                    factory.create_plan(spec)
                 }
             }
         });
@@ -422,9 +513,9 @@ fn gen_dct(input: &BackendInput) -> TokenStream2 {
 
 fn gen_xcorr(input: &BackendInput) -> TokenStream2 {
     let backend = &input.backend;
-    let dftr2c = &input.dftr2c;
-    let dftc2r = &input.dftc2r;
-    let vecops = &input.vecops;
+    let (r2c_ty, r2c_val) = input.r2c_handle();
+    let (c2r_ty, c2r_val) = input.c2r_handle();
+    let (vecops_ty, vecops_val) = input.vecops_handle();
     let mut tokens = TokenStream2::new();
 
     for float in float_idents() {
@@ -435,11 +526,11 @@ fn gen_xcorr(input: &BackendInput) -> TokenStream2 {
             {
                 type Plan = ::omnidsp_core::modules::xcorr::OmniCrossCorrPlan<
                     #float,
-                    <#dftr2c as ::omnidsp_core::traits::dft::DftR2c<#float>>::Plan,
+                    <#r2c_ty as ::omnidsp_core::traits::dft::DftR2c<#float>>::Plan,
                     ::omnidsp_core::hermitian::HermitianC2rPlan<
-                        <#dftc2r as ::omnidsp_core::traits::dft::DftC2r<#float>>::Plan,
+                        <#c2r_ty as ::omnidsp_core::traits::dft::DftC2r<#float>>::Plan,
                     >,
-                    #vecops,
+                    #vecops_ty,
                 >;
 
                 fn create_plan(
@@ -447,9 +538,9 @@ fn gen_xcorr(input: &BackendInput) -> TokenStream2 {
                     spec: &::omnidsp_core::modules::xcorr::CrossCorrSpec<#float>,
                 ) -> ::omnidsp_core::error::Result<Self::Plan> {
                     let factory = ::omnidsp_core::modules::xcorr::OmniCrossCorr::new(
-                        self.dftr2c.clone(),
-                        self.dftc2r.clone(),
-                        self.vecops.clone(),
+                        #r2c_val,
+                        #c2r_val,
+                        #vecops_val,
                     );
                     factory.create_plan(spec)
                 }
@@ -462,41 +553,53 @@ fn gen_xcorr(input: &BackendInput) -> TokenStream2 {
 
 // ─── Proc macro entry point ────────────────────────────────────────────
 
-/// Generate `CreatePlan<S>` implementations for all known spec types
-/// using generic composition.
+/// Generate a backend's `CreatePlan<S>` surface from its primitive slots.
 ///
-/// The backend struct must have `dft`, `dftr2c`, `dftc2r`, and `vecops` fields
-/// of the specified types.  The macro delegates to `omnidsp-core` modules
-/// internally, producing composition-based plans.
+/// Params mirror the **primitive** taxonomy; `skip` lists **modules** only:
 ///
-/// Use `skip: [...]` to exclude modules that the backend overrides with
-/// native implementations.  The backend can then hand-write
-/// `CreatePlan<S>` for those specs without conflict.
+/// - `backend:` — the backend struct (required).
+/// - `dftc2c:` — the complex-to-complex DFT base (**required** — the DFT has no
+///   pure-math fallback; a backend with no native FFT writes `dftc2c:
+///   RustDftC2c`).
+/// - `dftr2c:` / `dftc2r:` — native real-DFT kernels (optional; default to the
+///   realfft floor `RustDftR2c` / `RustDftC2r`).
+/// - `vecops:` — native vector ops (optional; default `ScalarVecOps`).
+/// - `iir:` — native IIR (optional; default `ScalarIir`).
+/// - `skip: [..]` — modules the backend overrides with a hand-written
+///   `CreatePlan<S>` (no conflict).  A **primitive** name here is a compile
+///   error.
+///
+/// For each provided slot the macro reads `self.<field>`; for an omitted slot
+/// it materializes the default floor inline, so an omitting backend needs no
+/// backing field (ADR-011 §3).  It emits the per-module impls plus a
+/// `RawDft` accessor; core's blanket impls
+/// then provide the shaped direct r2c/c2r and bare c2c plans (ADR-011 §2) — the
+/// macro itself emits no `CreatePlan<Dft*Spec>`.
 ///
 /// # Module names for `skip`
 ///
-/// `conv`, `fir`, `resampler`, `cqt`, `dft`, `iir`, `hilbert`, `dct`, `xcorr`
+/// `conv`, `fir`, `resampler`, `cqt`, `hilbert`, `dct`, `xcorr`
 ///
 /// # Examples
 ///
 /// ```ignore
-/// // All modules (default)
+/// // Pure-Rust floor: every slot named explicitly.
 /// omnidsp_macros::impl_generic_backend! {
 ///     backend: RustBackend,
-///     dft: RustDftC2c,
+///     dftc2c: RustDftC2c,
 ///     dftr2c: RustDftR2c,
 ///     dftc2r: RustDftC2r,
 ///     vecops: ScalarVecOps,
+///     iir:    ScalarIir,
 /// }
 ///
-/// // Skip modules with native overrides
+/// // Vendor with a native c2c + VecOps; r2c/c2r/iir take their defaults,
+/// // and the conv/fir modules are overridden natively.
 /// omnidsp_macros::impl_generic_backend! {
 ///     backend: IppBackend,
-///     dft: IppDftC2c,
-///     dftr2c: IppDftR2c,
-///     dftc2r: IppDftC2r,
+///     dftc2c: IppDftC2c,
 ///     vecops: IppVecOps,
-///     skip: [conv, fir],
+///     skip:   [conv, fir],
 /// }
 /// ```
 #[proc_macro]

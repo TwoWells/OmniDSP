@@ -3,10 +3,10 @@
 
 //! FIR filter module — direct and overlap-save streaming filter.
 //!
-//! [`OmniFir`] implements the [`Fir`] trait generically over any [`DftR2c`] /
-//! [`DftC2r`] and [`VecOps`] implementation.  Supports both time-domain
-//! (direct MAC loop) and frequency-domain (overlap-save) execution, selected
-//! via [`FirStrategy`].
+//! [`OmniFir`] builds streaming FIR plans via an inherent `create_plan`,
+//! generic over any [`DftR2c`] / [`DftC2r`] and [`VecOps`] implementation.
+//! Supports both time-domain (direct MAC loop) and frequency-domain
+//! (overlap-save) execution, selected via [`FirStrategy`].
 //!
 //! The overlap-save path transforms each real block through the real-DFT
 //! primitives ([`DftR2c`] forward, [`DftC2r`] inverse) rather than a complex
@@ -28,7 +28,7 @@ use num_traits::Float;
 use crate::error::{Error, Result};
 use crate::hermitian::{HermitianC2r, HermitianC2rPlan};
 use crate::traits::dft::{DftC2r, DftC2rPlan, DftC2rSpec, DftNorm, DftR2c, DftR2cPlan, DftR2cSpec};
-use crate::traits::fir::{Fir, FirPlan, FirSpec, FirStrategy};
+use crate::traits::fir::{FirPlan, FirSpec, FirStrategy};
 use crate::traits::vecops::VecOps;
 use crate::types::DspFloat;
 
@@ -101,7 +101,7 @@ impl<R, C, V> OmniFir<R, C, V> {
 
 /// Execution plan for a streaming FIR filter.
 ///
-/// Created by [`OmniFir::create_plan`](Fir::create_plan).  Mutable — holds
+/// Created by [`OmniFir::create_plan`].  Mutable — holds
 /// a delay line that persists across calls so successive `process` calls
 /// form a continuous stream.  Call [`reset`](FirPlan::reset) to clear the
 /// delay line without recreating the plan.
@@ -314,16 +314,31 @@ where
     }
 }
 
-impl<T, R, C, V> Fir<T> for OmniFir<R, C, V>
-where
-    T: DspFloat + AddAssign + MulAssign,
-    R: DftR2c<T>,
-    C: DftC2r<T> + Clone,
-    V: VecOps<T>,
-{
-    type Plan = OmniFirPlan<T, R::Plan, HermitianC2rPlan<C::Plan>, V>;
-
-    fn create_plan(&self, spec: &FirSpec<T>) -> Result<Self::Plan> {
+impl<R, C, V> OmniFir<R, C, V> {
+    /// Create a plan for a FIR filter described by `spec`.
+    ///
+    /// The overlap-save path wraps the inverse c2r factory in [`HermitianC2r`]
+    /// so the DC/Nyquist boundary is projected before the transform (ADR-010
+    /// §2/§5).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidSpec`] if the coefficients are empty.
+    #[allow(
+        clippy::type_complexity,
+        reason = "composite real-DFT plan type (r2c forward + Hermitian-shaped c2r \
+                  inverse); the dispatch layer names it via `type Plan` aliases"
+    )]
+    pub fn create_plan<T>(
+        &self,
+        spec: &FirSpec<T>,
+    ) -> Result<OmniFirPlan<T, <R as DftR2c<T>>::Plan, HermitianC2rPlan<<C as DftC2r<T>>::Plan>, V>>
+    where
+        T: DspFloat + AddAssign + MulAssign,
+        R: DftR2c<T>,
+        C: DftC2r<T> + Clone,
+        V: VecOps<T>,
+    {
         if spec.coefficients.is_empty() {
             return Err(Error::InvalidSpec(
                 "FIR coefficients must not be empty".to_owned(),
@@ -463,7 +478,7 @@ mod tests {
         let factory = make_factory();
         let coeffs = vec![1.0, 2.0, 3.0, 4.0, 5.0];
         let spec = FirSpec::new(coeffs.clone()).with_strategy(strategy);
-        let mut plan = Fir::<f64>::create_plan(&factory, &spec).expect("plan creation");
+        let mut plan = factory.create_plan(&spec).expect("plan creation");
 
         let mut input = vec![0.0; coeffs.len() + 4];
         input[0] = 1.0;
@@ -503,7 +518,7 @@ mod tests {
         let coeffs = vec![0.1, 0.2, 0.4, 0.2, 0.1];
         let expected_gain: f64 = coeffs.iter().sum();
         let spec = FirSpec::new(coeffs.clone()).with_strategy(strategy);
-        let mut plan = Fir::<f64>::create_plan(&factory, &spec).expect("plan creation");
+        let mut plan = factory.create_plan(&spec).expect("plan creation");
 
         let input_val = 3.0;
         let input = vec![input_val; 100];
@@ -538,14 +553,14 @@ mod tests {
         let coeffs = vec![1.0, -0.5, 0.25, -0.125, 0.0625];
         let spec = FirSpec::new(coeffs).with_strategy(strategy);
 
-        let mut plan_ref = Fir::<f64>::create_plan(&factory, &spec).expect("ref plan");
+        let mut plan_ref = factory.create_plan(&spec).expect("ref plan");
         let input: Vec<f64> = (0..20).map(|i| (f64::from(i)) * 0.1).collect();
         let mut output_ref = vec![0.0; 20];
         plan_ref
             .process(&input, &mut output_ref)
             .expect("ref process");
 
-        let mut plan_stream = Fir::<f64>::create_plan(&factory, &spec).expect("stream plan");
+        let mut plan_stream = factory.create_plan(&spec).expect("stream plan");
         let split = 7;
         let mut output_stream = vec![0.0; 20];
         plan_stream
@@ -579,7 +594,7 @@ mod tests {
         let factory = make_factory();
         let coeffs = vec![1.0, 0.5, 0.25];
         let spec = FirSpec::new(coeffs).with_strategy(strategy);
-        let mut plan = Fir::<f64>::create_plan(&factory, &spec).expect("plan creation");
+        let mut plan = factory.create_plan(&spec).expect("plan creation");
 
         let input = vec![1.0, 2.0, 3.0, 4.0, 5.0];
         let mut output1 = vec![0.0; 5];
@@ -617,8 +632,8 @@ mod tests {
         let spec_d = FirSpec::new(coeffs.clone()).with_strategy(FirStrategy::Direct);
         let spec_o = FirSpec::new(coeffs).with_strategy(FirStrategy::OverlapSave);
 
-        let mut plan_d = Fir::<f64>::create_plan(&factory, &spec_d).expect("direct plan");
-        let mut plan_o = Fir::<f64>::create_plan(&factory, &spec_o).expect("ols plan");
+        let mut plan_d = factory.create_plan(&spec_d).expect("direct plan");
+        let mut plan_o = factory.create_plan(&spec_o).expect("ols plan");
 
         let input: Vec<f64> = (0..50).map(|i| ((f64::from(i)) * 0.3).sin()).collect();
         let mut out_d = vec![0.0; 50];
@@ -636,7 +651,7 @@ mod tests {
         let factory = make_factory();
         let coeffs = vec![1.0, 0.0, 0.0];
         let spec = FirSpec::new(coeffs).with_strategy(strategy);
-        let mut plan = Fir::<f64>::create_plan(&factory, &spec).expect("plan creation");
+        let mut plan = factory.create_plan(&spec).expect("plan creation");
 
         let input1 = vec![1.0, 2.0, 3.0];
         let mut output1 = vec![0.0; 3];
@@ -677,7 +692,7 @@ mod tests {
         let factory = make_factory();
         let coeffs: Vec<f64> = (0..32).map(|i: i32| 1.0 / (f64::from(i) + 1.0)).collect();
         let spec = FirSpec::new(coeffs.clone()).with_strategy(FirStrategy::Direct);
-        let mut plan = Fir::<f64>::create_plan(&factory, &spec).expect("plan creation");
+        let mut plan = factory.create_plan(&spec).expect("plan creation");
 
         let mut input = vec![0.0; 64];
         input[0] = 1.0;
@@ -698,7 +713,7 @@ mod tests {
         let factory = make_factory();
         let coeffs = vec![1.0, 2.0, 3.0];
         let spec = FirSpec::new(coeffs.clone()).with_strategy(FirStrategy::OverlapSave);
-        let mut plan = Fir::<f64>::create_plan(&factory, &spec).expect("plan creation");
+        let mut plan = factory.create_plan(&spec).expect("plan creation");
 
         let mut input = vec![0.0; 16];
         input[0] = 1.0;
@@ -720,7 +735,7 @@ mod tests {
     fn empty_coefficients_returns_error() {
         let factory = make_factory();
         let spec = FirSpec::new(vec![]);
-        let result = Fir::<f64>::create_plan(&factory, &spec);
+        let result = factory.create_plan(&spec);
         assert!(result.is_err(), "empty coefficients should return error");
     }
 
@@ -728,7 +743,7 @@ mod tests {
     fn buffer_length_mismatch_returns_error() {
         let factory = make_factory();
         let spec = FirSpec::new(vec![1.0, 2.0]);
-        let mut plan = Fir::<f64>::create_plan(&factory, &spec).expect("plan creation");
+        let mut plan = factory.create_plan(&spec).expect("plan creation");
 
         let input = vec![1.0, 2.0, 3.0];
         let mut output = vec![0.0; 2];
@@ -747,8 +762,8 @@ mod tests {
         let spec_d = FirSpec::new(coeffs.clone()).with_strategy(FirStrategy::Direct);
         let spec_o = FirSpec::new(coeffs).with_strategy(FirStrategy::OverlapSave);
 
-        let mut plan_d = Fir::<f64>::create_plan(&factory, &spec_d).expect("direct plan");
-        let mut plan_o = Fir::<f64>::create_plan(&factory, &spec_o).expect("ols plan");
+        let mut plan_d = factory.create_plan(&spec_d).expect("direct plan");
+        let mut plan_o = factory.create_plan(&spec_o).expect("ols plan");
 
         let input: Vec<f64> = (0..200).map(|i| ((f64::from(i)) * 0.07).sin()).collect();
         let mut out_d = vec![0.0; 200];
@@ -768,8 +783,8 @@ mod tests {
         let spec_ref = FirSpec::new(coeffs.clone()).with_strategy(FirStrategy::Direct);
         let spec_ols = FirSpec::new(coeffs).with_strategy(FirStrategy::OverlapSave);
 
-        let mut plan_ref = Fir::<f64>::create_plan(&factory, &spec_ref).expect("ref plan");
-        let mut plan_ols = Fir::<f64>::create_plan(&factory, &spec_ols).expect("ols plan");
+        let mut plan_ref = factory.create_plan(&spec_ref).expect("ref plan");
+        let mut plan_ols = factory.create_plan(&spec_ols).expect("ols plan");
 
         let input: Vec<f64> = (0..100).map(|i| ((f64::from(i)) * 0.13).sin()).collect();
 
@@ -805,7 +820,7 @@ mod tests {
         for &strategy in &[FirStrategy::Direct, FirStrategy::OverlapSave] {
             let factory = make_factory();
             let spec = FirSpec::new(taps.to_vec()).with_strategy(strategy);
-            let mut plan = Fir::<f64>::create_plan(&factory, &spec).expect("plan creation");
+            let mut plan = factory.create_plan(&spec).expect("plan creation");
 
             let mut output = vec![0.0; input.len()];
             plan.process(input, &mut output).expect("process");
@@ -842,7 +857,7 @@ mod tests {
         for &strategy in &[FirStrategy::Direct, FirStrategy::OverlapSave] {
             let factory = make_factory();
             let spec = FirSpec::new(LFILTER_LP30_HAMMING_TAPS.to_vec()).with_strategy(strategy);
-            let mut plan = Fir::<f64>::create_plan(&factory, &spec).expect("plan creation");
+            let mut plan = factory.create_plan(&spec).expect("plan creation");
 
             let mut output = vec![0.0; LFILTER_LONG_INPUT.len()];
 

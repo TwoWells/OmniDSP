@@ -8,7 +8,7 @@ use omnidsp_core::design::resample::ResampleSpec;
 use omnidsp_core::error::Result;
 use omnidsp_core::modules::hilbert::HilbertSpec;
 use omnidsp_core::modules::xcorr::CrossCorrSpec;
-use omnidsp_core::scalar::ScalarVecOps;
+use omnidsp_core::scalar::{ScalarIir, ScalarVecOps};
 use omnidsp_core::traits::conv::ConvSpec;
 use omnidsp_core::traits::dct::DctSpec;
 use omnidsp_core::traits::dft::DftC2cSpec;
@@ -24,18 +24,20 @@ use omnidsp_core::create::CreatePlan;
 ///
 /// Combines [`RustDftC2c`] (wrapping `RustFFT`) and [`RustDftR2c`] /
 /// [`RustDftC2r`] (wrapping `realfft`) with [`ScalarVecOps`] (scalar loops,
-/// LLVM auto-vectorized).  Builds on every platform with no external
-/// dependencies.
+/// LLVM auto-vectorized) and [`ScalarIir`] (DF2T biquad cascade).  Builds on
+/// every platform with no external dependencies.
 #[derive(Debug, Clone, Copy)]
 pub struct RustBackend {
     /// Complex-to-complex DFT factory (`RustFFT` wrapper).
-    pub(crate) dft: RustDftC2c,
+    pub(crate) dftc2c: RustDftC2c,
     /// Real-to-complex DFT factory (`realfft` wrapper).
     pub(crate) dftr2c: RustDftR2c,
     /// Complex-to-real DFT factory (`realfft` wrapper).
     pub(crate) dftc2r: RustDftC2r,
     /// Vector operations (scalar fallback).
     pub(crate) vecops: ScalarVecOps,
+    /// IIR filter factory (scalar biquad cascade).
+    pub(crate) iir: ScalarIir,
 }
 
 impl RustBackend {
@@ -43,10 +45,11 @@ impl RustBackend {
     #[must_use]
     pub const fn new() -> Self {
         Self {
-            dft: RustDftC2c,
+            dftc2c: RustDftC2c,
             dftr2c: RustDftR2c,
             dftc2r: RustDftC2r,
             vecops: ScalarVecOps,
+            iir: ScalarIir,
         }
     }
 }
@@ -59,10 +62,11 @@ impl Default for RustBackend {
 
 omnidsp_macros::impl_generic_backend! {
     backend: RustBackend,
-    dft: RustDftC2c,
+    dftc2c: RustDftC2c,
     dftr2c: RustDftR2c,
     dftc2r: RustDftC2r,
     vecops: ScalarVecOps,
+    iir: ScalarIir,
 }
 
 // ─── OmniDSP struct ─────────────────────────────────────────────────

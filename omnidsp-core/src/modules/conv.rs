@@ -3,10 +3,10 @@
 
 //! Convolution module — direct and FFT-based fast convolution.
 //!
-//! [`OmniConv`] implements the [`Conv`] trait generically over any [`DftR2c`]
-//! / [`DftC2r`] and [`VecOps`] implementation.  Supports both time-domain
-//! (direct) and frequency-domain (FFT) convolution, selected via
-//! [`ConvMethod`].
+//! [`OmniConv`] builds convolution plans via an inherent `create_plan`,
+//! generic over any [`DftR2c`] / [`DftC2r`] and [`VecOps`] implementation.
+//! Supports both time-domain (direct) and frequency-domain (FFT) convolution,
+//! selected via [`ConvMethod`].
 //!
 //! The FFT path transforms the real inputs through the real-DFT primitives
 //! ([`DftR2c`] forward, [`DftC2r`] inverse) rather than embedding them in a
@@ -32,7 +32,7 @@ use num_traits::Float;
 
 use crate::error::{Error, Result};
 use crate::hermitian::{HermitianC2r, HermitianC2rPlan};
-use crate::traits::conv::{Conv, ConvMethod, ConvPlan, ConvSpec};
+use crate::traits::conv::{ConvMethod, ConvPlan, ConvSpec};
 use crate::traits::dft::{DftC2r, DftC2rPlan, DftC2rSpec, DftNorm, DftR2c, DftR2cPlan, DftR2cSpec};
 use crate::traits::vecops::VecOps;
 use crate::types::DspFloat;
@@ -96,8 +96,8 @@ impl<R, C, V> OmniConv<R, C, V> {
 
 /// Execution plan for a convolution operation.
 ///
-/// Created by [`OmniConv::create_plan`](Conv::create_plan).  Immutable and
-/// thread-safe (`Send + Sync`).
+/// Created by [`OmniConv::create_plan`].  Immutable and thread-safe
+/// (`Send + Sync`).
 ///
 /// Output length is `a_len + b_len - 1` (full convolution).
 ///
@@ -263,16 +263,32 @@ where
     }
 }
 
-impl<T, R, C, V> Conv<T> for OmniConv<R, C, V>
-where
-    T: DspFloat + AddAssign + MulAssign,
-    R: DftR2c<T>,
-    C: DftC2r<T> + Clone,
-    V: VecOps<T>,
-{
-    type Plan = OmniConvPlan<T, R::Plan, HermitianC2rPlan<C::Plan>, V>;
-
-    fn create_plan(&self, spec: &ConvSpec<T>) -> Result<Self::Plan> {
+impl<R, C, V> OmniConv<R, C, V> {
+    /// Create a plan for a convolution described by `spec`.
+    ///
+    /// The plan preallocates any internal buffers so that execution is
+    /// allocation-free.  The FFT path wraps the inverse c2r factory in
+    /// [`HermitianC2r`] so the round-trip DC/Nyquist drift is projected away
+    /// before the inverse transform (ADR-010 §2/§5).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidSpec`] if either input length is zero.
+    #[allow(
+        clippy::type_complexity,
+        reason = "composite real-DFT plan type (r2c forward + Hermitian-shaped c2r \
+                  inverse); the dispatch layer names it via `type Plan` aliases"
+    )]
+    pub fn create_plan<T>(
+        &self,
+        spec: &ConvSpec<T>,
+    ) -> Result<OmniConvPlan<T, <R as DftR2c<T>>::Plan, HermitianC2rPlan<<C as DftC2r<T>>::Plan>, V>>
+    where
+        T: DspFloat + AddAssign + MulAssign,
+        R: DftR2c<T>,
+        C: DftC2r<T> + Clone,
+        V: VecOps<T>,
+    {
         if spec.a_len == 0 {
             return Err(Error::InvalidSpec(
                 "convolution input a_len must be non-zero".to_owned(),
@@ -425,8 +441,9 @@ mod tests {
     #[test]
     fn basic_convolution() {
         let factory = make_factory();
-        let plan =
-            Conv::<f64>::create_plan(&factory, &spec(3, 2)).expect("plan creation should succeed");
+        let plan = factory
+            .create_plan(&spec(3, 2))
+            .expect("plan creation should succeed");
         let mut output = [0.0_f64; 4];
         plan.process(&[1.0, 2.0, 3.0], &[4.0, 5.0], &mut output)
             .expect("process should succeed");
@@ -437,8 +454,9 @@ mod tests {
     #[test]
     fn impulse_identity() {
         let factory = make_factory();
-        let plan =
-            Conv::<f64>::create_plan(&factory, &spec(1, 3)).expect("plan creation should succeed");
+        let plan = factory
+            .create_plan(&spec(1, 3))
+            .expect("plan creation should succeed");
         let mut output = [0.0_f64; 3];
         plan.process(&[1.0], &[2.0, 3.0, 4.0], &mut output)
             .expect("process should succeed");
@@ -449,8 +467,9 @@ mod tests {
     #[test]
     fn symmetric_inputs() {
         let factory = make_factory();
-        let plan =
-            Conv::<f64>::create_plan(&factory, &spec(3, 3)).expect("plan creation should succeed");
+        let plan = factory
+            .create_plan(&spec(3, 3))
+            .expect("plan creation should succeed");
         let mut output = [0.0_f64; 5];
         plan.process(&[1.0, 1.0, 1.0], &[1.0, 1.0, 1.0], &mut output)
             .expect("process should succeed");
@@ -461,8 +480,9 @@ mod tests {
     #[test]
     fn single_element() {
         let factory = make_factory();
-        let plan =
-            Conv::<f64>::create_plan(&factory, &spec(1, 1)).expect("plan creation should succeed");
+        let plan = factory
+            .create_plan(&spec(1, 1))
+            .expect("plan creation should succeed");
         let mut output = [0.0_f64; 1];
         plan.process(&[3.0], &[7.0], &mut output)
             .expect("process should succeed");
@@ -473,8 +493,9 @@ mod tests {
     #[test]
     fn delayed_impulse() {
         let factory = make_factory();
-        let plan =
-            Conv::<f64>::create_plan(&factory, &spec(3, 3)).expect("plan creation should succeed");
+        let plan = factory
+            .create_plan(&spec(3, 3))
+            .expect("plan creation should succeed");
         let mut output = [0.0_f64; 5];
         plan.process(&[0.0, 1.0, 0.0], &[2.0, 3.0, 4.0], &mut output)
             .expect("process should succeed");
@@ -485,10 +506,12 @@ mod tests {
     #[test]
     fn commutative() {
         let factory = make_factory();
-        let plan_ab =
-            Conv::<f64>::create_plan(&factory, &spec(3, 2)).expect("plan ab should succeed");
-        let plan_ba =
-            Conv::<f64>::create_plan(&factory, &spec(2, 3)).expect("plan ba should succeed");
+        let plan_ab = factory
+            .create_plan(&spec(3, 2))
+            .expect("plan ab should succeed");
+        let plan_ba = factory
+            .create_plan(&spec(2, 3))
+            .expect("plan ba should succeed");
 
         let mut out_ab = [0.0_f64; 4];
         let mut out_ba = [0.0_f64; 4];
@@ -507,8 +530,9 @@ mod tests {
     #[test]
     fn plan_reuse() {
         let factory = make_factory();
-        let plan =
-            Conv::<f64>::create_plan(&factory, &spec(2, 2)).expect("plan creation should succeed");
+        let plan = factory
+            .create_plan(&spec(2, 2))
+            .expect("plan creation should succeed");
 
         let mut out1 = [0.0_f64; 3];
         let mut out2 = [0.0_f64; 3];
@@ -530,7 +554,8 @@ mod tests {
     #[test]
     fn forced_direct() {
         let factory = make_factory();
-        let plan = Conv::<f64>::create_plan(&factory, &spec_direct(3, 2))
+        let plan = factory
+            .create_plan(&spec_direct(3, 2))
             .expect("plan creation should succeed");
         let mut output = [0.0_f64; 4];
         plan.process(&[1.0, 2.0, 3.0], &[4.0, 5.0], &mut output)
@@ -542,7 +567,8 @@ mod tests {
     #[test]
     fn forced_fft() {
         let factory = make_factory();
-        let plan = Conv::<f64>::create_plan(&factory, &spec_fft(3, 2))
+        let plan = factory
+            .create_plan(&spec_fft(3, 2))
             .expect("plan creation should succeed");
         let mut output = [0.0_f64; 4];
         plan.process(&[1.0, 2.0, 3.0], &[4.0, 5.0], &mut output)
@@ -554,10 +580,12 @@ mod tests {
     #[test]
     fn direct_and_fft_agree() {
         let factory = make_factory();
-        let plan_d = Conv::<f64>::create_plan(&factory, &spec_direct(4, 3))
+        let plan_d = factory
+            .create_plan(&spec_direct(4, 3))
             .expect("direct plan should succeed");
-        let plan_f =
-            Conv::<f64>::create_plan(&factory, &spec_fft(4, 3)).expect("fft plan should succeed");
+        let plan_f = factory
+            .create_plan(&spec_fft(4, 3))
+            .expect("fft plan should succeed");
 
         let a = [1.0, -1.0, 2.0, 0.5];
         let b = [3.0, 0.0, -2.0];
@@ -579,22 +607,23 @@ mod tests {
     #[test]
     fn zero_a_len_returns_error() {
         let factory = make_factory();
-        let result = Conv::<f64>::create_plan(&factory, &spec(0, 3));
+        let result = factory.create_plan(&spec(0, 3));
         assert!(result.is_err(), "zero a_len should return error");
     }
 
     #[test]
     fn zero_b_len_returns_error() {
         let factory = make_factory();
-        let result = Conv::<f64>::create_plan(&factory, &spec(3, 0));
+        let result = factory.create_plan(&spec(3, 0));
         assert!(result.is_err(), "zero b_len should return error");
     }
 
     #[test]
     fn wrong_a_length_returns_error() {
         let factory = make_factory();
-        let plan =
-            Conv::<f64>::create_plan(&factory, &spec(3, 2)).expect("plan creation should succeed");
+        let plan = factory
+            .create_plan(&spec(3, 2))
+            .expect("plan creation should succeed");
         let mut output = [0.0_f64; 4];
         assert!(
             plan.process(&[1.0, 2.0], &[4.0, 5.0], &mut output).is_err(),
@@ -605,8 +634,9 @@ mod tests {
     #[test]
     fn wrong_b_length_returns_error() {
         let factory = make_factory();
-        let plan =
-            Conv::<f64>::create_plan(&factory, &spec(3, 2)).expect("plan creation should succeed");
+        let plan = factory
+            .create_plan(&spec(3, 2))
+            .expect("plan creation should succeed");
         let mut output = [0.0_f64; 4];
         assert!(
             plan.process(&[1.0, 2.0, 3.0], &[4.0], &mut output).is_err(),
@@ -617,8 +647,9 @@ mod tests {
     #[test]
     fn wrong_output_length_returns_error() {
         let factory = make_factory();
-        let plan =
-            Conv::<f64>::create_plan(&factory, &spec(3, 2)).expect("plan creation should succeed");
+        let plan = factory
+            .create_plan(&spec(3, 2))
+            .expect("plan creation should succeed");
         let mut output = [0.0_f64; 3];
         assert!(
             plan.process(&[1.0, 2.0, 3.0], &[4.0, 5.0], &mut output)
