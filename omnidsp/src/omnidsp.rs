@@ -11,7 +11,7 @@ use omnidsp_core::modules::xcorr::CrossCorrSpec;
 use omnidsp_core::scalar::{ScalarIir, ScalarVecOps};
 use omnidsp_core::traits::conv::ConvSpec;
 use omnidsp_core::traits::dct::DctSpec;
-use omnidsp_core::traits::dft::DftC2cSpec;
+use omnidsp_core::traits::dft::{DftC2cSpec, DftC2rSpec, DftR2cSpec};
 use omnidsp_core::traits::fir::FirSpec;
 use omnidsp_core::traits::iir::IirSpec;
 use omnidsp_rustfft::{RustDftC2c, RustDftC2r, RustDftR2c};
@@ -164,14 +164,51 @@ impl<B> OmniDSP<B> {
         self.create_plan(spec)
     }
 
-    /// Create a DFT plan.
+    /// Create a complex-to-complex DFT plan
+    /// ([`DftC2c`](omnidsp_core::traits::dft::DftC2c)).
     ///
     /// # Errors
     ///
     /// Returns an error if the spec is invalid or plan creation fails.
-    pub fn dft<T>(&self, spec: &DftC2cSpec<T>) -> Result<<B as CreatePlan<DftC2cSpec<T>>>::Plan>
+    pub fn dft_c2c<T>(&self, spec: &DftC2cSpec<T>) -> Result<<B as CreatePlan<DftC2cSpec<T>>>::Plan>
     where
         B: CreatePlan<DftC2cSpec<T>>,
+    {
+        self.create_plan(spec)
+    }
+
+    /// Create a real-to-complex DFT plan
+    /// ([`DftR2c`](omnidsp_core::traits::dft::DftR2c)): `length` real samples →
+    /// a `length / 2 + 1` complex half-spectrum.
+    ///
+    /// The plan is Hermitian-shaped (ADR-010 §3): its DC bin — and, for even
+    /// `length`, its Nyquist bin — imaginary parts come out bit-exactly zero.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the spec is invalid or plan creation fails.
+    pub fn dft_r2c<T>(&self, spec: &DftR2cSpec<T>) -> Result<<B as CreatePlan<DftR2cSpec<T>>>::Plan>
+    where
+        B: CreatePlan<DftR2cSpec<T>>,
+    {
+        self.create_plan(spec)
+    }
+
+    /// Create a complex-to-real DFT plan
+    /// ([`DftC2r`](omnidsp_core::traits::dft::DftC2r)): a `length / 2 + 1`
+    /// complex half-spectrum → `length` real samples.
+    ///
+    /// The plan is Hermitian-shaped (ADR-010 §2): it projects the half-spectrum
+    /// onto the nearest valid Hermitian spectrum — consuming its `&mut` input —
+    /// before transforming, so legitimate round-trip drift never reaches the
+    /// kernel.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the spec is invalid or plan creation fails.
+    pub fn dft_c2r<T>(&self, spec: &DftC2rSpec<T>) -> Result<<B as CreatePlan<DftC2rSpec<T>>>::Plan>
+    where
+        B: CreatePlan<DftC2rSpec<T>>,
     {
         self.create_plan(spec)
     }

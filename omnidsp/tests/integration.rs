@@ -61,10 +61,10 @@ where
     let n = 8;
     let fwd_spec =
         DftC2cSpec::<T>::new(n, Direction::Forward, DftNorm::Inverse).expect("forward spec");
-    let fwd = dsp.dft(&fwd_spec).expect("forward DFT plan");
+    let fwd = dsp.dft_c2c(&fwd_spec).expect("forward DFT plan");
     let inv_spec =
         DftC2cSpec::<T>::new(n, Direction::Inverse, DftNorm::Inverse).expect("inverse spec");
-    let inv = dsp.dft(&inv_spec).expect("inverse DFT plan");
+    let inv = dsp.dft_c2c(&inv_spec).expect("inverse DFT plan");
 
     let zero = Complex::new(T::zero(), T::zero());
     let input: Vec<Complex<T>> = (0..n)
@@ -815,16 +815,16 @@ fn minimal_backend_defaults_materialize() {
 
 #[test]
 fn minimal_backend_shaped_direct_r2c_c2r() {
-    let b = MinimalBackend { dftc2c: RustDftC2c };
+    let dsp = OmniDSP::new(MinimalBackend { dftc2c: RustDftC2c });
 
-    // Direct r2c/c2r dispatch goes through the core blanket: shaped plans over
-    // the defaulted realfft floor (ADR-011 §2).
+    // The `dft_r2c` / `dft_c2r` convenience methods dispatch through the core
+    // blanket: shaped plans over the defaulted realfft floor (ADR-011 §2).
     let original = vec![1.0_f64, -2.0, 3.0, 0.5, -1.5, 2.0, 0.0, 4.0];
     let n = original.len();
     let r2c_spec = DftR2cSpec::<f64>::new(n, DftNorm::Inverse).expect("r2c spec");
-    let r2c = CreatePlan::create_plan(&b, &r2c_spec).expect("r2c plan");
+    let r2c = dsp.dft_r2c(&r2c_spec).expect("r2c plan");
     let c2r_spec = DftC2rSpec::<f64>::new(n, DftNorm::Inverse).expect("c2r spec");
-    let c2r = CreatePlan::create_plan(&b, &c2r_spec).expect("c2r plan");
+    let c2r = dsp.dft_c2r(&c2r_spec).expect("c2r plan");
 
     let mut time = original.clone();
     let mut spectrum = vec![Complex::new(0.0, 0.0); n / 2 + 1];
