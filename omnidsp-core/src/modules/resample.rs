@@ -230,6 +230,62 @@ where
     }
 }
 
+// ─── Plan trait ───────────────────────────────────────────────────────
+
+/// Execution object for a configured streaming resampler.
+///
+/// The named plan trait for the resampler module, the stateful analogue of
+/// [`FirPlan`](crate::traits::fir::FirPlan) (ADR-006 §2 eager plan traits,
+/// ADR-007 §6).  Like `FirPlan` it is mutable (`&mut self`) and carries no
+/// `Send + Sync` supertrait — the plan holds a delay line and phase counter
+/// that persist across calls.  Unlike `FirPlan`, the output length varies with
+/// the conversion ratio, so [`max_output_len`](Self::max_output_len) is part of
+/// the contract: a generic caller needs it to size `output` before
+/// [`process`](Self::process).  Implemented by [`OmniResamplePlan`]; vendor
+/// overrides may implement it directly.
+pub trait ResamplePlan<T> {
+    /// Resample `input`, writing to `output`; returns the number of output
+    /// samples written.
+    ///
+    /// `output` must be at least [`max_output_len(input.len())`](Self::max_output_len)
+    /// elements long.  Internal state persists across calls so successive calls
+    /// form a continuous stream.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `output` is shorter than the maximum output length
+    /// for `input`.
+    fn process(&mut self, input: &[T], output: &mut [T]) -> Result<usize>;
+
+    /// Maximum number of output samples for a given input length (the buffer
+    /// size [`process`](Self::process) requires).
+    fn max_output_len(&self, input_len: usize) -> usize;
+
+    /// Reset internal state (delay line and phase counter) without recreating
+    /// the plan.
+    fn reset(&mut self);
+}
+
+impl<T, V> ResamplePlan<T> for OmniResamplePlan<T, V>
+where
+    T: Float + AddAssign + MulAssign + Send + Sync,
+    V: VecOps<T>,
+{
+    // Each method delegates to the inherent one.  Inherent methods take
+    // precedence over trait methods in resolution, so these are not recursive.
+    fn process(&mut self, input: &[T], output: &mut [T]) -> Result<usize> {
+        self.process(input, output)
+    }
+
+    fn max_output_len(&self, input_len: usize) -> usize {
+        self.max_output_len(input_len)
+    }
+
+    fn reset(&mut self) {
+        self.reset();
+    }
+}
+
 // ─── Factory ──────────────────────────────────────────────────────────
 
 impl<V> OmniResample<V> {
@@ -611,6 +667,34 @@ mod tests {
         assert!(
             debug.contains("up_factor"),
             "debug should contain up_factor"
+        );
+    }
+
+    // ── Plan trait ──────────────────────────────────────────────────
+
+    /// A generic consumer bound on `ResamplePlan` compiles and runs, exercising
+    /// `max_output_len`, `process`, and `reset` through the trait.
+    #[test]
+    fn implements_plan_trait() {
+        fn check<P: ResamplePlan<f64>>(plan: &mut P, input: &[f64]) -> usize {
+            let max = plan.max_output_len(input.len());
+            let mut output = vec![0.0; max];
+            let n = plan
+                .process(input, &mut output)
+                .expect("trait process should succeed");
+            plan.reset();
+            n
+        }
+
+        let f = factory();
+        let mut plan = f
+            .create_plan(&spec(22050.0, 44100.0, 3))
+            .expect("create plan");
+        let input = vec![1.0_f64; 100];
+        let n = check(&mut plan, &input);
+        assert_eq!(
+            n, 200,
+            "2x interpolation through the trait should double the length"
         );
     }
 

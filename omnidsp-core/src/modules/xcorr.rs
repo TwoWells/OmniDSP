@@ -304,6 +304,43 @@ where
     }
 }
 
+// ─── Plan trait ──────────────────────────────────────────────────────────
+
+/// Execution object for a configured cross-correlation.
+///
+/// The named, `Send + Sync` plan trait for the cross-correlation module,
+/// mirroring [`ConvPlan`](crate::traits::conv::ConvPlan) /
+/// [`DctPlan`](crate::traits::dct::DctPlan) (ADR-006 §2 eager plan traits,
+/// ADR-007 §6).  It lets `process` be called generically (e.g. by the shared
+/// conformance suite) without naming the concrete plan.  Implemented by
+/// [`OmniCrossCorrPlan`]; vendor overrides may implement it directly.
+pub trait CrossCorrPlan<T>: Send + Sync {
+    /// Compute the full linear cross-correlation of `a` and `b`, writing the
+    /// result to `output`.
+    ///
+    /// `a` and `b` must have the lengths the plan was created for; `output`
+    /// must have length `a_len + b_len - 1`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any buffer length does not match the expected size.
+    fn process(&self, a: &[T], b: &[T], output: &mut [T]) -> Result<()>;
+}
+
+impl<T, RP, CP, V> CrossCorrPlan<T> for OmniCrossCorrPlan<T, RP, CP, V>
+where
+    T: Float + AddAssign + MulAssign + Send + Sync,
+    RP: DftR2cPlan<T>,
+    CP: DftC2rPlan<T>,
+    V: VecOps<T>,
+{
+    fn process(&self, a: &[T], b: &[T], output: &mut [T]) -> Result<()> {
+        // Delegate to the inherent `process`.  Inherent methods take precedence
+        // over trait methods in resolution, so this is not recursive.
+        self.process(a, b, output)
+    }
+}
+
 // ─── Factory implementation ──────────────────────────────────────────────
 
 /// The plan [`OmniCrossCorr::create_plan`] returns: the forward [`DftR2c`] plan
@@ -626,5 +663,36 @@ mod tests {
         assert_eq!(plan.a_len(), 8, "a_len accessor should match");
         assert_eq!(plan.b_len(), 4, "b_len accessor should match");
         assert_eq!(plan.output_len(), 11, "output_len accessor should match");
+    }
+
+    /// A generic consumer bound on `CrossCorrPlan` compiles and runs.
+    #[test]
+    fn implements_plan_trait() {
+        fn check<P: CrossCorrPlan<f64>>(plan: &P, a: &[f64], b: &[f64], out: &mut [f64]) {
+            plan.process(a, b, out)
+                .expect("trait process should succeed");
+        }
+
+        let factory = make_factory();
+        let spec = CrossCorrSpec::<f64>::new(4, 3).expect("valid xcorr spec");
+        let plan = factory
+            .create_plan(&spec)
+            .expect("plan creation should succeed");
+
+        let a = [1.0, 2.0, 3.0, 4.0];
+        let b = [0.5, 1.0, 1.5];
+        let mut out = vec![0.0; spec.output_len()];
+        check(&plan, &a, &b, &mut out);
+
+        // The trait method must agree with the inherent `process`.
+        let mut direct = vec![0.0; spec.output_len()];
+        plan.process(&a, &b, &mut direct)
+            .expect("inherent process should succeed");
+        for (i, (t, d)) in out.iter().zip(direct.iter()).enumerate() {
+            assert!(
+                (t - d).abs() < 1e-15,
+                "trait vs inherent mismatch at index {i}"
+            );
+        }
     }
 }

@@ -273,6 +273,45 @@ where
     }
 }
 
+// ─── Plan trait ───────────────────────────────────────────────────────
+
+/// Execution object for a configured Constant-Q Transform.
+///
+/// The named, `Send + Sync` plan trait for the CQT module, mirroring
+/// [`ConvPlan`](crate::traits::conv::ConvPlan) /
+/// [`DctPlan`](crate::traits::dct::DctPlan) (ADR-006 §2 eager plan traits,
+/// ADR-007 §6).  It lets the per-frame `process` be called generically (e.g.
+/// by the shared conformance suite covering the multirate CQT) without naming
+/// the concrete plan.  Implemented by [`OmniCqtPlan`]; vendor overrides may
+/// implement it directly.  The magnitude convenience
+/// ([`process_magnitude`](OmniCqtPlan::process_magnitude)) stays inherent.
+pub trait CqtPlan<T>: Send + Sync {
+    /// Compute the complex CQT coefficients of one frame.
+    ///
+    /// `input` must have length `fft_length`; `output` must have length
+    /// `num_bins`.  Each output element is the complex CQT coefficient for
+    /// that bin.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if either buffer length is wrong, or if FFT execution
+    /// fails.
+    fn process(&self, input: &[T], output: &mut [Complex<T>]) -> Result<()>;
+}
+
+impl<T, P, V> CqtPlan<T> for OmniCqtPlan<T, P, V>
+where
+    T: Float + AddAssign + MulAssign + Send + Sync,
+    P: DftC2cPlan<T>,
+    V: VecOps<T>,
+{
+    fn process(&self, input: &[T], output: &mut [Complex<T>]) -> Result<()> {
+        // Delegate to the inherent `process`.  Inherent methods take precedence
+        // over trait methods in resolution, so this is not recursive.
+        self.process(input, output)
+    }
+}
+
 // ─── Factory ──────────────────────────────────────────────────────────
 
 impl<D, V> OmniCqt<D, V> {
@@ -711,6 +750,36 @@ mod tests {
             debug.contains("num_bins"),
             "debug format should contain num_bins"
         );
+    }
+
+    // ── Plan trait ────────────────────────────────────────────────
+
+    /// A generic consumer bound on `CqtPlan` compiles and runs.
+    #[test]
+    fn implements_plan_trait() {
+        fn check<P: CqtPlan<f64>>(plan: &P, input: &[f64], output: &mut [Complex<f64>]) {
+            plan.process(input, output)
+                .expect("trait process should succeed");
+        }
+
+        let plan = make_plan(&small_spec());
+
+        // Impulse input gives a non-trivial response across all bins.
+        let mut input = vec![0.0_f64; plan.fft_length()];
+        input[0] = 1.0;
+        let mut via_trait = vec![Complex::new(0.0, 0.0); plan.num_bins()];
+        check(&plan, &input, &mut via_trait);
+
+        // The trait method must agree with the inherent `process`.
+        let mut direct = vec![Complex::new(0.0, 0.0); plan.num_bins()];
+        plan.process(&input, &mut direct)
+            .expect("inherent process should succeed");
+        for (k, (t, d)) in via_trait.iter().zip(direct.iter()).enumerate() {
+            assert!(
+                (t - d).norm() < 1e-15,
+                "trait vs inherent mismatch at bin {k}"
+            );
+        }
     }
 
     // ── Numpy reference tests ─────────────────────────────────────

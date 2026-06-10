@@ -235,6 +235,46 @@ where
     }
 }
 
+// ─── Plan trait ──────────────────────────────────────────────────────
+
+/// Execution object for a configured Hilbert transform.
+///
+/// The named, `Send + Sync` plan trait for the Hilbert module — the analytic
+/// counterpart to [`ConvPlan`](crate::traits::conv::ConvPlan) /
+/// [`DctPlan`](crate::traits::dct::DctPlan) (ADR-006 §2 eager plan traits,
+/// ADR-007 §6).  It lets the analytic-signal `process` be called generically
+/// (e.g. by the shared conformance suite) without naming the concrete plan.
+/// Implemented by [`OmniHilbertPlan`]; vendor overrides may implement it
+/// directly.
+pub trait HilbertPlan<T>: Send + Sync {
+    /// Compute the analytic signal of a real `input`, writing the complex
+    /// result to `output`.
+    ///
+    /// Both buffers must have the length the plan was created for.  The real
+    /// part of `output` equals `input`; the imaginary part is the Hilbert
+    /// transform of `input`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if either buffer length does not match the plan length,
+    /// or if FFT execution fails.
+    fn process(&self, input: &[T], output: &mut [Complex<T>]) -> Result<()>;
+}
+
+impl<T, RP, CP, V> HilbertPlan<T> for OmniHilbertPlan<T, RP, CP, V>
+where
+    T: Float + AddAssign + MulAssign + FromPrimitive + Send + Sync + 'static,
+    RP: DftR2cPlan<T>,
+    CP: DftC2cPlan<T>,
+    V: VecOps<T>,
+{
+    fn process(&self, input: &[T], output: &mut [Complex<T>]) -> Result<()> {
+        // Delegate to the inherent `process`.  Inherent methods take precedence
+        // over trait methods in resolution, so this is not recursive.
+        self.process(input, output)
+    }
+}
+
 // ─── Factory ─────────────────────────────────────────────────────────
 
 impl<R, C, V> OmniHilbert<R, C, V> {
@@ -325,7 +365,7 @@ mod tests {
 
     use num_complex::Complex;
 
-    use super::{HilbertSpec, OmniHilbert};
+    use super::{HilbertPlan, HilbertSpec, OmniHilbert};
     use crate::test_utils::{TestDftC2c, TestDftR2c, TestVecOps};
 
     fn make_factory() -> OmniHilbert<TestDftR2c, TestDftC2c, TestVecOps> {
@@ -769,6 +809,36 @@ mod tests {
             .create_plan(&spec)
             .expect("plan creation should succeed");
         assert_eq!(plan.length(), 512, "length accessor should match spec");
+    }
+
+    #[test]
+    fn implements_plan_trait() {
+        // A generic consumer bound on `HilbertPlan` compiles and runs.
+        fn check<P: HilbertPlan<f64>>(plan: &P, input: &[f64], output: &mut [Complex<f64>]) {
+            plan.process(input, output)
+                .expect("trait process should succeed");
+        }
+
+        let factory = make_factory();
+        let spec = HilbertSpec::<f64>::new(16).expect("valid hilbert spec");
+        let plan = factory
+            .create_plan(&spec)
+            .expect("plan creation should succeed");
+
+        let input: Vec<f64> = (0_i32..16).map(f64::from).collect();
+        let mut via_trait = vec![Complex::new(0.0, 0.0); 16];
+        check(&plan, &input, &mut via_trait);
+
+        // The trait method must agree with the inherent `process`.
+        let mut direct = vec![Complex::new(0.0, 0.0); 16];
+        plan.process(&input, &mut direct)
+            .expect("inherent process should succeed");
+        for (i, (t, d)) in via_trait.iter().zip(direct.iter()).enumerate() {
+            assert!(
+                (t - d).norm() < 1e-15,
+                "trait vs inherent mismatch at index {i}"
+            );
+        }
     }
 
     // ─── Scipy reference tests ───────────────────────────────────────
