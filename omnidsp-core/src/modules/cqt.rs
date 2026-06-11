@@ -77,6 +77,13 @@ use crate::traits::dft::{DftNorm, DftR2c, DftR2cPlan, DftR2cSpec};
 use crate::traits::vecops::VecOps;
 use crate::types::{DspFloat, Window};
 
+// The single-FFT reference (`SingleFftCqt`) is complex-to-complex; its imports
+// are gated to the test / `bench` builds that compile it.
+#[cfg(any(test, feature = "bench"))]
+use crate::traits::dft::{DftC2c, DftC2cPlan, DftC2cSpec};
+#[cfg(any(test, feature = "bench"))]
+use crate::types::Direction;
+
 // ─── Public types ──────────────────────────────────────────────────────
 
 /// Generic multirate CQT factory backed by [`DftR2c`] and [`VecOps`].
@@ -619,6 +626,197 @@ fn resample_window<T: DspFloat>(window: &[T], target: usize) -> Vec<f64> {
         .collect()
 }
 
+// ─── Single-FFT reference (test / `bench` feature only) ────────────────
+
+/// Single-FFT Constant-Q Transform — the simple reference the multirate
+/// [`OmniCqt`] is validated and benchmarked against.
+///
+/// Sizes one FFT for the lowest bin and correlates every bin against that one
+/// spectrum (`Σ X[m]·conj(K[m])`).  It is **not** part of the shipped surface —
+/// surface-lock 5L resolved the CQT to a single public type, the multirate
+/// [`OmniCqt`] — so it is compiled only under `cfg(test)` or the `bench`
+/// feature, serving as the equivalence oracle and as the naive baseline the
+/// `cqt` benchmark times the multirate path against.
+#[cfg(any(test, feature = "bench"))]
+#[derive(Debug, Clone)]
+pub struct SingleFftCqt<D, V> {
+    dft: D,
+    vecops: V,
+}
+
+#[cfg(any(test, feature = "bench"))]
+impl<D, V> SingleFftCqt<D, V> {
+    /// Create a single-FFT CQT factory.
+    #[must_use]
+    pub const fn new(dft: D, vecops: V) -> Self {
+        Self { dft, vecops }
+    }
+}
+
+/// Execution plan for the single-FFT reference CQT (see [`SingleFftCqt`]).
+#[cfg(any(test, feature = "bench"))]
+pub struct SingleFftCqtPlan<T, P, V> {
+    kernels: Vec<Vec<Complex<T>>>,
+    fwd: P,
+    vecops: V,
+    fft_length: usize,
+    num_bins: usize,
+    scratch: Mutex<SingleFftScratch<T>>,
+}
+
+#[cfg(any(test, feature = "bench"))]
+struct SingleFftScratch<T> {
+    buf_input: Vec<Complex<T>>,
+    buf_spectrum: Vec<Complex<T>>,
+}
+
+#[cfg(any(test, feature = "bench"))]
+impl<T, P, V> fmt::Debug for SingleFftCqtPlan<T, P, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SingleFftCqtPlan")
+            .field("num_bins", &self.num_bins)
+            .field("fft_length", &self.fft_length)
+            .finish_non_exhaustive()
+    }
+}
+
+#[cfg(any(test, feature = "bench"))]
+impl<T, P, V> SingleFftCqtPlan<T, P, V>
+where
+    T: DspFloat + AddAssign + MulAssign,
+    P: DftC2cPlan<T>,
+    V: VecOps<T>,
+{
+    /// Compute the CQT of one frame.
+    ///
+    /// `input` must have length [`fft_length`](Self::fft_length); `output` must
+    /// have length [`num_bins`](Self::num_bins).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::BufferMismatch`] on a length mismatch, or propagates FFT
+    /// execution failures.
+    #[allow(
+        clippy::significant_drop_tightening,
+        reason = "MutexGuard must live for the entire FFT + correlation pipeline"
+    )]
+    pub fn process(&self, input: &[T], output: &mut [Complex<T>]) -> Result<()> {
+        if input.len() != self.fft_length {
+            return Err(Error::BufferMismatch {
+                expected: self.fft_length,
+                actual: input.len(),
+            });
+        }
+        if output.len() != self.num_bins {
+            return Err(Error::BufferMismatch {
+                expected: self.num_bins,
+                actual: output.len(),
+            });
+        }
+
+        let mut guard = self
+            .scratch
+            .lock()
+            .map_err(|e| Error::Internal(format!("scratch buffer lock poisoned: {e}")))?;
+        let SingleFftScratch {
+            buf_input,
+            buf_spectrum,
+        } = &mut *guard;
+
+        self.vecops.real_to_complex(input, buf_input)?;
+        self.fwd.process(buf_input, buf_spectrum)?;
+        for (k, kernel) in self.kernels.iter().enumerate() {
+            output[k] = self.vecops.cdot(buf_spectrum, kernel)?;
+        }
+        Ok(())
+    }
+
+    /// Number of frequency bins.
+    #[must_use]
+    pub const fn num_bins(&self) -> usize {
+        self.num_bins
+    }
+
+    /// Required input frame length.
+    #[must_use]
+    pub const fn fft_length(&self) -> usize {
+        self.fft_length
+    }
+}
+
+#[cfg(any(test, feature = "bench"))]
+impl<D, V> SingleFftCqt<D, V> {
+    /// Build a single-FFT CQT plan from a [`CqtSpec`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if DFT plan creation fails.
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "kernel lengths and FFT sizes are small enough for f64"
+    )]
+    #[allow(
+        clippy::type_complexity,
+        reason = "the plan names its concrete forward DFT plan type"
+    )]
+    pub fn create_plan<T>(&self, spec: &CqtSpec<T>) -> Result<SingleFftCqtPlan<T, D::Plan, V>>
+    where
+        T: DspFloat + AddAssign + MulAssign,
+        D: DftC2c<T>,
+        V: VecOps<T>,
+    {
+        let fft_length = spec.fft_length();
+        let fwd_spec = DftC2cSpec::new(fft_length, Direction::Forward, DftNorm::None)?;
+        let fwd = self.dft.create_plan(&fwd_spec)?;
+
+        let inv_n = T::from(fft_length)
+            .ok_or_else(|| Error::Internal("cannot convert FFT length to T".into()))?
+            .recip();
+        let zero = Complex::new(T::zero(), T::zero());
+        let mut kern_time = vec![zero; fft_length];
+        let mut kern_freq = vec![zero; fft_length];
+
+        let bins = spec.bins();
+        let mut kernels = Vec::with_capacity(bins.len());
+        for bin in bins {
+            let n_k = bin.window.len();
+            let inv_nk = T::from(n_k)
+                .ok_or_else(|| Error::Internal("cannot convert kernel length to T".into()))?
+                .recip();
+            kern_time.fill(zero);
+            for (n, &w) in bin.window.iter().enumerate() {
+                let angle = TAU * bin.frequency * n as f64 / spec.sample_rate();
+                let cos_v = T::from(angle.cos())
+                    .ok_or_else(|| Error::Internal("cannot convert cos to T".into()))?;
+                let sin_v = T::from(angle.sin())
+                    .ok_or_else(|| Error::Internal("cannot convert sin to T".into()))?;
+                let scaled = w * inv_nk;
+                kern_time[n] = Complex::new(scaled * cos_v, scaled * sin_v);
+            }
+            fwd.process(&kern_time, &mut kern_freq)?;
+            kernels.push(
+                kern_freq
+                    .iter()
+                    .map(|c| Complex::new(c.re * inv_n, -(c.im * inv_n)))
+                    .collect(),
+            );
+        }
+
+        let num_bins = kernels.len();
+        Ok(SingleFftCqtPlan {
+            kernels,
+            fwd,
+            vecops: self.vecops.clone(),
+            fft_length,
+            num_bins,
+            scratch: Mutex::new(SingleFftScratch {
+                buf_input: vec![zero; fft_length],
+                buf_spectrum: vec![zero; fft_length],
+            }),
+        })
+    }
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -628,13 +826,12 @@ mod tests {
 
     use num_complex::Complex;
 
-    use super::{CqtPlan, OmniCqt, OmniCqtPlan};
+    use super::{CqtPlan, OmniCqt, OmniCqtPlan, SingleFftCqt};
     use crate::design::cqt::{self, CqtSpec};
-    use crate::error::Result;
     use crate::modules::resample::{OmniResample, OmniResamplePlan};
     use crate::test_utils::{TestDftC2c, TestDftR2c, TestVecOps};
-    use crate::traits::dft::{DftC2c, DftC2cPlan, DftC2cSpec, DftNorm, DftR2c};
-    use crate::types::{Direction, Window};
+    use crate::traits::dft::{DftC2c, DftR2c};
+    use crate::types::Window;
 
     // ── The multirate plan under test ──────────────────────────────
 
@@ -667,83 +864,22 @@ mod tests {
 
     // ── The single-FFT oracle (reference only) ─────────────────────
     //
-    // The simple, numpy-validated single-FFT CQT retained ONLY as the test
-    // oracle the multirate path is checked against (surface-lock 5L: one public
-    // type — the multirate `OmniCqt`).  It is c2c and computes each bin as the
-    // full-spectrum correlation `Σ X[m]·conj(K[m])`.
+    // The simple, numpy-validated single-FFT CQT ([`SingleFftCqt`]) retained
+    // ONLY as the test oracle the multirate path is checked against (surface-lock
+    // 5L: one public type — the multirate `OmniCqt`).  It is c2c and computes
+    // each bin as the full-spectrum correlation `Σ X[m]·conj(K[m])`.
 
-    struct OracleCqt;
-
-    struct OraclePlan {
-        kernels: Vec<Vec<Complex<f64>>>,
-        fwd: <TestDftC2c as DftC2c<f64>>::Plan,
-        fft_length: usize,
-        num_bins: usize,
-    }
-
-    impl OracleCqt {
-        #[allow(
-            clippy::cast_precision_loss,
-            reason = "oracle FFT lengths and kernel sizes are small enough for f64"
-        )]
-        fn create_plan(spec: &CqtSpec<f64>) -> Result<OraclePlan> {
-            let fft_length = spec.fft_length();
-            let fwd_spec = DftC2cSpec::new(fft_length, Direction::Forward, DftNorm::None)?;
-            let fwd = TestDftC2c.create_plan(&fwd_spec)?;
-            let inv_n = 1.0 / fft_length as f64;
-
-            let mut kern_time = vec![Complex::new(0.0, 0.0); fft_length];
-            let mut kern_freq = vec![Complex::new(0.0, 0.0); fft_length];
-            let mut kernels = Vec::with_capacity(spec.num_bins());
-
-            for bin in spec.bins() {
-                let n_k = bin.window.len();
-                let inv_nk = 1.0 / n_k as f64;
-                kern_time.fill(Complex::new(0.0, 0.0));
-                for (n, &w) in bin.window.iter().enumerate() {
-                    let angle = TAU * bin.frequency * n as f64 / spec.sample_rate();
-                    let scaled = w * inv_nk;
-                    kern_time[n] = Complex::new(scaled * angle.cos(), scaled * angle.sin());
-                }
-                fwd.process(&kern_time, &mut kern_freq)?;
-                kernels.push(
-                    kern_freq
-                        .iter()
-                        .map(|c| Complex::new(c.re * inv_n, -(c.im * inv_n)))
-                        .collect(),
-                );
-            }
-
-            Ok(OraclePlan {
-                kernels,
-                fwd,
-                fft_length,
-                num_bins: spec.num_bins(),
-            })
-        }
-    }
-
-    impl OraclePlan {
-        fn process(&self, input: &[f64], output: &mut [Complex<f64>]) -> Result<()> {
-            let mut buf_in = vec![Complex::new(0.0, 0.0); self.fft_length];
-            let mut spectrum = vec![Complex::new(0.0, 0.0); self.fft_length];
-            for (c, &r) in buf_in.iter_mut().zip(input) {
-                *c = Complex::new(r, 0.0);
-            }
-            self.fwd.process(&buf_in, &mut spectrum)?;
-            for (k, kernel) in self.kernels.iter().enumerate() {
-                output[k] = spectrum
-                    .iter()
-                    .zip(kernel)
-                    .fold(Complex::new(0.0, 0.0), |acc, (&x, &h)| acc + x * h);
-            }
-            Ok(())
-        }
+    fn oracle_plan(
+        spec: &CqtSpec<f64>,
+    ) -> super::SingleFftCqtPlan<f64, <TestDftC2c as DftC2c<f64>>::Plan, TestVecOps> {
+        SingleFftCqt::new(TestDftC2c, TestVecOps)
+            .create_plan(spec)
+            .expect("oracle plan creation should succeed")
     }
 
     fn oracle_magnitudes(spec: &CqtSpec<f64>, input: &[f64]) -> Vec<f64> {
-        let plan = OracleCqt::create_plan(spec).expect("oracle plan");
-        let mut out = vec![Complex::new(0.0, 0.0); plan.num_bins];
+        let plan = oracle_plan(spec);
+        let mut out = vec![Complex::new(0.0, 0.0); plan.num_bins()];
         plan.process(input, &mut out).expect("oracle process");
         out.iter().map(|c| c.norm()).collect()
     }
@@ -1105,8 +1241,8 @@ mod tests {
         assert_eq!(spec.fft_length(), CQT_PROC_FFT_LENGTH, "FFT length");
         assert_eq!(spec.num_bins(), CQT_PROC_NUM_BINS, "bin count");
 
-        let plan = OracleCqt::create_plan(&spec).expect("oracle plan");
-        let mut output = vec![Complex::new(0.0, 0.0); plan.num_bins];
+        let plan = oracle_plan(&spec);
+        let mut output = vec![Complex::new(0.0, 0.0); plan.num_bins()];
         plan.process(CQT_PROC_ALL_TONES_INPUT, &mut output)
             .expect("oracle process");
         assert_complex_approx_eq(
@@ -1120,8 +1256,8 @@ mod tests {
     #[test]
     fn oracle_numpy_pure_tone() {
         let spec = numpy_spec();
-        let plan = OracleCqt::create_plan(&spec).expect("oracle plan");
-        let mut output = vec![Complex::new(0.0, 0.0); plan.num_bins];
+        let plan = oracle_plan(&spec);
+        let mut output = vec![Complex::new(0.0, 0.0); plan.num_bins()];
         plan.process(CQT_PROC_TONE_INPUT, &mut output)
             .expect("oracle process");
         assert_complex_approx_eq(&output, CQT_PROC_TONE_OUTPUT, 1e-10, "oracle pure-tone");
@@ -1138,8 +1274,8 @@ mod tests {
     #[test]
     fn oracle_numpy_two_tone() {
         let spec = numpy_spec();
-        let plan = OracleCqt::create_plan(&spec).expect("oracle plan");
-        let mut output = vec![Complex::new(0.0, 0.0); plan.num_bins];
+        let plan = oracle_plan(&spec);
+        let mut output = vec![Complex::new(0.0, 0.0); plan.num_bins()];
         plan.process(CQT_PROC_TWO_TONE_INPUT, &mut output)
             .expect("oracle process");
         assert_complex_approx_eq(&output, CQT_PROC_TWO_TONE_OUTPUT, 1e-10, "oracle two-tone");

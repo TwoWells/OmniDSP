@@ -63,6 +63,10 @@ setup-tools:
 build-release:
 	@cargo build --release
 
+# Multirate vs single-FFT CQT throughput (exposes the SingleFftCqt baseline).
+bench:
+	@cargo bench -p omnidsp-core --features bench
+
 check: setup-tools
 	@PINNED=$$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml); \
 	 LATEST=$$(rustup run stable rustc --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1); \

@@ -10,6 +10,11 @@ repository = "https://github.com/TwoWells/OmniDSP"
 [lints]
 workspace = true
 
+[features]
+# Exposes the single-FFT `SingleFftCqt` reference (otherwise `cfg(test)`-only)
+# so the `cqt` benchmark can time the multirate path against the naive baseline.
+bench = []
+
 [dependencies]
 num-complex = "0.4"
 num-traits = "0.2"
@@ -17,3 +22,8 @@ thiserror = "2"
 
 [dev-dependencies]
 omnidsp-rustfft = { path = "../omnidsp-rustfft" }
+
+[[bench]]
+name = "cqt"
+harness = false
+required-features = ["bench"]
