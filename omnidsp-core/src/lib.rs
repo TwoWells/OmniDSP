@@ -2,18 +2,12 @@
 // Copyright (C) 2026 Two Wells <contact@twowells.dev>
 
 //! `OmniDSP` core library.
-
-/// Resolve a path relative to `testdata/` in the crate root.
-///
-/// ```ignore
-/// include!(testdata!("iir_scipy.rs"));
-/// ```
-#[cfg(test)]
-macro_rules! testdata {
-    ($file:expr) => {
-        concat!(env!("CARGO_MANIFEST_DIR"), "/testdata/", $file)
-    };
-}
+//!
+//! Test reference vectors live in the [`omnidsp-testdata`] crate (a
+//! dev-dependency) rather than inline here, so the `omnidsp-conformance` suite
+//! can share the exact same golden data without a dependency cycle (ADR-007 §3).
+//!
+//! [`omnidsp-testdata`]: https://github.com/TwoWells/OmniDSP
 
 pub mod create;
 pub mod design;

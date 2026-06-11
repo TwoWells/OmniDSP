@@ -28,7 +28,7 @@ def write_array(out, name, arr, doc):
     out.write("    clippy::unreadable_literal,\n")
     out.write("    reason = \"scipy reference\"\n")
     out.write(")]\n")
-    out.write(f"const {name}: &[f64] = &[\n")
+    out.write(f"pub const {name}: &[f64] = &[\n")
     for val in arr:
         out.write(format_f64(val) + "\n")
     out.write("];\n\n")
@@ -83,8 +83,8 @@ def main():
 
     out.write(f"/// Delay detection: a = sin(2π·{freq}·t), "
               f"b = sin(2π·{freq}·(t-{delay})), len={n}\n")
-    out.write(f"const XCORR_DELAY_N: usize = {n};\n")
-    out.write(f"const XCORR_DELAY_TRUE_LAG: usize = {delay};\n\n")
+    out.write(f"pub const XCORR_DELAY_N: usize = {n};\n")
+    out.write(f"pub const XCORR_DELAY_TRUE_LAG: usize = {delay};\n\n")
 
     write_array(out, "XCORR_DELAY_A", a3, f"Sine wave, freq={freq} cycles/sample")
     write_array(out, "XCORR_DELAY_B", b3,

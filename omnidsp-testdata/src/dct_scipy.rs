@@ -13,7 +13,7 @@
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const DCT_INPUT_RAMP8: &[f64] = &[
+pub const DCT_INPUT_RAMP8: &[f64] = &[
     1.00000000000000000e+00,
     2.00000000000000000e+00,
     3.00000000000000000e+00,
@@ -29,7 +29,7 @@ const DCT_INPUT_RAMP8: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const DCT2_RAMP8: &[f64] = &[
+pub const DCT2_RAMP8: &[f64] = &[
     7.20000000000000000e+01,
     -2.57692920908205494e+01,
     0.00000000000000000e+00,
@@ -45,7 +45,7 @@ const DCT2_RAMP8: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const DCT2_ORTHO_RAMP8: &[f64] = &[
+pub const DCT2_ORTHO_RAMP8: &[f64] = &[
     1.27279220613578570e+01,
     -6.44232302270513735e+00,
     0.00000000000000000e+00,
@@ -61,7 +61,7 @@ const DCT2_ORTHO_RAMP8: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const DCT3_RAMP8: &[f64] = &[
+pub const DCT3_RAMP8: &[f64] = &[
     3.93350990285710154e+01,
     -3.56026718929041976e+01,
     1.45877413989888289e+01,
@@ -77,7 +77,7 @@ const DCT3_RAMP8: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const DCT3_ORTHO_RAMP8: &[f64] = &[
+pub const DCT3_ORTHO_RAMP8: &[f64] = &[
     9.93732814773602868e+00,
     -8.79711458263277457e+00,
     3.75048874034048074e+00,
@@ -95,7 +95,7 @@ const DCT3_ORTHO_RAMP8: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const DCT_INPUT_SINE16: &[f64] = &[
+pub const DCT_INPUT_SINE16: &[f64] = &[
     0.00000000000000000e+00,
     6.44217687237691017e-01,
     9.85449729988460144e-01,
@@ -119,7 +119,7 @@ const DCT_INPUT_SINE16: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const DCT2_SINE16: &[f64] = &[
+pub const DCT2_SINE16: &[f64] = &[
     3.16255559545048825e+00,
     2.51044225983223068e+00,
     4.58640500452819211e+00,
@@ -143,7 +143,7 @@ const DCT2_SINE16: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const DCT2_ORTHO_SINE16: &[f64] = &[
+pub const DCT2_ORTHO_SINE16: &[f64] = &[
     3.95319449431311143e-01,
     4.43787686426162842e-01,
     8.10769519992450727e-01,
@@ -167,7 +167,7 @@ const DCT2_ORTHO_SINE16: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const DCT3_SINE16: &[f64] = &[
+pub const DCT3_SINE16: &[f64] = &[
     3.21344850191833320e+00,
     1.87392434057848956e+00,
     9.44488888419490991e+00,
@@ -191,7 +191,7 @@ const DCT3_SINE16: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const DCT3_ORTHO_SINE16: &[f64] = &[
+pub const DCT3_ORTHO_SINE16: &[f64] = &[
     5.68062806675051490e-01,
     3.31266152163394723e-01,
     1.66963624439191660e+00,
@@ -217,7 +217,7 @@ const DCT3_ORTHO_SINE16: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const DCT_INPUT_COS17: &[f64] = &[
+pub const DCT_INPUT_COS17: &[f64] = &[
     1.00000000000000000e+00,
     2.67498828624587348e-01,
     -8.56888753368947320e-01,
@@ -242,7 +242,7 @@ const DCT_INPUT_COS17: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const DCT2_COS17: &[f64] = &[
+pub const DCT2_COS17: &[f64] = &[
     1.85117707582760938e+00,
     1.51714660580813815e-01,
     2.00444270246184253e+00,
@@ -267,7 +267,7 @@ const DCT2_COS17: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const DCT2_ORTHO_COS17: &[f64] = &[
+pub const DCT2_ORTHO_COS17: &[f64] = &[
     2.24488194569390231e-01,
     2.60188496349855365e-02,
     3.43759087471432800e-01,
@@ -292,7 +292,7 @@ const DCT2_ORTHO_COS17: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const DCT3_COS17: &[f64] = &[
+pub const DCT3_COS17: &[f64] = &[
     1.25951414367652115e-01,
     -3.91808754075764154e-01,
     7.05950859758177174e-01,
@@ -317,7 +317,7 @@ const DCT3_COS17: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const DCT3_ORTHO_COS17: &[f64] = &[
+pub const DCT3_ORTHO_COS17: &[f64] = &[
     9.26375292545743578e-02,
     3.84239292338139915e-03,
     1.92106613522489228e-01,
@@ -344,7 +344,7 @@ const DCT3_ORTHO_COS17: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const DCT_INPUT_RANDOM64: &[f64] = &[
+pub const DCT_INPUT_RANDOM64: &[f64] = &[
     3.04717079754431353e-01,
     -1.03998410624049553e+00,
     7.50451195806457250e-01,
@@ -416,7 +416,7 @@ const DCT_INPUT_RANDOM64: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const DCT2_RANDOM64: &[f64] = &[
+pub const DCT2_RANDOM64: &[f64] = &[
     5.29669700839727575e+00,
     -1.29434996719916695e+00,
     -1.17309044461859884e+01,
@@ -488,7 +488,7 @@ const DCT2_RANDOM64: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const DCT2_ORTHO_RANDOM64: &[f64] = &[
+pub const DCT2_ORTHO_RANDOM64: &[f64] = &[
     3.31043563024829790e-01,
     -1.14405454879389579e-01,
     -1.03687526041869171e+00,
@@ -560,7 +560,7 @@ const DCT2_ORTHO_RANDOM64: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const DCT3_RANDOM64: &[f64] = &[
+pub const DCT3_RANDOM64: &[f64] = &[
     3.50010710292472993e+00,
     -8.33021229221338189e+00,
     -8.47074201695259532e+00,
@@ -632,7 +632,7 @@ const DCT3_RANDOM64: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const DCT3_ORTHO_RANDOM64: &[f64] = &[
+pub const DCT3_ORTHO_RANDOM64: &[f64] = &[
     3.20524879209248603e-01,
     -7.25137504278863143e-01,
     -7.37558694444035434e-01,
@@ -698,4 +698,3 @@ const DCT3_ORTHO_RANDOM64: &[f64] = &[
     7.63962415990778632e-01,
     1.07816554949047805e+00,
 ];
-

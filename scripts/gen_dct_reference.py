@@ -27,7 +27,7 @@ def write_array(out, name, values):
     out.write("    clippy::unreadable_literal,\n")
     out.write('    reason = "scipy reference"\n')
     out.write(")]\n")
-    out.write(f"const {name}: &[f64] = &[\n")
+    out.write(f"pub const {name}: &[f64] = &[\n")
     for v in values:
         out.write(format_f64(v) + "\n")
     out.write("];\n\n")

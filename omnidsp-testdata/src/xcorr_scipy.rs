@@ -12,7 +12,7 @@
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const XCORR_SHORT_A: &[f64] = &[
+pub const XCORR_SHORT_A: &[f64] = &[
     3.04717079754431353e-01,
     -1.03998410624049553e+00,
     7.50451195806457250e-01,
@@ -37,7 +37,7 @@ const XCORR_SHORT_A: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const XCORR_SHORT_B: &[f64] = &[
+pub const XCORR_SHORT_B: &[f64] = &[
     3.68750784082498839e-01,
     -9.58882600828998899e-01,
     8.78450301307272530e-01,
@@ -54,7 +54,7 @@ const XCORR_SHORT_B: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const XCORR_SHORT_RESULT: &[f64] = &[
+pub const XCORR_SHORT_RESULT: &[f64] = &[
     -4.70877725119701537e-02,
     5.33237431896953606e-01,
     -1.59488125833813976e+00,
@@ -86,7 +86,7 @@ const XCORR_SHORT_RESULT: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const XCORR_EQUAL_A: &[f64] = &[
+pub const XCORR_EQUAL_A: &[f64] = &[
     -4.28327822163107219e-01,
     -3.52133550488229585e-01,
     5.32309185553348718e-01,
@@ -127,7 +127,7 @@ const XCORR_EQUAL_A: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const XCORR_EQUAL_B: &[f64] = &[
+pub const XCORR_EQUAL_B: &[f64] = &[
     -2.75142251226683732e-01,
     1.49494131123439589e+00,
     -8.65831115693243225e-01,
@@ -168,7 +168,7 @@ const XCORR_EQUAL_B: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const XCORR_EQUAL_RESULT: &[f64] = &[
+pub const XCORR_EQUAL_RESULT: &[f64] = &[
     -5.35157866447764918e-03,
     1.96658483709496623e-01,
     -3.66408153210427134e-02,
@@ -235,8 +235,8 @@ const XCORR_EQUAL_RESULT: &[f64] = &[
 ];
 
 /// Delay detection: a = sin(2π·0.1·t), b = sin(2π·0.1·(t-17)), len=128
-const XCORR_DELAY_N: usize = 128;
-const XCORR_DELAY_TRUE_LAG: usize = 17;
+pub const XCORR_DELAY_N: usize = 128;
+pub const XCORR_DELAY_TRUE_LAG: usize = 17;
 
 /// Sine wave, freq=0.1 cycles/sample
 #[allow(
@@ -244,7 +244,7 @@ const XCORR_DELAY_TRUE_LAG: usize = 17;
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const XCORR_DELAY_A: &[f64] = &[
+pub const XCORR_DELAY_A: &[f64] = &[
     0.00000000000000000e+00,
     5.87785252292473137e-01,
     9.51056516295153531e-01,
@@ -381,7 +381,7 @@ const XCORR_DELAY_A: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const XCORR_DELAY_B: &[f64] = &[
+pub const XCORR_DELAY_B: &[f64] = &[
     9.51056516295153420e-01,
     5.87785252292472804e-01,
     -3.67394039744205938e-16,
@@ -518,7 +518,7 @@ const XCORR_DELAY_B: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const XCORR_DELAY_RESULT: &[f64] = &[
+pub const XCORR_DELAY_RESULT: &[f64] = &[
     0.00000000000000000e+00,
     -5.76008993320653824e-15,
     -3.45491502812535156e-01,
@@ -775,4 +775,3 @@ const XCORR_DELAY_RESULT: &[f64] = &[
     -1.11803398874988558e+00,
     -9.04508497187471616e-01,
 ];
-

@@ -33,7 +33,7 @@ def write_array(out, name, doc, values):
     out.write("    clippy::unreadable_literal,\n")
     out.write('    reason = "scipy reference"\n')
     out.write(")]\n")
-    out.write(f"const {name}: &[f64] = &[\n")
+    out.write(f"pub const {name}: &[f64] = &[\n")
     for v in values:
         out.write(format_value(v) + "\n")
     out.write("];\n\n")
@@ -42,7 +42,7 @@ def write_array(out, name, doc, values):
 def write_scalar(out, name, doc, value):
     """Write a const usize to the output."""
     out.write(f"/// `{doc}`\n")
-    out.write(f"const {name}: usize = {value};\n\n")
+    out.write(f"pub const {name}: usize = {value};\n\n")
 
 
 def gen_case(out, prefix, sr_in, sr_out, signal, doc_signal, num_taps=65):

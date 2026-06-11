@@ -1,6 +1,13 @@
 [workspace]
 resolver = "3"
-members = ["omnidsp-core", "omnidsp-macros", "omnidsp-rustfft", "omnidsp"]
+members = [
+    "omnidsp-core",
+    "omnidsp-macros",
+    "omnidsp-rustfft",
+    "omnidsp",
+    "omnidsp-testdata",
+    "omnidsp-conformance",
+]
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

@@ -302,7 +302,11 @@ pub fn design<T: Float>(
 mod tests {
     use super::*;
 
-    include!(testdata!("cqt_numpy.rs"));
+    #[allow(
+        clippy::wildcard_imports,
+        reason = "bulk golden-vector import in tests"
+    )]
+    use omnidsp_testdata::cqt_numpy::*;
 
     // ── Validation ─────────────────────────────────────────────
 

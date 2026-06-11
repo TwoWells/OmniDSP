@@ -7,10 +7,10 @@
 // scipy 1.17.1, numpy 2.4.4
 
 /// `L=160`
-const RPOLY_44_48_UP: usize = 160;
+pub const RPOLY_44_48_UP: usize = 160;
 
 /// `M=147`
-const RPOLY_44_48_DOWN: usize = 147;
+pub const RPOLY_44_48_DOWN: usize = 147;
 
 /// `firwin(65, hamming) prototype`
 #[allow(
@@ -18,7 +18,7 @@ const RPOLY_44_48_DOWN: usize = 147;
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const RPOLY_44_48_PROTO: &[f64] = &[
+pub const RPOLY_44_48_PROTO: &[f64] = &[
     2.18366775755680226e-03,
     2.25347309568642165e-03,
     2.44482694557009031e-03,
@@ -92,7 +92,7 @@ const RPOLY_44_48_PROTO: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const RPOLY_44_48_INPUT: &[f64] = &[
+pub const RPOLY_44_48_INPUT: &[f64] = &[
     0.00000000000000000e+00,
     5.11235910275480210e-01,
     4.93300152879830478e-01,
@@ -357,7 +357,7 @@ const RPOLY_44_48_INPUT: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const RPOLY_44_48_OUTPUT: &[f64] = &[
+pub const RPOLY_44_48_OUTPUT: &[f64] = &[
     0.00000000000000000e+00,
     0.00000000000000000e+00,
     0.00000000000000000e+00,
@@ -639,10 +639,10 @@ const RPOLY_44_48_OUTPUT: &[f64] = &[
 ];
 
 /// `L=147`
-const RPOLY_48_44_UP: usize = 147;
+pub const RPOLY_48_44_UP: usize = 147;
 
 /// `M=160`
-const RPOLY_48_44_DOWN: usize = 160;
+pub const RPOLY_48_44_DOWN: usize = 160;
 
 /// `firwin(65, hamming) prototype`
 #[allow(
@@ -650,7 +650,7 @@ const RPOLY_48_44_DOWN: usize = 160;
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const RPOLY_48_44_PROTO: &[f64] = &[
+pub const RPOLY_48_44_PROTO: &[f64] = &[
     2.18366775755680226e-03,
     2.25347309568642165e-03,
     2.44482694557009031e-03,
@@ -724,7 +724,7 @@ const RPOLY_48_44_PROTO: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const RPOLY_48_44_INPUT: &[f64] = &[
+pub const RPOLY_48_44_INPUT: &[f64] = &[
     0.00000000000000000e+00,
     4.85348658135163147e-01,
     5.37541165159872825e-01,
@@ -989,7 +989,7 @@ const RPOLY_48_44_INPUT: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const RPOLY_48_44_OUTPUT: &[f64] = &[
+pub const RPOLY_48_44_OUTPUT: &[f64] = &[
     0.00000000000000000e+00,
     8.26675940211906823e-01,
     2.12195825973635754e+00,
@@ -1228,10 +1228,10 @@ const RPOLY_48_44_OUTPUT: &[f64] = &[
 ];
 
 /// `L=1`
-const RPOLY_44_22_UP: usize = 1;
+pub const RPOLY_44_22_UP: usize = 1;
 
 /// `M=2`
-const RPOLY_44_22_DOWN: usize = 2;
+pub const RPOLY_44_22_DOWN: usize = 2;
 
 /// `firwin(65, hamming) prototype`
 #[allow(
@@ -1239,7 +1239,7 @@ const RPOLY_44_22_DOWN: usize = 2;
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const RPOLY_44_22_PROTO: &[f64] = &[
+pub const RPOLY_44_22_PROTO: &[f64] = &[
     -1.56047493162951083e-18,
     -8.44841923095676433e-04,
     5.08429257025330501e-18,
@@ -1313,7 +1313,7 @@ const RPOLY_44_22_PROTO: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const RPOLY_44_22_INPUT: &[f64] = &[
+pub const RPOLY_44_22_INPUT: &[f64] = &[
     0.00000000000000000e+00,
     5.11235910275480210e-01,
     4.93300152879830478e-01,
@@ -1578,7 +1578,7 @@ const RPOLY_44_22_INPUT: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const RPOLY_44_22_OUTPUT: &[f64] = &[
+pub const RPOLY_44_22_OUTPUT: &[f64] = &[
     0.00000000000000000e+00,
     -4.31913529592706138e-04,
     5.32611183820384153e-04,
@@ -1710,10 +1710,10 @@ const RPOLY_44_22_OUTPUT: &[f64] = &[
 ];
 
 /// `L=2`
-const RPOLY_22_44_UP: usize = 2;
+pub const RPOLY_22_44_UP: usize = 2;
 
 /// `M=1`
-const RPOLY_22_44_DOWN: usize = 1;
+pub const RPOLY_22_44_DOWN: usize = 1;
 
 /// `firwin(65, hamming) prototype`
 #[allow(
@@ -1721,7 +1721,7 @@ const RPOLY_22_44_DOWN: usize = 1;
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const RPOLY_22_44_PROTO: &[f64] = &[
+pub const RPOLY_22_44_PROTO: &[f64] = &[
     -1.56047493162951083e-18,
     -8.44841923095676433e-04,
     5.08429257025330501e-18,
@@ -1795,7 +1795,7 @@ const RPOLY_22_44_PROTO: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const RPOLY_22_44_INPUT: &[f64] = &[
+pub const RPOLY_22_44_INPUT: &[f64] = &[
     0.00000000000000000e+00,
     5.68010459750893038e-01,
     6.05558212581498445e-01,
@@ -2060,7 +2060,7 @@ const RPOLY_22_44_INPUT: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const RPOLY_22_44_OUTPUT: &[f64] = &[
+pub const RPOLY_22_44_OUTPUT: &[f64] = &[
     0.00000000000000000e+00,
     0.00000000000000000e+00,
     -1.77273216668924361e-18,
@@ -2576,10 +2576,10 @@ const RPOLY_22_44_OUTPUT: &[f64] = &[
 ];
 
 /// `L=160`
-const RPOLY_LONG_UP: usize = 160;
+pub const RPOLY_LONG_UP: usize = 160;
 
 /// `M=147`
-const RPOLY_LONG_DOWN: usize = 147;
+pub const RPOLY_LONG_DOWN: usize = 147;
 
 /// `firwin(65, hamming) prototype`
 #[allow(
@@ -2587,7 +2587,7 @@ const RPOLY_LONG_DOWN: usize = 147;
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const RPOLY_LONG_PROTO: &[f64] = &[
+pub const RPOLY_LONG_PROTO: &[f64] = &[
     2.18366775755680226e-03,
     2.25347309568642165e-03,
     2.44482694557009031e-03,
@@ -2661,7 +2661,7 @@ const RPOLY_LONG_PROTO: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const RPOLY_LONG_INPUT: &[f64] = &[
+pub const RPOLY_LONG_INPUT: &[f64] = &[
     0.00000000000000000e+00,
     3.39366224415459938e-01,
     2.20745768413276977e-01,
@@ -3694,7 +3694,7 @@ const RPOLY_LONG_INPUT: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const RPOLY_LONG_OUTPUT: &[f64] = &[
+pub const RPOLY_LONG_OUTPUT: &[f64] = &[
     0.00000000000000000e+00,
     0.00000000000000000e+00,
     0.00000000000000000e+00,
@@ -4810,4 +4810,3 @@ const RPOLY_LONG_OUTPUT: &[f64] = &[
     0.00000000000000000e+00,
     0.00000000000000000e+00,
 ];
-

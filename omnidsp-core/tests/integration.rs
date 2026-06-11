@@ -31,15 +31,6 @@ use omnidsp_core::traits::vecops::VecOps;
 use omnidsp_core::types::{Direction, FilterType, Window};
 use omnidsp_rustfft::{RustDftC2c, RustDftC2r, RustDftR2c};
 
-// ─── Test data ─────────────────────────────────────────────────────────
-
-/// Resolve a path relative to `testdata/` in the `omnidsp-core` crate root.
-macro_rules! testdata {
-    ($file:expr) => {
-        concat!(env!("CARGO_MANIFEST_DIR"), "/testdata/", $file)
-    };
-}
-
 // ─── Helpers ───────────────────────────────────────────────────────────
 
 fn assert_approx_eq(actual: &[f64], expected: &[f64], tol: f64, label: &str) {
@@ -67,7 +58,11 @@ fn assert_approx_eq(actual: &[f64], expected: &[f64], tol: f64, label: &str) {
 mod fir_integration {
     use super::*;
 
-    include!(testdata!("fir_lfilter_scipy.rs"));
+    #[allow(
+        clippy::wildcard_imports,
+        reason = "bulk golden-vector import in tests"
+    )]
+    use omnidsp_testdata::fir_lfilter_scipy::*;
 
     /// End-to-end: design LP FIR → create plan with RustDftC2c+ScalarVecOps → process → compare scipy.
     #[test]
@@ -221,7 +216,11 @@ mod fir_integration {
 mod iir_integration {
     use super::*;
 
-    include!(testdata!("iir_sosfilt_scipy.rs"));
+    #[allow(
+        clippy::wildcard_imports,
+        reason = "bulk golden-vector import in tests"
+    )]
+    use omnidsp_testdata::iir_sosfilt_scipy::*;
 
     /// End-to-end: design LP Butterworth → `ScalarIir` → process → compare scipy sosfilt.
     ///
@@ -808,7 +807,11 @@ mod pipeline {
 mod cqt_integration {
     use super::*;
 
-    include!(testdata!("cqt_librosa.rs"));
+    #[allow(
+        clippy::wildcard_imports,
+        reason = "bulk golden-vector import in tests"
+    )]
+    use omnidsp_testdata::cqt_librosa::*;
 
     /// Magnitude tolerance for the multirate CQT vs the single-FFT/librosa
     /// reference.  This spec is a single octave, so the multirate path runs no
@@ -967,7 +970,11 @@ mod cqt_integration {
 mod xcorr_integration {
     use super::*;
 
-    include!(testdata!("xcorr_scipy.rs"));
+    #[allow(
+        clippy::wildcard_imports,
+        reason = "bulk golden-vector import in tests"
+    )]
+    use omnidsp_testdata::xcorr_scipy::*;
 
     const fn make_factory() -> OmniCrossCorr<RustDftR2c, RustDftC2r, ScalarVecOps> {
         OmniCrossCorr::new(RustDftR2c, RustDftC2r, ScalarVecOps)

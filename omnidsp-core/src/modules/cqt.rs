@@ -1198,7 +1198,11 @@ mod tests {
     // These pin the single-FFT oracle to numpy so it remains a trustworthy
     // reference for the multirate equivalence checks above.
 
-    include!(testdata!("cqt_process_numpy.rs"));
+    #[allow(
+        clippy::wildcard_imports,
+        reason = "bulk golden-vector import in tests"
+    )]
+    use omnidsp_testdata::cqt_process_numpy::*;
 
     fn numpy_spec() -> CqtSpec<f64> {
         cqt::design(

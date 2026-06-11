@@ -1,0 +1,13 @@
+[package]
+name = "omnidsp-testdata"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Committed scipy/numpy golden reference vectors for OmniDSP tests and conformance."
+authors = ["Mark Wells"]
+repository = "https://github.com/TwoWells/OmniDSP"
+
+[lints]
+workspace = true
+
+[dependencies]

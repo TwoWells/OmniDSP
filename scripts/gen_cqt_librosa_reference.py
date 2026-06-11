@@ -53,7 +53,7 @@ def write_real_array(out, name, doc, values):
     out.write("    clippy::unreadable_literal,\n")
     out.write('    reason = "librosa-validated reference"\n')
     out.write(")]\n")
-    out.write(f"const {name}: &[f64] = &[\n")
+    out.write(f"pub const {name}: &[f64] = &[\n")
     for v in values:
         out.write(f"    {format_f64(v)},\n")
     out.write("];\n\n")
@@ -114,12 +114,12 @@ def main():
     out.write("// centered time axis prevents exact magnitude agreement.\n")
     out.write("\n")
 
-    out.write(f"const CQT_LIB_SAMPLE_RATE: f64 = {sr};\n")
-    out.write(f"const CQT_LIB_MIN_FREQ: f64 = {fmin};\n")
-    out.write(f"const CQT_LIB_MAX_FREQ: f64 = {fmax};\n")
-    out.write(f"const CQT_LIB_BINS_PER_OCTAVE: u32 = {bpo};\n")
-    out.write(f"const CQT_LIB_FFT_LENGTH: usize = {fft_length};\n")
-    out.write(f"const CQT_LIB_NUM_BINS: usize = {n_bins};\n")
+    out.write(f"pub const CQT_LIB_SAMPLE_RATE: f64 = {sr};\n")
+    out.write(f"pub const CQT_LIB_MIN_FREQ: f64 = {fmin};\n")
+    out.write(f"pub const CQT_LIB_MAX_FREQ: f64 = {fmax};\n")
+    out.write(f"pub const CQT_LIB_BINS_PER_OCTAVE: u32 = {bpo};\n")
+    out.write(f"pub const CQT_LIB_FFT_LENGTH: usize = {fft_length};\n")
+    out.write(f"pub const CQT_LIB_NUM_BINS: usize = {n_bins};\n")
     out.write("\n")
 
     t = np.arange(fft_length) / sr
@@ -178,7 +178,7 @@ def main():
         f"CQT magnitudes of sine at bin {mid_bin} (librosa-validated design)",
         tone_mag,
     )
-    out.write(f"const CQT_LIB_TONE_BIN: usize = {mid_bin};\n\n")
+    out.write(f"pub const CQT_LIB_TONE_BIN: usize = {mid_bin};\n\n")
 
     # --- Case 3: Two tones at bin 2 and bin 9 ---
     freq_a = freqs[2]

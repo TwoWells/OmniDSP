@@ -99,7 +99,7 @@ def write_real_array(out, name, doc, values):
     out.write("    clippy::unreadable_literal,\n")
     out.write('    reason = "numpy reference"\n')
     out.write(")]\n")
-    out.write(f"const {name}: &[f64] = &[\n")
+    out.write(f"pub const {name}: &[f64] = &[\n")
     for v in values:
         out.write(f"    {format_f64(v)},\n")
     out.write("];\n\n")
@@ -112,7 +112,7 @@ def write_complex_array(out, name, doc, values):
     out.write("    clippy::unreadable_literal,\n")
     out.write('    reason = "numpy reference"\n')
     out.write(")]\n")
-    out.write(f"const {name}: &[(f64, f64)] = &[\n")
+    out.write(f"pub const {name}: &[(f64, f64)] = &[\n")
     for v in values:
         out.write(f"    ({format_f64(v.real)}, {format_f64(v.imag)}),\n")
     out.write("];\n\n")
@@ -140,12 +140,12 @@ def main():
     out.write(f"// Q={q:.10f}, {len(freqs)} bins, fft_length={fft_length}\n")
     out.write("\n")
 
-    out.write(f"const CQT_PROC_SAMPLE_RATE: f64 = {sr};\n")
-    out.write(f"const CQT_PROC_MIN_FREQ: f64 = {min_freq};\n")
-    out.write(f"const CQT_PROC_MAX_FREQ: f64 = {max_freq};\n")
-    out.write(f"const CQT_PROC_BINS_PER_OCTAVE: u32 = {bpo};\n")
-    out.write(f"const CQT_PROC_FFT_LENGTH: usize = {fft_length};\n")
-    out.write(f"const CQT_PROC_NUM_BINS: usize = {len(freqs)};\n")
+    out.write(f"pub const CQT_PROC_SAMPLE_RATE: f64 = {sr};\n")
+    out.write(f"pub const CQT_PROC_MIN_FREQ: f64 = {min_freq};\n")
+    out.write(f"pub const CQT_PROC_MAX_FREQ: f64 = {max_freq};\n")
+    out.write(f"pub const CQT_PROC_BINS_PER_OCTAVE: u32 = {bpo};\n")
+    out.write(f"pub const CQT_PROC_FFT_LENGTH: usize = {fft_length};\n")
+    out.write(f"pub const CQT_PROC_NUM_BINS: usize = {len(freqs)};\n")
     out.write("\n")
 
     t = np.arange(fft_length) / sr
@@ -187,7 +187,7 @@ def main():
         f"CQT of sine at bin {mid_bin} center frequency",
         tone_cqt,
     )
-    out.write(f"const CQT_PROC_TONE_BIN: usize = {mid_bin};\n\n")
+    out.write(f"pub const CQT_PROC_TONE_BIN: usize = {mid_bin};\n\n")
 
     # --- Case 3: Sum of two tones at bin 2 and bin 9 ---
     freq_a = freqs[2]

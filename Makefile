@@ -101,52 +101,52 @@ doc:
 # --- Reference data ---
 
 gen-fir-reference:
-	@python3 scripts/gen_fir_reference.py > omnidsp-core/testdata/fir_scipy.rs
-	@echo "Generated omnidsp-core/testdata/fir_scipy.rs"
+	@python3 scripts/gen_fir_reference.py > omnidsp-testdata/src/fir_scipy.rs
+	@echo "Generated omnidsp-testdata/src/fir_scipy.rs"
 
 gen-fir-lfilter-reference:
-	@python3 scripts/gen_fir_lfilter_reference.py > omnidsp-core/testdata/fir_lfilter_scipy.rs
-	@echo "Generated omnidsp-core/testdata/fir_lfilter_scipy.rs"
+	@python3 scripts/gen_fir_lfilter_reference.py > omnidsp-testdata/src/fir_lfilter_scipy.rs
+	@echo "Generated omnidsp-testdata/src/fir_lfilter_scipy.rs"
 
 gen-cqt-reference:
-	@python3 scripts/gen_cqt_reference.py > omnidsp-core/testdata/cqt_numpy.rs
-	@echo "Generated omnidsp-core/testdata/cqt_numpy.rs"
+	@python3 scripts/gen_cqt_reference.py > omnidsp-testdata/src/cqt_numpy.rs
+	@echo "Generated omnidsp-testdata/src/cqt_numpy.rs"
 
 gen-cqt-process-reference:
-	@python3 scripts/gen_cqt_process_reference.py > omnidsp-core/testdata/cqt_process_numpy.rs
-	@echo "Generated omnidsp-core/testdata/cqt_process_numpy.rs"
+	@python3 scripts/gen_cqt_process_reference.py > omnidsp-testdata/src/cqt_process_numpy.rs
+	@echo "Generated omnidsp-testdata/src/cqt_process_numpy.rs"
 
 gen-cqt-librosa-reference:
-	@python3 scripts/gen_cqt_librosa_reference.py > omnidsp-core/testdata/cqt_librosa.rs
-	@echo "Generated omnidsp-core/testdata/cqt_librosa.rs"
+	@python3 scripts/gen_cqt_librosa_reference.py > omnidsp-testdata/src/cqt_librosa.rs
+	@echo "Generated omnidsp-testdata/src/cqt_librosa.rs"
 
 gen-iir-reference:
-	@python3 scripts/gen_iir_reference.py > omnidsp-core/testdata/iir_scipy.rs
-	@echo "Generated omnidsp-core/testdata/iir_scipy.rs"
+	@python3 scripts/gen_iir_reference.py > omnidsp-testdata/src/iir_scipy.rs
+	@echo "Generated omnidsp-testdata/src/iir_scipy.rs"
 
 gen-iir-sosfilt-reference:
-	@python3 scripts/gen_iir_sosfilt_reference.py > omnidsp-core/testdata/iir_sosfilt_scipy.rs
-	@echo "Generated omnidsp-core/testdata/iir_sosfilt_scipy.rs"
+	@python3 scripts/gen_iir_sosfilt_reference.py > omnidsp-testdata/src/iir_sosfilt_scipy.rs
+	@echo "Generated omnidsp-testdata/src/iir_sosfilt_scipy.rs"
 
 gen-resample-reference:
-	@python3 scripts/gen_resample_reference.py > omnidsp-core/testdata/resample_scipy.rs
-	@echo "Generated omnidsp-core/testdata/resample_scipy.rs"
+	@python3 scripts/gen_resample_reference.py > omnidsp-testdata/src/resample_scipy.rs
+	@echo "Generated omnidsp-testdata/src/resample_scipy.rs"
 
 gen-resample-poly-reference:
-	@python3 scripts/gen_resample_poly_reference.py > omnidsp-core/testdata/resample_poly_scipy.rs
-	@echo "Generated omnidsp-core/testdata/resample_poly_scipy.rs"
+	@python3 scripts/gen_resample_poly_reference.py > omnidsp-testdata/src/resample_poly_scipy.rs
+	@echo "Generated omnidsp-testdata/src/resample_poly_scipy.rs"
 
 gen-hilbert-reference:
-	@python3 scripts/gen_hilbert_reference.py > omnidsp-core/testdata/hilbert_scipy.rs
-	@echo "Generated omnidsp-core/testdata/hilbert_scipy.rs"
+	@python3 scripts/gen_hilbert_reference.py > omnidsp-testdata/src/hilbert_scipy.rs
+	@echo "Generated omnidsp-testdata/src/hilbert_scipy.rs"
 
 gen-dct-reference:
-	@python3 scripts/gen_dct_reference.py > omnidsp-core/testdata/dct_scipy.rs
-	@echo "Generated omnidsp-core/testdata/dct_scipy.rs"
+	@python3 scripts/gen_dct_reference.py > omnidsp-testdata/src/dct_scipy.rs
+	@echo "Generated omnidsp-testdata/src/dct_scipy.rs"
 
 gen-xcorr-reference:
-	@python3 scripts/gen_xcorr_reference.py > omnidsp-core/testdata/xcorr_scipy.rs
-	@echo "Generated omnidsp-core/testdata/xcorr_scipy.rs"
+	@python3 scripts/gen_xcorr_reference.py > omnidsp-testdata/src/xcorr_scipy.rs
+	@echo "Generated omnidsp-testdata/src/xcorr_scipy.rs"
 
 machete:
 	@cargo machete --skip-target-dir

@@ -12,7 +12,7 @@
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const LP_ORDER30_HAMMING: &[f64] = &[
+pub const LP_ORDER30_HAMMING: &[f64] = &[
     2.19058724383599428e-03,
     2.85372284547642406e-03,
     4.30786733842594347e-03,
@@ -52,7 +52,7 @@ const LP_ORDER30_HAMMING: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const HP_ORDER30_HANN: &[f64] = &[
+pub const HP_ORDER30_HANN: &[f64] = &[
     -0.00000000000000000e+00,
     -2.21030053619572395e-04,
     3.40616487319532675e-04,
@@ -92,7 +92,7 @@ const HP_ORDER30_HANN: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const BP_ORDER60_HAMMING: &[f64] = &[
+pub const BP_ORDER60_HAMMING: &[f64] = &[
     1.25785860087472448e-03,
     1.63244194604401818e-03,
     1.67345755790859383e-03,
@@ -162,7 +162,7 @@ const BP_ORDER60_HAMMING: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const BS_ORDER60_HAMMING: &[f64] = &[
+pub const BS_ORDER60_HAMMING: &[f64] = &[
     -1.31881322259657361e-03,
     -1.71154851750982538e-03,
     -1.75455170659823264e-03,
@@ -232,11 +232,10 @@ const BS_ORDER60_HAMMING: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const LP_ORDER4_RECT: &[f64] = &[
+pub const LP_ORDER4_RECT: &[f64] = &[
     1.56268961003256740e-01,
     2.20997684028757968e-01,
     2.45466709935970612e-01,
     2.20997684028757968e-01,
     1.56268961003256740e-01,
 ];
-

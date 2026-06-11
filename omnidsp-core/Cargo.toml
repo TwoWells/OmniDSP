@@ -22,6 +22,7 @@ thiserror = "2"
 
 [dev-dependencies]
 omnidsp-rustfft = { path = "../omnidsp-rustfft" }
+omnidsp-testdata = { path = "../omnidsp-testdata" }
 
 [[bench]]
 name = "cqt"

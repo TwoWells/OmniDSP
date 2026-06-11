@@ -8,15 +8,15 @@
 
 /// Resample 44100 -> 22050, quality=5
 /// L=1, M=2, order=74, taps=75
-const RESAMPLE_44100_22050_Q5_UP: usize = 1;
-const RESAMPLE_44100_22050_Q5_DOWN: usize = 2;
-const RESAMPLE_44100_22050_Q5_ORDER: usize = 74;
+pub const RESAMPLE_44100_22050_Q5_UP: usize = 1;
+pub const RESAMPLE_44100_22050_Q5_DOWN: usize = 2;
+pub const RESAMPLE_44100_22050_Q5_ORDER: usize = 74;
 #[allow(
     clippy::excessive_precision,
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const RESAMPLE_44100_22050_Q5_TAPS: &[f64] = &[
+pub const RESAMPLE_44100_22050_Q5_TAPS: &[f64] = &[
     6.87776483078461967e-04,
     -1.59050178667769321e-18,
     -7.87213538132452268e-04,
@@ -96,15 +96,15 @@ const RESAMPLE_44100_22050_Q5_TAPS: &[f64] = &[
 
 /// Resample 22050 -> 44100, quality=5
 /// L=2, M=1, order=74, taps=75
-const RESAMPLE_22050_44100_Q5_UP: usize = 2;
-const RESAMPLE_22050_44100_Q5_DOWN: usize = 1;
-const RESAMPLE_22050_44100_Q5_ORDER: usize = 74;
+pub const RESAMPLE_22050_44100_Q5_UP: usize = 2;
+pub const RESAMPLE_22050_44100_Q5_DOWN: usize = 1;
+pub const RESAMPLE_22050_44100_Q5_ORDER: usize = 74;
 #[allow(
     clippy::excessive_precision,
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const RESAMPLE_22050_44100_Q5_TAPS: &[f64] = &[
+pub const RESAMPLE_22050_44100_Q5_TAPS: &[f64] = &[
     6.87776483078461967e-04,
     -1.59050178667769321e-18,
     -7.87213538132452268e-04,
@@ -184,15 +184,15 @@ const RESAMPLE_22050_44100_Q5_TAPS: &[f64] = &[
 
 /// Resample 44100 -> 44100, quality=5
 /// L=1, M=1, order=38, taps=39
-const RESAMPLE_44100_44100_Q5_UP: usize = 1;
-const RESAMPLE_44100_44100_Q5_DOWN: usize = 1;
-const RESAMPLE_44100_44100_Q5_ORDER: usize = 38;
+pub const RESAMPLE_44100_44100_Q5_UP: usize = 1;
+pub const RESAMPLE_44100_44100_Q5_DOWN: usize = 1;
+pub const RESAMPLE_44100_44100_Q5_ORDER: usize = 38;
 #[allow(
     clippy::excessive_precision,
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const RESAMPLE_44100_44100_Q5_TAPS: &[f64] = &[
+pub const RESAMPLE_44100_44100_Q5_TAPS: &[f64] = &[
     1.59999999950418965e-09,
     -1.72547601557744388e-09,
     2.09848138084691458e-09,
@@ -236,15 +236,15 @@ const RESAMPLE_44100_44100_Q5_TAPS: &[f64] = &[
 
 /// Resample 48000 -> 16000, quality=3
 /// L=1, M=3, order=68, taps=69
-const RESAMPLE_48000_16000_Q3_UP: usize = 1;
-const RESAMPLE_48000_16000_Q3_DOWN: usize = 3;
-const RESAMPLE_48000_16000_Q3_ORDER: usize = 68;
+pub const RESAMPLE_48000_16000_Q3_UP: usize = 1;
+pub const RESAMPLE_48000_16000_Q3_DOWN: usize = 3;
+pub const RESAMPLE_48000_16000_Q3_ORDER: usize = 68;
 #[allow(
     clippy::excessive_precision,
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const RESAMPLE_48000_16000_Q3_TAPS: &[f64] = &[
+pub const RESAMPLE_48000_16000_Q3_TAPS: &[f64] = &[
     -6.48621958796976000e-04,
     3.87374130366854154e-18,
     7.56632899677884305e-04,
@@ -318,15 +318,15 @@ const RESAMPLE_48000_16000_Q3_TAPS: &[f64] = &[
 
 /// Resample 16000 -> 48000, quality=3
 /// L=3, M=1, order=68, taps=69
-const RESAMPLE_16000_48000_Q3_UP: usize = 3;
-const RESAMPLE_16000_48000_Q3_DOWN: usize = 1;
-const RESAMPLE_16000_48000_Q3_ORDER: usize = 68;
+pub const RESAMPLE_16000_48000_Q3_UP: usize = 3;
+pub const RESAMPLE_16000_48000_Q3_DOWN: usize = 1;
+pub const RESAMPLE_16000_48000_Q3_ORDER: usize = 68;
 #[allow(
     clippy::excessive_precision,
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const RESAMPLE_16000_48000_Q3_TAPS: &[f64] = &[
+pub const RESAMPLE_16000_48000_Q3_TAPS: &[f64] = &[
     -6.48621958796976000e-04,
     3.87374130366854154e-18,
     7.56632899677884305e-04,
@@ -400,15 +400,15 @@ const RESAMPLE_16000_48000_Q3_TAPS: &[f64] = &[
 
 /// Resample 44100 -> 48000, quality=0
 /// L=160, M=147, order=1588, taps=1589
-const RESAMPLE_44100_48000_Q0_UP: usize = 160;
-const RESAMPLE_44100_48000_Q0_DOWN: usize = 147;
-const RESAMPLE_44100_48000_Q0_ORDER: usize = 1588;
+pub const RESAMPLE_44100_48000_Q0_UP: usize = 160;
+pub const RESAMPLE_44100_48000_Q0_DOWN: usize = 147;
+pub const RESAMPLE_44100_48000_Q0_ORDER: usize = 1588;
 #[allow(
     clippy::excessive_precision,
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const RESAMPLE_44100_48000_Q0_TAPS: &[f64] = &[
+pub const RESAMPLE_44100_48000_Q0_TAPS: &[f64] = &[
     3.76034287278107608e-06,
     4.38912476883907009e-06,
     5.01830807134230638e-06,
@@ -2002,15 +2002,15 @@ const RESAMPLE_44100_48000_Q0_TAPS: &[f64] = &[
 
 /// Resample 44100 -> 48000, quality=5
 /// L=160, M=147, order=4096, taps=4097
-const RESAMPLE_44100_48000_Q5_UP: usize = 160;
-const RESAMPLE_44100_48000_Q5_DOWN: usize = 147;
-const RESAMPLE_44100_48000_Q5_ORDER: usize = 4096;
+pub const RESAMPLE_44100_48000_Q5_UP: usize = 160;
+pub const RESAMPLE_44100_48000_Q5_DOWN: usize = 147;
+pub const RESAMPLE_44100_48000_Q5_ORDER: usize = 4096;
 #[allow(
     clippy::excessive_precision,
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const RESAMPLE_44100_48000_Q5_TAPS: &[f64] = &[
+pub const RESAMPLE_44100_48000_Q5_TAPS: &[f64] = &[
     7.30136757796212324e-06,
     7.50098168858039408e-06,
     7.69800452782734180e-06,
@@ -6112,15 +6112,15 @@ const RESAMPLE_44100_48000_Q5_TAPS: &[f64] = &[
 
 /// Resample 48000 -> 44100, quality=5
 /// L=147, M=160, order=4096, taps=4097
-const RESAMPLE_48000_44100_Q5_UP: usize = 147;
-const RESAMPLE_48000_44100_Q5_DOWN: usize = 160;
-const RESAMPLE_48000_44100_Q5_ORDER: usize = 4096;
+pub const RESAMPLE_48000_44100_Q5_UP: usize = 147;
+pub const RESAMPLE_48000_44100_Q5_DOWN: usize = 160;
+pub const RESAMPLE_48000_44100_Q5_ORDER: usize = 4096;
 #[allow(
     clippy::excessive_precision,
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const RESAMPLE_48000_44100_Q5_TAPS: &[f64] = &[
+pub const RESAMPLE_48000_44100_Q5_TAPS: &[f64] = &[
     7.30136757796212324e-06,
     7.50098168858039408e-06,
     7.69800452782734180e-06,
@@ -10219,4 +10219,3 @@ const RESAMPLE_48000_44100_Q5_TAPS: &[f64] = &[
     7.50098168858039408e-06,
     7.30136757796212324e-06,
 ];
-

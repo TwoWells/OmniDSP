@@ -1,9 +1,9 @@
 [package]
-name = "omnidsp"
+name = "omnidsp-conformance"
 version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
-description = "OmniDSP — composable DSP with pluggable backends."
+description = "Shared backend-conformance suite for OmniDSP — one golden-vector test every backend is held to."
 authors = ["Mark Wells"]
 repository = "https://github.com/TwoWells/OmniDSP"
 
@@ -12,10 +12,6 @@ workspace = true
 
 [dependencies]
 omnidsp-core = { path = "../omnidsp-core" }
-omnidsp-macros = { path = "../omnidsp-macros" }
-omnidsp-rustfft = { path = "../omnidsp-rustfft" }
-
-[dev-dependencies]
+omnidsp-testdata = { path = "../omnidsp-testdata" }
 num-complex = "0.4"
 num-traits = "0.2"
-omnidsp-conformance = { path = "../omnidsp-conformance" }

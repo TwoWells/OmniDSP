@@ -59,7 +59,7 @@ def main():
         out.write("    clippy::unreadable_literal,\n")
         out.write("    reason = \"scipy reference\"\n")
         out.write(")]\n")
-        out.write(f"const {name}: &[(f64, f64, f64, f64, f64)] = &[\n")
+        out.write(f"pub const {name}: &[(f64, f64, f64, f64, f64)] = &[\n")
         for row in sos:
             out.write(format_section(row) + "\n")
         out.write("];\n\n")

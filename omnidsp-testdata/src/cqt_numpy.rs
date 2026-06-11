@@ -8,24 +8,24 @@
 
 /// CQT design: sr=44100.0, fmin=27.5, fmax=4186.0, B=24
 /// Q=34.1270877089, 174 bins, fft=65536, hop=92
-const CQT_PIANO_24_SAMPLE_RATE: f64 = 44100.0;
-const CQT_PIANO_24_MIN_FREQ: f64 = 27.5;
-const CQT_PIANO_24_MAX_FREQ: f64 = 4186.0;
-const CQT_PIANO_24_BINS_PER_OCTAVE: u32 = 24;
+pub const CQT_PIANO_24_SAMPLE_RATE: f64 = 44100.0;
+pub const CQT_PIANO_24_MIN_FREQ: f64 = 27.5;
+pub const CQT_PIANO_24_MAX_FREQ: f64 = 4186.0;
+pub const CQT_PIANO_24_BINS_PER_OCTAVE: u32 = 24;
 #[allow(
     clippy::excessive_precision,
     clippy::unreadable_literal,
     reason = "numpy reference"
 )]
-const CQT_PIANO_24_Q: f64 = 3.41270877089205626e+01;
-const CQT_PIANO_24_FFT_LENGTH: usize = 65536;
-const CQT_PIANO_24_HOP_LENGTH: usize = 92;
+pub const CQT_PIANO_24_Q: f64 = 3.41270877089205626e+01;
+pub const CQT_PIANO_24_FFT_LENGTH: usize = 65536;
+pub const CQT_PIANO_24_HOP_LENGTH: usize = 92;
 #[allow(
     clippy::excessive_precision,
     clippy::unreadable_literal,
     reason = "numpy reference"
 )]
-const CQT_PIANO_24_FREQS: &[f64] = &[
+pub const CQT_PIANO_24_FREQS: &[f64] = &[
     2.75000000000000000e+01,
     2.83058115076960313e+01,
     2.91352350948806205e+01,
@@ -201,203 +201,41 @@ const CQT_PIANO_24_FREQS: &[f64] = &[
     3.95106641004899393e+03,
     4.06684149299039973e+03,
 ];
-const CQT_PIANO_24_KERNEL_LENGTHS: &[usize] = &[
-    54728,
-    53170,
-    51656,
-    50186,
-    48757,
-    47369,
-    46021,
-    44711,
-    43438,
-    42201,
-    41000,
-    39833,
-    38699,
-    37597,
-    36527,
-    35487,
-    34477,
-    33495,
-    32542,
-    31615,
-    30715,
-    29841,
-    28991,
-    28166,
-    27364,
-    26585,
-    25828,
-    25093,
-    24379,
-    23685,
-    23011,
-    22356,
-    21719,
-    21101,
-    20500,
-    19917,
-    19350,
-    18799,
-    18264,
-    17744,
-    17239,
-    16748,
-    16271,
-    15808,
-    15358,
-    14921,
-    14496,
-    14083,
-    13682,
-    13293,
-    12914,
-    12547,
-    12190,
-    11843,
-    11506,
-    11178,
-    10860,
-    10551,
-    10250,
-    9959,
-    9675,
-    9400,
-    9132,
-    8872,
-    8620,
-    8374,
-    8136,
-    7904,
-    7679,
-    7461,
-    7248,
-    7042,
-    6841,
-    6647,
-    6457,
-    6274,
-    6095,
-    5922,
-    5753,
-    5589,
-    5430,
-    5276,
-    5125,
-    4980,
-    4838,
-    4700,
-    4566,
-    4436,
-    4310,
-    4187,
-    4068,
-    3952,
-    3840,
-    3731,
-    3624,
-    3521,
-    3421,
-    3324,
-    3229,
-    3137,
-    3048,
-    2961,
-    2877,
-    2795,
-    2715,
-    2638,
-    2563,
-    2490,
-    2419,
-    2350,
-    2283,
-    2218,
-    2155,
-    2094,
-    2034,
-    1976,
-    1920,
-    1866,
-    1812,
-    1761,
-    1711,
-    1662,
-    1615,
-    1569,
-    1524,
-    1481,
-    1439,
-    1398,
-    1358,
-    1319,
-    1282,
-    1245,
-    1210,
-    1175,
-    1142,
-    1109,
-    1078,
-    1047,
-    1017,
-    988,
-    960,
-    933,
-    906,
-    881,
-    856,
-    831,
-    808,
-    785,
-    762,
-    741,
-    720,
-    699,
-    679,
-    660,
-    641,
-    623,
-    605,
-    588,
-    571,
-    555,
-    539,
-    524,
-    509,
-    494,
-    480,
-    467,
-    453,
-    441,
-    428,
-    416,
-    404,
-    393,
-    381,
-    371,
+pub const CQT_PIANO_24_KERNEL_LENGTHS: &[usize] = &[
+    54728, 53170, 51656, 50186, 48757, 47369, 46021, 44711, 43438, 42201, 41000, 39833, 38699,
+    37597, 36527, 35487, 34477, 33495, 32542, 31615, 30715, 29841, 28991, 28166, 27364, 26585,
+    25828, 25093, 24379, 23685, 23011, 22356, 21719, 21101, 20500, 19917, 19350, 18799, 18264,
+    17744, 17239, 16748, 16271, 15808, 15358, 14921, 14496, 14083, 13682, 13293, 12914, 12547,
+    12190, 11843, 11506, 11178, 10860, 10551, 10250, 9959, 9675, 9400, 9132, 8872, 8620, 8374,
+    8136, 7904, 7679, 7461, 7248, 7042, 6841, 6647, 6457, 6274, 6095, 5922, 5753, 5589, 5430, 5276,
+    5125, 4980, 4838, 4700, 4566, 4436, 4310, 4187, 4068, 3952, 3840, 3731, 3624, 3521, 3421, 3324,
+    3229, 3137, 3048, 2961, 2877, 2795, 2715, 2638, 2563, 2490, 2419, 2350, 2283, 2218, 2155, 2094,
+    2034, 1976, 1920, 1866, 1812, 1761, 1711, 1662, 1615, 1569, 1524, 1481, 1439, 1398, 1358, 1319,
+    1282, 1245, 1210, 1175, 1142, 1109, 1078, 1047, 1017, 988, 960, 933, 906, 881, 856, 831, 808,
+    785, 762, 741, 720, 699, 679, 660, 641, 623, 605, 588, 571, 555, 539, 524, 509, 494, 480, 467,
+    453, 441, 428, 416, 404, 393, 381, 371,
 ];
 
 /// CQT design: sr=44100.0, fmin=440.0, fmax=880.0, B=12
 /// Q=16.8171537451, 12 bins, fft=2048, hop=223
-const CQT_OCTAVE_12_SAMPLE_RATE: f64 = 44100.0;
-const CQT_OCTAVE_12_MIN_FREQ: f64 = 440.0;
-const CQT_OCTAVE_12_MAX_FREQ: f64 = 880.0;
-const CQT_OCTAVE_12_BINS_PER_OCTAVE: u32 = 12;
+pub const CQT_OCTAVE_12_SAMPLE_RATE: f64 = 44100.0;
+pub const CQT_OCTAVE_12_MIN_FREQ: f64 = 440.0;
+pub const CQT_OCTAVE_12_MAX_FREQ: f64 = 880.0;
+pub const CQT_OCTAVE_12_BINS_PER_OCTAVE: u32 = 12;
 #[allow(
     clippy::excessive_precision,
     clippy::unreadable_literal,
     reason = "numpy reference"
 )]
-const CQT_OCTAVE_12_Q: f64 = 1.68171537451057560e+01;
-const CQT_OCTAVE_12_FFT_LENGTH: usize = 2048;
-const CQT_OCTAVE_12_HOP_LENGTH: usize = 223;
+pub const CQT_OCTAVE_12_Q: f64 = 1.68171537451057560e+01;
+pub const CQT_OCTAVE_12_FFT_LENGTH: usize = 2048;
+pub const CQT_OCTAVE_12_HOP_LENGTH: usize = 223;
 #[allow(
     clippy::excessive_precision,
     clippy::unreadable_literal,
     reason = "numpy reference"
 )]
-const CQT_OCTAVE_12_FREQS: &[f64] = &[
+pub const CQT_OCTAVE_12_FREQS: &[f64] = &[
     4.40000000000000000e+02,
     4.66163761518089927e+02,
     4.93883301256124128e+02,
@@ -411,41 +249,30 @@ const CQT_OCTAVE_12_FREQS: &[f64] = &[
     7.83990871963498535e+02,
     8.30609395159890255e+02,
 ];
-const CQT_OCTAVE_12_KERNEL_LENGTHS: &[usize] = &[
-    1686,
-    1591,
-    1502,
-    1418,
-    1338,
-    1263,
-    1192,
-    1125,
-    1062,
-    1003,
-    946,
-    893,
+pub const CQT_OCTAVE_12_KERNEL_LENGTHS: &[usize] = &[
+    1686, 1591, 1502, 1418, 1338, 1263, 1192, 1125, 1062, 1003, 946, 893,
 ];
 
 /// CQT design: sr=44100.0, fmin=10000.0, fmax=22000.0, B=12
 /// Q=16.8171537451, 14 bins, fft=128, hop=9
-const CQT_NYQUIST_12_SAMPLE_RATE: f64 = 44100.0;
-const CQT_NYQUIST_12_MIN_FREQ: f64 = 10000.0;
-const CQT_NYQUIST_12_MAX_FREQ: f64 = 22000.0;
-const CQT_NYQUIST_12_BINS_PER_OCTAVE: u32 = 12;
+pub const CQT_NYQUIST_12_SAMPLE_RATE: f64 = 44100.0;
+pub const CQT_NYQUIST_12_MIN_FREQ: f64 = 10000.0;
+pub const CQT_NYQUIST_12_MAX_FREQ: f64 = 22000.0;
+pub const CQT_NYQUIST_12_BINS_PER_OCTAVE: u32 = 12;
 #[allow(
     clippy::excessive_precision,
     clippy::unreadable_literal,
     reason = "numpy reference"
 )]
-const CQT_NYQUIST_12_Q: f64 = 1.68171537451057560e+01;
-const CQT_NYQUIST_12_FFT_LENGTH: usize = 128;
-const CQT_NYQUIST_12_HOP_LENGTH: usize = 9;
+pub const CQT_NYQUIST_12_Q: f64 = 1.68171537451057560e+01;
+pub const CQT_NYQUIST_12_FFT_LENGTH: usize = 128;
+pub const CQT_NYQUIST_12_HOP_LENGTH: usize = 9;
 #[allow(
     clippy::excessive_precision,
     clippy::unreadable_literal,
     reason = "numpy reference"
 )]
-const CQT_NYQUIST_12_FREQS: &[f64] = &[
+pub const CQT_NYQUIST_12_FREQS: &[f64] = &[
     1.00000000000000000e+04,
     1.05946309435929525e+04,
     1.12246204830937295e+04,
@@ -461,20 +288,5 @@ const CQT_NYQUIST_12_FREQS: &[f64] = &[
     2.00000000000000000e+04,
     2.11892618871859049e+04,
 ];
-const CQT_NYQUIST_12_KERNEL_LENGTHS: &[usize] = &[
-    75,
-    71,
-    67,
-    63,
-    59,
-    56,
-    53,
-    50,
-    47,
-    45,
-    42,
-    40,
-    38,
-    36,
-];
-
+pub const CQT_NYQUIST_12_KERNEL_LENGTHS: &[usize] =
+    &[75, 71, 67, 63, 59, 56, 53, 50, 47, 45, 42, 40, 38, 36];

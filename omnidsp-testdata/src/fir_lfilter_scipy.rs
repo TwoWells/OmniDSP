@@ -12,7 +12,7 @@
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const LFILTER_INPUT: &[f64] = &[
+pub const LFILTER_INPUT: &[f64] = &[
     0.00000000000000000e+00,
     5.11235910275480210e-01,
     4.93300152879830478e-01,
@@ -277,7 +277,7 @@ const LFILTER_INPUT: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const LFILTER_LP30_HAMMING_TAPS: &[f64] = &[
+pub const LFILTER_LP30_HAMMING_TAPS: &[f64] = &[
     2.19058724383599428e-03,
     2.85372284547642406e-03,
     4.30786733842594347e-03,
@@ -317,7 +317,7 @@ const LFILTER_LP30_HAMMING_TAPS: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const LFILTER_LP30_HAMMING_OUTPUT: &[f64] = &[
+pub const LFILTER_LP30_HAMMING_OUTPUT: &[f64] = &[
     0.00000000000000000e+00,
     1.11990686364034993e-03,
     2.53954261886197566e-03,
@@ -582,7 +582,7 @@ const LFILTER_LP30_HAMMING_OUTPUT: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const LFILTER_HP30_HANN_TAPS: &[f64] = &[
+pub const LFILTER_HP30_HANN_TAPS: &[f64] = &[
     -0.00000000000000000e+00,
     -2.21030053619572395e-04,
     3.40616487319532675e-04,
@@ -622,7 +622,7 @@ const LFILTER_HP30_HANN_TAPS: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const LFILTER_HP30_HANN_OUTPUT: &[f64] = &[
+pub const LFILTER_HP30_HANN_OUTPUT: &[f64] = &[
     0.00000000000000000e+00,
     0.00000000000000000e+00,
     -1.12998500660440289e-04,
@@ -887,7 +887,7 @@ const LFILTER_HP30_HANN_OUTPUT: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const LFILTER_LONG_INPUT: &[f64] = &[
+pub const LFILTER_LONG_INPUT: &[f64] = &[
     0.00000000000000000e+00,
     3.39366224415459938e-01,
     2.20745768413276977e-01,
@@ -1920,7 +1920,7 @@ const LFILTER_LONG_INPUT: &[f64] = &[
     clippy::unreadable_literal,
     reason = "scipy reference"
 )]
-const LFILTER_LONG_OUTPUT: &[f64] = &[
+pub const LFILTER_LONG_OUTPUT: &[f64] = &[
     0.00000000000000000e+00,
     7.43411322193289871e-04,
     1.45202001201437609e-03,
@@ -2946,4 +2946,3 @@ const LFILTER_LONG_OUTPUT: &[f64] = &[
     6.39250226436019808e-01,
     6.66537720507988207e-01,
 ];
-

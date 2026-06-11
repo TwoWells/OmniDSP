@@ -357,7 +357,11 @@ mod tests {
     use super::*;
     use crate::test_utils::{TestDftC2r, TestDftR2c, TestVecOps};
 
-    include!(testdata!("dct_scipy.rs"));
+    #[allow(
+        clippy::wildcard_imports,
+        reason = "bulk golden-vector import in tests"
+    )]
+    use omnidsp_testdata::dct_scipy::*;
 
     const EPSILON: f64 = 1e-10;
 

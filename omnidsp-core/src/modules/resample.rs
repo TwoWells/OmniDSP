@@ -731,7 +731,11 @@ mod tests {
     // bypassing our design layer, so that the polyphase algorithm
     // itself is compared bit-for-bit against scipy's upfirdn.
 
-    include!(testdata!("resample_poly_scipy.rs"));
+    #[allow(
+        clippy::wildcard_imports,
+        reason = "bulk golden-vector import in tests"
+    )]
+    use omnidsp_testdata::resample_poly_scipy::*;
 
     /// Build a plan from an explicit prototype filter (test-only).
     ///

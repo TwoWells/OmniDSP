@@ -13,13 +13,13 @@ from scipy.signal import hilbert
 def format_f64_array(name: str, arr: np.ndarray) -> str:
     """Format a 1-D array as a Rust const slice."""
     values = ", ".join(f"{x:.17e}" for x in arr)
-    return f"const {name}: &[f64] = &[{values}];"
+    return f"pub const {name}: &[f64] = &[{values}];"
 
 
 def format_complex_array(name: str, arr: np.ndarray) -> str:
     """Format a 1-D complex array as a Rust const slice of (re, im) tuples."""
     values = ", ".join(f"({x.real:.17e}, {x.imag:.17e})" for x in arr)
-    return f"const {name}: &[(f64, f64)] = &[{values}];"
+    return f"pub const {name}: &[(f64, f64)] = &[{values}];"
 
 
 def main():
@@ -60,79 +60,9 @@ def main():
     lines.append(format_complex_array("RANDOM_EXPECTED", z3))
     lines.append("")
 
-    # Test functions
-    lines.append("""
-#[test]
-fn scipy_chirp() {
-    let factory = make_factory();
-    let spec = HilbertSpec::<f64>::new(CHIRP_INPUT.len()).expect("valid hilbert spec");
-    let plan = factory.create_plan(&spec).expect("plan creation should succeed");
-
-    let mut output = vec![Complex::new(0.0, 0.0); CHIRP_INPUT.len()];
-    plan.process(CHIRP_INPUT, &mut output).expect("process should succeed");
-
-    let tol = 1e-10;
-    for (i, (z, &(re, im))) in output.iter().zip(CHIRP_EXPECTED).enumerate() {
-        assert!(
-            (z.re - re).abs() < tol,
-            "chirp real mismatch at {i}: got {}, expected {re}",
-            z.re
-        );
-        assert!(
-            (z.im - im).abs() < tol,
-            "chirp imag mismatch at {i}: got {}, expected {im}",
-            z.im
-        );
-    }
-}
-
-#[test]
-fn scipy_two_tones() {
-    let factory = make_factory();
-    let spec = HilbertSpec::<f64>::new(TWO_TONES_INPUT.len()).expect("valid hilbert spec");
-    let plan = factory.create_plan(&spec).expect("plan creation should succeed");
-
-    let mut output = vec![Complex::new(0.0, 0.0); TWO_TONES_INPUT.len()];
-    plan.process(TWO_TONES_INPUT, &mut output).expect("process should succeed");
-
-    let tol = 1e-10;
-    for (i, (z, &(re, im))) in output.iter().zip(TWO_TONES_EXPECTED).enumerate() {
-        assert!(
-            (z.re - re).abs() < tol,
-            "two_tones real mismatch at {i}: got {}, expected {re}",
-            z.re
-        );
-        assert!(
-            (z.im - im).abs() < tol,
-            "two_tones imag mismatch at {i}: got {}, expected {im}",
-            z.im
-        );
-    }
-}
-
-#[test]
-fn scipy_random() {
-    let factory = make_factory();
-    let spec = HilbertSpec::<f64>::new(RANDOM_INPUT.len()).expect("valid hilbert spec");
-    let plan = factory.create_plan(&spec).expect("plan creation should succeed");
-
-    let mut output = vec![Complex::new(0.0, 0.0); RANDOM_INPUT.len()];
-    plan.process(RANDOM_INPUT, &mut output).expect("process should succeed");
-
-    let tol = 1e-10;
-    for (i, (z, &(re, im))) in output.iter().zip(RANDOM_EXPECTED).enumerate() {
-        assert!(
-            (z.re - re).abs() < tol,
-            "random real mismatch at {i}: got {}, expected {re}",
-            z.re
-        );
-        assert!(
-            (z.im - im).abs() < tol,
-            "random imag mismatch at {i}: got {}, expected {im}",
-            z.im
-        );
-    }
-}""")
+    # Data only: the `omnidsp-testdata` crate holds pure `pub const` vectors.
+    # The consuming `#[test]` functions live in `omnidsp-core`'s Hilbert module,
+    # not in the generated data file.
 
     sys.stdout.write("\n".join(lines) + "\n")
 

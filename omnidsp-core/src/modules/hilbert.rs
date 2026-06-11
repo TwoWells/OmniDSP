@@ -843,5 +843,61 @@ mod tests {
 
     // ─── Scipy reference tests ───────────────────────────────────────
 
-    include!(testdata!("hilbert_scipy.rs"));
+    use omnidsp_testdata::hilbert_scipy::{
+        HAND_N4_EXPECTED, HAND_N4_INPUT, HAND_N8_COS2_EXPECTED, HAND_N8_COS2_INPUT,
+    };
+
+    #[test]
+    fn hand_computed_n4() {
+        let factory = make_factory();
+        let spec = HilbertSpec::<f64>::new(HAND_N4_INPUT.len()).expect("valid hilbert spec");
+        let plan = factory
+            .create_plan(&spec)
+            .expect("plan creation should succeed");
+
+        let mut output = vec![Complex::new(0.0, 0.0); HAND_N4_INPUT.len()];
+        plan.process(HAND_N4_INPUT, &mut output)
+            .expect("process should succeed");
+
+        let tol = 1e-12;
+        for (i, (z, &(re, im))) in output.iter().zip(HAND_N4_EXPECTED).enumerate() {
+            assert!(
+                (z.re - re).abs() < tol,
+                "n4 real mismatch at {i}: got {}, expected {re}",
+                z.re
+            );
+            assert!(
+                (z.im - im).abs() < tol,
+                "n4 imag mismatch at {i}: got {}, expected {im}",
+                z.im
+            );
+        }
+    }
+
+    #[test]
+    fn hand_computed_n8_cos2() {
+        let factory = make_factory();
+        let spec = HilbertSpec::<f64>::new(HAND_N8_COS2_INPUT.len()).expect("valid hilbert spec");
+        let plan = factory
+            .create_plan(&spec)
+            .expect("plan creation should succeed");
+
+        let mut output = vec![Complex::new(0.0, 0.0); HAND_N8_COS2_INPUT.len()];
+        plan.process(HAND_N8_COS2_INPUT, &mut output)
+            .expect("process should succeed");
+
+        let tol = 1e-12;
+        for (i, (z, &(re, im))) in output.iter().zip(HAND_N8_COS2_EXPECTED).enumerate() {
+            assert!(
+                (z.re - re).abs() < tol,
+                "n8_cos2 real mismatch at {i}: got {}, expected {re}",
+                z.re
+            );
+            assert!(
+                (z.im - im).abs() < tol,
+                "n8_cos2 imag mismatch at {i}: got {}, expected {im}",
+                z.im
+            );
+        }
+    }
 }
