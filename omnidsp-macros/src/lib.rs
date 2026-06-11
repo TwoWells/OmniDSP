@@ -371,22 +371,29 @@ fn gen_resampler(input: &BackendInput) -> TokenStream2 {
 
 fn gen_cqt(input: &BackendInput) -> TokenStream2 {
     let backend = &input.backend;
-    let (c2c_ty, c2c_val) = input.c2c_handle();
+    let (r2c_ty, r2c_val) = input.r2c_handle();
     let (vecops_ty, vecops_val) = input.vecops_handle();
     let mut tokens = TokenStream2::new();
 
     for float in float_idents() {
-        // Single-FFT c2c oracle (ADR-009 §5).  At capstone 05L this generator
-        // is rewritten to thread `dftr2c`, `vecops` + the backend itself as the
-        // `CreatePlan<ResampleSpec>` sub-plan factory (option A).
+        // Multirate CQT capstone (05L, ADR-006 §2a / ADR-009 §6): octave-recursive
+        // r2c analysis with an `OmniResample(1, 2)` decimator routed as a sub-plan.
+        // The backend itself (`self`) is threaded as the `CreatePlan<ResampleSpec>`
+        // factory, so a vendor that overrides resampling accelerates the CQT
+        // decimation; an unoverriding backend gets `OmniResample` over its own
+        // `VecOps`.  Requires `Backend: CreatePlan<ResampleSpec<#float>>` — true
+        // unless the `resampler` module is skipped.
         tokens.extend(quote! {
             impl ::omnidsp_core::create::CreatePlan<::omnidsp_core::design::cqt::CqtSpec<#float>>
                 for #backend
             {
                 type Plan = ::omnidsp_core::modules::cqt::OmniCqtPlan<
                     #float,
-                    <#c2c_ty as ::omnidsp_core::traits::dft::DftC2c<#float>>::Plan,
+                    <#r2c_ty as ::omnidsp_core::traits::dft::DftR2c<#float>>::Plan,
                     #vecops_ty,
+                    <#backend as ::omnidsp_core::create::CreatePlan<
+                        ::omnidsp_core::design::resample::ResampleSpec<#float>,
+                    >>::Plan,
                 >;
 
                 fn create_plan(
@@ -394,10 +401,12 @@ fn gen_cqt(input: &BackendInput) -> TokenStream2 {
                     spec: &::omnidsp_core::design::cqt::CqtSpec<#float>,
                 ) -> ::omnidsp_core::error::Result<Self::Plan> {
                     let factory = ::omnidsp_core::modules::cqt::OmniCqt::new(
-                        #c2c_val,
+                        #r2c_val,
                         #vecops_val,
                     );
-                    factory.create_plan(spec)
+                    // The backend is the routed resample sub-plan factory (option A);
+                    // it is borrowed here and dropped — never stored in the plan.
+                    factory.create_plan(spec, self)
                 }
             }
         });

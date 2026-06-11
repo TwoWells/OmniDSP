@@ -19,12 +19,12 @@ use std::f64::consts::TAU;
 use num_complex::Complex;
 
 use omnidsp_core::design::{cqt, fir, iir, resample};
-use omnidsp_core::modules::cqt::OmniCqt;
+use omnidsp_core::modules::cqt::{OmniCqt, OmniCqtPlan};
 use omnidsp_core::modules::fir::OmniFir;
-use omnidsp_core::modules::resample::OmniResample;
+use omnidsp_core::modules::resample::{OmniResample, OmniResamplePlan};
 use omnidsp_core::modules::xcorr::{CrossCorrSpec, OmniCrossCorr};
 use omnidsp_core::scalar::{ScalarIir, ScalarVecOps};
-use omnidsp_core::traits::dft::{DftC2c, DftC2cPlan, DftC2cSpec, DftNorm};
+use omnidsp_core::traits::dft::{DftC2c, DftC2cPlan, DftC2cSpec, DftNorm, DftR2c};
 use omnidsp_core::traits::fir::{FirPlan, FirStrategy};
 use omnidsp_core::traits::iir::{Iir, IirPlan};
 use omnidsp_core::traits::vecops::VecOps;
@@ -810,13 +810,27 @@ mod cqt_integration {
 
     include!(testdata!("cqt_librosa.rs"));
 
-    /// Helper: create a CQT plan with real primitives.
-    fn make_plan(
-        spec: &omnidsp_core::design::cqt::CqtSpec<f64>,
-    ) -> omnidsp_core::modules::cqt::OmniCqtPlan<f64, <RustDftC2c as DftC2c<f64>>::Plan, ScalarVecOps>
-    {
-        let factory = OmniCqt::new(RustDftC2c, ScalarVecOps);
-        factory.create_plan(spec).expect("CQT plan creation")
+    /// Magnitude tolerance for the multirate CQT vs the single-FFT/librosa
+    /// reference.  This spec is a single octave, so the multirate path runs no
+    /// decimation and reduces to the half-spectrum correlation of the same
+    /// frame the reference computes in full — they agree up to negligible
+    /// negative-frequency leakage (dropped upper-half terms, ADR-009 §6).
+    const CQT_LIB_TOL: f64 = 2e-4;
+
+    /// Helper: create a multirate CQT plan with real primitives, routing the
+    /// octave decimator through an [`OmniResample`] sub-plan factory (option A).
+    type LibrosaPlan = OmniCqtPlan<
+        f64,
+        <RustDftR2c as DftR2c<f64>>::Plan,
+        ScalarVecOps,
+        OmniResamplePlan<f64, ScalarVecOps>,
+    >;
+
+    fn make_plan(spec: &omnidsp_core::design::cqt::CqtSpec<f64>) -> LibrosaPlan {
+        let factory = OmniCqt::new(RustDftR2c, ScalarVecOps);
+        factory
+            .create_plan(spec, &OmniResample::new(ScalarVecOps))
+            .expect("CQT plan creation")
     }
 
     fn librosa_spec() -> omnidsp_core::design::cqt::CqtSpec<f64> {
@@ -903,7 +917,7 @@ mod cqt_integration {
         assert_approx_eq(
             &magnitudes,
             CQT_LIB_TONE_MAG,
-            1e-10,
+            CQT_LIB_TOL,
             "CQT single-tone magnitudes vs librosa-validated reference",
         );
     }
@@ -921,7 +935,7 @@ mod cqt_integration {
         assert_approx_eq(
             &magnitudes,
             CQT_LIB_ALL_TONES_MAG,
-            1e-10,
+            CQT_LIB_TOL,
             "CQT all-tones magnitudes vs librosa-validated reference",
         );
     }
@@ -939,7 +953,7 @@ mod cqt_integration {
         assert_approx_eq(
             &magnitudes,
             CQT_LIB_TWO_TONE_MAG,
-            1e-10,
+            CQT_LIB_TOL,
             "CQT two-tone magnitudes vs librosa-validated reference",
         );
     }
