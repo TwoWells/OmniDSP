@@ -1,0 +1,2 @@
+# wasm-pack output (generated ESM glue + .wasm); rebuilt via `make wasm-pack`.
+/pkg/

@@ -35,8 +35,7 @@ use omnidsp_core::design::cqt::{self, CqtSpec};
 use omnidsp_core::types::Window;
 use wasm_bindgen::prelude::wasm_bindgen;
 
-/// Canonical demo CQT range: 20 Hz – 16 kHz (musical, log-spaced).
-const MIN_FREQ: f64 = 20.0;
+/// Upper edge of the demo CQT range (must stay below Nyquist).
 const MAX_FREQ: f64 = 16_000.0;
 
 /// Bins per octave for the visualiser (12 = one bin per semitone).
@@ -67,27 +66,37 @@ pub struct CqtEngine {
 
 #[wasm_bindgen]
 impl CqtEngine {
-    /// Build the CQT engine for a given audio-context sample rate.
+    /// Build the CQT engine for a given audio-context sample rate and low-edge
+    /// frequency.
     ///
-    /// The 20 Hz – 16 kHz spec is built at **`sample_rate`** — the actual rate
-    /// JS reports (commonly 48 kHz, sometimes 44.1 kHz). Do not hardcode a rate
-    /// here; feeding a 48 kHz context a 44.1 kHz spec mislabels every bin.
+    /// The `min_freq … 16 kHz` spec is built at **`sample_rate`** — the actual
+    /// rate JS reports (commonly 48 kHz, sometimes 44.1 kHz). Do not hardcode a
+    /// rate here; feeding a 48 kHz context a 44.1 kHz spec mislabels every bin.
+    ///
+    /// `min_freq` sets the analysis-window length, and hence the visualiser's
+    /// latency: the CQT FFT length is sized to resolve `min_freq`, so a lower
+    /// edge means a longer window (20 Hz ≈ 1.4 s at 48 kHz). Raising it (e.g.
+    /// 55 Hz ≈ 0.34 s) shortens the window and cuts latency at the cost of
+    /// low-bass coverage. The kernels are causally anchored at the window start
+    /// (`cqt` batch-v1 convention), so latency tracks the window length.
     ///
     /// # Errors
     ///
-    /// Returns a JS string error if `sample_rate` is too low to admit the
-    /// 20 Hz – 16 kHz range (max frequency must stay below Nyquist) or if plan
-    /// construction otherwise fails.
+    /// Returns a JS string error if `min_freq` / `sample_rate` cannot admit the
+    /// `min_freq … 16 kHz` range (max frequency must stay below Nyquist) or if
+    /// plan construction otherwise fails.
     #[wasm_bindgen(constructor)]
-    pub fn new(sample_rate: f32) -> Result<CqtEngine, String> {
+    pub fn new(sample_rate: f32, min_freq: f32) -> Result<CqtEngine, String> {
         let spec: CqtSpec<f32> = cqt::design(
             f64::from(sample_rate),
-            MIN_FREQ,
+            f64::from(min_freq),
             MAX_FREQ,
             BINS_PER_OCTAVE,
             &Window::<f32>::Hann,
         )
-        .map_err(|e| format!("CQT design failed at {sample_rate} Hz: {e}"))?;
+        .map_err(|e| {
+            format!("CQT design failed at {sample_rate} Hz (min {min_freq} Hz): {e}")
+        })?;
 
         let dsp = OmniDSP::rust();
         let plan: RustCqtPlan = dsp
