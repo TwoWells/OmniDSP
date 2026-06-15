@@ -7,7 +7,7 @@
 #   make release-major   # 0.1.0 -> 1.0.0
 #   make release V=0.2.0 # explicit version
 
-.PHONY: bench build-release check deny doc gen-cqt-reference gen-cqt-process-reference gen-cqt-librosa-reference gen-fir-reference gen-fir-lfilter-reference gen-hilbert-reference gen-iir-reference gen-iir-sosfilt-reference gen-resample-reference gen-resample-poly-reference gen-xcorr-reference machete mutants setup setup-hooks setup-tools test release release-patch release-minor release-major publish tag-current
+.PHONY: bench build-release wasm-check check deny doc gen-cqt-reference gen-cqt-process-reference gen-cqt-librosa-reference gen-fir-reference gen-fir-lfilter-reference gen-hilbert-reference gen-iir-reference gen-iir-sosfilt-reference gen-resample-reference gen-resample-poly-reference gen-xcorr-reference machete mutants setup setup-hooks setup-tools test release release-patch release-minor release-major publish tag-current
 
 # Get current version from Cargo.toml
 CURRENT_VERSION := $(shell grep '^version = ' omnidsp-core/Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
@@ -97,6 +97,21 @@ deny:
 
 doc:
 	@cargo doc --no-deps --document-private-items
+
+# --- WASM floor (DEMO-00 prerequisite) ---
+
+# Smoke-build the RustBackend floor for the browser target the CQT visualiser
+# runs on (demo workstream, DEMO-00). Confirms omnidsp + rustfft/realfft
+# compile to wasm32-unknown-unknown with simd128 — the auto-vectorisation knob
+# the in-browser real-time budget depends on. Installs the target if missing.
+# This proves the floor *builds* for wasm; it does NOT prove real-time headroom
+# (that needs the running demo).
+wasm-check:
+	@rustup target list --installed | grep -qx wasm32-unknown-unknown \
+	  || rustup target add wasm32-unknown-unknown
+	@RUSTFLAGS="-C target-feature=+simd128" \
+	  cargo build --target wasm32-unknown-unknown -p omnidsp
+	@echo "wasm-check: omnidsp builds for wasm32-unknown-unknown (+simd128)"
 
 # --- Reference data ---
 
