@@ -1,0 +1,137 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<!-- Copyright (C) 2026 Two Wells <contact@twowells.dev> -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OmniDSP — Constant-Q Transform visualiser</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0c0d10;
+        --fg: #e8e8ea;
+        --muted: #9a9aa2;
+        --accent: #4ad;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font: 14px/1.5 system-ui, -apple-system, sans-serif;
+      }
+      #app {
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 24px 16px 40px;
+      }
+      header h1 { margin: 0 0 2px; font-size: 18px; font-weight: 650; }
+      header p { margin: 0 0 16px; color: var(--muted); }
+      #stage {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 16 / 7;
+        background: #000;
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid #222;
+      }
+      #stage canvas {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      #spectrogram { image-rendering: auto; }
+      #overlay { pointer-events: none; }
+      #controls {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 14px;
+        flex-wrap: wrap;
+      }
+      button {
+        background: #1a1c22;
+        color: var(--fg);
+        border: 1px solid #313440;
+        border-radius: 6px;
+        padding: 8px 14px;
+        font: inherit;
+        cursor: pointer;
+      }
+      button:hover:not(:disabled) { border-color: var(--accent); }
+      button:disabled { opacity: 0.45; cursor: default; }
+      button[data-active="true"] { border-color: var(--accent); color: var(--accent); }
+      label.field {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      select {
+        background: #1a1c22;
+        color: var(--fg);
+        border: 1px solid #313440;
+        border-radius: 6px;
+        padding: 7px 8px;
+        font: inherit;
+      }
+      #stats {
+        margin-left: auto;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      .caption { margin-top: 16px; color: var(--muted); font-size: 13px; }
+      .caption strong { color: var(--fg); }
+      #error {
+        margin-top: 14px;
+        color: #ff6b6b;
+        white-space: pre-wrap;
+        font-family: ui-monospace, monospace;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <h1>OmniDSP — Constant-Q Transform visualiser</h1>
+        <p>Real-time 20&nbsp;Hz–16&nbsp;kHz log-frequency spectrogram, compiled to wasm32.</p>
+      </header>
+
+      <div id="stage">
+        <canvas id="spectrogram"></canvas>
+        <canvas id="overlay"></canvas>
+      </div>
+
+      <div id="controls">
+        <button id="start">▶ Start (sample clip)</button>
+        <button id="mic" disabled>🎤 Use microphone</button>
+        <label class="field" for="minfreq">
+          low&nbsp;edge
+          <select id="minfreq" title="Lower edge sets the analysis-window length and hence latency">
+            <option value="20">20 Hz · ~1.4 s</option>
+            <option value="32">32 Hz · ~0.7 s</option>
+            <option value="55" selected>55 Hz · ~0.34 s</option>
+            <option value="110">110 Hz · ~0.17 s</option>
+          </select>
+        </label>
+        <span id="stats">initialising…</span>
+      </div>
+
+      <p class="caption">
+        Powered by the <strong>RustBackend floor</strong> — RustFFT/realfft +
+        auto-vectorised scalar ops. <strong>No vendor acceleration.</strong>
+      </p>
+      <div id="error"></div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

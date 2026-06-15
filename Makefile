@@ -7,7 +7,7 @@
 #   make release-major   # 0.1.0 -> 1.0.0
 #   make release V=0.2.0 # explicit version
 
-.PHONY: bench build-release wasm-check wasm-pack check deny doc gen-cqt-reference gen-cqt-process-reference gen-cqt-librosa-reference gen-fir-reference gen-fir-lfilter-reference gen-hilbert-reference gen-iir-reference gen-iir-sosfilt-reference gen-resample-reference gen-resample-poly-reference gen-xcorr-reference machete mutants setup setup-hooks setup-tools test release release-patch release-minor release-major publish tag-current
+.PHONY: bench build-release wasm-check wasm-pack demo check deny doc gen-cqt-reference gen-cqt-process-reference gen-cqt-librosa-reference gen-fir-reference gen-fir-lfilter-reference gen-hilbert-reference gen-iir-reference gen-iir-sosfilt-reference gen-resample-reference gen-resample-poly-reference gen-xcorr-reference machete mutants setup setup-hooks setup-tools test release release-patch release-minor release-major publish tag-current
 
 # Get current version from Cargo.toml
 CURRENT_VERSION := $(shell grep '^version = ' omnidsp-core/Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
@@ -133,6 +133,16 @@ wasm-pack:
 	    --release --target wasm32-unknown-unknown; \
 	  echo "wasm-pack: omnidsp-wasm builds for wasm32-unknown-unknown (+simd128); install wasm-pack to emit pkg/ glue"; \
 	fi
+
+# Build the wasm engine and run the demo visualiser dev server (DEMO-00).
+# Requires `wasm-pack` (the app imports the pkg/ glue it emits) and npm. Opens a
+# local Vite dev server; Ctrl-C to stop.
+demo: wasm-pack
+	@if ! command -v wasm-pack >/dev/null 2>&1; then \
+	  echo "demo: wasm-pack is required (cargo binstall wasm-pack) — the app imports omnidsp-wasm/pkg"; \
+	  exit 1; \
+	fi
+	@cd demo && npm install && npm run dev
 
 # --- Reference data ---
 
