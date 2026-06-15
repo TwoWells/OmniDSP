@@ -8,6 +8,13 @@ members = [
     "omnidsp-testdata",
     "omnidsp-conformance",
 ]
+# The wasm-bindgen visualiser engine (DEMO-00) is intentionally outside the core
+# lint workspace: its generated glue does not meet the library's
+# pedantic/nursery/forbid(unsafe_code) bar, and excluding it keeps `make check`
+# clean and fast. Build it via `make wasm-pack`.
+exclude = [
+    "omnidsp-wasm",
+]
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

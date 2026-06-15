@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Two Wells <contact@twowells.dev>
+
+[package]
+name = "omnidsp-wasm"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "wasm-bindgen binding exposing the OmniDSP RustBackend multirate CQT to the browser (DEMO-00 visualiser engine)."
+authors = ["Mark Wells"]
+repository = "https://github.com/TwoWells/OmniDSP"
+publish = false
+
+# Intentionally NOT a member of the core lint workspace (see root Cargo.toml
+# `[workspace.exclude]`): wasm-bindgen's generated code does not meet the
+# library's pedantic/nursery/forbid(unsafe_code) bar, and keeping it out keeps
+# `make check` clean and fast. This crate carries its own minimal lint posture.
+
+[lib]
+# wasm-bindgen requires a cdylib for the wasm-pack `--target web` output; rlib
+# keeps host `cargo test`/`cargo check` of this crate usable.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+omnidsp = { path = "../omnidsp" }
+omnidsp-core = { path = "../omnidsp-core" }
+wasm-bindgen = "0.2"
+
+[profile.release]
+# Small, fast wasm: optimise for the real-time browser budget.
+opt-level = 3
+lto = true
+codegen-units = 1

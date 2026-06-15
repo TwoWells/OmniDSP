@@ -7,7 +7,7 @@
 #   make release-major   # 0.1.0 -> 1.0.0
 #   make release V=0.2.0 # explicit version
 
-.PHONY: bench build-release wasm-check check deny doc gen-cqt-reference gen-cqt-process-reference gen-cqt-librosa-reference gen-fir-reference gen-fir-lfilter-reference gen-hilbert-reference gen-iir-reference gen-iir-sosfilt-reference gen-resample-reference gen-resample-poly-reference gen-xcorr-reference machete mutants setup setup-hooks setup-tools test release release-patch release-minor release-major publish tag-current
+.PHONY: bench build-release wasm-check wasm-pack check deny doc gen-cqt-reference gen-cqt-process-reference gen-cqt-librosa-reference gen-fir-reference gen-fir-lfilter-reference gen-hilbert-reference gen-iir-reference gen-iir-sosfilt-reference gen-resample-reference gen-resample-poly-reference gen-xcorr-reference machete mutants setup setup-hooks setup-tools test release release-patch release-minor release-major publish tag-current
 
 # Get current version from Cargo.toml
 CURRENT_VERSION := $(shell grep '^version = ' omnidsp-core/Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
@@ -112,6 +112,27 @@ wasm-check:
 	@RUSTFLAGS="-C target-feature=+simd128" \
 	  cargo build --target wasm32-unknown-unknown -p omnidsp
 	@echo "wasm-check: omnidsp builds for wasm32-unknown-unknown (+simd128)"
+
+# Build the DEMO-00 visualiser engine (`omnidsp-wasm`, the wasm-bindgen binding
+# the browser app consumes). This crate is OUTSIDE the core lint workspace
+# (root Cargo.toml `[workspace.exclude]`), so it is built by manifest path, not
+# `-p`. If `wasm-pack` is installed it emits the `pkg/` ESM glue for the app;
+# otherwise it falls back to a plain target build, which is sufficient proof the
+# crate compiles for the browser (+simd128).
+wasm-pack:
+	@rustup target list --installed | grep -qx wasm32-unknown-unknown \
+	  || rustup target add wasm32-unknown-unknown
+	@if command -v wasm-pack >/dev/null 2>&1; then \
+	  RUSTFLAGS="-C target-feature=+simd128" \
+	    wasm-pack build omnidsp-wasm --release --target web; \
+	  echo "wasm-pack: omnidsp-wasm packaged to omnidsp-wasm/pkg (+simd128)"; \
+	else \
+	  echo "wasm-pack not found; falling back to a plain target build"; \
+	  RUSTFLAGS="-C target-feature=+simd128" \
+	    cargo build --manifest-path omnidsp-wasm/Cargo.toml \
+	    --release --target wasm32-unknown-unknown; \
+	  echo "wasm-pack: omnidsp-wasm builds for wasm32-unknown-unknown (+simd128); install wasm-pack to emit pkg/ glue"; \
+	fi
 
 # --- Reference data ---
 
