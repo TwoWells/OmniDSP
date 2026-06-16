@@ -410,6 +410,43 @@ fn gen_cqt(input: &BackendInput) -> TokenStream2 {
                 }
             }
         });
+
+        // Streaming, newest-anchored CQT (ticket 22): the streaming analogue of
+        // the batch impl above, gated together under the same `"cqt"` module key.
+        // `OmniCqt::create_stream_plan` mirrors `create_plan`, building one
+        // continuous decimator sub-plan per octave transition from the routed
+        // `CreatePlan<ResampleSpec>` factory (`self`, option A) and dropping it —
+        // the plan retains only the concrete decimators.  Same
+        // `Backend: CreatePlan<ResampleSpec<#float>>` precondition as the batch
+        // path (the macro emits the resampler impl unless skipped).
+        tokens.extend(quote! {
+            impl ::omnidsp_core::create::CreatePlan<
+                ::omnidsp_core::modules::cqt::CqtStreamSpec<#float>,
+            > for #backend
+            {
+                type Plan = ::omnidsp_core::modules::cqt::OmniCqtStreamPlan<
+                    #float,
+                    <#r2c_ty as ::omnidsp_core::traits::dft::DftR2c<#float>>::Plan,
+                    #vecops_ty,
+                    <#backend as ::omnidsp_core::create::CreatePlan<
+                        ::omnidsp_core::design::resample::ResampleSpec<#float>,
+                    >>::Plan,
+                >;
+
+                fn create_plan(
+                    &self,
+                    spec: &::omnidsp_core::modules::cqt::CqtStreamSpec<#float>,
+                ) -> ::omnidsp_core::error::Result<Self::Plan> {
+                    let factory = ::omnidsp_core::modules::cqt::OmniCqt::new(
+                        #r2c_val,
+                        #vecops_val,
+                    );
+                    // The backend is the routed resample sub-plan factory (option A);
+                    // it is borrowed here and dropped — never stored in the plan.
+                    factory.create_stream_plan(spec, self)
+                }
+            }
+        });
     }
 
     tokens

@@ -60,7 +60,7 @@ mod support;
 use omnidsp_core::create::CreatePlan;
 use omnidsp_core::design::cqt::CqtSpec;
 use omnidsp_core::design::resample::ResampleSpec;
-use omnidsp_core::modules::cqt::CqtPlan;
+use omnidsp_core::modules::cqt::{CqtPlan, CqtStreamPlan, CqtStreamSpec};
 use omnidsp_core::modules::hilbert::{HilbertPlan, HilbertSpec};
 use omnidsp_core::modules::resample::ResamplePlan;
 use omnidsp_core::modules::xcorr::{CrossCorrPlan, CrossCorrSpec};
@@ -97,6 +97,7 @@ pub trait BackendUnderTest<T>:
     + CreatePlan<CrossCorrSpec<T>, Plan: CrossCorrPlan<T>>
     + CreatePlan<ResampleSpec<T>, Plan: ResamplePlan<T>>
     + CreatePlan<CqtSpec<T>, Plan: CqtPlan<T>>
+    + CreatePlan<CqtStreamSpec<T>, Plan: CqtStreamPlan<T>>
 {
 }
 
@@ -112,6 +113,7 @@ impl<T, B> BackendUnderTest<T> for B where
         + CreatePlan<CrossCorrSpec<T>, Plan: CrossCorrPlan<T>>
         + CreatePlan<ResampleSpec<T>, Plan: ResamplePlan<T>>
         + CreatePlan<CqtSpec<T>, Plan: CqtPlan<T>>
+        + CreatePlan<CqtStreamSpec<T>, Plan: CqtStreamPlan<T>>
 {
 }
 

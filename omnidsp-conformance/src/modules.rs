@@ -15,7 +15,7 @@ use omnidsp_core::create::CreatePlan;
 use omnidsp_core::design::cqt::{self, CqtSpec};
 use omnidsp_core::design::resample::{ResampleMode, ResampleSpec};
 use omnidsp_core::error::Result;
-use omnidsp_core::modules::cqt::{CqtPlan, CqtStreamSpec, OmniCqt};
+use omnidsp_core::modules::cqt::{CqtPlan, CqtStreamPlan, CqtStreamSpec, OmniCqt};
 use omnidsp_core::modules::hilbert::{HilbertPlan, HilbertSpec};
 use omnidsp_core::modules::resample::ResamplePlan;
 use omnidsp_core::modules::xcorr::{CrossCorrPlan, CrossCorrSpec};
@@ -814,20 +814,24 @@ pub fn check_cqt_stream<B, T>(b: &B)
 where
     T: ConformanceFloat + std::ops::MulAssign,
     ScalarVecOps: omnidsp_core::traits::vecops::VecOps<T>,
-    B: CreatePlan<DftR2cSpec<T>> + CreatePlan<ResampleSpec<T>>,
+    B: CreatePlan<DftR2cSpec<T>> + CreatePlan<ResampleSpec<T>> + CreatePlan<CqtStreamSpec<T>>,
     <B as CreatePlan<DftR2cSpec<T>>>::Plan: omnidsp_core::traits::dft::DftR2cPlan<T>,
     <B as CreatePlan<ResampleSpec<T>>>::Plan: ResamplePlan<T>,
+    <B as CreatePlan<CqtStreamSpec<T>>>::Plan: CqtStreamPlan<T>,
 {
     let spec =
         cqt::design::<T>(16000.0, 125.0, 1000.0, 12, &Window::Hann).expect("valid cqt design");
-    let factory = OmniCqt::new(R2cFactory(b), ScalarVecOps);
-
+    // The plan under test is built **through dispatch** (`CreatePlan<CqtStreamSpec>`,
+    // wired by `gen_cqt` in 22c), so `run_all<B>` drives the streaming plan the
+    // same way a consumer reaches it via `OmniDSP::cqt_stream`.
     let stream_spec = CqtStreamSpec::new(spec.clone());
-    let mut plan = factory
-        .create_stream_plan(&stream_spec, b)
-        .expect("cqt stream plan");
-    // The independent newest-anchored reference (decimation-free, end-placed
-    // kernels) and the oldest-anchored 05L batch (the stationary cross-check).
+    let mut plan = b.create_plan(&stream_spec).expect("cqt stream plan");
+    // The references are **not** the plan under test, so they keep building
+    // `OmniCqt` directly: the independent newest-anchored reference (decimation-
+    // free, end-placed kernels via `NewestRef`) and the oldest-anchored 05L batch
+    // (the stationary cross-check, built through `OmniCqt` over the backend's
+    // real-DFT primitive via `R2cFactory`).
+    let factory = OmniCqt::new(R2cFactory(b), ScalarVecOps);
     let reference = NewestRef::new(b, &spec);
     let batch = factory
         .create_plan(&spec, b)
@@ -836,7 +840,10 @@ where
     let nb = plan.num_bins();
     assert_eq!(nb, spec.num_bins(), "cqt stream [{}]: bin count", T::WIDTH);
     let fft = batch.fft_length();
-    let hop = plan.hop_length();
+    // `hop_length` is inherent on `OmniCqtStreamPlan`, not on the `CqtStreamPlan`
+    // trait the dispatched plan is bounded by; the plan derives it as
+    // `spec.hop_length().max(1)`, so take it from the spec the same way.
+    let hop = spec.hop_length().max(1);
     let sr = spec.sample_rate();
     let freqs: Vec<f64> = plan.bin_frequencies().to_vec();
     let zero = Complex::new(T::zero(), T::zero());
@@ -1011,9 +1018,8 @@ where
     plan.reset();
 
     // ── reset returns to the initial state: a fresh feed reproduces the run. ──
-    let mut fresh = factory
-        .create_stream_plan(&stream_spec, b)
-        .expect("cqt stream plan");
+    // Also built through dispatch, matching the plan under test.
+    let mut fresh = b.create_plan(&stream_spec).expect("cqt stream plan");
     plan.reset();
     let mut out_reset = vec![zero; plan.max_output_columns(total) * nb];
     let mut out_fresh = vec![zero; fresh.max_output_columns(total) * nb];

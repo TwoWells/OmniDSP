@@ -6,6 +6,7 @@
 use omnidsp_core::design::cqt::CqtSpec;
 use omnidsp_core::design::resample::ResampleSpec;
 use omnidsp_core::error::Result;
+use omnidsp_core::modules::cqt::CqtStreamSpec;
 use omnidsp_core::modules::hilbert::HilbertSpec;
 use omnidsp_core::modules::xcorr::CrossCorrSpec;
 use omnidsp_core::scalar::{ScalarIir, ScalarVecOps};
@@ -161,6 +162,25 @@ impl<B> OmniDSP<B> {
     pub fn cqt<T>(&self, spec: &CqtSpec<T>) -> Result<<B as CreatePlan<CqtSpec<T>>>::Plan>
     where
         B: CreatePlan<CqtSpec<T>>,
+    {
+        self.create_plan(spec)
+    }
+
+    /// Create a streaming, newest-anchored CQT plan (ticket 22).
+    ///
+    /// The streaming analogue of [`cqt`](Self::cqt): a stateful `&mut self`
+    /// analyzer whose per-bin latency collapses to the Gabor floor `Q/f` rather
+    /// than the whole window length.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the spec is invalid or plan creation fails.
+    pub fn cqt_stream<T>(
+        &self,
+        spec: &CqtStreamSpec<T>,
+    ) -> Result<<B as CreatePlan<CqtStreamSpec<T>>>::Plan>
+    where
+        B: CreatePlan<CqtStreamSpec<T>>,
     {
         self.create_plan(spec)
     }
