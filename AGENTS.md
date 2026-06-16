@@ -56,6 +56,13 @@ Rust workspace. `omnidsp-core` is the library (traits, modules, omni implementat
 - **Test (all):** `make test`
 - **Test (filtered):** `make test T=<filter>`
 - **Test (repeat):** `make test T=<filter> N=<count>`
+- **Bench (CQT throughput):** `make bench` — multirate vs single-FFT CQT throughput (`omnidsp-core`, `bench` feature).
+
+### Demo / WASM (DEMO-00)
+
+- **Floor wasm build:** `make wasm-check` — smoke-builds the `RustBackend` floor (`omnidsp`) for `wasm32-unknown-unknown` with `simd128`. Proves the floor *compiles* for the browser (not real-time headroom — that needs the running demo). Installs the target if missing.
+- **WASM engine:** `make wasm-pack` — builds the `omnidsp-wasm` binding (outside the lint workspace) for the browser (`+simd128`); emits the `pkg/` ESM glue if `wasm-pack` is installed, otherwise a plain target build.
+- **Run the demo:** `make demo` — builds the wasm engine and runs the Vite dev server for the CQT visualizer. Requires `wasm-pack` and `npm`.
 
 ## Release Workflow
 
