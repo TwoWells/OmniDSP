@@ -14,12 +14,15 @@ use num_complex::Complex;
 use omnidsp_core::create::CreatePlan;
 use omnidsp_core::design::cqt::{self, CqtSpec};
 use omnidsp_core::design::resample::{ResampleMode, ResampleSpec};
-use omnidsp_core::modules::cqt::CqtPlan;
+use omnidsp_core::error::Result;
+use omnidsp_core::modules::cqt::{CqtPlan, CqtStreamSpec, OmniCqt};
 use omnidsp_core::modules::hilbert::{HilbertPlan, HilbertSpec};
 use omnidsp_core::modules::resample::ResamplePlan;
 use omnidsp_core::modules::xcorr::{CrossCorrPlan, CrossCorrSpec};
+use omnidsp_core::scalar::ScalarVecOps;
 use omnidsp_core::traits::conv::{ConvMethod, ConvPlan, ConvSpec};
 use omnidsp_core::traits::dct::{DctNorm, DctPlan, DctSpec, DctType};
+use omnidsp_core::traits::dft::{DftR2c, DftR2cSpec};
 use omnidsp_core::traits::fir::{FirPlan, FirSpec, FirStrategy};
 use omnidsp_core::traits::iir::{IirPlan, IirSpec};
 use omnidsp_core::types::{BiquadSection, Window};
@@ -562,7 +565,7 @@ where
     );
 }
 
-/// Conformance for the multirate CQT ([`OmniCqt`](omnidsp_core::modules::cqt::OmniCqt)) —
+/// Conformance for the multirate CQT ([`OmniCqt`]) —
 /// the surface-lock capstone (ADR-006 §2a).
 ///
 /// Designs the numpy reference spec, then compares the multirate transform's bin
@@ -641,4 +644,198 @@ where
         "cqt [{}]: input-length mismatch must error",
         T::WIDTH,
     );
+}
+
+/// Adapts a backend's `CreatePlan<DftR2cSpec>` into a [`DftR2c`] factory.
+///
+/// The streaming CQT factory [`OmniCqt`] is generic over a [`DftR2c`] factory,
+/// not over the dispatch trait `CreatePlan<DftR2cSpec>` — and 22a deliberately
+/// does **not** wire `CreatePlan<CqtStreamSpec>` (that is 22c).  Their
+/// `create_plan` signatures are identical, so this borrowing newtype lets
+/// [`check_cqt_stream`] build the streaming plan over the backend under test's
+/// own real-DFT primitive without a dispatch route.
+struct R2cFactory<'b, B>(&'b B);
+
+impl<B, T> DftR2c<T> for R2cFactory<'_, B>
+where
+    B: CreatePlan<DftR2cSpec<T>>,
+    B::Plan: omnidsp_core::traits::dft::DftR2cPlan<T>,
+{
+    type Plan = B::Plan;
+
+    fn create_plan(&self, spec: &DftR2cSpec<T>) -> Result<Self::Plan> {
+        self.0.create_plan(spec)
+    }
+}
+
+/// Conformance for the streaming, newest-anchored CQT
+/// ([`OmniCqtStreamPlan`](omnidsp_core::modules::cqt::OmniCqtStreamPlan), ticket 22).
+///
+/// Drives the stateful `&mut self` plan the way [`check_resample`] drives the
+/// resampler — variable-count `process`, `max_output_columns` sizing, `reset` —
+/// and verifies the **batch-oracle equivalence** that rides through every
+/// streaming slice: each settled column equals the batch CQT of the equivalent
+/// newest-anchored window, **magnitude exactly** and **complex up to the per-bin
+/// newest-anchoring phase** `exp(-j·2π·f_k·Δ/sr)` (`Δ = fft_length − 1`).
+///
+/// The streaming and oracle plans are built from the same [`OmniCqt`] over the
+/// backend's real-DFT primitive (via the local `R2cFactory` adapter) and
+/// [`ScalarVecOps`], routing the octave decimator through `b` — so the
+/// equivalence holds by
+/// construction (22a's intent: pin the harness, cadence, and phase convention as
+/// the gate 22b must keep green).
+///
+/// # Panics
+///
+/// Panics if `max_output_columns` fails to bound the emitted count, if `process`
+/// writes the wrong count or wrong values, if a settled column deviates from the
+/// de-rotated batch oracle beyond [`ConformanceFloat::CQT_TOL`], or if `reset`
+/// fails to restore the initial state.
+#[allow(
+    clippy::too_many_lines,
+    reason = "one cohesive harness: trait mechanics, batch-oracle equivalence, and reset"
+)]
+pub fn check_cqt_stream<B, T>(b: &B)
+where
+    T: ConformanceFloat + std::ops::MulAssign,
+    ScalarVecOps: omnidsp_core::traits::vecops::VecOps<T>,
+    B: CreatePlan<DftR2cSpec<T>> + CreatePlan<ResampleSpec<T>>,
+    <B as CreatePlan<DftR2cSpec<T>>>::Plan: omnidsp_core::traits::dft::DftR2cPlan<T>,
+    <B as CreatePlan<ResampleSpec<T>>>::Plan: ResamplePlan<T>,
+{
+    let spec =
+        cqt::design::<T>(16000.0, 125.0, 1000.0, 12, &Window::Hann).expect("valid cqt design");
+    let factory = OmniCqt::new(R2cFactory(b), ScalarVecOps);
+
+    let stream_spec = CqtStreamSpec::new(spec.clone());
+    let mut plan = factory
+        .create_stream_plan(&stream_spec, b)
+        .expect("cqt stream plan");
+    // The batch oracle: the same factory's per-frame transform of each window.
+    let oracle = factory.create_plan(&spec, b).expect("cqt batch oracle");
+
+    let nb = plan.num_bins();
+    assert_eq!(nb, spec.num_bins(), "cqt stream [{}]: bin count", T::WIDTH);
+    let fft = oracle.fft_length();
+    let hop = plan.hop_length();
+    let sr = spec.sample_rate();
+    let delta = (fft - 1) as f64;
+    let freqs: Vec<f64> = plan.bin_frequencies().to_vec();
+    let zero = Complex::new(T::zero(), T::zero());
+
+    // ── Trait mechanics: max_output_columns bounds the emitted count. ──
+    for &len in &[0usize, 1, hop, hop + 1, 2 * hop + 3] {
+        let bound = plan.max_output_columns(len);
+        let mut out = vec![zero; bound * nb];
+        let input = vec![T::zero(); len];
+        let produced = plan.process(&input, &mut out).expect("cqt stream process");
+        assert!(
+            produced <= bound,
+            "cqt stream [{}]: produced {produced} > bound {bound} for len {len}",
+            T::WIDTH,
+        );
+    }
+    plan.reset();
+
+    // ── Undersized output must error. ──
+    {
+        let input = vec![T::zero(); hop];
+        let mut tiny = vec![zero; nb - 1];
+        assert!(
+            plan.process(&input, &mut tiny).is_err(),
+            "cqt stream [{}]: undersized output must error",
+            T::WIDTH,
+        );
+        plan.reset();
+    }
+
+    // ── A broadband signal long enough to settle several columns. ──
+    let total = fft + 6 * hop;
+    let signal: Vec<T> = (0..total)
+        .map(|i| {
+            let s: f64 = freqs
+                .iter()
+                .map(|&f| (std::f64::consts::TAU * f * i as f64 / sr).sin())
+                .sum();
+            T::lit(s)
+        })
+        .collect();
+
+    let mut out = vec![zero; plan.max_output_columns(total) * nb];
+    let columns = plan.process(&signal, &mut out).expect("cqt stream process");
+    assert!(
+        columns >= 1,
+        "cqt stream [{}]: expected ≥1 column, got {columns}",
+        T::WIDTH,
+    );
+
+    // Each settled column equals the de-rotated batch CQT of its window.
+    let mut settled = 0usize;
+    for c in 0..columns {
+        let now = (c + 1) * hop;
+        if now < fft {
+            continue; // window would be zero-padded — not yet settled
+        }
+        let window = &signal[now - fft..now];
+        let mut ref_col = vec![zero; nb];
+        oracle.process(window, &mut ref_col).expect("batch oracle");
+
+        let col = &out[c * nb..(c + 1) * nb];
+        for (k, (s, o)) in col.iter().zip(&ref_col).enumerate() {
+            // Magnitude matches (anchoring is a pure phase shift).
+            assert!(
+                (s.norm() - o.norm()).abs() <= T::CQT_TOL * (T::one() + o.norm()),
+                "cqt stream [{}]: col {c} bin {k}: |stream| {:?} vs |batch| {:?}",
+                T::WIDTH,
+                s.norm(),
+                o.norm(),
+            );
+            // Complex matches after applying the newest-anchoring phase.
+            let angle = -std::f64::consts::TAU * freqs[k] * delta / sr;
+            let rot = Complex::new(T::lit(angle.cos()), T::lit(angle.sin()));
+            let expected = *o * rot;
+            assert!(
+                (*s - expected).norm() <= T::CQT_TOL * (T::one() + expected.norm()),
+                "cqt stream [{}]: col {c} bin {k}: stream {:?} vs de-rotated batch {:?}",
+                T::WIDTH,
+                s,
+                expected,
+            );
+        }
+        settled += 1;
+    }
+    assert!(
+        settled >= 1,
+        "cqt stream [{}]: expected ≥1 settled column to verify",
+        T::WIDTH,
+    );
+
+    // ── reset returns to the initial state: a fresh feed reproduces the run. ──
+    let mut fresh = factory
+        .create_stream_plan(&stream_spec, b)
+        .expect("cqt stream plan");
+    plan.reset();
+    let mut out_reset = vec![zero; plan.max_output_columns(total) * nb];
+    let mut out_fresh = vec![zero; fresh.max_output_columns(total) * nb];
+    let cols_reset = plan.process(&signal, &mut out_reset).expect("post-reset");
+    let cols_fresh = fresh.process(&signal, &mut out_fresh).expect("fresh");
+    assert_eq!(
+        cols_reset,
+        cols_fresh,
+        "cqt stream [{}]: reset restores the column cadence",
+        T::WIDTH,
+    );
+    for (k, (a, e)) in out_reset[..cols_reset * nb]
+        .iter()
+        .zip(&out_fresh)
+        .enumerate()
+    {
+        assert!(
+            (*a - *e).norm() <= T::CQT_TOL * (T::one() + e.norm()),
+            "cqt stream [{}]: index {k}: post-reset {:?} vs fresh {:?}",
+            T::WIDTH,
+            a,
+            e,
+        );
+    }
 }

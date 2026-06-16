@@ -73,8 +73,8 @@ use omnidsp_core::traits::fir::{FirPlan, FirSpec};
 use omnidsp_core::traits::iir::{IirPlan, IirSpec};
 
 pub use modules::{
-    check_conv, check_cqt, check_dct, check_fir, check_hilbert, check_iir, check_resample,
-    check_xcorr,
+    check_conv, check_cqt, check_cqt_stream, check_dct, check_fir, check_hilbert, check_iir,
+    check_resample, check_xcorr,
 };
 pub use primitives::{check_dft_c2c, check_dft_c2r, check_dft_r2c, check_dft_real_round_trip};
 pub use support::ConformanceFloat;
@@ -118,7 +118,8 @@ impl<T, B> BackendUnderTest<T> for B where
 /// Run every conformance check for one float width.
 fn run_all_for<B, T>(b: &B)
 where
-    T: ConformanceFloat,
+    T: ConformanceFloat + std::ops::MulAssign,
+    omnidsp_core::scalar::ScalarVecOps: omnidsp_core::traits::vecops::VecOps<T>,
     B: BackendUnderTest<T>,
 {
     primitives::check_dft_c2c::<B, T>(b);
@@ -133,6 +134,7 @@ where
     modules::check_xcorr::<B, T>(b);
     modules::check_resample::<B, T>(b);
     modules::check_cqt::<B, T>(b);
+    modules::check_cqt_stream::<B, T>(b);
 }
 
 /// Run the full conformance suite against `b` over both `f32` and `f64`.
