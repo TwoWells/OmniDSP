@@ -16,9 +16,12 @@
 //!
 //! The per-octave kernel design and octave partitioning live in the shared
 //! [`kernel`] submodule; this batch file owns the per-frame `process`.
-//! It is the **conformance oracle** for the newest-anchored streaming CQT
-//! ([`stream`](super::stream), ticket 22) — that path is checked for
-//! equivalence against this batch transform.
+//! It anchors every bin's kernel at the **oldest** sample of the frame
+//! (`kernel::Anchor::Start`); it is the streaming CQT's **stationary
+//! cross-check** ([`stream`](super::stream), ticket 22) — on a steady tone the
+//! streaming magnitude matches this batch transform, and the per-bin phase
+//! relationship holds — while the streaming path's primary oracle is an
+//! independent newest-anchored reference.
 //!
 //! # Sub-plan routing (option A)
 //!
@@ -86,6 +89,12 @@ impl<R, V> OmniCqt<R, V> {
     /// magnitude convenience).
     pub(super) const fn vecops(&self) -> &V {
         &self.vecops
+    }
+
+    /// The factory's real-DFT handle (shared by the streaming path's octave
+    /// layout builder).
+    pub(super) const fn dftr2c(&self) -> &R {
+        &self.dftr2c
     }
 }
 

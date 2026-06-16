@@ -8,7 +8,9 @@
 //! - [`batch`] — the per-frame multirate CQT (surface-lock capstone `05L`).
 //!   [`OmniCqt`] / [`OmniCqtPlan`] anchor every bin's kernel at the **oldest**
 //!   sample of the frame (causal, index 0).  It is the public batch CQT and the
-//!   **conformance oracle** for the streaming path.
+//!   streaming path's **stationary cross-check** (steady-state magnitude/phase);
+//!   the streaming path's primary oracle is an independent newest-anchored
+//!   reference (see [`stream`]).
 //! - [`stream`] — the **newest-anchored** streaming CQT (ticket 22).
 //!   [`OmniCqtStreamPlan`] is a stateful `&mut self` analyzer mirroring
 //!   [`ResamplePlan`](crate::modules::resample::ResamplePlan): feed any chunk of
@@ -22,13 +24,20 @@
 //!
 //! # Newest- vs oldest-anchoring (the streaming crux)
 //!
-//! Anchoring is a pure time shift, so it affects **only phase, not magnitude**.
-//! The batch (oldest-anchored) and streaming (newest-anchored) coefficients for
-//! the same window differ by a known per-bin linear phase
-//! `exp(-j·2π·f_k·Δ/sr)`, where `Δ` is the shift from window-start to
-//! window-end.  Magnitudes are identical; complex outputs match after
-//! de-rotating by that per-bin factor.  This equivalence is the correctness
-//! gate the streaming conformance check enforces against the batch oracle.
+//! Anchoring relocates **which samples each octave/bin analyses**, so it is
+//! **not** a pure time shift.  The batch path slices each octave's frame from
+//! the *old* edge with kernels at index 0 (oldest samples); the streaming path
+//! relocates each octave's frame to **end at "now"** and places each bin's
+//! kernel at the frame end (newest samples), so onset latency collapses to the
+//! Gabor floor `Q/f` instead of the whole window length.  Because the two cover
+//! **different** signal, for a transient/onset their magnitudes differ in
+//! *timing* — that earlier response is the responsiveness win.  The pure-phase
+//! relationship (magnitudes identical, a per-bin linear phase) holds **only for
+//! signals stationary across the frame**: a steady-state cross-check, not the
+//! general law.  The streaming correctness gate is therefore equivalence to an
+//! *independent* newest-anchored reference (a decimation-free single-FFT CQT
+//! with end-placed kernels), with the oldest-anchored batch retained as the
+//! stationary magnitude/phase cross-check.
 
 pub mod batch;
 pub mod kernel;
