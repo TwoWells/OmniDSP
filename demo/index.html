@@ -46,6 +46,34 @@
       }
       #spectrogram { image-rendering: auto; }
       #overlay { pointer-events: none; }
+      #stagerow { display: flex; gap: 8px; align-items: stretch; }
+      #stage { flex: 1 1 0; min-width: 0; }
+      #meter {
+        width: 96px;
+        align-self: stretch;
+        background: #000;
+        border: 1px solid #222;
+        border-radius: 8px;
+      }
+      #readout {
+        position: fixed;
+        pointer-events: none;
+        background: rgba(12, 13, 16, 0.94);
+        border: 1px solid #313440;
+        border-radius: 6px;
+        padding: 4px 8px;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        transform: translate(14px, -50%);
+        z-index: 10;
+      }
+      input[type="range"] {
+        accent-color: var(--accent);
+        width: 120px;
+        vertical-align: middle;
+      }
+      #legend { vertical-align: middle; }
       #controls {
         display: flex;
         align-items: center;
@@ -105,10 +133,14 @@
         <p>Real-time 20&nbsp;Hz–16&nbsp;kHz log-frequency spectrogram, compiled to wasm32.</p>
       </header>
 
-      <div id="stage">
-        <canvas id="spectrogram"></canvas>
-        <canvas id="overlay"></canvas>
+      <div id="stagerow">
+        <div id="stage">
+          <canvas id="spectrogram"></canvas>
+          <canvas id="overlay"></canvas>
+        </div>
+        <canvas id="meter" title="live spectrum · peak-hold"></canvas>
       </div>
+      <div id="readout" hidden></div>
 
       <div id="controls">
         <button id="start">▶ Start (sample clip)</button>
@@ -122,7 +154,22 @@
             <option value="110">110 Hz · ~0.17 s</option>
           </select>
         </label>
-        <span id="stats">initialising…</span>
+        <label class="field" for="history">
+          history
+          <select id="history" title="Columns of scroll history — longer span, thinner columns">
+            <option value="900">short</option>
+            <option value="1800" selected>medium</option>
+            <option value="3600">long</option>
+            <option value="7200">max</option>
+          </select>
+        </label>
+        <label class="field" for="sens">
+          sensitivity
+          <input id="sens" type="range" min="30" max="100" step="1" value="70"
+            title="right = more sensitive (pulls up fainter detail); left = cleaner" />
+          <canvas id="legend" width="150" height="14"></canvas>
+        </label>
+        <span id="stats" title="process = wasm CQT compute per frame · fps = render rate · col/s = CQT columns emitted per second (the scroll speed)">initialising…</span>
       </div>
 
       <p class="caption">
