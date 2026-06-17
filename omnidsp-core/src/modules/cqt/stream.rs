@@ -822,20 +822,29 @@ mod tests {
 
     /// Magnitude tolerance for deeper-octave bins against the decimation-free
     /// reference.  The multirate path passes those bins through 1–2 half-band ×2
-    /// decimation stages whose response is not perfectly flat, so its magnitude
-    /// differs slightly from a single-FFT computed on the full-rate signal — the
-    /// same multirate-vs-single-FFT gap the 05L capstone tolerates (`CQT_TOL`).
-    /// **Measured** worst-case here ≈ 7.5e-3 (relative); this bound is ≈1.3×.
-    const DEEP_MAG_TOL: f64 = 1e-2;
+    /// decimation stages whose passband response is not perfectly flat, so its
+    /// magnitude would droop toward the band edge — except the per-bin gain
+    /// compensation (ticket 23d) bakes the analytic inverse `1/G_k` of that
+    /// cascaded passband response into the kernel, flattening the octave seam.
+    /// What remains is only the residual the compensation cannot model (the
+    /// decimator stopband leakage / aliasing, and the half-spectrum floor).
+    /// **Before** compensation the deepest bin drooped to ≈ 0.24 (relative);
+    /// **after** the equiripple half-band decimator + gain compensation the
+    /// measured worst-case is ≈ 1.7e-3 — a ~140× reduction — and this tightened
+    /// bound (≈1.4×) tracks it, the proof the compensation is real.
+    const DEEP_MAG_TOL: f64 = 2.5e-3;
 
     /// Complex tolerance for deeper-octave bins against the decimation-free
     /// reference.  The half-band ×2 decimator is not phase-exact, so a
     /// decimation-free reference and the multirate streaming path differ by a
-    /// per-octave residual in the complex value — larger than the magnitude gap,
-    /// since it also carries the decimator's phase.  **Measured** worst-case
-    /// here ≈ 5.9e-2 (relative); this bound is ≈1.2×.  Not a loosening: the
-    /// streaming path is genuinely multirate and the reference is genuinely
-    /// decimation-free, so this residual is real and irreducible at this octave.
+    /// per-octave residual in the complex value.  Gain compensation corrects the
+    /// **magnitude** droop (see [`DEEP_MAG_TOL`]) but is orthogonal to the
+    /// decimator's group-delay *phase*, which dominates this complex residual —
+    /// so it stays at the decimator-phase floor even as the magnitude residual
+    /// collapses (≈ 2.4e-1 → ≈ 5.8e-2 here, the phase the compensation does not
+    /// touch).  **Measured** worst-case here ≈ 5.8e-2 (relative); this bound is
+    /// ≈1.2×.  Not a loosening: the streaming path is genuinely multirate and the
+    /// reference is genuinely decimation-free, so this residual is real.
     const DEEP_COMPLEX_TOL: f64 = 7e-2;
 
     /// The deepest-octave sample stride `2^(O−1)` "now" is quantised to.
@@ -1111,6 +1120,179 @@ mod tests {
             "newest-ref residual (rel): top mag {top_mag:.3e} cplx {top_cplx:.3e}, \
              deep mag {deep_mag:.3e} cplx {deep_cplx:.3e}"
         );
+    }
+
+    // ── Gain compensation flattens the octave seam (the 23d evidence) ──
+
+    #[test]
+    #[allow(
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "sample indices, bin counts, and octave indices are small \
+                  non-negative values exact in f64"
+    )]
+    fn gain_compensation_flattens_octave_seam() {
+        // Every octave's mean ratio |stream|/|oracle| must sit within this band
+        // of 1 — i.e. no staircase.  (Uncompensated, the deepest octave's mean
+        // is ≈ 0.5–0.8; this 6% bound would fail loudly there.)
+        const SEAM_TOL: f64 = 0.06;
+
+        // Direct evidence the per-bin gain compensation removes the octave
+        // staircase (ticket 23d).  Drive a broadband input with an *equal* tone
+        // at every bin frequency; against the decimation-free oracle each bin
+        // should read ≈ the same magnitude (the input is flat across the
+        // spectrum), so the per-octave mean of |stream|/|oracle| must sit at ≈ 1
+        // in **every** octave.  Without compensation the decimator passband
+        // droop pulls the deep octaves' ratio well below 1 (the seam); with it,
+        // the staircase collapses and the per-octave means agree to a tight band.
+        let spec = multi_octave_spec();
+        let mut stream = make_stream(&spec);
+        let reference = NewestRef::new(&spec);
+        let nb = stream.num_bins();
+        let fft = stream.fft_length();
+        let hop = stream.hop_length();
+        let align = align_of(&stream);
+        let sr = spec.sample_rate();
+
+        // Bin → octave (0 = top), mirroring `build_bands`' partition.
+        let f_max = spec.bins().last().expect("spec has bins").frequency;
+        let octave_of =
+            |f: f64| -> usize { ((f_max / f).max(1.0).log2() + 1e-9).floor().max(0.0) as usize };
+        let n_octaves = spec
+            .bins()
+            .iter()
+            .map(|b| octave_of(b.frequency))
+            .max()
+            .expect("at least one bin")
+            + 1;
+        assert!(n_octaves >= 3, "need ≥3 octaves to exercise a deep seam");
+
+        // Equal-amplitude tone at every bin → a flat target across the spectrum.
+        let total = 4 * fft;
+        let freqs: Vec<f64> = spec.bins().iter().map(|b| b.frequency).collect();
+        let signal: Vec<f64> = (0..total)
+            .map(|i| {
+                freqs
+                    .iter()
+                    .map(|&f| (TAU * f * i as f64 / sr).sin())
+                    .sum::<f64>()
+            })
+            .collect();
+
+        let mut out = vec![Complex::new(0.0, 0.0); stream.max_output_columns(total) * nb];
+        let columns = stream.process(&signal, &mut out).expect("stream process");
+
+        // Per-octave accumulated ratio |stream|/|oracle| over the settled
+        // columns; a flat input + correct compensation → every octave's mean ≈ 1.
+        let mut sum = vec![0.0_f64; n_octaves];
+        let mut cnt = vec![0usize; n_octaves];
+        let mut checked = 0;
+        for c in 0..columns {
+            let raw = (c + 1) * hop;
+            let now = raw - (raw % align);
+            if now < 2 * fft {
+                continue;
+            }
+            let window = &signal[now - fft..now];
+            let oracle = reference.column(window);
+            let col = &out[c * nb..(c + 1) * nb];
+            for (k, (s, o)) in col.iter().zip(&oracle).enumerate() {
+                let on = o.norm();
+                if on < 1e-6 {
+                    continue; // skip bins with negligible reference energy
+                }
+                let o_idx = octave_of(freqs[k]);
+                sum[o_idx] += s.norm() / on;
+                cnt[o_idx] += 1;
+            }
+            checked += 1;
+        }
+        assert!(
+            checked >= 1,
+            "expected ≥1 settled column for the seam check"
+        );
+
+        // Every octave's mean ratio must sit within a tight band of 1 — no
+        // staircase.
+        for o in 0..n_octaves {
+            if cnt[o] == 0 {
+                continue;
+            }
+            let mean = sum[o] / cnt[o] as f64;
+            assert!(
+                (mean - 1.0).abs() < SEAM_TOL,
+                "octave {o} seam: mean |stream|/|oracle| {mean:.4} should be ≈1 (no staircase)"
+            );
+        }
+    }
+
+    // ── Decimator quality is a free knob (≥2 levels vs the reference) ──
+
+    #[test]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "sample indices are small enough for f64"
+    )]
+    fn decimator_quality_levels_track_reference() {
+        // The decimator quality is a *free* knob on `CqtSpec` (ADR-012 §5); both
+        // a low and the default-high level must converge to the decimation-free
+        // oracle in magnitude (the equiripple stopband + gain compensation hold
+        // at every quality, the deeper stopband simply lowers the residual).
+        use crate::design::cqt::DecimatorQuality;
+
+        let base = multi_octave_spec();
+        let fft = base.fft_length();
+        let hop = base.hop_length().max(1);
+        let nb = base.num_bins();
+        let sr = base.sample_rate();
+        let total = 4 * fft;
+        let freqs: Vec<f64> = base.bins().iter().map(|b| b.frequency).collect();
+        let signal: Vec<f64> = (0..total)
+            .map(|i| {
+                freqs
+                    .iter()
+                    .map(|&f| (TAU * f * i as f64 / sr).sin())
+                    .sum::<f64>()
+            })
+            .collect();
+        let reference = NewestRef::new(&base);
+
+        for q in [0u8, DecimatorQuality::MAX] {
+            let spec = base
+                .clone()
+                .with_decimator_quality(DecimatorQuality::new(q).expect("valid quality"));
+            let mut stream = make_stream(&spec);
+            let align = align_of(&stream);
+            let mut out = vec![Complex::new(0.0, 0.0); stream.max_output_columns(total) * nb];
+            let columns = stream.process(&signal, &mut out).expect("process");
+
+            let mut worst_mag = 0.0_f64;
+            let mut checked = 0;
+            for c in 0..columns {
+                let raw = (c + 1) * hop;
+                let now = raw - (raw % align);
+                if now < 2 * fft {
+                    continue;
+                }
+                let window = &signal[now - fft..now];
+                let oracle = reference.column(window);
+                let col = &out[c * nb..(c + 1) * nb];
+                for (s, o) in col.iter().zip(&oracle) {
+                    let mag = (s.norm() - o.norm()).abs() / (1.0 + o.norm());
+                    worst_mag = worst_mag.max(mag);
+                }
+                checked += 1;
+            }
+            assert!(checked >= 1, "quality {q}: expected ≥1 settled column");
+            // Gain compensation keeps every quality's magnitude close to the
+            // oracle; the loose bound covers the lowest quality's shorter
+            // (shallower-stopband) decimator.
+            assert!(
+                worst_mag < 2e-2,
+                "quality {q}: worst deep magnitude residual {worst_mag:.3e} should track the oracle"
+            );
+        }
     }
 
     // ── Stationary cross-check against the oldest-anchored 05L batch ──

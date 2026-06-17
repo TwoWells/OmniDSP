@@ -53,14 +53,13 @@ use std::ops::{AddAssign, MulAssign};
 use num_complex::Complex;
 
 use crate::create::CreatePlan;
-use crate::design::cqt::CqtSpec;
-use crate::design::resample::{
-    self, DEFAULT_MAX_PHASES, ResampleMode, ResampleQuality, ResampleSpec,
-};
+use crate::design::cqt::{CqtSpec, DecimatorQuality};
+use crate::design::fir::{self, FirMethod};
+use crate::design::resample::{ResampleMode, ResampleSpec};
 use crate::error::{Error, Result};
 use crate::modules::resample::ResamplePlan;
 use crate::traits::dft::{DftNorm, DftR2c, DftR2cSpec};
-use crate::types::{DspFloat, Window};
+use crate::types::{DspFloat, FilterType};
 
 /// Where a bin's kernel sits inside its octave's `fft_len`-point frame.
 ///
@@ -201,12 +200,28 @@ where
         .unwrap_or(0)
         + 1;
 
-    // The ×2 half-band decimation spec (option A).  The prototype's linear-phase
-    // group delay is (proto_len-1)/2 at the stage input rate, i.e.
-    // (proto_len-1)/4 output samples per ×2 stage.
-    let decimate_spec = derive_decimate_spec::<T>()?;
+    // The ×2 half-band equiripple decimation spec (option A), at the spec's
+    // decimator quality.  The prototype's linear-phase group delay is
+    // (proto_len-1)/2 at the stage input rate, i.e. (proto_len-1)/4 output
+    // samples per ×2 stage.
+    let decimate_spec = derive_decimate_spec::<T>(spec.decimator_quality())?;
     let proto_len = decimate_spec.prototype_filter().len();
     let proto_delay = (proto_len.saturating_sub(1)) as f64 / 4.0;
+
+    // Decimator coefficients (in f64) for the per-bin gain compensation: a bin
+    // in octave `o` has passed through `o` cascaded ×2 half-band decimators, so
+    // its cumulative passband gain is the product of the decimator's magnitude
+    // response at the bin's normalized frequency at each stage's input rate.
+    // Baking the analytic inverse `1/G_k` into the kernel flattens the octave
+    // staircase (ticket 23d / ADR-012 §5) — the exact inverse of the known
+    // filter's known response, no fudge factor.  The half-band's DC gain is ~1
+    // and the ×2 decimator applies no L-scaling (up = 1), so `G_k` is the true
+    // end-to-end per-octave passband gain.
+    let decim_coeffs: Vec<f64> = decimate_spec
+        .prototype_filter()
+        .iter()
+        .map(|&c| c.to_f64().unwrap_or(0.0))
+        .collect();
 
     let bin_frequencies: Vec<f64> = bins.iter().map(|b| b.frequency).collect();
 
@@ -252,14 +267,25 @@ where
                 Anchor::Start => 0,
                 Anchor::End => fft_len - nk,
             };
-            kernels.push(build_half_kernel::<T>(
+            let mut kernel = build_half_kernel::<T>(
                 &bins[i].window,
                 bins[i].frequency,
                 rate_o,
                 nk,
                 fft_len,
                 kernel_start,
-            )?);
+            )?;
+            // Bake the analytic inverse of the cascaded decimator passband
+            // response into the kernel: a bin in octave `o` accumulated gain
+            // G_k = ∏_{j=1}^{o} |H(ω_j)|, with ω_j = 2π·f_k·2^(j-1)/sr the bin's
+            // normalized frequency at stage j's input rate sr/2^(j-1).  Scaling
+            // the kernel coefficients by 1/G_k removes the octave droop.  The
+            // top octave (o = 0) has an empty product → 1.0, so it is untouched.
+            let comp = compensation_factor::<T>(&decim_coeffs, bins[i].frequency, sr, o)?;
+            for c in &mut kernel {
+                *c = *c * comp;
+            }
+            kernels.push(kernel);
         }
 
         octaves.push(OctaveBand {
@@ -400,25 +426,101 @@ fn kernel_len_at(len: usize, scale: f64) -> usize {
     ((len as f64 * scale).round() as usize).max(1)
 }
 
-/// Derive the ×2 half-band decimation spec (`up = 1`, `down = 2`) from
-/// `design::resample` — a 2:1 input/output rate ratio yields the half-band
-/// polyphase prototype (cutoff at a quarter of the input rate).
-fn derive_decimate_spec<T: DspFloat>() -> Result<ResampleSpec<T>> {
-    let two: T =
-        T::from(2.0_f64).ok_or_else(|| Error::Internal("cannot represent 2.0 in T".into()))?;
+/// Derive the ×2 half-band **equiripple** decimation spec (`up = 1`, `down = 2`)
+/// for the requested [`DecimatorQuality`] (ticket 23d / ADR-012 §3, §5).
+///
+/// Designs a half-band equiripple lowpass at cutoff `fs/4` via
+/// [`fir::design`] — the minimax-optimal ×2 anti-alias filter, whose
+/// off-center even taps vanish (half the multiply count) and whose stopband
+/// depth is set by the filter **length** (mapped from `quality`) — then drops
+/// it into [`ResampleSpec::new`] (the bring-your-own composition path, ADR-012
+/// §1).  `resample::design`'s general windowed prototype is left untouched;
+/// only the CQT decimator takes this path.
+///
+/// The filter is designed at a nominal rate of `4` with cutoff `1` so the
+/// normalized cutoff is exactly `0.25 = fs/4` — the half-band trigger, and the
+/// `1/(2·max(1, 2))` polyphase anti-alias bound the cross-spec invariant checks
+/// (admitted with equality).  The coefficients are rate-independent; the
+/// resampler uses only the rational `1:2` factors.
+fn derive_decimate_spec<T: DspFloat>(quality: DecimatorQuality) -> Result<ResampleSpec<T>> {
+    let four: T =
+        T::from(4.0_f64).ok_or_else(|| Error::Internal("cannot represent 4.0 in T".into()))?;
     let one: T =
         T::from(1.0_f64).ok_or_else(|| Error::Internal("cannot represent 1.0 in T".into()))?;
-    // Quality 5 keeps the transition band comfortably above every band's bins
-    // (which sit well below the f_s/4 cutoff) without an over-long filter.
-    let quality = ResampleQuality::new(5)?;
-    resample::design(
-        two,
+    // A high half-band stopband comfortably below the bins (which sit well below
+    // f_s/4) needs only a moderate ripple/attenuation target; the *length*
+    // (from `quality`) is what governs the realized stopband depth for a
+    // half-band, so these dB targets only have to be loose enough to converge.
+    let pass_ripple: T =
+        T::from(0.1_f64).ok_or_else(|| Error::Internal("cannot represent 0.1 in T".into()))?;
+    let stop_atten: T =
+        T::from(80.0_f64).ok_or_else(|| Error::Internal("cannot represent 80.0 in T".into()))?;
+    let filter = fir::design(
+        FilterType::Lowpass,
+        quality.half_band_order(),
+        four,
         one,
-        quality,
-        &Window::<T>::Hamming,
-        DEFAULT_MAX_PHASES,
-        ResampleMode::Streaming,
-    )
+        None,
+        &FirMethod::Equiripple {
+            pass_ripple,
+            stop_atten,
+        },
+    )?;
+    ResampleSpec::new(filter, 1, 2, ResampleMode::Streaming)
+}
+
+/// The per-bin gain-compensation factor `1/G_k` for a bin at `freq` Hz in
+/// octave `octave` (0 = top), given the decimator coefficients `coeffs` and the
+/// top sample rate `sr` (ticket 23d / ADR-012 §5).
+///
+/// The bin passed through `octave` cascaded ×2 half-band decimators.  At stage
+/// `j` (1..=octave) the input rate is `sr / 2^(j-1)`, so the bin sat at
+/// normalized angular frequency `ω_j = 2π · freq · 2^(j-1) / sr`, where the
+/// decimator's magnitude response is `|H(ω_j)|`.  The cumulative passband gain
+/// is `G_k = ∏_{j=1}^{octave} |H(ω_j)|` (an empty product, `1`, for the top
+/// octave), and the compensation is its exact inverse `1/G_k`.
+///
+/// Returns an error only if `1/G_k` cannot be represented in `T`; `G_k` is a
+/// product of passband magnitudes (each ≈ 1) so it is bounded away from zero
+/// for any bin below the decimator's `fs/4` cutoff.
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "octave/stage indices are small non-negative values exact in f64"
+)]
+fn compensation_factor<T: DspFloat>(
+    coeffs: &[f64],
+    freq: f64,
+    sr: f64,
+    octave: usize,
+) -> Result<T> {
+    let mut gain = 1.0_f64;
+    for j in 1..=octave {
+        // Stage j's input rate is sr / 2^(j-1); the bin's normalized angular
+        // frequency there is 2π · freq / (sr / 2^(j-1)) = 2π · freq · 2^(j-1)/sr.
+        let stage_scale = (1usize << (j - 1)) as f64;
+        let omega = TAU * freq * stage_scale / sr;
+        gain *= dtft_magnitude(coeffs, omega);
+    }
+    // 1/G_k — the analytic inverse of the known filter's known response.
+    T::from(1.0 / gain)
+        .ok_or_else(|| Error::Internal("cannot represent gain-compensation factor in T".into()))
+}
+
+/// Magnitude of the FIR frequency response `H(ω) = Σ_n h[n] e^{-jωn}` at
+/// normalized angular frequency `ω` (the DTFT of the decimator coefficients).
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "coefficient indices are small enough that usize→f64 is exact"
+)]
+fn dtft_magnitude(coeffs: &[f64], omega: f64) -> f64 {
+    let (re, im) = coeffs
+        .iter()
+        .enumerate()
+        .fold((0.0, 0.0), |(re, im), (n, &h)| {
+            let phase = omega * n as f64;
+            (h.mul_add(phase.cos(), re), h.mul_add(-phase.sin(), im))
+        });
+    re.hypot(im)
 }
 
 /// Build one conjugated half-spectrum kernel via a direct DFT.

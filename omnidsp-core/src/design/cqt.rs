@@ -29,6 +29,75 @@ use num_traits::Float;
 use crate::error::{Error, Result};
 use crate::types::Window;
 
+// ─── Decimator quality ──────────────────────────────────────────────
+
+/// Quality of the multirate CQT's ×2 half-band decimator (ADR-012 §5 — the
+/// *free* knob a composing spec surfaces, with a high default the casual caller
+/// never sees).
+///
+/// The 1:2 decimation **ratio** stays driven/internal; this exposes only the
+/// decimator's *FIR design quality*.  Because the decimator is a **half-band
+/// equiripple** filter (ticket 23d / ADR-012 §3), its stopband depth — and
+/// therefore the residual aliasing between octaves — is governed by the filter
+/// **length**, not by any dB weight (a half-band's pass/stop weights are equal
+/// by construction).  Higher quality therefore maps to a **longer half-band**:
+/// a deeper stopband, less inter-octave aliasing, at a modest cost in taps and
+/// group delay.
+///
+/// The value is a `u8` from zero up to [`MAX`](Self::MAX); it selects the
+/// half-band **order** via [`half_band_order`](Self::half_band_order).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DecimatorQuality(u8);
+
+impl DecimatorQuality {
+    /// Maximum quality value.
+    pub const MAX: u8 = 6;
+
+    /// The high-quality default the casual caller gets (the maximum).
+    pub const HIGH: Self = Self(Self::MAX);
+
+    /// Create a new decimator quality value.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidSpec`] if `value` exceeds [`Self::MAX`].
+    pub fn new(value: u8) -> Result<Self> {
+        if value > Self::MAX {
+            return Err(Error::InvalidSpec(format!(
+                "decimator quality ({value}) must be in 0..={max}",
+                max = Self::MAX,
+            )));
+        }
+        Ok(Self(value))
+    }
+
+    /// The raw quality value.
+    #[must_use]
+    pub const fn value(self) -> u8 {
+        self.0
+    }
+
+    /// The half-band FIR **order** this quality selects.
+    ///
+    /// A half-band Type-I FIR has an order of the form `4·m + 2` (so the tap
+    /// count `order + 1 = 4·m + 3` is odd and the alternate taps vanish
+    /// cleanly).  Quality `q` maps to `m = q + 2`, i.e. order
+    /// `4·(q + 2) + 2 = 4·q + 10` — from order `10` (11 taps) at quality 0 up to
+    /// order `34` (35 taps) at the maximum.  Longer filters deepen the stopband
+    /// (less inter-octave aliasing) at a modest cost in taps and group delay.
+    #[must_use]
+    pub const fn half_band_order(self) -> usize {
+        4 * (self.0 as usize) + 10
+    }
+}
+
+impl Default for DecimatorQuality {
+    /// The high-quality default ([`DecimatorQuality::HIGH`]).
+    fn default() -> Self {
+        Self::HIGH
+    }
+}
+
 // ─── Spec ───────────────────────────────────────────────────────────
 
 /// Per-bin specification for the CQT.
@@ -95,6 +164,7 @@ pub struct CqtSpec<T> {
     fft_length: usize,
     hop_length: usize,
     bins: Vec<CqtBinSpec<T>>,
+    decimator_quality: DecimatorQuality,
 }
 
 impl<T> CqtSpec<T> {
@@ -139,7 +209,21 @@ impl<T> CqtSpec<T> {
             fft_length,
             hop_length,
             bins,
+            decimator_quality: DecimatorQuality::HIGH,
         })
+    }
+
+    /// Override the multirate decimator quality (the *free* knob, ADR-012 §5).
+    ///
+    /// Defaults to [`DecimatorQuality::HIGH`]; the casual caller never sets it.
+    /// A builder (rather than a `new` argument) keeps the constructor signature
+    /// and every existing call site — including the WASM engine — undisturbed.
+    /// The 1:2 decimation ratio stays driven/internal; only the decimator's FIR
+    /// design quality is exposed here.
+    #[must_use]
+    pub const fn with_decimator_quality(mut self, quality: DecimatorQuality) -> Self {
+        self.decimator_quality = quality;
+        self
     }
 
     /// Sample rate in Hz.
@@ -170,6 +254,12 @@ impl<T> CqtSpec<T> {
     #[must_use]
     pub const fn num_bins(&self) -> usize {
         self.bins.len()
+    }
+
+    /// The multirate decimator quality (the *free* knob, ADR-012 §5).
+    #[must_use]
+    pub const fn decimator_quality(&self) -> DecimatorQuality {
+        self.decimator_quality
     }
 }
 
@@ -292,6 +382,7 @@ pub fn design<T: Float>(
         fft_length,
         hop_length,
         bins,
+        decimator_quality: DecimatorQuality::HIGH,
     })
 }
 

@@ -12,7 +12,7 @@
 use num_complex::Complex;
 
 use omnidsp_core::create::CreatePlan;
-use omnidsp_core::design::cqt::{self, CqtSpec};
+use omnidsp_core::design::cqt::{self, CqtSpec, DecimatorQuality};
 use omnidsp_core::design::resample::{ResampleMode, ResampleSpec};
 use omnidsp_core::error::Result;
 use omnidsp_core::modules::cqt::{CqtPlan, CqtStreamPlan, CqtStreamSpec, OmniCqt};
@@ -780,13 +780,16 @@ where
 ///   the streaming complex value matches the reference within
 ///   [`ConformanceFloat::CQT_TOL`].
 /// - **Deeper octaves**: the multirate path runs the signal through 1–2
-///   half-band ×2 decimation stages whose response is not perfectly flat, so it
-///   differs from the decimation-free reference by a per-octave residual — the
-///   same multirate-vs-single-FFT gap 05L tolerates.  The **top octave** (no
-///   decimation) is held to `CQT_TOL` for magnitude *and* complex; the **deeper
-///   octaves** are bounded by documented per-octave residual tolerances
-///   (`deep_mag_tol` ≈ 7.5e-3, `deep_complex_tol` ≈ 6e-2 measured) that reflect
-///   the decimator's amplitude/phase — a real residual, not a loosening of the
+///   half-band ×2 decimation stages whose response is not perfectly flat.  The
+///   per-bin **gain compensation** (ticket 23d) bakes the analytic inverse of
+///   the cascaded decimator passband response into the kernels, so the magnitude
+///   droop (the octave staircase) is removed; what remains is the leakage /
+///   half-spectrum floor (magnitude) and the decimator group-delay phase
+///   (complex).  The **top octave** (no decimation) is held to `CQT_TOL` for
+///   magnitude *and* complex; the **deeper octaves** are bounded by documented
+///   per-octave residual tolerances (`deep_mag_tol` ≈ 1.7e-3 measured — down
+///   from ≈ 0.24 uncompensated; `deep_complex_tol` ≈ 5.8e-2, the decimator phase
+///   the compensation does not touch) — a real residual, not a loosening of the
 ///   math (the undecimated top octave still matching to ~3e-5 proves the math).
 ///
 /// A **stationary cross-check** rides alongside it: on a single steady tone the
@@ -864,18 +867,20 @@ where
     let top_octave_lo = nb - 12.min(nb);
     // Deep-octave residuals against the **decimation-free** reference.  The
     // multirate streaming path runs deeper-octave bins through 1–2 half-band ×2
-    // decimation stages whose amplitude/phase response is not perfectly flat, so
-    // it differs from a single-FFT computed on the full-rate signal by a
-    // per-octave residual — exactly the multirate-vs-single-FFT gap the 05L
-    // capstone tolerates (it pins multirate to its single-FFT oracle only on the
-    // no-decimation spec, and to librosa at `CQT_TOL` otherwise).  Measured
-    // worst-case here (16 kHz, 125–1000 Hz, 12 b/oct): magnitude ≈ 7.5e-3,
-    // complex ≈ 6e-2 (relative).  These bounds cover them with margin; they are
-    // the real decimator residual, not a loosening — the top octave (no
-    // decimation) is still held to the tight `CQT_TOL` for both magnitude and
-    // complex.
-    let deep_mag_tol = T::lit(1.5e-2);
-    let deep_complex_tol = T::lit(1e-1);
+    // decimation stages whose amplitude/phase response is not perfectly flat.
+    // The per-bin **gain compensation** (ticket 23d) bakes the analytic inverse
+    // `1/G_k` of the cascaded decimator passband response into each kernel, so
+    // the magnitude droop (the octave staircase) is removed — what remains is
+    // the residual the compensation cannot model (decimator stopband leakage and
+    // the half-spectrum floor for magnitude; the decimator group-delay *phase*,
+    // orthogonal to magnitude compensation, for the complex value).  Measured
+    // worst-case here (16 kHz, 125–1000 Hz, 12 b/oct): magnitude ≈ 1.7e-3 (down
+    // from ≈ 0.24 uncompensated — a ~140× shrink), complex ≈ 5.8e-2.  These
+    // bounds cover them with margin; they are the real decimator residual, not a
+    // loosening — the top octave (no decimation) is still held to the tight
+    // `CQT_TOL` for both magnitude and complex.
+    let deep_mag_tol = T::lit(2.5e-3);
+    let deep_complex_tol = T::lit(7e-2);
 
     // ── Trait mechanics: max_output_columns bounds the emitted count. ──
     for &len in &[0usize, 1, hop, hop + 1, 2 * hop + 3] {
@@ -972,6 +977,63 @@ where
         "cqt stream [{}]: expected ≥1 settled column to verify",
         T::WIDTH,
     );
+
+    // ── The decimator quality is a *free* knob (ADR-012 §5): exercise ≥2
+    // levels against the oracle. ──
+    // The main verification above used the default-high quality; here a **low**
+    // quality (shorter half-band, shallower stopband) must still converge to the
+    // decimation-free reference in magnitude — the equiripple stopband + per-bin
+    // gain compensation hold at every quality, a deeper stopband simply lowers
+    // the residual.  Built through the same dispatch route as the plan under
+    // test, with the free knob set on the wrapped `CqtSpec`.
+    for q in [
+        DecimatorQuality::new(0).expect("valid quality"),
+        spec.decimator_quality(),
+    ] {
+        let q_spec = CqtStreamSpec::new(spec.clone().with_decimator_quality(q));
+        let mut q_plan = b.create_plan(&q_spec).expect("cqt stream plan at quality");
+        let mut q_out = vec![zero; q_plan.max_output_columns(total) * nb];
+        let q_cols = q_plan
+            .process(&signal, &mut q_out)
+            .expect("cqt stream process at quality");
+        let mut q_settled = 0usize;
+        for c in 0..q_cols {
+            let raw = (c + 1) * hop;
+            let now = raw - (raw % align);
+            if now < 2 * fft {
+                continue;
+            }
+            let window = &signal[now - fft..now];
+            let ref_col = reference.column(window);
+            let col = &q_out[c * nb..(c + 1) * nb];
+            for (k, (s, o)) in col.iter().zip(&ref_col).enumerate() {
+                // Low quality's shorter decimator leaves a slightly larger
+                // residual, so the deeper octaves use a looser magnitude bound
+                // here than the default-high check above; the top octave (no
+                // decimation) is unaffected by quality and stays tight.
+                let mag_tol = if k >= top_octave_lo {
+                    T::CQT_TOL
+                } else {
+                    T::lit(2e-2)
+                };
+                assert!(
+                    (s.norm() - o.norm()).abs() <= mag_tol * (T::one() + o.norm()),
+                    "cqt stream [{}]: quality {q_val} col {c} bin {k}: |stream| {:?} vs |reference| {:?}",
+                    T::WIDTH,
+                    s.norm(),
+                    o.norm(),
+                    q_val = q.value(),
+                );
+            }
+            q_settled += 1;
+        }
+        assert!(
+            q_settled >= 1,
+            "cqt stream [{}]: quality {} expected ≥1 settled column",
+            T::WIDTH,
+            q.value(),
+        );
+    }
 
     // ── Stationary cross-check against the oldest-anchored 05L batch. ──
     // On a single steady tone (stationary across the frame) the streaming
