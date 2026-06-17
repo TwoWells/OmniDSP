@@ -3,7 +3,10 @@
 
 import { viridis } from "./colormap";
 
-const HISTORY = 900; // columns of scroll history
+const HISTORY = 1800; // columns of scroll history (canvas internal width).
+// Longer = more time on screen; columns get thinner (the stage smooths them).
+// The wall-clock span = HISTORY / (columns-per-second), which the streaming
+// engine drives at the hop rate — see the `col/s` figure in the stats line.
 const DB_MIN = -70; // magnitude floor (dB) → black
 const DB_MAX = 0; // magnitude ceiling (dB) → bright
 

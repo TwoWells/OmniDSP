@@ -6,12 +6,14 @@
 // v1 is deliberately simple and main-thread (no AudioWorklet, no
 // SharedArrayBuffer — keeps the demo on free static hosting, see DEMO-00).
 // A ScriptProcessorNode taps the live audio graph and fills a circular PCM
-// buffer; the render loop pulls the latest `windowLen` samples each frame.
+// buffer; the render loop drains the newly-arrived samples each frame and feeds
+// them to the streaming CQT (each sample consumed once).
 // ScriptProcessorNode is deprecated but needs no SAB/worklet and matches the
 // "audio callback fills a ring buffer" model — the AudioWorklet upgrade is
 // explicitly deferred.
 
 const SCRIPT_BUFFER = 4096;
+const RING_CAPACITY = 1 << 15; // ~0.68 s at 48 kHz — ample inter-frame buffer
 const CLIP_SECONDS = 6;
 
 /** Source kind currently feeding the tap. */
@@ -19,9 +21,11 @@ export type Source = "none" | "clip" | "mic";
 
 export class AudioEngine {
   readonly ctx: AudioContext;
-  /** Circular PCM buffer, capacity == the CQT window (FFT length). */
-  private readonly ring: Float32Array;
+  /** Capacity-bounded circular PCM buffer; the render loop drains new samples. */
+  private readonly ring = new Float32Array(RING_CAPACITY);
   private writeIdx = 0;
+  /** Samples written but not yet drained (0 … ring capacity). */
+  private available = 0;
 
   private readonly tap: ScriptProcessorNode;
   private readonly master: GainNode;
@@ -33,9 +37,8 @@ export class AudioEngine {
 
   source: Source = "none";
 
-  constructor(ctx: AudioContext, windowLen: number) {
+  constructor(ctx: AudioContext) {
     this.ctx = ctx;
-    this.ring = new Float32Array(windowLen);
 
     this.master = ctx.createGain();
     this.master.gain.value = 1;
@@ -97,13 +100,21 @@ export class AudioEngine {
     this.source = "none";
   }
 
-  /** Copy the latest `out.length` samples (oldest→newest) into `out`. */
-  readLatestWindow(out: Float32Array): void {
+  /**
+   * Drain up to `out.length` newly-arrived samples (oldest→newest) into `out`
+   * and return the count written. Each sample is returned exactly once; if the
+   * reader falls more than a ring behind, the oldest undrained samples are
+   * dropped to stay current.
+   */
+  drainNewSamples(out: Float32Array): number {
     const cap = this.ring.length;
-    const start = this.writeIdx; // oldest sample in a full ring
-    const head = cap - start;
-    out.set(this.ring.subarray(start, cap), 0);
-    if (start > 0) out.set(this.ring.subarray(0, start), head);
+    const n = Math.min(this.available, out.length);
+    const read = (this.writeIdx - this.available + cap) % cap;
+    const head = Math.min(n, cap - read);
+    out.set(this.ring.subarray(read, read + head), 0);
+    if (n > head) out.set(this.ring.subarray(0, n - head), head);
+    this.available -= n;
+    return n;
   }
 
   private writeRing(chunk: Float32Array): void {
@@ -112,12 +123,14 @@ export class AudioEngine {
     if (n >= cap) {
       this.ring.set(chunk.subarray(n - cap));
       this.writeIdx = 0;
+      this.available = cap;
       return;
     }
     const head = Math.min(n, cap - this.writeIdx);
     this.ring.set(chunk.subarray(0, head), this.writeIdx);
     if (n > head) this.ring.set(chunk.subarray(head), 0);
     this.writeIdx = (this.writeIdx + n) % cap;
+    this.available = Math.min(this.available + n, cap);
   }
 
   private stopSources(): void {

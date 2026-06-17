@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Two Wells <contact@twowells.dev>
 
-// Entry point: load the wasm CQT engine, wire Web Audio → ring buffer → per
-// requestAnimationFrame hop → CqtEngine.process() → scrolling spectrogram.
+// Entry point: load the wasm streaming CQT engine, wire Web Audio → ring buffer
+// → per requestAnimationFrame: drain newly-arrived PCM → CqtEngine.process(n) →
+// scroll the newest-anchored magnitude columns it emits.
 //
 // The engine is imported straight from the wasm-pack `--target web` output in
 // ../../omnidsp-wasm/pkg (run `make wasm-pack` first). The `?url` import hands
@@ -31,8 +32,8 @@ interface Active {
   engine: CqtEngine;
   audio: AudioEngine;
   spectro: Spectrogram;
-  inLen: number;
-  outLen: number;
+  inCap: number;
+  bins: number;
 }
 
 async function bootstrap(): Promise<void> {
@@ -68,22 +69,21 @@ async function bootstrap(): Promise<void> {
       return;
     }
 
-    const inLen = engine.input_len;
-    const outLen = engine.output_len;
-    const binsPerOctave = Math.max(1, Math.round(outLen / engine.num_octaves));
+    const inCap = engine.input_capacity;
+    const bins = engine.num_bins;
+    const binsPerOctave = engine.bins_per_octave;
 
-    const audio = new AudioEngine(ctx, inLen);
-    const spectro = new Spectrogram(spectroCanvas, outLen);
-    drawOverlay(overlayCanvas, engine.frequencies(), outLen, binsPerOctave);
-    active = { engine, audio, spectro, inLen, outLen };
+    const audio = new AudioEngine(ctx);
+    const spectro = new Spectrogram(spectroCanvas, bins);
+    drawOverlay(overlayCanvas, engine.frequencies(), bins, binsPerOctave);
+    active = { engine, audio, spectro, inCap, bins };
 
     // Carry the previous source across a rebuild so changing the low edge
     // mid-stream doesn't stop the audio.
     if (prev === "clip") void audio.startClip().catch(showError);
     else if (prev === "mic") void audio.useMic().catch(showError);
     else {
-      const winS = (inLen / ctx.sampleRate).toFixed(2);
-      stats.textContent = `ready · ${outLen} bins · win ${winS} s · ${ctx.sampleRate / 1000} kHz — press Start`;
+      stats.textContent = `ready · ${bins} bins · streaming (per-bin Q/f) · ${ctx.sampleRate / 1000} kHz — press Start`;
     }
   };
 
@@ -109,40 +109,52 @@ async function bootstrap(): Promise<void> {
   // --- Render loop ---
   let procMsAvg = 0;
   let frames = 0;
+  let colSum = 0;
   let lastStat = performance.now();
 
   const frame = (): void => {
     requestAnimationFrame(frame);
     if (!active || !active.audio.running) return;
-    const { engine, audio, spectro, inLen, outLen } = active;
+    const { engine, audio, spectro, inCap, bins } = active;
 
     // Rebuild views each frame: cheap (no copy), and robust if wasm linear
     // memory ever grows and detaches the backing ArrayBuffer.
-    const inView = new Float32Array(wasm.memory.buffer, engine.input_ptr, inLen);
-    audio.readLatestWindow(inView);
+    const inView = new Float32Array(wasm.memory.buffer, engine.input_ptr, inCap);
+    const n = audio.drainNewSamples(inView);
 
-    const t0 = performance.now();
-    try {
-      engine.process();
-    } catch (err) {
-      showError(err);
-      return;
+    let cols = 0;
+    if (n > 0) {
+      const t0 = performance.now();
+      try {
+        cols = engine.process(n);
+      } catch (err) {
+        showError(err);
+        return;
+      }
+      procMsAvg += (performance.now() - t0 - procMsAvg) * 0.1;
+
+      if (cols > 0) {
+        // Read the output view after process() (wasm memory may have grown) and
+        // slice it per column — the plan emits low → high, oldest hop-boundary
+        // column first.
+        const outView = new Float32Array(wasm.memory.buffer, engine.output_ptr, cols * bins);
+        for (let c = 0; c < cols; c++) {
+          spectro.pushColumn(outView.subarray(c * bins, (c + 1) * bins));
+        }
+      }
     }
-    const dt = performance.now() - t0;
 
-    const outView = new Float32Array(wasm.memory.buffer, engine.output_ptr, outLen);
-    spectro.pushColumn(outView);
-
-    procMsAvg += (dt - procMsAvg) * 0.1;
     frames++;
+    colSum += cols;
     const now = performance.now();
     if (now - lastStat > 250) {
       const fps = (frames * 1000) / (now - lastStat);
-      const winS = (inLen / ctx.sampleRate).toFixed(2);
+      const cps = (colSum * 1000) / (now - lastStat);
       stats.textContent =
-        `process ${procMsAvg.toFixed(1)} ms · ${fps.toFixed(0)} fps · ` +
-        `${outLen} bins · win ${winS} s · ${ctx.sampleRate / 1000} kHz`;
+        `process ${procMsAvg.toFixed(2)} ms · ${fps.toFixed(0)} fps · ` +
+        `${cps.toFixed(0)} col/s · ${bins} bins · ${ctx.sampleRate / 1000} kHz`;
       frames = 0;
+      colSum = 0;
       lastStat = now;
     }
   };
