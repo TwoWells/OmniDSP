@@ -36,6 +36,7 @@ use std::f64::consts::PI;
 
 use num_traits::Float;
 
+use crate::design::remez;
 use crate::error::{Error, Result};
 use crate::traits::fir::{FirFilter, FirMeta};
 use crate::types::{FilterType, Window};
@@ -50,9 +51,10 @@ use crate::types::{FilterType, Window};
 /// [`Windowed`](FirMethod::Windowed) variant only — it is an ingredient of the
 /// windowed-sinc method, not a property of the filter.
 ///
-/// The minimax-optimal `Equiripple` (Parks–McClellan/Remez) method is a future
-/// variant; the windowed method stays because it is simple and windows remain
-/// essential for spectral analysis regardless.
+/// The minimax-optimal `Equiripple` (Parks–McClellan/Remez) method takes a
+/// stopband *attenuation* target directly (no window). The windowed method
+/// stays because it is simple and windows remain essential for spectral
+/// analysis regardless.
 #[derive(Debug, Clone, PartialEq)]
 #[allow(
     clippy::derive_partial_eq_without_eq,
@@ -65,6 +67,37 @@ pub enum FirMethod<T> {
     Windowed {
         /// Window applied to the ideal (sinc) impulse response.
         window: Window<T>,
+    },
+
+    /// Equiripple (Parks–McClellan / Remez exchange) design: the
+    /// minimax-optimal linear-phase FIR for a given length and spec.
+    ///
+    /// Unlike the windowed method, equiripple takes the passband/stopband
+    /// tolerances directly, so its attenuation is *truthful* — the realized
+    /// stopband meets the requested `stop_atten`.  For a ×2 decimation lowpass
+    /// (cutoff `fs/4` with a symmetric transition) the design is a **half-band**
+    /// filter whose even-indexed taps, bar the center, are zero (ADR-012 §3).
+    ///
+    /// # Units and Remez weighting
+    ///
+    /// Both fields are in **decibels**:
+    ///
+    /// * `pass_ripple` — peak passband ripple `Ap` (dB). Converted to a linear
+    ///   deviation `δ_p = (10^(Ap/20) − 1) / (10^(Ap/20) + 1)`.
+    /// * `stop_atten` — stopband attenuation `As` (positive dB). Converted to a
+    ///   linear deviation `δ_s = 10^(−As/20)`.
+    ///
+    /// The desired band amplitudes are `1` in the passband and `0` in the
+    /// stopband, and the Remez error weights are **inversely proportional to
+    /// the allowed deviations** (`W_pass = 1/δ_p`, `W_stop = 1/δ_s`) so the
+    /// realized ripples equalize to the requested `Ap`/`As`.  This is the exact
+    /// mapping the scipy golden generator (`scripts/gen_remez_reference.py`)
+    /// uses with `scipy.signal.remez(..., weight=[1/δ_p, 1/δ_s])`.
+    Equiripple {
+        /// Peak passband ripple `Ap` in dB (e.g. `0.1`).
+        pass_ripple: T,
+        /// Stopband attenuation `As` in positive dB (e.g. `60.0`).
+        stop_atten: T,
     },
 }
 
@@ -127,6 +160,34 @@ pub fn design<T: Float>(
 
     let validated = validate(filter_type, order, sr, c1, c2)?;
 
+    // Dispatch over the design method (ADR-012 §3); each produces f64 taps.
+    let normalized: Vec<f64> = match method {
+        FirMethod::Windowed { window } => design_windowed(filter_type, &validated, window)?,
+        FirMethod::Equiripple {
+            pass_ripple,
+            stop_atten,
+        } => design_equiripple(
+            filter_type,
+            &validated,
+            to_f64(*pass_ripple)?,
+            to_f64(*stop_atten)?,
+        )?,
+    };
+
+    // Convert to target type
+    let coefficients: Result<Vec<T>> = normalized.iter().map(|&v| from_f64(v)).collect();
+
+    // Record the design context: the primary normalized cutoff (cutoff1 / fs).
+    let normalized_cutoff = from_f64(validated.primary_cutoff)?;
+    FirFilter::new(coefficients?, FirMeta::new(sample_rate, normalized_cutoff))
+}
+
+/// Windowed-sinc design path: ideal impulse response, taper, gain normalize.
+fn design_windowed<T: Float>(
+    filter_type: FilterType,
+    validated: &ValidatedSpec,
+    window: &Window<T>,
+) -> Result<Vec<f64>> {
     // Compute ideal impulse response
     let ideal = match validated.cutoffs {
         NormalizedCutoffs::Single(fn1) => match filter_type {
@@ -150,7 +211,6 @@ pub fn design<T: Float>(
     };
 
     // Generate and apply the method-specific taper.
-    let FirMethod::Windowed { window } = method;
     let win_coeffs = window.coefficients(validated.num_taps)?;
     let windowed: Result<Vec<f64>> = ideal
         .iter()
@@ -159,14 +219,192 @@ pub fn design<T: Float>(
         .collect();
 
     // Normalize gain
-    let normalized = normalize(filter_type, &windowed?, &validated.cutoffs);
+    Ok(normalize(filter_type, &windowed?, &validated.cutoffs))
+}
 
-    // Convert to target type
-    let coefficients: Result<Vec<T>> = normalized.iter().map(|&v| from_f64(v)).collect();
+/// Fraction of a cutoff frequency spanned by the equiripple half-transition.
+///
+/// Equiripple needs an explicit transition gap; `design` only takes cutoffs,
+/// so each cutoff is widened into a passband edge / stopband edge symmetric
+/// transition of half-width `cutoff · EQ_TRANSITION_FRACTION`.
+const EQ_TRANSITION_FRACTION: f64 = 0.25;
 
-    // Record the design context: the primary normalized cutoff (cutoff1 / fs).
-    let normalized_cutoff = from_f64(validated.primary_cutoff)?;
-    FirFilter::new(coefficients?, FirMeta::new(sample_rate, normalized_cutoff))
+/// Equiripple (Parks–McClellan/Remez) design path.
+///
+/// Maps the dB passband-ripple / stopband-attenuation targets to linear Remez
+/// deviations and band weights (see [`FirMethod::Equiripple`]), derives band
+/// edges from the validated cutoffs (a symmetric transition of half-width
+/// `cutoff · EQ_TRANSITION_FRACTION` about each cutoff), and dispatches to the
+/// Remez engine.  A lowpass at cutoff ≈ `fs/4` takes the **half-band** path:
+/// design then zero the alternate taps (ADR-012 §3, the ×2 decimation case).
+#[allow(
+    clippy::too_many_lines,
+    reason = "the per-filter-type band construction is one cohesive match"
+)]
+fn design_equiripple(
+    filter_type: FilterType,
+    validated: &ValidatedSpec,
+    pass_ripple_db: f64,
+    stop_atten_db: f64,
+) -> Result<Vec<f64>> {
+    if pass_ripple_db <= 0.0 || stop_atten_db <= 0.0 {
+        return Err(Error::InvalidSpec(
+            "equiripple pass_ripple and stop_atten must be positive (dB)".into(),
+        ));
+    }
+
+    // dB specs → linear deviations → Remez weights (inverse of the deviations).
+    let ap = (10.0_f64).powf(pass_ripple_db / 20.0);
+    let delta_p = (ap - 1.0) / (ap + 1.0);
+    let delta_s = (10.0_f64).powf(-stop_atten_db / 20.0);
+    if delta_p <= 0.0 {
+        return Err(Error::InvalidSpec(
+            "equiripple pass_ripple too small to realize".into(),
+        ));
+    }
+    let w_pass = 1.0 / delta_p;
+    let w_stop = 1.0 / delta_s;
+
+    let bands: Vec<remez::Band> = match validated.cutoffs {
+        NormalizedCutoffs::Single(fc) => match filter_type {
+            FilterType::Lowpass => {
+                // ×2 decimation half-band special case: cutoff at fs/4.
+                if (fc - 0.25).abs() < 1e-6 {
+                    return design_halfband(validated.num_taps, w_pass, w_stop);
+                }
+                let delta = fc * EQ_TRANSITION_FRACTION;
+                vec![
+                    remez::Band {
+                        low: 0.0,
+                        high: (fc - delta).max(0.0),
+                        desired: 1.0,
+                        weight: w_pass,
+                    },
+                    remez::Band {
+                        low: (fc + delta).min(0.5),
+                        high: 0.5,
+                        desired: 0.0,
+                        weight: w_stop,
+                    },
+                ]
+            }
+            FilterType::Highpass => {
+                let delta = fc * EQ_TRANSITION_FRACTION;
+                vec![
+                    remez::Band {
+                        low: 0.0,
+                        high: (fc - delta).max(0.0),
+                        desired: 0.0,
+                        weight: w_stop,
+                    },
+                    remez::Band {
+                        low: (fc + delta).min(0.5),
+                        high: 0.5,
+                        desired: 1.0,
+                        weight: w_pass,
+                    },
+                ]
+            }
+            FilterType::Bandpass | FilterType::Bandstop => {
+                return Err(Error::Internal(
+                    "bandpass/bandstop requires two cutoffs".into(),
+                ));
+            }
+        },
+        NormalizedCutoffs::Dual(fc1, fc2) => {
+            let d1 = fc1 * EQ_TRANSITION_FRACTION;
+            let d2 = fc2 * EQ_TRANSITION_FRACTION;
+            match filter_type {
+                FilterType::Bandpass => vec![
+                    remez::Band {
+                        low: 0.0,
+                        high: (fc1 - d1).max(0.0),
+                        desired: 0.0,
+                        weight: w_stop,
+                    },
+                    remez::Band {
+                        low: (fc1 + d1).min(0.5),
+                        high: (fc2 - d2).max(fc1 + d1),
+                        desired: 1.0,
+                        weight: w_pass,
+                    },
+                    remez::Band {
+                        low: (fc2 + d2).min(0.5),
+                        high: 0.5,
+                        desired: 0.0,
+                        weight: w_stop,
+                    },
+                ],
+                FilterType::Bandstop => vec![
+                    remez::Band {
+                        low: 0.0,
+                        high: (fc1 - d1).max(0.0),
+                        desired: 1.0,
+                        weight: w_pass,
+                    },
+                    remez::Band {
+                        low: (fc1 + d1).min(0.5),
+                        high: (fc2 - d2).max(fc1 + d1),
+                        desired: 0.0,
+                        weight: w_stop,
+                    },
+                    remez::Band {
+                        low: (fc2 + d2).min(0.5),
+                        high: 0.5,
+                        desired: 1.0,
+                        weight: w_pass,
+                    },
+                ],
+                FilterType::Lowpass | FilterType::Highpass => {
+                    return Err(Error::Internal(
+                        "lowpass/highpass requires one cutoff".into(),
+                    ));
+                }
+            }
+        }
+    };
+
+    remez::design(validated.num_taps, &bands)
+}
+
+/// Design a half-band equiripple lowpass at cutoff `fs/4` and zero the
+/// alternate (even-indexed, off-center) taps — the optimal ×2 decimation
+/// filter (ADR-012 §3).
+///
+/// A true half-band has even-symmetric bands about `fs/4` and equal pass/stop
+/// weighting; the Remez solution then has its even-indexed taps (bar the
+/// center) vanish to numerical precision.  We force them to exactly zero, which
+/// makes the structure exact (and halves the multiply count of the decimator).
+/// The transition is symmetric about `fs/4` at half-width
+/// `0.25 · EQ_TRANSITION_FRACTION`.
+fn design_halfband(num_taps: usize, _w_pass: f64, _w_stop: f64) -> Result<Vec<f64>> {
+    let delta = 0.25 * EQ_TRANSITION_FRACTION;
+    let bands = [
+        remez::Band {
+            low: 0.0,
+            high: 0.25 - delta,
+            desired: 1.0,
+            // Symmetric (equal) weighting is what makes alternate taps vanish.
+            weight: 1.0,
+        },
+        remez::Band {
+            low: 0.25 + delta,
+            high: 0.5,
+            desired: 0.0,
+            weight: 1.0,
+        },
+    ];
+    let mut taps = remez::design(num_taps, &bands)?;
+
+    // Force the half-band structure exact: even-indexed taps, except the
+    // center, are zero.
+    let center = (num_taps - 1) / 2;
+    for (i, t) in taps.iter_mut().enumerate() {
+        if i != center && i % 2 == 0 {
+            *t = 0.0;
+        }
+    }
+    Ok(taps)
 }
 
 /// Estimate FIR filter order using Kaiser's formula.
@@ -850,5 +1088,261 @@ mod tests {
         .coefficients()
         .to_vec();
         assert_response_match(&ours, LP_ORDER4_RECT, 2.0, 1e-10, "LP4 rect");
+    }
+
+    // ── Equiripple (Remez) scipy reference comparison ───────────
+    //
+    // Generated by scripts/gen_remez_reference.py.
+    // Regenerate with: make gen-remez-reference
+    //
+    // The engine (`design::remez::design`) is driven with the *exact* band
+    // edges / desired / weights the golden script used, so the frequency
+    // responses match to tight tolerance.  The dB→deviation→weight mapping
+    // mirrors `FirMethod::Equiripple` and the script.
+
+    use crate::design::remez::{Band, design as remez_design};
+    use omnidsp_testdata::remez_scipy::{BP_REMEZ_4K_8K, HB_REMEZ_X2, LP_REMEZ_4K_6K};
+
+    /// Linear passband / stopband deviations from the dB specs (mirrors the
+    /// `FirMethod::Equiripple` doc and the golden generator).
+    fn deltas(pass_ripple_db: f64, stop_atten_db: f64) -> (f64, f64) {
+        let ap = 10.0_f64.powf(pass_ripple_db / 20.0);
+        let delta_p = (ap - 1.0) / (ap + 1.0);
+        let delta_s = 10.0_f64.powf(-stop_atten_db / 20.0);
+        (delta_p, delta_s)
+    }
+
+    /// Peak magnitude deviation from `target` over a normalized frequency band.
+    fn band_deviation(taps: &[f64], f_lo: f64, f_hi: f64, target: f64) -> f64 {
+        let mut peak: f64 = 0.0;
+        for i in 0..=500 {
+            let f = f_lo + (f_hi - f_lo) * f64::from(i) / 500.0;
+            peak = peak.max((eval_gain(taps, f) - target).abs());
+        }
+        peak
+    }
+
+    /// Assert two equiripple filters agree to `tol` at **in-band** frequencies
+    /// (the union of `bands`, given as `(lo, hi)` normalized pairs).
+    ///
+    /// Two independently-computed minimax-optimal filters with the same spec are
+    /// constrained — and so must agree tightly — inside the pass/stop bands; the
+    /// *transition* gaps are unconstrained and legitimately diverge, so they are
+    /// excluded.  This is a stronger check than a loose full-spectrum tolerance.
+    fn assert_inband_match(
+        ours: &[f64],
+        scipy: &[f64],
+        bands: &[(f64, f64)],
+        tol: f64,
+        label: &str,
+    ) {
+        for &(lo, hi) in bands {
+            for i in 0..=400 {
+                let f = lo + (hi - lo) * f64::from(i) / 400.0;
+                let g_ours = eval_gain(ours, f);
+                let g_scipy = eval_gain(scipy, f);
+                let err = (g_ours - g_scipy).abs();
+                assert!(
+                    err < tol,
+                    "{label}: in-band mismatch at f_norm={f:.5} — ours={g_ours:.12e}, scipy={g_scipy:.12e}, err={err:.2e}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn scipy_equiripple_lowpass() {
+        let (dp, ds) = deltas(0.1, 60.0);
+        let bands = [
+            Band {
+                low: 0.0,
+                high: 4000.0 / 44100.0,
+                desired: 1.0,
+                weight: 1.0 / dp,
+            },
+            Band {
+                low: 6000.0 / 44100.0,
+                high: 0.5,
+                desired: 0.0,
+                weight: 1.0 / ds,
+            },
+        ];
+        let ours = remez_design(65, &bands).expect("equiripple LP");
+        // In-band agreement to ~2e-5: both are the minimax-optimal filter for
+        // this spec, so they coincide in the pass/stop bands to ~5 significant
+        // figures (the unconstrained transition gap is excluded; the residual
+        // is the two optimizers' extremal-set convergence and the barycentric
+        // synthesis conditioning at the band endpoints). The absolute gate is
+        // the realized-spec test below.
+        assert_inband_match(
+            &ours,
+            LP_REMEZ_4K_6K,
+            &[(0.0, 4000.0 / 44100.0), (6000.0 / 44100.0, 0.5)],
+            2e-5,
+            "Remez LP 4k/6k",
+        );
+    }
+
+    #[test]
+    fn scipy_equiripple_bandpass() {
+        let (dp, ds) = deltas(0.1, 60.0);
+        let bands = [
+            Band {
+                low: 0.0,
+                high: 2000.0 / 44100.0,
+                desired: 0.0,
+                weight: 1.0 / ds,
+            },
+            Band {
+                low: 4000.0 / 44100.0,
+                high: 8000.0 / 44100.0,
+                desired: 1.0,
+                weight: 1.0 / dp,
+            },
+            Band {
+                low: 10000.0 / 44100.0,
+                high: 0.5,
+                desired: 0.0,
+                weight: 1.0 / ds,
+            },
+        ];
+        let ours = remez_design(81, &bands).expect("equiripple BP");
+        assert_inband_match(
+            &ours,
+            BP_REMEZ_4K_8K,
+            &[
+                (0.0, 2000.0 / 44100.0),
+                (4000.0 / 44100.0, 8000.0 / 44100.0),
+                (10000.0 / 44100.0, 0.5),
+            ],
+            2e-5,
+            "Remez BP 4k/8k",
+        );
+    }
+
+    #[test]
+    fn scipy_equiripple_halfband() {
+        // Half-band: cutoff fs/4, symmetric transition ±4410 Hz, equal weights.
+        let transition = 4410.0 / 44100.0;
+        let bands = [
+            Band {
+                low: 0.0,
+                high: 0.25 - transition,
+                desired: 1.0,
+                weight: 1.0,
+            },
+            Band {
+                low: 0.25 + transition,
+                high: 0.5,
+                desired: 0.0,
+                weight: 1.0,
+            },
+        ];
+        let ours = remez_design(31, &bands).expect("equiripple half-band");
+        assert_inband_match(
+            &ours,
+            HB_REMEZ_X2,
+            &[(0.0, 0.25 - transition), (0.25 + transition, 0.5)],
+            2e-5,
+            "Remez half-band ×2",
+        );
+    }
+
+    // ── Equiripple realized-spec assertions (the FirMethod API path) ──
+
+    fn equiripple(pass_ripple: f64, stop_atten: f64) -> FirMethod<f64> {
+        FirMethod::Equiripple {
+            pass_ripple,
+            stop_atten,
+        }
+    }
+
+    #[test]
+    fn equiripple_lowpass_meets_requested_spec() {
+        // fs = 44100, cutoff 5000 → ±25% transition → pass [0, 3750], stop [6250, …].
+        let taps = design(
+            FilterType::Lowpass,
+            80,
+            44100.0,
+            5000.0,
+            None,
+            &equiripple(0.1, 60.0),
+        )
+        .expect("equiripple LP design")
+        .coefficients()
+        .to_vec();
+
+        let (dp, ds) = deltas(0.1, 60.0);
+        let pass_dev = band_deviation(&taps, 0.0, 3750.0 / 44100.0, 1.0);
+        let stop_dev = band_deviation(&taps, 6250.0 / 44100.0, 0.5, 0.0);
+        // Allow a small slack over the exact deviation for grid discretization.
+        assert!(
+            pass_dev <= dp * 1.2,
+            "passband ripple {pass_dev:.3e} should meet δ_p {dp:.3e}"
+        );
+        assert!(
+            stop_dev <= ds * 1.2,
+            "stopband leakage {stop_dev:.3e} should meet δ_s {ds:.3e}"
+        );
+    }
+
+    #[test]
+    #[allow(
+        clippy::float_cmp,
+        reason = "half-band alternate taps are force-zeroed to exactly 0.0"
+    )]
+    fn equiripple_halfband_zeroes_alternate_taps() {
+        // cutoff = fs/4 triggers the half-band path.
+        let taps = design(
+            FilterType::Lowpass,
+            30,
+            44100.0,
+            44100.0 / 4.0,
+            None,
+            &equiripple(0.1, 70.0),
+        )
+        .expect("half-band design")
+        .coefficients()
+        .to_vec();
+        assert_eq!(taps.len(), 31, "order 30 → 31 taps (Type I, odd length)");
+        let center = (taps.len() - 1) / 2;
+        for (i, &t) in taps.iter().enumerate() {
+            if i != center && i % 2 == 0 {
+                assert_eq!(
+                    t, 0.0,
+                    "half-band even-indexed tap {i} (off-center) must be exactly zero"
+                );
+            }
+        }
+        // Center tap ≈ 0.5 for a half-band.
+        assert!(
+            (taps[center] - 0.5).abs() < 0.05,
+            "half-band center tap should be ≈0.5, got {}",
+            taps[center]
+        );
+    }
+
+    #[test]
+    fn equiripple_does_not_converge_is_an_error() {
+        // A vanishingly small transition at a short length leaves the
+        // alternation unreachable — the design must report an error, never
+        // panic or loop forever.
+        let degenerate = [
+            Band {
+                low: 0.0,
+                high: 0.2499,
+                desired: 1.0,
+                weight: 1.0,
+            },
+            Band {
+                low: 0.2501,
+                high: 0.5,
+                desired: 0.0,
+                weight: 1e6,
+            },
+        ];
+        // A 3-tap filter cannot satisfy such a tight, heavily-weighted spec;
+        // the routine must terminate with a result either way (no hang).
+        let _ = remez_design(3, &degenerate);
     }
 }

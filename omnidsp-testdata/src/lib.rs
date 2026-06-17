@@ -35,6 +35,7 @@ pub mod fir_scipy;
 pub mod hilbert_scipy;
 pub mod iir_scipy;
 pub mod iir_sosfilt_scipy;
+pub mod remez_scipy;
 pub mod resample_poly_scipy;
 pub mod resample_scipy;
 pub mod xcorr_scipy;

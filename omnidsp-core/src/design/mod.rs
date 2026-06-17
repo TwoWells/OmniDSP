@@ -14,5 +14,6 @@ pub mod cqt;
 pub mod dft;
 pub mod fir;
 pub mod iir;
+pub(crate) mod remez;
 pub mod resample;
 pub(crate) mod window;

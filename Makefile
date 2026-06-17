@@ -7,7 +7,7 @@
 #   make release-major   # 0.1.0 -> 1.0.0
 #   make release V=0.2.0 # explicit version
 
-.PHONY: bench build-release wasm-check wasm-pack demo check deny doc gen-cqt-reference gen-cqt-process-reference gen-cqt-librosa-reference gen-fir-reference gen-fir-lfilter-reference gen-hilbert-reference gen-iir-reference gen-iir-sosfilt-reference gen-resample-reference gen-resample-poly-reference gen-xcorr-reference machete mutants setup setup-hooks setup-tools test release release-patch release-minor release-major publish tag-current
+.PHONY: bench build-release wasm-check wasm-pack demo check deny doc gen-cqt-reference gen-cqt-process-reference gen-cqt-librosa-reference gen-fir-reference gen-fir-lfilter-reference gen-remez-reference gen-hilbert-reference gen-iir-reference gen-iir-sosfilt-reference gen-resample-reference gen-resample-poly-reference gen-xcorr-reference machete mutants setup setup-hooks setup-tools test release release-patch release-minor release-major publish tag-current
 
 # Get current version from Cargo.toml
 CURRENT_VERSION := $(shell grep '^version = ' omnidsp-core/Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
@@ -153,6 +153,10 @@ gen-fir-reference:
 gen-fir-lfilter-reference:
 	@python3 scripts/gen_fir_lfilter_reference.py > omnidsp-testdata/src/fir_lfilter_scipy.rs
 	@echo "Generated omnidsp-testdata/src/fir_lfilter_scipy.rs"
+
+gen-remez-reference:
+	@python3 scripts/gen_remez_reference.py > omnidsp-testdata/src/remez_scipy.rs
+	@echo "Generated omnidsp-testdata/src/remez_scipy.rs"
 
 gen-cqt-reference:
 	@python3 scripts/gen_cqt_reference.py > omnidsp-testdata/src/cqt_numpy.rs

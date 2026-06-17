@@ -40,6 +40,17 @@ pub enum Error {
         message: String,
     },
 
+    /// An iterative design algorithm failed to converge within its bounded
+    /// iteration budget.
+    ///
+    /// Produced by the equiripple (Parks–McClellan/Remez) FIR design when the
+    /// extremal-set exchange does not stabilize before the iteration cap — for
+    /// example, a spec whose band edges or weights leave the alternation
+    /// condition unsatisfiable at the requested length.  The design is a total,
+    /// bounded routine (no panic, no unbounded loop); it reports this instead.
+    #[error("design did not converge: {0}")]
+    DidNotConverge(String),
+
     /// An internal error not covered by other variants.
     #[error("{0}")]
     Internal(String),
