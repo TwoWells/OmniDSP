@@ -271,7 +271,9 @@ fn rust_iir_first_order_f32() {
 /// 2× upsample with a simple prototype filter: output count should be
 /// exactly 2× input count (streaming mode).
 fn resample_upsample_f64(dsp: &OmniDSP<RustBackend>) {
-    let spec = ResampleSpec::<f64>::new(2, 1, vec![0.5, 1.0, 0.5], ResampleMode::Streaming)
+    let filter = FirFilter::<f64>::new(vec![0.5, 1.0, 0.5], FirMeta::unknown())
+        .expect("non-empty prototype");
+    let spec = ResampleSpec::<f64>::new(filter, 2, 1, ResampleMode::Streaming)
         .expect("valid resample spec");
     let mut plan = dsp.resample(&spec).expect("resample plan");
 
@@ -286,7 +288,9 @@ fn resample_upsample_f64(dsp: &OmniDSP<RustBackend>) {
     reason = "small test indices fit in f32 mantissa"
 )]
 fn resample_upsample_f32(dsp: &OmniDSP<RustBackend>) {
-    let spec = ResampleSpec::<f32>::new(2, 1, vec![0.5, 1.0, 0.5], ResampleMode::Streaming)
+    let filter = FirFilter::<f32>::new(vec![0.5, 1.0, 0.5], FirMeta::unknown())
+        .expect("non-empty prototype");
+    let spec = ResampleSpec::<f32>::new(filter, 2, 1, ResampleMode::Streaming)
         .expect("valid resample spec");
     let mut plan = dsp.resample(&spec).expect("resample plan f32");
 
@@ -678,7 +682,9 @@ fn macro_create_iir_f32() {
 #[test]
 fn macro_create_resample_f64() {
     let b = macro_backend();
-    let spec = ResampleSpec::<f64>::new(2, 1, vec![0.5, 1.0, 0.5], ResampleMode::Streaming)
+    let filter = FirFilter::<f64>::new(vec![0.5, 1.0, 0.5], FirMeta::unknown())
+        .expect("non-empty prototype");
+    let spec = ResampleSpec::<f64>::new(filter, 2, 1, ResampleMode::Streaming)
         .expect("valid resample spec");
     let mut plan = CreatePlan::create_plan(&b, &spec).expect("macro resample plan");
 

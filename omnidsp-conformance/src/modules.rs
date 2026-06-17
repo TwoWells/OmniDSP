@@ -523,7 +523,9 @@ where
         ),
     ];
     for &(label, up, down, proto, input, expected) in cases {
-        let spec = ResampleSpec::<T>::new(up, down, to_vec::<T>(proto), ResampleMode::Streaming)
+        let filter = FirFilter::<T>::new(to_vec::<T>(proto), FirMeta::unknown())
+            .expect("non-empty prototype");
+        let spec = ResampleSpec::<T>::new(filter, up, down, ResampleMode::Streaming)
             .expect("valid resample spec");
         let mut plan = b.create_plan(&spec).expect("resample plan");
         let signal = to_vec::<T>(input);
@@ -547,7 +549,9 @@ where
     let proto = to_vec::<T>(&[0.5, 1.0, 0.5]);
     let signal = to_vec::<T>(&(0..16).map(|i| i as f64).collect::<Vec<_>>());
     for &mode in &[ResampleMode::Streaming, ResampleMode::Batch] {
-        let spec = ResampleSpec::<T>::new(2, 1, proto.clone(), mode).expect("valid resample spec");
+        let filter =
+            FirFilter::<T>::new(proto.clone(), FirMeta::unknown()).expect("non-empty prototype");
+        let spec = ResampleSpec::<T>::new(filter, 2, 1, mode).expect("valid resample spec");
         let mut plan = b.create_plan(&spec).expect("resample plan");
         let mut out = vec![T::zero(); plan.max_output_len(signal.len())];
         let produced = plan.process(&signal, &mut out).expect("resample process");
@@ -558,8 +562,9 @@ where
         );
     }
 
+    let filter = FirFilter::<T>::new(proto, FirMeta::unknown()).expect("non-empty prototype");
     let spec =
-        ResampleSpec::<T>::new(2, 1, proto, ResampleMode::Streaming).expect("valid resample spec");
+        ResampleSpec::<T>::new(filter, 2, 1, ResampleMode::Streaming).expect("valid resample spec");
     let mut plan = b.create_plan(&spec).expect("resample plan");
     let input = vec![T::zero(); 8];
     let mut tiny = vec![T::zero(); 1];

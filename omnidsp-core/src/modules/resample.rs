@@ -386,6 +386,7 @@ mod tests {
     use super::*;
     use crate::design::resample::{self, DEFAULT_MAX_PHASES, ResampleMode, ResampleQuality};
     use crate::test_utils::TestVecOps;
+    use crate::traits::fir::{FirFilter, FirMeta};
     use crate::types::Window;
 
     fn factory() -> OmniResample<TestVecOps> {
@@ -739,47 +740,23 @@ mod tests {
 
     /// Build a plan from an explicit prototype filter (test-only).
     ///
-    /// Performs the same polyphase decomposition as `create_plan` but
-    /// takes a pre-designed prototype instead of calling `design()`.
-    #[allow(
-        clippy::cast_precision_loss,
-        reason = "up_factor is a small integer, exact as f64"
-    )]
+    /// Wraps the raw prototype in a [`FirFilter`] with no recorded design
+    /// context ([`FirMeta::unknown`], so the cross-spec cutoff check is
+    /// skipped), composes a [`ResampleSpec`], and routes through the real
+    /// `create_plan` — exercising the spec path rather than duplicating the
+    /// polyphase decomposition.
     fn plan_from_prototype(
         prototype: &[f64],
         up_factor: usize,
         down_factor: usize,
     ) -> OmniResamplePlan<f64, TestVecOps> {
-        let taps_per_phase = prototype.len().div_ceil(up_factor);
-
-        let mut phases = vec![0.0_f64; up_factor * taps_per_phase];
-        for p in 0..up_factor {
-            for k in 0..taps_per_phase {
-                let src = p + k * up_factor;
-                if src < prototype.len() {
-                    phases[p * taps_per_phase + (taps_per_phase - 1 - k)] = prototype[src];
-                }
-            }
-        }
-
-        // Scale by L (same as create_plan).
-        let scale = up_factor as f64;
-        for coeff in &mut phases {
-            *coeff *= scale;
-        }
-
-        OmniResamplePlan {
-            phases,
-            taps_per_phase,
-            up_factor,
-            down_factor,
-            delay: vec![0.0; 2 * taps_per_phase],
-            write_pos: 0,
-            phase: 0,
-            proto_len: prototype.len(),
-            mode: ResampleMode::Streaming,
-            vecops: TestVecOps,
-        }
+        let filter = FirFilter::new(prototype.to_vec(), FirMeta::unknown())
+            .expect("non-empty prototype filter");
+        let spec = ResampleSpec::new(filter, up_factor, down_factor, ResampleMode::Streaming)
+            .expect("valid resample spec");
+        factory()
+            .create_plan(&spec)
+            .expect("create plan from prototype")
     }
 
     fn assert_approx_eq(actual: &[f64], expected: &[f64], tol: f64, label: &str) {

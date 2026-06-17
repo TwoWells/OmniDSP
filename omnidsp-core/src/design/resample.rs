@@ -11,12 +11,13 @@
 //! 2. **Prototype filter:** a lowpass FIR with cutoff `1 / (2 · max(L, M))`
 //!    (normalized to the upsampled rate) prevents aliasing.  Filter length
 //!    is estimated from the quality parameter via Kaiser's formula.
-//! 3. **Output:** a [`ResampleSpec`] holding `L`, `M`, the prototype
-//!    coefficients, and the processing mode.
+//! 3. **Output:** a [`ResampleSpec`] composing `L`, `M`, the prototype as a
+//!    [`FirFilter`], and the processing mode.
 //!
 //! [`design`] takes plain parameters (rates, quality, window) and returns
-//! the spec.  Users with pre-computed coefficients can construct a
-//! [`ResampleSpec`] directly via [`ResampleSpec::new`].
+//! the spec.  Users with pre-computed coefficients can wrap them in a
+//! `FirFilter` and construct a [`ResampleSpec`] directly via
+//! [`ResampleSpec::new`].
 
 #![allow(
     clippy::cast_precision_loss,
@@ -31,6 +32,7 @@
 use num_traits::Float;
 
 use crate::error::{Error, Result};
+use crate::traits::fir::{FirFilter, FirMeta};
 use crate::types::Window;
 
 // ─── Spec (backend-agnostic) ─────────────────────────────────────────
@@ -102,10 +104,11 @@ impl ResampleQuality {
 
 /// Resampling specification — plan-ready data for a polyphase resampler.
 ///
-/// Holds the rational conversion factors, prototype anti-aliasing FIR
-/// filter, and processing mode.  Construct via [`design`] for automatic
-/// filter generation, or via [`ResampleSpec::new`] with pre-computed
-/// coefficients.
+/// Composes a designed anti-aliasing [`FirFilter`] (ADR-012 §4 — replacing
+/// the bare `prototype_filter: Vec<T>`) with the rational conversion factors
+/// and processing mode.  Construct via [`design`] for automatic filter
+/// generation, or via [`ResampleSpec::new`] from a [`FirFilter`] built directly
+/// via [`FirFilter::new`] for pre-computed coefficients.
 ///
 /// # Examples
 ///
@@ -113,6 +116,7 @@ impl ResampleQuality {
 /// use omnidsp_core::design::resample::{
 ///     self, ResampleSpec, ResampleMode, ResampleQuality, DEFAULT_MAX_PHASES,
 /// };
+/// use omnidsp_core::traits::fir::{FirFilter, FirMeta};
 /// use omnidsp_core::types::Window;
 ///
 /// // Via design():
@@ -126,15 +130,17 @@ impl ResampleQuality {
 /// assert_eq!(spec.up_factor(), 160);
 /// assert_eq!(spec.down_factor(), 147);
 ///
-/// // Or directly from pre-computed data:
-/// let spec = ResampleSpec::new(2, 1, vec![0.5_f64, 1.0, 0.5], ResampleMode::Streaming).unwrap();
+/// // Or directly from pre-computed data (bring-your-own coefficients, no
+/// // recorded cutoff → the cross-spec cutoff check is skipped):
+/// let filter = FirFilter::new(vec![0.5_f64, 1.0, 0.5], FirMeta::unknown()).unwrap();
+/// let spec = ResampleSpec::new(filter, 2, 1, ResampleMode::Streaming).unwrap();
 /// assert_eq!(spec.up_factor(), 2);
 /// ```
 #[derive(Debug, Clone)]
 pub struct ResampleSpec<T> {
     up_factor: usize,
     down_factor: usize,
-    prototype_filter: Vec<T>,
+    filter: FirFilter<T>,
     mode: ResampleMode,
 }
 
@@ -144,17 +150,41 @@ pub const DEFAULT_MAX_PHASES: usize = 256;
 /// Hard upper limit on polyphase phases.
 pub const MAX_PHASES_LIMIT: usize = 1024;
 
-impl<T> ResampleSpec<T> {
-    /// Create a spec from pre-computed polyphase data.
+/// Tolerance for the cross-spec anti-alias / anti-image cutoff invariant.
+///
+/// The polyphase factorization requires the prototype's normalized cutoff to
+/// satisfy `cutoff ≤ 1 / (2·max(L, M))`.  [`design`] computes the cutoff at
+/// exactly that bound for the decimation/interpolation cases, so the check must
+/// admit equality (and small float drift) — this slack does so.
+const CUTOFF_TOLERANCE: f64 = 1e-9;
+
+impl<T: Float> ResampleSpec<T> {
+    /// Create a spec composing a designed anti-aliasing `filter` with the
+    /// rational conversion factors and processing mode.
+    ///
+    /// # Cross-spec invariant
+    ///
+    /// Validates that the composed `filter` is compatible with the polyphase
+    /// factorization (ADR-012 §4 — *valid-by-construction* now checks the
+    /// composition, not just the parts):
+    ///
+    /// - `up_factor` and `down_factor` must both be positive (`≥ 1`).
+    /// - When the filter records a normalized cutoff (its [`FirMeta`] cutoff is
+    ///   `Some`), the cutoff must satisfy the anti-alias / anti-image condition
+    ///   `cutoff ≤ 1 / (2·max(up_factor, down_factor))` (within a small float
+    ///   tolerance that admits equality).  A higher cutoff would pass band energy that the
+    ///   polyphase rate change aliases (decimation) or images (interpolation).
+    ///   When the cutoff is unknown (`None`, bring-your-own coefficients), this
+    ///   check is skipped — the caller owns the prototype's correctness.
     ///
     /// # Errors
     ///
     /// Returns [`Error::InvalidSpec`] if `up_factor` or `down_factor` is zero,
-    /// or if `prototype_filter` is empty.
+    /// or if the filter's known normalized cutoff exceeds the polyphase bound.
     pub fn new(
+        filter: FirFilter<T>,
         up_factor: usize,
         down_factor: usize,
-        prototype_filter: Vec<T>,
         mode: ResampleMode,
     ) -> Result<Self> {
         if up_factor == 0 || down_factor == 0 {
@@ -162,19 +192,30 @@ impl<T> ResampleSpec<T> {
                 "resample up_factor and down_factor must be positive".into(),
             ));
         }
-        if prototype_filter.is_empty() {
-            return Err(Error::InvalidSpec(
-                "resample prototype filter must not be empty".into(),
-            ));
+        if let Some(&cutoff) = filter.meta().normalized_cutoff() {
+            let max_factor = up_factor.max(down_factor);
+            let cutoff_f64 = cutoff
+                .to_f64()
+                .ok_or_else(|| Error::Internal("failed to convert cutoff to f64".into()))?;
+            // cutoff ≤ 1 / (2·max(L, M)) — the anti-alias / anti-image bound.
+            let bound = 1.0 / (2.0 * max_factor as f64);
+            if cutoff_f64 > bound + CUTOFF_TOLERANCE {
+                return Err(Error::InvalidSpec(format!(
+                    "resample prototype cutoff ({cutoff_f64}) exceeds the polyphase \
+                     anti-alias bound 1/(2·max({up_factor},{down_factor})) = {bound}"
+                )));
+            }
         }
         Ok(Self {
             up_factor,
             down_factor,
-            prototype_filter,
+            filter,
             mode,
         })
     }
+}
 
+impl<T> ResampleSpec<T> {
     /// Upsampling factor L (number of polyphase phases).
     #[must_use]
     pub const fn up_factor(&self) -> usize {
@@ -187,10 +228,17 @@ impl<T> ResampleSpec<T> {
         self.down_factor
     }
 
-    /// Prototype FIR filter coefficients.
+    /// The composed anti-aliasing filter (ADR-012 §4 — the reused artifact).
+    #[must_use]
+    pub const fn filter(&self) -> &FirFilter<T> {
+        &self.filter
+    }
+
+    /// Prototype FIR filter coefficients — delegates to the composed
+    /// [`FirFilter`]'s [`coefficients`](FirFilter::coefficients).
     #[must_use]
     pub fn prototype_filter(&self) -> &[T] {
-        &self.prototype_filter
+        self.filter.coefficients()
     }
 
     /// Processing mode.
@@ -284,12 +332,13 @@ pub fn design<T: Float>(
         &super::fir::FirMethod::Windowed { window: *window },
     )?;
 
-    ResampleSpec::new(
-        up as usize,
-        down as usize,
-        fir_result.coefficients().to_vec(),
-        mode,
-    )
+    // Re-wrap the designed coefficients in a FirFilter carrying the design
+    // context the cross-spec invariant validates against: the prototype was
+    // designed at the upsampled rate with normalized cutoff `cutoff_normalized`.
+    let meta = FirMeta::new(from_f64(upsampled_rate)?, from_f64(cutoff_normalized)?);
+    let filter = FirFilter::new(fir_result.coefficients().to_vec(), meta)?;
+
+    ResampleSpec::new(filter, up as usize, down as usize, mode)
 }
 
 // ─── Internals ───────────────────────────────────────────────────────
@@ -519,24 +568,31 @@ mod tests {
 
     // ── ResampleSpec direct construction ────────────────────────────
 
+    /// Build a `FirFilter` with no recorded cutoff (bring-your-own coefficients
+    /// → the cross-spec cutoff check is skipped).
+    fn byo(coeffs: Vec<f64>) -> FirFilter<f64> {
+        FirFilter::new(coeffs, FirMeta::unknown()).expect("non-empty coefficients")
+    }
+
     #[test]
     fn spec_accessors() {
         let spec = ResampleSpec::new(
+            byo(vec![0.25, 0.5, 1.0, 0.5, 0.25]),
             3,
             2,
-            vec![0.25, 0.5, 1.0, 0.5, 0.25],
             ResampleMode::Streaming,
         )
         .expect("valid resample spec");
         assert_eq!(spec.up_factor(), 3, "up_factor");
         assert_eq!(spec.down_factor(), 2, "down_factor");
         assert_eq!(spec.prototype_filter().len(), 5, "prototype length");
+        assert_eq!(spec.filter().coefficients().len(), 5, "filter coeff length");
         assert_eq!(spec.mode(), ResampleMode::Streaming, "mode");
     }
 
     #[test]
     fn spec_with_mode() {
-        let spec = ResampleSpec::new(2, 1, vec![1.0_f64], ResampleMode::Streaming)
+        let spec = ResampleSpec::new(byo(vec![1.0_f64]), 2, 1, ResampleMode::Streaming)
             .expect("valid resample spec")
             .with_mode(ResampleMode::Batch);
         assert_eq!(
@@ -549,7 +605,7 @@ mod tests {
     #[test]
     fn spec_rejects_zero_up_factor() {
         assert!(
-            ResampleSpec::new(0, 1, vec![1.0_f64], ResampleMode::Streaming).is_err(),
+            ResampleSpec::new(byo(vec![1.0_f64]), 0, 1, ResampleMode::Streaming).is_err(),
             "zero up_factor should be rejected"
         );
     }
@@ -557,16 +613,42 @@ mod tests {
     #[test]
     fn spec_rejects_zero_down_factor() {
         assert!(
-            ResampleSpec::new(1, 0, vec![1.0_f64], ResampleMode::Streaming).is_err(),
+            ResampleSpec::new(byo(vec![1.0_f64]), 1, 0, ResampleMode::Streaming).is_err(),
             "zero down_factor should be rejected"
         );
     }
 
     #[test]
     fn spec_rejects_empty_prototype() {
+        // Emptiness is now caught one rung earlier — at `FirFilter::new`.
         assert!(
-            ResampleSpec::<f64>::new(1, 1, vec![], ResampleMode::Streaming).is_err(),
-            "empty prototype filter should be rejected"
+            FirFilter::<f64>::new(vec![], FirMeta::unknown()).is_err(),
+            "empty prototype filter should be rejected at FirFilter::new"
+        );
+    }
+
+    #[test]
+    fn spec_rejects_cutoff_too_high_for_factorization() {
+        // A filter with a known normalized cutoff of 0.3 is incompatible with a
+        // ×2 decimator: the anti-alias bound is 1/(2·max(1,2)) = 0.25, so the
+        // cross-spec invariant must reject it.
+        let meta = FirMeta::new(44100.0_f64, 0.3);
+        let filter = FirFilter::new(vec![0.25, 0.5, 0.25], meta).expect("non-empty");
+        assert!(
+            ResampleSpec::new(filter, 1, 2, ResampleMode::Streaming).is_err(),
+            "cutoff above the polyphase anti-alias bound should be rejected"
+        );
+    }
+
+    #[test]
+    fn spec_accepts_cutoff_at_factorization_bound() {
+        // The bound holds with equality for the ×2 decimator: cutoff = 0.25 =
+        // 1/(2·max(1,2)).  The tolerance must admit equality.
+        let meta = FirMeta::new(44100.0_f64, 0.25);
+        let filter = FirFilter::new(vec![0.25, 0.5, 0.25], meta).expect("non-empty");
+        assert!(
+            ResampleSpec::new(filter, 1, 2, ResampleMode::Streaming).is_ok(),
+            "cutoff exactly at the polyphase bound should be accepted"
         );
     }
 
