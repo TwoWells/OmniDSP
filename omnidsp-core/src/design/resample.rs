@@ -281,7 +281,7 @@ pub fn design<T: Float>(
         from_f64(upsampled_rate)?,
         from_f64(cutoff_hz)?,
         None,
-        window,
+        &super::fir::FirMethod::Windowed { window: *window },
     )?;
 
     ResampleSpec::new(

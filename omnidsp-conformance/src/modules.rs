@@ -23,7 +23,7 @@ use omnidsp_core::scalar::ScalarVecOps;
 use omnidsp_core::traits::conv::{ConvMethod, ConvPlan, ConvSpec};
 use omnidsp_core::traits::dct::{DctNorm, DctPlan, DctSpec, DctType};
 use omnidsp_core::traits::dft::{DftNorm, DftR2c, DftR2cPlan, DftR2cSpec};
-use omnidsp_core::traits::fir::{FirPlan, FirSpec, FirStrategy};
+use omnidsp_core::traits::fir::{FirFilter, FirMeta, FirPlan, FirSpec, FirStrategy};
 use omnidsp_core::traits::iir::{IirPlan, IirSpec};
 use omnidsp_core::traits::vecops::VecOps;
 use omnidsp_core::types::{BiquadSection, Window};
@@ -104,9 +104,15 @@ where
     B: CreatePlan<FirSpec<T>>,
     B::Plan: FirPlan<T>,
 {
+    // Build a FIR spec from bring-your-own taps and a strategy.
+    let fir_spec = |taps: Vec<T>, strategy: FirStrategy| -> FirSpec<T> {
+        let filter = FirFilter::new(taps, FirMeta::unknown()).expect("valid fir filter");
+        FirSpec::new(filter, strategy)
+    };
+
     // Impulse response equals the coefficients.
     let coeffs = [0.25, 0.5, 0.25];
-    let spec = FirSpec::new(to_vec::<T>(&coeffs)).expect("valid fir spec");
+    let spec = fir_spec(to_vec::<T>(&coeffs), FirStrategy::Auto);
     let mut plan = b.create_plan(&spec).expect("fir plan");
     let mut impulse = vec![T::zero(); 8];
     impulse[0] = T::one();
@@ -129,9 +135,7 @@ where
     let input = to_vec::<T>(firl::LFILTER_INPUT);
     for &(label, taps, expected) in golden {
         for &strategy in &[FirStrategy::Direct, FirStrategy::OverlapSave] {
-            let spec = FirSpec::new(to_vec::<T>(taps))
-                .expect("valid fir spec")
-                .with_strategy(strategy);
+            let spec = fir_spec(to_vec::<T>(taps), strategy);
             let mut plan = b.create_plan(&spec).expect("fir plan");
             let mut out = vec![T::zero(); input.len()];
             plan.process(&input, &mut out).expect("fir process");
@@ -145,7 +149,7 @@ where
     }
 
     let mut plan = b
-        .create_plan(&FirSpec::new(to_vec::<T>(&coeffs)).expect("valid fir spec"))
+        .create_plan(&fir_spec(to_vec::<T>(&coeffs), FirStrategy::Auto))
         .expect("fir plan");
     let small = vec![T::zero(); 4];
     let mut wrong = vec![T::zero(); 3];

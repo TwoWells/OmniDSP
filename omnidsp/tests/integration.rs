@@ -24,7 +24,7 @@ use omnidsp_core::traits::conv::{ConvMethod, ConvPlan, ConvSpec};
 use omnidsp_core::traits::dft::{
     DftC2cPlan, DftC2cSpec, DftC2rPlan, DftC2rSpec, DftNorm, DftR2cPlan, DftR2cSpec,
 };
-use omnidsp_core::traits::fir::{FirPlan, FirSpec};
+use omnidsp_core::traits::fir::{FirFilter, FirMeta, FirPlan, FirSpec, FirStrategy};
 use omnidsp_core::traits::iir::{IirPlan, IirSpec};
 use omnidsp_core::types::{BiquadSection, Direction, Window};
 use omnidsp_rustfft::{RustDftC2c, RustDftC2r, RustDftR2c};
@@ -143,7 +143,8 @@ where
     let quarter = T::from(0.25).expect("0.25");
     let half = T::from(0.5).expect("0.5");
     let coeffs = vec![quarter, half, quarter];
-    let spec = FirSpec::new(coeffs.clone()).expect("valid fir spec");
+    let filter = FirFilter::new(coeffs.clone(), FirMeta::unknown()).expect("valid fir filter");
+    let spec = FirSpec::new(filter, FirStrategy::Auto);
     let mut plan = dsp.fir(&spec).expect("FIR plan");
 
     let mut input = vec![T::zero(); 8];
@@ -605,7 +606,9 @@ fn macro_create_dft_f32() {
 #[test]
 fn macro_create_fir_f64() {
     let b = macro_backend();
-    let spec = FirSpec::new(vec![0.25_f64, 0.5, 0.25]).expect("valid fir spec");
+    let filter =
+        FirFilter::new(vec![0.25_f64, 0.5, 0.25], FirMeta::unknown()).expect("valid fir filter");
+    let spec = FirSpec::new(filter, FirStrategy::Auto);
     let mut plan = CreatePlan::create_plan(&b, &spec).expect("macro FIR plan");
 
     let mut input = vec![0.0; 8];
@@ -618,7 +621,9 @@ fn macro_create_fir_f64() {
 #[test]
 fn macro_create_fir_f32() {
     let b = macro_backend();
-    let spec = FirSpec::new(vec![0.25_f32, 0.5, 0.25]).expect("valid fir spec");
+    let filter =
+        FirFilter::new(vec![0.25_f32, 0.5, 0.25], FirMeta::unknown()).expect("valid fir filter");
+    let spec = FirSpec::new(filter, FirStrategy::Auto);
     let mut plan = CreatePlan::create_plan(&b, &spec).expect("macro FIR plan f32");
 
     let mut input = vec![0.0_f32; 8];

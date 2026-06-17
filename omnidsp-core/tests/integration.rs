@@ -18,6 +18,7 @@ use std::f64::consts::TAU;
 
 use num_complex::Complex;
 
+use omnidsp_core::design::fir::FirMethod;
 use omnidsp_core::design::{cqt, fir, iir, resample};
 use omnidsp_core::modules::cqt::{OmniCqt, OmniCqtPlan};
 use omnidsp_core::modules::fir::OmniFir;
@@ -25,7 +26,7 @@ use omnidsp_core::modules::resample::{OmniResample, OmniResamplePlan};
 use omnidsp_core::modules::xcorr::{CrossCorrSpec, OmniCrossCorr};
 use omnidsp_core::scalar::{ScalarIir, ScalarVecOps};
 use omnidsp_core::traits::dft::{DftC2c, DftC2cPlan, DftC2cSpec, DftNorm, DftR2c};
-use omnidsp_core::traits::fir::{FirPlan, FirStrategy};
+use omnidsp_core::traits::fir::{FirPlan, FirSpec, FirStrategy};
 use omnidsp_core::traits::iir::{Iir, IirPlan};
 use omnidsp_core::traits::vecops::VecOps;
 use omnidsp_core::types::{Direction, FilterType, Window};
@@ -69,19 +70,21 @@ mod fir_integration {
     fn design_and_apply_lowpass() {
         // Design: lowpass, order 30, Hamming, fc=1000 Hz, fs=44100
         // (matches scipy: firwin(31, 1000, window='hamming', pass_zero=True, fs=44100))
-        let spec = fir::design(
+        let filter = fir::design(
             FilterType::Lowpass,
             30,
             44100.0_f64,
             1000.0,
             None,
-            &Window::Hamming,
+            &FirMethod::Windowed {
+                window: Window::Hamming,
+            },
         )
         .expect("FIR design");
 
         // Verify our design matches scipy's taps.
         assert_approx_eq(
-            spec.coefficients(),
+            filter.coefficients(),
             LFILTER_LP30_HAMMING_TAPS,
             1e-14,
             "FIR taps vs scipy firwin",
@@ -91,7 +94,7 @@ mod fir_integration {
         let factory = OmniFir::new(RustDftR2c, RustDftC2r, ScalarVecOps);
 
         for &strategy in &[FirStrategy::Direct, FirStrategy::OverlapSave] {
-            let plan_spec = spec.clone().with_strategy(strategy);
+            let plan_spec = FirSpec::new(filter.clone(), strategy);
             let mut plan = factory.create_plan(&plan_spec).expect("FIR plan creation");
 
             let mut output = vec![0.0; LFILTER_INPUT.len()];
@@ -118,20 +121,22 @@ mod fir_integration {
         reason = "signal indices are small enough for f64"
     )]
     fn design_and_apply_highpass() {
-        let spec = fir::design(
+        let filter = fir::design(
             FilterType::Highpass,
             30,
             44100.0_f64,
             10000.0,
             None,
-            &Window::Hann,
+            &FirMethod::Windowed {
+                window: Window::Hann,
+            },
         )
         .expect("FIR design");
 
         let factory = OmniFir::new(RustDftR2c, RustDftC2r, ScalarVecOps);
 
         for &strategy in &[FirStrategy::Direct, FirStrategy::OverlapSave] {
-            let plan_spec = spec.clone().with_strategy(strategy);
+            let plan_spec = FirSpec::new(filter.clone(), strategy);
             let mut plan = factory.create_plan(&plan_spec).expect("FIR plan creation");
 
             // Input: 400 Hz (below cutoff, should be rejected) + 15 kHz (above cutoff, should pass).
@@ -167,20 +172,22 @@ mod fir_integration {
     /// scipy lfilter reference.
     #[test]
     fn design_and_stream_long_signal() {
-        let spec = fir::design(
+        let filter = fir::design(
             FilterType::Lowpass,
             30,
             44100.0_f64,
             1000.0,
             None,
-            &Window::Hamming,
+            &FirMethod::Windowed {
+                window: Window::Hamming,
+            },
         )
         .expect("FIR design");
 
         let factory = OmniFir::new(RustDftR2c, RustDftC2r, ScalarVecOps);
 
         for &strategy in &[FirStrategy::Direct, FirStrategy::OverlapSave] {
-            let plan_spec = spec.clone().with_strategy(strategy);
+            let plan_spec = FirSpec::new(filter.clone(), strategy);
             let mut plan = factory.create_plan(&plan_spec).expect("FIR plan creation");
 
             let mut output = vec![0.0; LFILTER_LONG_INPUT.len()];
@@ -456,13 +463,15 @@ mod streaming_equivalence {
     /// FIR: single-shot vs chunked processing must produce identical output.
     #[test]
     fn fir_streaming_equivalence() {
-        let spec = fir::design(
+        let filter = fir::design(
             FilterType::Lowpass,
             64,
             44100.0_f64,
             2000.0,
             None,
-            &Window::Hamming,
+            &FirMethod::Windowed {
+                window: Window::Hamming,
+            },
         )
         .expect("FIR design");
 
@@ -473,7 +482,7 @@ mod streaming_equivalence {
 
         for &strategy in &[FirStrategy::Direct, FirStrategy::OverlapSave] {
             // Single-shot.
-            let plan_spec = spec.clone().with_strategy(strategy);
+            let plan_spec = FirSpec::new(filter.clone(), strategy);
             let mut plan_single = factory.create_plan(&plan_spec).expect("single plan");
             let mut single_out = vec![0.0; input.len()];
             plan_single
@@ -654,15 +663,18 @@ mod pipeline {
         let resampled = &resampled[..n_resamp];
 
         // Stage 2: lowpass FIR at 8000 Hz, 48000 Hz sample rate.
-        let fir_spec = fir::design(
+        let fir_filter = fir::design(
             FilterType::Lowpass,
             32,
             48000.0_f64,
             8000.0,
             None,
-            &Window::Hamming,
+            &FirMethod::Windowed {
+                window: Window::Hamming,
+            },
         )
         .expect("FIR design");
+        let fir_spec = FirSpec::new(fir_filter, FirStrategy::Auto);
 
         let fir_factory = OmniFir::new(RustDftR2c, RustDftC2r, ScalarVecOps);
         let mut fir_plan = fir_factory.create_plan(&fir_spec).expect("FIR plan");
