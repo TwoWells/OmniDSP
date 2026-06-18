@@ -3,8 +3,9 @@
 
 // Entry point: load the wasm streaming CQT engine, wire Web Audio → ring buffer
 // → per requestAnimationFrame: drain newly-arrived PCM → CqtEngine.process(n) →
-// scroll the newest-anchored magnitude columns it emits, plus a live-spectrum
-// meter, a hover readout, and sensitivity / history / low-edge controls.
+// max-pool the emitted columns to the chosen on-screen span → scroll. Plus a
+// live-spectrum meter, a hover readout, and span / sensitivity / low-edge
+// controls.
 //
 // The engine is imported straight from the wasm-pack `--target web` output in
 // ../../omnidsp-wasm/pkg (run `make wasm-pack` first). The `?url` import hands
@@ -12,7 +13,7 @@
 import init, { CqtEngine } from "../../omnidsp-wasm/pkg/omnidsp_wasm.js";
 import wasmUrl from "../../omnidsp-wasm/pkg/omnidsp_wasm_bg.wasm?url";
 import { AudioEngine } from "./audio";
-import { Spectrogram, drawOverlay } from "./spectrogram";
+import { Spectrogram, drawOverlay, DEFAULT_HISTORY } from "./spectrogram";
 import { SpectrumMeter, drawLegend } from "./meter";
 import { freqToNote, hzLabel } from "./notes";
 
@@ -32,7 +33,7 @@ function showError(err: unknown): void {
   console.error(err);
 }
 
-/** Everything tied to one engine build; rebuilt when low edge / history changes. */
+/** Everything tied to one engine build; rebuilt when the low edge changes. */
 interface Active {
   engine: CqtEngine;
   audio: AudioEngine;
@@ -41,6 +42,10 @@ interface Active {
   inCap: number;
   bins: number;
   freqs: Float32Array;
+  /** Per-bin newest-anchored latency in input samples (low → high). */
+  latencies: Float32Array;
+  /** Max-pool accumulator across emitted columns (one displayed column per K). */
+  pool: Float32Array;
 }
 
 async function bootstrap(): Promise<void> {
@@ -59,7 +64,7 @@ async function bootstrap(): Promise<void> {
   const startBtn = $<HTMLButtonElement>("start");
   const micBtn = $<HTMLButtonElement>("mic");
   const minFreqSel = $<HTMLSelectElement>("minfreq");
-  const historySel = $<HTMLSelectElement>("history");
+  const spanSel = $<HTMLSelectElement>("span");
   const sensInput = $<HTMLInputElement>("sens");
   const stats = $("stats");
 
@@ -67,11 +72,35 @@ async function bootstrap(): Promise<void> {
   // The slider reads as "sensitivity": higher (right) = deeper dynamic range =
   // lower dB floor = fainter detail shown. dbMin is the negated slider value.
   let dbMin = -Number(sensInput.value);
-  let history = Number(historySel.value); // columns of scroll history
-  let lastCps = 0; // most recent columns/second, for the hover time-ago
+  let targetSec = Number(spanSel.value); // desired on-screen time span
+  let poolCount = 0; // emitted columns accumulated into the current pooled one
+  let poolK = 1; // emitted columns per displayed column (drives the span)
+  let lastCps = 0; // most recent columns/second, for poolK + the hover time-ago
+
+  // Convert each bin's newest-anchored latency (input samples) to displayed
+  // columns and hand it to the spectrogram for per-row de-warping. One displayed
+  // column is `hop · poolK = (sr/cps) · poolK` input samples, so
+  // `cols[bin] = latency_samples[bin] · cps / (sr · poolK)`. Recomputed whenever
+  // poolK / cps drift (below), since the column→time scale moves with them.
+  const updateLatencyColumns = (cps: number): void => {
+    if (!active || cps <= 0) return;
+    const { latencies, spectro } = active;
+    const scale = cps / (ctx.sampleRate * poolK);
+    const cols = new Float32Array(latencies.length);
+    for (let b = 0; b < latencies.length; b++) cols[b] = latencies[b] * scale;
+    spectro.setLatencyColumns(cols);
+  };
+
+  // Recompute the pool factor so `DEFAULT_HISTORY` displayed columns cover
+  // `targetSec`: K = emitted-col/s · span / width. The displayed-column scale
+  // moves with poolK, so refresh the per-bin latency offsets here too.
+  const updatePoolK = (cps: number): void => {
+    if (cps > 0) poolK = Math.max(1, Math.round((cps * targetSec) / DEFAULT_HISTORY));
+    updateLatencyColumns(cps);
+  };
 
   // (Re)build the engine + audio graph + canvases. The CQT is sized to the low
-  // edge, so changing it (or the history width) means a fresh engine + ring.
+  // edge, so changing it means a fresh engine + ring; the span knob does not.
   const rebuild = (minFreq: number): void => {
     const prev = active?.audio.source ?? "none";
     active?.audio.dispose();
@@ -89,12 +118,27 @@ async function bootstrap(): Promise<void> {
     const inCap = engine.input_capacity;
     const bins = engine.num_bins;
     const freqs = engine.frequencies();
+    const latencies = engine.bin_latencies();
 
     const audio = new AudioEngine(ctx);
-    const spectro = new Spectrogram(spectroCanvas, bins, history, dbMin);
+    const spectro = new Spectrogram(spectroCanvas, bins, DEFAULT_HISTORY, dbMin);
     const meter = new SpectrumMeter(meterCanvas, bins, dbMin);
     drawOverlay(overlayCanvas, freqs, bins, engine.bins_per_octave);
-    active = { engine, audio, spectro, meter, inCap, bins, freqs };
+    active = {
+      engine,
+      audio,
+      spectro,
+      meter,
+      inCap,
+      bins,
+      freqs,
+      latencies,
+      pool: new Float32Array(bins),
+    };
+    poolCount = 0;
+    // Apply the current column scale to the new engine's per-bin latencies
+    // (a fresh engine resets poolK's relationship to the new bin set).
+    updateLatencyColumns(lastCps);
 
     // Carry the previous source across a rebuild so changing a control
     // mid-stream doesn't stop the audio.
@@ -121,9 +165,9 @@ async function bootstrap(): Promise<void> {
       .catch(showError);
   });
   minFreqSel.addEventListener("change", () => rebuild(Number(minFreqSel.value)));
-  historySel.addEventListener("change", () => {
-    history = Number(historySel.value);
-    rebuild(Number(minFreqSel.value));
+  spanSel.addEventListener("change", () => {
+    targetSec = Number(spanSel.value);
+    updatePoolK(lastCps);
   });
   sensInput.addEventListener("input", () => {
     dbMin = -Number(sensInput.value);
@@ -133,7 +177,7 @@ async function bootstrap(): Promise<void> {
   });
 
   // Hover readout: cursor over the spectrogram → nearest note, frequency, and
-  // how long ago that column was (columns-from-right ÷ columns-per-second).
+  // how long ago that column was (displayed-columns-from-right · seconds each).
   stage.addEventListener("mousemove", (e) => {
     if (!active) return;
     const rect = stage.getBoundingClientRect();
@@ -146,7 +190,7 @@ async function bootstrap(): Promise<void> {
     const bin = Math.min(active.bins - 1, Math.max(0, Math.round((1 - fy) * (active.bins - 1))));
     const f = active.freqs[bin];
     const colsFromRight = Math.round((1 - fx) * (active.spectro.history - 1));
-    const age = lastCps > 0 ? colsFromRight / lastCps : 0;
+    const age = lastCps > 0 ? (colsFromRight * poolK) / lastCps : 0;
     readout.textContent = `${freqToNote(f)} · ${hzLabel(f)} Hz · −${age.toFixed(1)} s`;
     readout.style.left = `${e.clientX}px`;
     readout.style.top = `${e.clientY}px`;
@@ -168,7 +212,7 @@ async function bootstrap(): Promise<void> {
   const frame = (): void => {
     requestAnimationFrame(frame);
     if (!active || !active.audio.running) return;
-    const { engine, audio, spectro, meter, inCap, bins } = active;
+    const { engine, audio, spectro, meter, inCap, bins, pool } = active;
 
     // Rebuild views each frame: cheap (no copy), and robust if wasm linear
     // memory ever grows and detaches the backing ArrayBuffer.
@@ -187,13 +231,23 @@ async function bootstrap(): Promise<void> {
       procMsAvg += (performance.now() - t0 - procMsAvg) * 0.1;
 
       if (cols > 0) {
-        // Read the output view after process() (wasm memory may have grown) and
-        // slice it per column — the plan emits low → high, oldest hop-boundary
-        // column first; the meter shows the newest.
+        // Read the output view after process() (wasm memory may have grown). The
+        // plan emits low → high, oldest hop-boundary column first. Max-pool each
+        // emitted column into `pool`; flush one displayed column every poolK.
         const outView = new Float32Array(wasm.memory.buffer, engine.output_ptr, cols * bins);
         for (let c = 0; c < cols; c++) {
-          spectro.pushColumn(outView.subarray(c * bins, (c + 1) * bins));
+          const base = c * bins;
+          for (let b = 0; b < bins; b++) {
+            const v = outView[base + b];
+            if (v > pool[b]) pool[b] = v;
+          }
+          if (++poolCount >= poolK) {
+            spectro.pushColumn(pool);
+            pool.fill(0);
+            poolCount = 0;
+          }
         }
+        // The meter shows the live instantaneous spectrum (newest raw column).
         meter.update(outView.subarray((cols - 1) * bins, cols * bins));
       }
     }
@@ -205,9 +259,11 @@ async function bootstrap(): Promise<void> {
       const fps = (frames * 1000) / (now - lastStat);
       const cps = (colSum * 1000) / (now - lastStat);
       lastCps = cps;
+      updatePoolK(cps);
+      const span = cps > 0 ? (DEFAULT_HISTORY * poolK) / cps : targetSec;
       stats.textContent =
         `process ${procMsAvg.toFixed(2)} ms · ${fps.toFixed(0)} fps · ` +
-        `${cps.toFixed(0)} col/s · ${bins} bins · ${ctx.sampleRate / 1000} kHz`;
+        `${cps.toFixed(0)} col/s · ${span.toFixed(1)} s span · ${bins} bins`;
       frames = 0;
       colSum = 0;
       lastStat = now;

@@ -20,13 +20,29 @@ const EPS = 1e-6;
  * `history / columns-per-second`, the latter driven at the streaming hop rate.
  * `dbMin` is the magnitude floor (sensitivity): raise it to suppress faint
  * detail, lower it to pull it up.
+ *
+ * ## Per-bin latency compensation (ticket 27)
+ *
+ * The streaming CQT is newest-anchored: each bin's value at "now" reflects the
+ * signal at `now − latency_bin` (`latency = window/2 + decimation group delay`,
+ * decreasing with frequency). Left uncompensated, an exponential sweep renders
+ * as a per-octave warped staircase. We keep the uncompensated scrolled image on
+ * an internal `buffer` canvas (the scroll + newest-column draw operate there)
+ * and, at *present* time, blit each bin's row to the visible canvas offset LEFT
+ * by its latency in displayed columns. Treble latency ≈ 0 stays at the live edge
+ * (snaps); bass shifts left (de-warped) and its rightmost `latency` pixels stay
+ * background — that bin genuinely cannot resolve "now" yet (the bloom edge).
  */
 export class Spectrogram {
   private readonly ctx: CanvasRenderingContext2D;
+  private readonly buffer: HTMLCanvasElement;
+  private readonly bctx: CanvasRenderingContext2D;
   private readonly w: number;
   private readonly h: number;
   private readonly column: ImageData;
   private dbMin: number;
+  /** Per-bin left shift at present time, in displayed columns (pixels). */
+  private latencyCols: Int32Array;
 
   constructor(canvas: HTMLCanvasElement, numBins: number, history: number, dbMin: number) {
     canvas.width = history;
@@ -34,12 +50,23 @@ export class Spectrogram {
     this.w = history;
     this.h = numBins;
     this.dbMin = dbMin;
+    this.latencyCols = new Int32Array(numBins); // no compensation until set
     const ctx = canvas.getContext("2d", { alpha: false });
     if (!ctx) throw new Error("2D canvas context unavailable");
     this.ctx = ctx;
     this.ctx.fillStyle = "#000";
     this.ctx.fillRect(0, 0, this.w, this.h);
-    this.column = this.ctx.createImageData(1, numBins);
+
+    // Internal offscreen canvas holding the uncompensated scrolled image.
+    this.buffer = document.createElement("canvas");
+    this.buffer.width = history;
+    this.buffer.height = numBins;
+    const bctx = this.buffer.getContext("2d", { alpha: false });
+    if (!bctx) throw new Error("2D canvas context unavailable");
+    this.bctx = bctx;
+    this.bctx.fillStyle = "#000";
+    this.bctx.fillRect(0, 0, this.w, this.h);
+    this.column = this.bctx.createImageData(1, numBins);
   }
 
   /** Columns of scroll history (canvas internal width). */
@@ -52,10 +79,27 @@ export class Spectrogram {
     this.dbMin = dbMin;
   }
 
+  /**
+   * Set the per-bin display-time left shift (in displayed columns), low → high.
+   * Recomputed whenever the pool factor / columns-per-second drift. Re-presents
+   * the current buffer so the change is visible without waiting for new audio.
+   */
+  setLatencyColumns(cols: Float32Array): void {
+    const next = new Int32Array(this.h);
+    for (let b = 0; b < this.h; b++) {
+      // Clamp into the visible span; a shift past the width would blank the row.
+      const c = Math.round(cols[b]);
+      next[b] = c < 0 ? 0 : c > this.w - 1 ? this.w - 1 : c;
+    }
+    this.latencyCols = next;
+    this.present();
+  }
+
   /** Push one CQT magnitude frame as the newest column. */
   pushColumn(mags: Float32Array): void {
-    // Scroll left by one pixel (self-copy is well-defined on canvas).
-    this.ctx.drawImage(this.ctx.canvas, -1, 0);
+    // Scroll the uncompensated buffer left by one pixel (self-copy is
+    // well-defined on canvas) and draw the newest column at its right edge.
+    this.bctx.drawImage(this.buffer, -1, 0);
 
     const data = this.column.data;
     const span = DB_MAX - this.dbMin;
@@ -71,7 +115,27 @@ export class Spectrogram {
       data[o + 2] = bl;
       data[o + 3] = 255;
     }
-    this.ctx.putImageData(this.column, this.w - 1, 0);
+    this.bctx.putImageData(this.column, this.w - 1, 0);
+
+    this.present();
+  }
+
+  /**
+   * Blit the uncompensated buffer to the visible canvas, each bin's row shifted
+   * LEFT by its latency in displayed columns. The rightmost `latency` pixels of
+   * each row stay background (that bin can't resolve "now" yet — the bloom).
+   */
+  private present(): void {
+    this.ctx.fillStyle = "#000";
+    this.ctx.fillRect(0, 0, this.w, this.h);
+    for (let b = 0; b < this.h; b++) {
+      const row = this.h - 1 - b; // low freq at the bottom (matches pushColumn)
+      const dx = this.latencyCols[b];
+      const srcW = this.w - dx;
+      if (srcW <= 0) continue; // fully shifted out (clamped above, but guard)
+      // buffer[dx..w] of this row → visible[0..w-dx]; trailing dx px stay black.
+      this.ctx.drawImage(this.buffer, dx, row, srcW, 1, 0, row, srcW, 1);
+    }
   }
 }
 

@@ -131,6 +131,11 @@ pub(super) struct StreamOctaveLayout<T, RP, ResP> {
     pub decimators: Vec<ResP>,
     /// Per-bin center frequencies in Hz, pinned low → high.
     pub bin_frequencies: Vec<f64>,
+    /// Per-bin newest-anchored analysis-center latency in **top-rate input
+    /// samples**, pinned low → high (parallel to `bin_frequencies`): the
+    /// newest-anchored value at "now" reflects the signal at `now − latency`,
+    /// `latency = window_len/2 + decimation group delay` (ticket 27).
+    pub bin_latencies: Vec<f64>,
     /// Total number of frequency bins.
     pub num_bins: usize,
     /// Required input frame length (the spec's FFT length).
@@ -147,6 +152,10 @@ pub(super) struct StreamOctaveLayout<T, RP, ResP> {
 struct OctaveBands<T, RP> {
     octaves: Vec<OctaveBand<T, RP>>,
     bin_frequencies: Vec<f64>,
+    /// Per-bin newest-anchored analysis-center latency in **top-rate input
+    /// samples**, pinned low → high (parallel to `bin_frequencies`).  Used by
+    /// the streaming layout only (display latency compensation, ticket 27).
+    bin_latencies: Vec<f64>,
     num_bins: usize,
     fft_length: usize,
     max_fft: usize,
@@ -228,6 +237,9 @@ where
         .collect();
 
     let bin_frequencies: Vec<f64> = bins.iter().map(|b| b.frequency).collect();
+    // Per-bin newest-anchored analysis-center latency, top-rate samples, written
+    // into each bin's global index (ticket 27).  See the accumulation below.
+    let mut bin_latencies = vec![0.0_f64; num_bins];
 
     let mut octaves = Vec::with_capacity(octaves_count);
     let mut scale = 1.0_f64; // 1 / 2^o
@@ -260,6 +272,21 @@ where
 
         let r2c_spec = DftR2cSpec::new(fft_len, DftNorm::None)?;
         let r2c = dftr2c.create_plan(&r2c_spec)?;
+
+        // Per-bin newest-anchored latency (ticket 27), in top-rate input
+        // samples: a bin's newest-anchored value at "now" reflects the signal at
+        // `now − latency`.  Two terms, both projected to the top rate:
+        //   • `window_len/2` — the smooth window-center delay (the bin's full-rate
+        //     time-domain window length, halved).  ∝ 1/f, the smooth bow.
+        //   • `offset_f · 2^o` — the cascaded decimator group delay (`offset_f` is
+        //     this octave's accumulated *decimated*-sample offset, `2^o = 1/scale`
+        //     projects it to the top rate).  The per-octave staircase.
+        // Compensating both de-warps the demo's exponential sweep.  Written into
+        // the bin's global index (`band_idx` gives the global low→high indices).
+        let offset_top = offset_f / scale;
+        for &i in &band_idx {
+            bin_latencies[i] = bins[i].window.len() as f64 / 2.0 + offset_top;
+        }
 
         let mut kernels = Vec::with_capacity(band_idx.len());
         for &i in &band_idx {
@@ -309,6 +336,7 @@ where
     Ok(OctaveBands {
         octaves,
         bin_frequencies,
+        bin_latencies,
         num_bins,
         fft_length,
         max_fft,
@@ -411,6 +439,7 @@ where
         octaves: bands.octaves,
         decimators,
         bin_frequencies: bands.bin_frequencies,
+        bin_latencies: bands.bin_latencies,
         num_bins: bands.num_bins,
         fft_length: bands.fft_length,
         max_fft: bands.max_fft,
@@ -434,18 +463,6 @@ fn kernel_len_at(len: usize, scale: f64) -> usize {
 /// downsampling, `fs/4` of the input rate.  Everything at or above this must be
 /// rejected so it cannot fold back into the kept band.
 const DECIMATOR_STOPBAND: f64 = 0.25;
-
-/// Kaiser shape parameter β for a target stopband attenuation (dB), per the
-/// standard Kaiser formula (Oppenheim & Schafer §7.6).
-fn kaiser_beta(atten_db: f64) -> f64 {
-    if atten_db > 50.0 {
-        0.1102 * (atten_db - 8.7)
-    } else if atten_db >= 21.0 {
-        0.5842f64.mul_add((atten_db - 21.0).powf(0.4), 0.078_86 * (atten_db - 21.0))
-    } else {
-        0.0
-    }
-}
 
 /// Derive the ×2 **windowed Kaiser** decimation spec (`up = 1`, `down = 2`) for
 /// the requested [`DecimatorQuality`] and `passband_edge` (ticket 24 — supersedes
@@ -490,7 +507,7 @@ fn derive_decimate_spec<T: DspFloat>(
     // Stopband attenuation target → Kaiser β + order (Kaiser's formulas over the
     // actual transition width).
     let atten_db = quality.stop_atten_db();
-    let beta = kaiser_beta(atten_db);
+    let beta = crate::design::window::kaiser_beta(atten_db);
     let order_est = (atten_db - 7.95) / (2.285 * 2.0 * std::f64::consts::PI * transition);
     // Even order (Type-I linear-phase FIR), clamped to a sane range.
     let order = ((order_est.ceil() as usize).clamp(16, 1024) + 1) & !1;

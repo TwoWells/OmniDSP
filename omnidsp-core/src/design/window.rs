@@ -270,6 +270,33 @@ fn bessel_i0(x: f64) -> f64 {
     sum
 }
 
+/// Kaiser shape parameter β for a target sidelobe / stopband attenuation.
+///
+/// Solves the standard Kaiser design formula (Oppenheim & Schafer, *Discrete-Time
+/// Signal Processing* §7.6) for β given the desired attenuation `atten_db` — the
+/// peak sidelobe level below the main lobe, in dB:
+///
+/// ```text
+/// β = 0.1102·(A − 8.7)                          A > 50 dB
+/// β = 0.5842·(A − 21)^0.4 + 0.07886·(A − 21)    21 ≤ A ≤ 50 dB
+/// β = 0                                          A < 21 dB   (rectangular)
+/// ```
+///
+/// This is how β is chosen from a *spec* rather than by hand: state the
+/// attenuation requirement `A` and β follows. The realized attenuation of a
+/// finite, sampled window lands within a few dB of `A`. The same formula sizes
+/// the CQT octave decimator's anti-alias filter, so the analysis kernel and the
+/// decimator are designed from one equation.
+pub fn kaiser_beta(atten_db: f64) -> f64 {
+    if atten_db > 50.0 {
+        0.1102 * (atten_db - 8.7)
+    } else if atten_db >= 21.0 {
+        0.5842f64.mul_add((atten_db - 21.0).powf(0.4), 0.078_86 * (atten_db - 21.0))
+    } else {
+        0.0
+    }
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -609,6 +636,29 @@ mod tests {
         // I₀(0) = 1 for all n, so Kaiser with β=0 is rectangular.
         let c = win(&Window::Kaiser(0.0), 8);
         assert_close(&c, &[1.0; 8], "kaiser(8, beta=0)");
+    }
+
+    #[test]
+    fn kaiser_beta_solves_attenuation_spec() {
+        // Oppenheim & Schafer §7.6 reference values for the three bands.
+        // High band (A > 50): 70 dB → 0.1102·(70−8.7).
+        assert!(
+            (kaiser_beta(70.0) - 6.7553).abs() < 1e-3,
+            "70 dB → β ≈ 6.755, got {}",
+            kaiser_beta(70.0)
+        );
+        // Mid band (21 ≤ A ≤ 50): 40 dB → continuous, positive.
+        assert!(
+            (kaiser_beta(40.0) - 3.3956).abs() < 1e-3,
+            "40 dB → β ≈ 3.396, got {}",
+            kaiser_beta(40.0)
+        );
+        // Low band (A < 21): no taper (β = 0 → rectangular).
+        assert!(
+            kaiser_beta(10.0).abs() < 1e-12,
+            "below 21 dB → β = 0, got {}",
+            kaiser_beta(10.0)
+        );
     }
 
     #[test]

@@ -45,6 +45,17 @@ const MAX_FREQ: f64 = 16_000.0;
 /// Bins per octave for the visualiser (12 = one bin per semitone).
 const BINS_PER_OCTAVE: u32 = 12;
 
+/// Analysis-kernel sidelobe suppression target, in dB below the main lobe.
+///
+/// Sets the faint leakage "ridge" that parallels a tone in the spectrogram. The
+/// Kaiser shape parameter β is **solved** from this spec via the Kaiser formula
+/// (Oppenheim & Schafer §7.6, [`Window::kaiser_for_attenuation`]) — not
+/// hand-tuned: 70 dB ≈ the demo's display dynamic range, giving
+/// β = 0.1102·(70 − 8.7) ≈ 6.75. The realized suppression of the finite
+/// constant-Q kernels is a few dB less (measured ridge ≈ −51…−63 dB vs Hann's
+/// ≈ −32…−43 dB). Raise it for a cleaner background at the cost of a wider sweep.
+const KERNEL_SIDELOBE_DB: f64 = 70.0;
+
 /// Maximum new PCM samples JS may feed in a single [`process`](CqtEngine::process)
 /// call — the input-scratch capacity. One `requestAnimationFrame` at 48 kHz is
 /// ~800 samples, so this is several frames of headroom; JS feeds whatever has
@@ -74,6 +85,9 @@ pub struct CqtEngine {
     output: Vec<f32>,
     /// Per-bin centre frequencies in Hz (low → high), for axis labelling.
     frequencies: Vec<f32>,
+    /// Per-bin newest-anchored latency in **input samples** (low → high), for
+    /// display latency compensation (de-warping a swept tone).
+    latencies: Vec<f32>,
     /// Bin count — the per-column magnitude count and spectrogram height.
     num_bins: usize,
 }
@@ -100,12 +114,17 @@ impl CqtEngine {
     /// plan construction otherwise fails.
     #[wasm_bindgen(constructor)]
     pub fn new(sample_rate: f32, min_freq: f32) -> Result<CqtEngine, String> {
+        // The analysis-kernel window. β is solved from KERNEL_SIDELOBE_DB by the
+        // Kaiser formula, so the kernel sidelobes (the spectrogram "ridge") sit at
+        // a designed level rather than wherever a fixed window happens to put them.
+        let window = Window::<f32>::kaiser_for_attenuation(KERNEL_SIDELOBE_DB)
+            .map_err(|e| format!("kernel window design failed: {e}"))?;
         let spec: CqtSpec<f32> = cqt::design(
             f64::from(sample_rate),
             f64::from(min_freq),
             MAX_FREQ,
             BINS_PER_OCTAVE,
-            &Window::<f32>::Hann,
+            &window,
         )
         .map_err(|e| format!("CQT design failed at {sample_rate} Hz (min {min_freq} Hz): {e}"))?;
 
@@ -119,12 +138,14 @@ impl CqtEngine {
         let input = vec![0.0_f32; INPUT_CAPACITY];
         let output = vec![0.0_f32; max_columns * num_bins];
         let frequencies: Vec<f32> = plan.bin_frequencies().iter().map(|&f| f as f32).collect();
+        let latencies: Vec<f32> = plan.bin_latencies().iter().map(|&l| l as f32).collect();
 
         Ok(Self {
             plan,
             input,
             output,
             frequencies,
+            latencies,
             num_bins,
         })
     }
@@ -208,5 +229,21 @@ impl CqtEngine {
     #[must_use]
     pub fn frequencies(&self) -> Vec<f32> {
         self.frequencies.clone()
+    }
+
+    /// Per-bin newest-anchored latency in **input samples**, low → high.
+    ///
+    /// The streaming CQT is newest-anchored: each bin's value at "now" reflects
+    /// the signal at `now − latency`, where `latency = window_len/2 + decimation
+    /// group delay` (in top-rate input samples).  It decreases with frequency
+    /// (treble near-instant, deep bass slow).  JS converts this to displayed
+    /// columns and shifts each bin's history left by it, de-warping a swept tone
+    /// into a straight diagonal while keeping the live edge newest-anchored.
+    ///
+    /// Copied out as a fresh `Float32Array` (called once at setup / on a span or
+    /// pool-factor change, not on the hot path).
+    #[must_use]
+    pub fn bin_latencies(&self) -> Vec<f32> {
+        self.latencies.clone()
     }
 }

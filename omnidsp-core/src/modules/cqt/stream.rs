@@ -148,6 +148,14 @@ pub trait CqtStreamPlan<T> {
     /// Per-bin center frequencies in Hz (pinned low → high).
     fn bin_frequencies(&self) -> &[f64];
 
+    /// Per-bin newest-anchored latency in **top-rate input samples** (pinned
+    /// low → high, parallel to [`bin_frequencies`](Self::bin_frequencies)).
+    ///
+    /// The newest-anchored value at "now" reflects the signal at
+    /// `now − latency`, where `latency = window_len/2 + decimation group delay`.
+    /// Used for display latency compensation (de-warping a swept tone).
+    fn bin_latencies(&self) -> &[f64];
+
     /// Upper bound on columns [`process`](Self::process) may emit for
     /// `input_len` new samples — size `out` to
     /// `max_output_columns(input_len) * num_bins`.  The
@@ -285,6 +293,10 @@ pub struct OmniCqtStreamPlan<T, RP, V, ResP> {
     vecops: V,
     /// Per-bin center frequencies in Hz, pinned low → high.
     bin_frequencies: Vec<f64>,
+    /// Per-bin newest-anchored analysis-center latency in top-rate input
+    /// samples, pinned low → high (parallel to `bin_frequencies`).  See
+    /// [`bin_latencies`](Self::bin_latencies).
+    bin_latencies: Vec<f64>,
     /// Top (input) sample rate in Hz — used to phase-compensate the per-octave
     /// decimator group delay the causal stream cannot reach (see
     /// [`emit_column`](Self::emit_column)).
@@ -466,6 +478,25 @@ where
         &self.bin_frequencies
     }
 
+    /// Per-bin newest-anchored latency in **top-rate input samples** (pinned
+    /// low → high, parallel to [`bin_frequencies`](Self::bin_frequencies)).
+    ///
+    /// The streaming CQT is newest-anchored: each bin's analysis window ends at
+    /// "now", so a bin's value at "now" actually reflects the signal at
+    /// `now − latency`.  The latency is the analysis-center delay
+    /// `window_len/2 + decimation group delay` — the smooth window-center bow
+    /// (`∝ 1/f`) plus the per-octave cascaded-decimator group delay (the
+    /// staircase) — projected to top-rate input samples.  It decreases with
+    /// frequency (treble near-instant, deep bass slow).
+    ///
+    /// For display latency compensation: shifting each bin's history left by its
+    /// latency de-warps an exponential sweep into a straight diagonal while
+    /// keeping the live edge newest-anchored (treble snaps, bass blooms).
+    #[must_use]
+    pub fn bin_latencies(&self) -> &[f64] {
+        &self.bin_latencies
+    }
+
     /// The deepest-octave sample stride `2^(O−1)` "now" is quantised to.
     ///
     /// Test-only accessor (not part of the locked 22a surface); the equivalence
@@ -632,6 +663,10 @@ where
         self.bin_frequencies()
     }
 
+    fn bin_latencies(&self) -> &[f64] {
+        self.bin_latencies()
+    }
+
     fn max_output_columns(&self, input_len: usize) -> usize {
         self.max_output_columns(input_len)
     }
@@ -706,6 +741,7 @@ impl<R, V> OmniCqt<R, V> {
             rings,
             vecops: self.vecops().clone(),
             bin_frequencies: layout.bin_frequencies,
+            bin_latencies: layout.bin_latencies,
             sample_rate: cqt_spec.sample_rate(),
             fft_length,
             hop_length,
@@ -936,6 +972,67 @@ mod tests {
             plan.bin_frequencies().len(),
             spec.num_bins(),
             "one frequency per bin"
+        );
+    }
+
+    // ── Per-bin newest-anchored latency (ticket 27) ────────────────
+
+    #[test]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "bin counts and window lengths are small enough for f64"
+    )]
+    fn bin_latencies_decrease_with_frequency() {
+        // The demo regime (48 kHz, 110 Hz … 16 kHz, 12 bins/oct, Hann): the
+        // per-bin newest-anchored latency must be one value per bin, all positive,
+        // and monotonically *decreasing* with frequency (low bins look further
+        // back — `window/2 + decimation group delay`, both ∝ deeper octave).
+        let spec = cqt::design(48000.0, 110.0, 16000.0, 12, &Window::Hann)
+            .expect("valid demo-regime design");
+        let plan = make_stream(&spec);
+        let nb = plan.num_bins();
+        let lat = plan.bin_latencies();
+        let sr = spec.sample_rate();
+
+        assert_eq!(lat.len(), nb, "one latency per bin");
+        for (k, &l) in lat.iter().enumerate() {
+            assert!(l > 0.0, "bin {k} latency {l} must be positive");
+        }
+        // bins ascend in frequency low → high, so latency must descend.
+        for k in 1..nb {
+            assert!(
+                lat[k] <= lat[k - 1],
+                "latency must not increase with frequency: bin {k} ({}) > bin {} ({})",
+                lat[k],
+                k - 1,
+                lat[k - 1]
+            );
+        }
+
+        // The deepest bin (≈ 110 Hz) sits in a sane display-latency range: its
+        // window-center delay alone is window_len/2 / sr, and the decimation
+        // group delay adds the staircase on top.  Measured ≈ 209 ms; bound it
+        // generously (150–260 ms) so a regression in either term shows.
+        let deep_ms = lat[0] / sr * 1000.0;
+        assert!(
+            (150.0..=260.0).contains(&deep_ms),
+            "deepest (≈110 Hz) bin latency {deep_ms:.1} ms out of the 150–260 ms band"
+        );
+        // The window/2 term is the floor; the full latency must exceed it (the
+        // decimation group delay is strictly positive for any decimated octave).
+        let window_half = spec.bins()[0].window.len() as f64 / 2.0;
+        assert!(
+            lat[0] > window_half,
+            "deepest latency {} must exceed its window-center floor {window_half}",
+            lat[0]
+        );
+
+        // The top bin (≈ 16 kHz, top octave, no decimation) is just its
+        // window-center delay — far smaller, only a few ms.
+        let top_ms = lat[nb - 1] / sr * 1000.0;
+        assert!(
+            top_ms < 5.0,
+            "top (≈16 kHz) bin latency {top_ms:.1} ms should be near-instant (< 5 ms)"
         );
     }
 

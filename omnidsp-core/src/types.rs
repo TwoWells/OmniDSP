@@ -180,6 +180,38 @@ impl<T: Float> Window<T> {
         Self::Kaiser(beta).coefficients(length)
     }
 
+    /// Build a [`Kaiser`](Self::Kaiser) window whose shape parameter β is **solved
+    /// from a target sidelobe / stopband attenuation** `atten_db` (dB) via the
+    /// standard Kaiser formula (Oppenheim & Schafer §7.6).
+    ///
+    /// This is the principled way to choose the window: state the attenuation
+    /// requirement — e.g. the dynamic range a spectrogram must suppress kernel
+    /// leakage below — and β follows by equation rather than by hand-tuning. The
+    /// same formula sizes the CQT octave decimator, so kernel and decimator are
+    /// designed from one spec. Higher `atten_db` lowers the sidelobes at the cost
+    /// of a wider main lobe.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Internal`](crate::error::Error::Internal) if the resulting β is
+    /// not representable in `T` (does not arise for the finite β this produces).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use omnidsp_core::types::Window;
+    /// // 70 dB sidelobe suppression → β ≈ 6.75.
+    /// let w = Window::<f64>::kaiser_for_attenuation(70.0).unwrap();
+    /// assert!(matches!(w, Window::Kaiser(b) if (b - 6.7553).abs() < 1e-3));
+    /// ```
+    pub fn kaiser_for_attenuation(atten_db: f64) -> Result<Self> {
+        let beta = crate::design::window::kaiser_beta(atten_db);
+        let beta_t = T::from(beta).ok_or_else(|| {
+            crate::error::Error::Internal("Kaiser β not representable in target type".into())
+        })?;
+        Ok(Self::Kaiser(beta_t))
+    }
+
     /// Compute a Nuttall window of the given length.
     ///
     /// # Errors
