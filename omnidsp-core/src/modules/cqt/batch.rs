@@ -765,6 +765,68 @@ mod tests {
         }
     }
 
+    // ── Sweep: no octave-aliasing image below the fundamental ──────
+    //
+    // The demo plays a pure exponential sweep; a rising tone must not paint an
+    // aliased image into the octaves *below* it.  We compare the multirate path
+    // to the decimation-free single-FFT oracle on a sweep frame: the multirate
+    // low-octave energy must stay at (or below) the oracle's own inherent kernel
+    // leakage, and far below any visible floor.  (The 23d half-band put a
+    // full-amplitude phantom here — +1 dB; this guards the sweep case the
+    // static-tone tests miss.)
+    #[test]
+    #[allow(
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "sweep sample indices are small enough for f64"
+    )]
+    fn sweep_adds_no_low_octave_aliasing() {
+        let spec = cqt::design(48000.0, 100.0, 16000.0, 12, &Window::Hann).expect("design");
+        let plan = make_plan(&spec);
+        let n = plan.fft_length();
+        let sr = 48000.0;
+        let (f_lo, f_hi, tsweep) = (100.0_f64, 16000.0_f64, 6.0_f64);
+        let total = (tsweep * sr) as usize;
+        let kk = (f_hi / f_lo).ln();
+        let tc = tsweep * (1000.0_f64 / f_lo).ln() / kk; // frame centred where f≈1000 Hz
+        let start = ((tc * sr) as usize).saturating_sub(n / 2);
+        let mut phase = 0.0_f64;
+        let mut frame = vec![0.0_f64; n];
+        for i in 0..(start + n) {
+            let f = f_lo * (kk * (i as f64) / (total as f64)).exp();
+            phase += 2.0 * std::f64::consts::PI * f / sr;
+            if i >= start {
+                frame[i - start] = 0.3 * phase.sin();
+            }
+        }
+        let mut out = vec![Complex::new(0.0, 0.0); plan.num_bins()];
+        plan.process(&frame, &mut out).expect("process");
+        let mr: Vec<f64> = out.iter().map(|c| c.norm()).collect();
+        let oracle = oracle_magnitudes(&spec, &frame);
+        let peak_bin = mr
+            .iter()
+            .enumerate()
+            .max_by(|a, b| a.1.partial_cmp(b.1).expect("no NaN"))
+            .expect("bins")
+            .0;
+        let peak = mr[peak_bin].max(1e-12);
+        let lo = peak_bin.saturating_sub(12); // bins > 1 octave below the peak
+        let worst_mr = mr[..lo].iter().copied().fold(0.0_f64, f64::max);
+        let worst_oracle = oracle[..lo].iter().copied().fold(0.0_f64, f64::max);
+        let db = |x: f64| 20.0 * (x / peak).log10();
+        assert!(
+            db(worst_mr) < -50.0,
+            "sweep low-octave leakage {:.1} dB exceeds −50 dB — an octave-aliasing image",
+            db(worst_mr)
+        );
+        assert!(
+            worst_mr <= worst_oracle * 2.0,
+            "multirate low-octave leakage {worst_mr:.6} exceeds 2× the oracle's inherent \
+             {worst_oracle:.6} — a decimation artifact, not just kernel leakage",
+        );
+    }
+
     // ── Demo-regime stress: f_max near Nyquist (what the WASM demo runs) ──
     //
     // `multi_octave_spec` keeps f_max ≈ 0.06·Nyquist — far below every
