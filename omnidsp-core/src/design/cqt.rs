@@ -31,21 +31,21 @@ use crate::types::Window;
 
 // ─── Decimator quality ──────────────────────────────────────────────
 
-/// Quality of the multirate CQT's ×2 half-band decimator (ADR-012 §5 — the
+/// Quality of the multirate CQT's ×2 anti-alias decimator (ADR-012 §5 — the
 /// *free* knob a composing spec surfaces, with a high default the casual caller
 /// never sees).
 ///
 /// The 1:2 decimation **ratio** stays driven/internal; this exposes only the
-/// decimator's *FIR design quality*.  Because the decimator is a **half-band
-/// equiripple** filter (ticket 23d / ADR-012 §3), its stopband depth — and
-/// therefore the residual aliasing between octaves — is governed by the filter
-/// **length**, not by any dB weight (a half-band's pass/stop weights are equal
-/// by construction).  Higher quality therefore maps to a **longer half-band**:
-/// a deeper stopband, less inter-octave aliasing, at a modest cost in taps and
-/// group delay.
+/// decimator's *FIR design quality*.  The decimator is a **windowed Kaiser**
+/// lowpass at cutoff `fs/4` (ticket 24 — the standard Schörkhuber–Klapuri /
+/// librosa octave-decimation filter; it superseded the 23d equiripple half-band,
+/// which could not reject the CQT's sub-`fs/4` octave-overlap band and caused
+/// octave-aliasing reflections).  Higher quality maps to a deeper **stopband
+/// attenuation** target, from which the Kaiser shape parameter β and the filter
+/// length follow — a sharper anti-alias at a modest cost in taps and group delay.
 ///
 /// The value is a `u8` from zero up to [`MAX`](Self::MAX); it selects the
-/// half-band **order** via [`half_band_order`](Self::half_band_order).
+/// stopband attenuation (dB) via [`stop_atten_db`](Self::stop_atten_db).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DecimatorQuality(u8);
 
@@ -77,17 +77,17 @@ impl DecimatorQuality {
         self.0
     }
 
-    /// The half-band FIR **order** this quality selects.
+    /// The decimator's stopband attenuation target in dB.
     ///
-    /// A half-band Type-I FIR has an order of the form `4·m + 2` (so the tap
-    /// count `order + 1 = 4·m + 3` is odd and the alternate taps vanish
-    /// cleanly).  Quality `q` maps to `m = q + 2`, i.e. order
-    /// `4·(q + 2) + 2 = 4·q + 10` — from order `10` (11 taps) at quality 0 up to
-    /// order `34` (35 taps) at the maximum.  Longer filters deepen the stopband
-    /// (less inter-octave aliasing) at a modest cost in taps and group delay.
+    /// Quality `q` maps to `50 + 5·q` dB — from `50` dB at quality 0 up to `80`
+    /// dB at the maximum (the high default).  The Kaiser shape parameter β and
+    /// the filter length are derived from this target (Kaiser's β + order
+    /// formulas), so a higher target yields a deeper stopband and a longer
+    /// filter.  `80` dB comfortably suppresses inter-octave aliasing (the demo
+    /// regime was already clean at the windowed ~53 dB floor).
     #[must_use]
-    pub const fn half_band_order(self) -> usize {
-        4 * (self.0 as usize) + 10
+    pub fn stop_atten_db(self) -> f64 {
+        50.0 + 5.0 * f64::from(self.0)
     }
 }
 

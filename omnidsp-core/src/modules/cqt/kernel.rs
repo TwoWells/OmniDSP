@@ -59,7 +59,7 @@ use crate::design::resample::{ResampleMode, ResampleSpec};
 use crate::error::{Error, Result};
 use crate::modules::resample::ResamplePlan;
 use crate::traits::dft::{DftNorm, DftR2c, DftR2cSpec};
-use crate::types::{DspFloat, FilterType};
+use crate::types::{DspFloat, FilterType, Window};
 
 /// Where a bin's kernel sits inside its octave's `fft_len`-point frame.
 ///
@@ -426,44 +426,74 @@ fn kernel_len_at(len: usize, scale: f64) -> usize {
     ((len as f64 * scale).round() as usize).max(1)
 }
 
-/// Derive the ×2 half-band **equiripple** decimation spec (`up = 1`, `down = 2`)
-/// for the requested [`DecimatorQuality`] (ticket 23d / ADR-012 §3, §5).
+/// Normalized transition width of the CQT decimator's Kaiser lowpass.
 ///
-/// Designs a half-band equiripple lowpass at cutoff `fs/4` via
-/// [`fir::design`] — the minimax-optimal ×2 anti-alias filter, whose
-/// off-center even taps vanish (half the multiply count) and whose stopband
-/// depth is set by the filter **length** (mapped from `quality`) — then drops
-/// it into [`ResampleSpec::new`] (the bring-your-own composition path, ADR-012
-/// §1).  `resample::design`'s general windowed prototype is left untouched;
-/// only the CQT decimator takes this path.
+/// The anti-alias transition spans `±DECIMATOR_TRANSITION` (normalized) about the
+/// `fs/4` cutoff; with the quality's attenuation target it sets the Kaiser order.
+/// `0.06` keeps the order modest (≈ 50–85 taps across the quality range) while
+/// the rolloff comfortably suppresses the sub-`fs/4` octave-overlap band that the
+/// half-band could not (ticket 24).
+const DECIMATOR_TRANSITION: f64 = 0.06;
+
+/// Kaiser shape parameter β for a target stopband attenuation (dB), per the
+/// standard Kaiser formula (Oppenheim & Schafer §7.6).
+fn kaiser_beta(atten_db: f64) -> f64 {
+    if atten_db > 50.0 {
+        0.1102 * (atten_db - 8.7)
+    } else if atten_db >= 21.0 {
+        0.5842f64.mul_add((atten_db - 21.0).powf(0.4), 0.078_86 * (atten_db - 21.0))
+    } else {
+        0.0
+    }
+}
+
+/// Derive the ×2 **windowed Kaiser** decimation spec (`up = 1`, `down = 2`) for
+/// the requested [`DecimatorQuality`] (ticket 24 — supersedes 23d's equiripple
+/// half-band).
+///
+/// Designs a windowed-Kaiser lowpass at cutoff `fs/4` via [`fir::design`] — the
+/// standard Schörkhuber–Klapuri / librosa octave-decimation anti-alias filter —
+/// then drops it into [`ResampleSpec::new`] (the bring-your-own composition path,
+/// ADR-012 §1).  `quality` sets the stopband attenuation target, from which the
+/// Kaiser β and the filter order (Kaiser's order formula over
+/// [`DECIMATOR_TRANSITION`]) follow.  Unlike the equiripple half-band, a Kaiser
+/// lowpass has the rolloff needed to reject the CQT's sub-`fs/4` octave-overlap
+/// content, so it does not produce octave-aliasing reflections.
 ///
 /// The filter is designed at a nominal rate of `4` with cutoff `1` so the
-/// normalized cutoff is exactly `0.25 = fs/4` — the half-band trigger, and the
-/// `1/(2·max(1, 2))` polyphase anti-alias bound the cross-spec invariant checks
-/// (admitted with equality).  The coefficients are rate-independent; the
-/// resampler uses only the rational `1:2` factors.
+/// normalized cutoff is exactly `0.25 = fs/4` — matching the `1/(2·max(1, 2))`
+/// polyphase anti-alias bound the cross-spec invariant checks (admitted with
+/// equality).  The coefficients are rate-independent; the resampler uses only the
+/// rational `1:2` factors.
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "the Kaiser order is a small positive integer exact in f64"
+)]
 fn derive_decimate_spec<T: DspFloat>(quality: DecimatorQuality) -> Result<ResampleSpec<T>> {
     let four: T =
         T::from(4.0_f64).ok_or_else(|| Error::Internal("cannot represent 4.0 in T".into()))?;
     let one: T =
         T::from(1.0_f64).ok_or_else(|| Error::Internal("cannot represent 1.0 in T".into()))?;
-    // A high half-band stopband comfortably below the bins (which sit well below
-    // f_s/4) needs only a moderate ripple/attenuation target; the *length*
-    // (from `quality`) is what governs the realized stopband depth for a
-    // half-band, so these dB targets only have to be loose enough to converge.
-    let pass_ripple: T =
-        T::from(0.1_f64).ok_or_else(|| Error::Internal("cannot represent 0.1 in T".into()))?;
-    let stop_atten: T =
-        T::from(80.0_f64).ok_or_else(|| Error::Internal("cannot represent 80.0 in T".into()))?;
+
+    // Stopband attenuation target → Kaiser β + order (Kaiser's formulas).
+    let atten_db = quality.stop_atten_db();
+    let beta = kaiser_beta(atten_db);
+    let order_est = (atten_db - 7.95) / (2.285 * 2.0 * std::f64::consts::PI * DECIMATOR_TRANSITION);
+    // Even order (Type-I linear-phase FIR), clamped to a sane range.
+    let order = ((order_est.ceil() as usize).clamp(16, 512) + 1) & !1;
+
+    let beta_t: T =
+        T::from(beta).ok_or_else(|| Error::Internal("cannot represent Kaiser beta in T".into()))?;
     let filter = fir::design(
         FilterType::Lowpass,
-        quality.half_band_order(),
+        order,
         four,
         one,
         None,
-        &FirMethod::Equiripple {
-            pass_ripple,
-            stop_atten,
+        &FirMethod::Windowed {
+            window: Window::Kaiser(beta_t),
         },
     )?;
     ResampleSpec::new(filter, 1, 2, ResampleMode::Streaming)

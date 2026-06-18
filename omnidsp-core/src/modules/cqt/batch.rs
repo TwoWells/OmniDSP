@@ -765,6 +765,60 @@ mod tests {
         }
     }
 
+    // ── Demo-regime stress: f_max near Nyquist (what the WASM demo runs) ──
+    //
+    // `multi_octave_spec` keeps f_max ≈ 0.06·Nyquist — far below every
+    // decimation cutoff — so it never exercises the decimator transition. The
+    // demo sweeps 20 Hz–16 kHz with f_max a large fraction of Nyquist, so the
+    // top bins of each octave sit at the decimator's fs/4 transition, where
+    // stopband leakage aliases between octaves. Compare the multirate path
+    // against the decimation-free oracle across the whole range.
+    #[test]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "sample indices are small enough for f64"
+    )]
+    fn matches_oracle_demo_regime() {
+        let spec = cqt::design(48000.0, 250.0, 16000.0, 12, &Window::Hann)
+            .expect("valid demo-like design");
+        let plan = make_plan(&spec);
+        let n = plan.fft_length();
+        let sr = spec.sample_rate();
+
+        let mut worst = 0.0_f64;
+        let mut at = (0.0_f64, 0usize, 0.0_f64, 0.0_f64);
+        for &ftone in &[
+            700.0, 1500.0, 3000.0, 6000.0, 9000.0, 11000.0, 11500.0, 12000.0, 12500.0, 13000.0,
+            14000.0,
+        ] {
+            let input: Vec<f64> = (0..n)
+                .map(|i| (TAU * ftone * i as f64 / sr).sin())
+                .collect();
+            let mut output = vec![Complex::new(0.0, 0.0); plan.num_bins()];
+            plan.process(&input, &mut output).expect("process");
+            let got: Vec<f64> = output.iter().map(|c| c.norm()).collect();
+            let want = oracle_magnitudes(&spec, &input);
+            let peak = want.iter().copied().fold(0.0_f64, f64::max).max(1e-12);
+            for (k, (&g, &w)) in got.iter().zip(&want).enumerate() {
+                let rel = (g - w).abs() / peak;
+                if rel > worst {
+                    worst = rel;
+                    at = (ftone, k, g, w);
+                }
+            }
+        }
+        assert!(
+            worst < 5e-2,
+            "demo-regime multirate vs decimation-free oracle: worst relative deviation {worst:.4} \
+             at tone {} Hz, bin {} (multirate |{:.5}| vs oracle |{:.5}|) — aliasing/leakage the \
+             static-tone oracle test (multi_octave_spec) does not exercise",
+            at.0,
+            at.1,
+            at.2,
+            at.3
+        );
+    }
+
     // ── Pure tone peaks in its octave's center bin ─────────────────
 
     #[test]

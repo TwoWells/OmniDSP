@@ -821,18 +821,20 @@ mod tests {
     const REF_TOL: f64 = 1e-3;
 
     /// Magnitude tolerance for deeper-octave bins against the decimation-free
-    /// reference.  The multirate path passes those bins through 1–2 half-band ×2
-    /// decimation stages whose passband response is not perfectly flat, so its
-    /// magnitude would droop toward the band edge — except the per-bin gain
-    /// compensation (ticket 23d) bakes the analytic inverse `1/G_k` of that
-    /// cascaded passband response into the kernel, flattening the octave seam.
-    /// What remains is only the residual the compensation cannot model (the
-    /// decimator stopband leakage / aliasing, and the half-spectrum floor).
-    /// **Before** compensation the deepest bin drooped to ≈ 0.24 (relative);
-    /// **after** the equiripple half-band decimator + gain compensation the
-    /// measured worst-case is ≈ 1.7e-3 — a ~140× reduction — and this tightened
-    /// bound (≈1.4×) tracks it, the proof the compensation is real.
-    const DEEP_MAG_TOL: f64 = 2.5e-3;
+    /// reference.  The multirate path passes those bins through 1–2 windowed
+    /// Kaiser ×2 decimation stages (ticket 24) whose passband response is not
+    /// perfectly flat, so its magnitude would droop toward the band edge — except
+    /// the per-bin gain compensation (ticket 23d, retained) bakes the analytic
+    /// inverse `1/G_k` of that cascaded passband response into the kernel,
+    /// flattening the octave seam.  **Before** compensation the deepest bin
+    /// drooped to ≈ 0.24 (relative); **after**, the seam is flat and the measured
+    /// worst-case is ≈ 1.1e-2 — set by the longer Kaiser filter's group-delay /
+    /// finite-frame alignment residual (the deep stopband and the per-bin gain
+    /// compensation leave that as the floor; the half-band gave a smaller ≈ 1.7e-3
+    /// residual but caused octave-aliasing reflections, ticket 24).  The top
+    /// octave (no decimation) still matches to ≈ 2.7e-5, the proof this is a real
+    /// decimation residual, not a loosening.
+    const DEEP_MAG_TOL: f64 = 1.5e-2;
 
     /// Complex tolerance for deeper-octave bins against the decimation-free
     /// reference.  The half-band ×2 decimator is not phase-exact, so a
@@ -842,10 +844,11 @@ mod tests {
     /// decimator's group-delay *phase*, which dominates this complex residual —
     /// so it stays at the decimator-phase floor even as the magnitude residual
     /// collapses (≈ 2.4e-1 → ≈ 5.8e-2 here, the phase the compensation does not
-    /// touch).  **Measured** worst-case here ≈ 5.8e-2 (relative); this bound is
-    /// ≈1.2×.  Not a loosening: the streaming path is genuinely multirate and the
-    /// reference is genuinely decimation-free, so this residual is real.
-    const DEEP_COMPLEX_TOL: f64 = 7e-2;
+    /// touch).  **Measured** worst-case here ≈ 8.7e-2 (relative, windowed Kaiser
+    /// decimator, ticket 24); this bound is ≈1.25×.  Not a loosening: the
+    /// streaming path is genuinely multirate and the reference is genuinely
+    /// decimation-free, so this residual is real.
+    const DEEP_COMPLEX_TOL: f64 = 1.1e-1;
 
     /// The deepest-octave sample stride `2^(O−1)` "now" is quantised to.
     fn align_of(plan: &TestStreamPlan) -> usize {
@@ -1103,6 +1106,62 @@ mod tests {
             worst_top_complex,
             worst_deep_mag,
             worst_deep_complex,
+        );
+    }
+
+    /// Demo-regime streaming guard (ticket 24): a pure tone in the **top** octave
+    /// must not leak into the **deep** octaves.
+    ///
+    /// `multi_octave_spec` keeps `f_max` ≈ 0.06·Nyquist (far below the decimator
+    /// transition) and so never exercises octave-aliasing; this uses `f_max` ≈
+    /// 0.67·Nyquist like the WASM demo — the regime where 23d's equiripple
+    /// half-band produced full-amplitude octave-aliasing phantoms (an 11 kHz tone
+    /// folding down to ≈ 1 kHz, four octaves below). The windowed Kaiser
+    /// decimator (ticket 24) has the rolloff to keep the deep octaves clean.
+    #[test]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "sample indices are small enough for f64"
+    )]
+    fn demo_regime_top_tone_does_not_leak_into_deep_octaves() {
+        let spec = cqt::design(48000.0, 250.0, 16000.0, 12, &Window::Hann)
+            .expect("valid demo-like design");
+        let mut stream = make_stream(&spec);
+        let nb = stream.num_bins();
+        let fft = stream.fft_length();
+        let sr = spec.sample_rate();
+
+        // A pure tone in the top octave (8–16 kHz) — exactly where the half-band
+        // leaked; 11 kHz folds to ≈ 1 kHz through the decimation cascade.
+        let ftone = 11000.0;
+        let total = 4 * fft;
+        let signal: Vec<f64> = (0..total)
+            .map(|i| (TAU * ftone * i as f64 / sr).sin())
+            .collect();
+
+        let mut out = vec![0.0_f64; stream.max_output_columns(total) * nb];
+        let columns = stream
+            .process_magnitude(&signal, &mut out)
+            .expect("stream process");
+        assert!(columns >= 1, "expected at least one settled column");
+
+        // The last column: the peak sits in the top octave (near 11 kHz); the
+        // deep octaves (every bin below the top four) must stay quiet.
+        let last = &out[(columns - 1) * nb..columns * nb];
+        let peak = last.iter().copied().fold(0.0_f64, f64::max).max(1e-12);
+        let deep_hi = nb.saturating_sub(48); // exclude the top four octaves
+        let mut worst_deep = 0.0_f64;
+        let mut worst_bin = 0usize;
+        for (k, &m) in last[..deep_hi].iter().enumerate() {
+            if m > worst_deep {
+                worst_deep = m;
+                worst_bin = k;
+            }
+        }
+        assert!(
+            worst_deep < 0.05 * peak,
+            "demo-regime: 11 kHz top-octave tone leaked into deep bin {worst_bin} \
+             (|{worst_deep}| vs peak |{peak}|) — an octave-aliasing reflection"
         );
     }
 
