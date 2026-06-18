@@ -788,9 +788,11 @@ where
 ///   the decimator group-delay phase (complex).  The **top octave** (no
 ///   decimation) is held to `CQT_TOL` for magnitude *and* complex; the **deeper
 ///   octaves** are bounded by documented per-octave residual tolerances
-///   (`deep_mag_tol` ≈ 2.1e-3 measured — down from ≈ 0.24 uncompensated;
-///   `deep_complex_tol` ≈ 5.6e-2) — a real residual, not a loosening of the math
-///   (the undecimated top octave still matching to ~3e-5 proves the math).
+///   (`deep_mag_tol` ≈ 3.6e-2 measured — the decimation droop is gain-compensated
+///   away, leaving the deep octave's group-delay window-position residual against
+///   the decimation-free oracle, ticket 26; `deep_complex_tol` ≈ 7.0e-2 after that
+///   lag is phase-compensated) — a real residual, not a loosening of the math (the
+///   undecimated top octave still matching to ~3e-5 proves the math).
 ///
 /// A **stationary cross-check** rides alongside it: on a single steady tone the
 /// streaming magnitude matches the oldest-anchored 05L batch (anchoring preserves
@@ -875,16 +877,24 @@ where
     // staircase) is removed — what remains is the residual the compensation
     // cannot model (the Kaiser filter's group-delay / finite-frame alignment for
     // magnitude; the decimator group-delay *phase*, orthogonal to magnitude
-    // compensation, for the complex value).  Measured worst-case here (16 kHz,
-    // 125–1000 Hz, 12 b/oct): magnitude ≈ 2.1e-3 (down from ≈ 0.24 uncompensated),
-    // complex ≈ 5.6e-2 — as tight as the 23d half-band's ≈ 1.7e-3 / 5.8e-2 but
-    // *without* its octave-aliasing reflections (the asymmetric decimator adapts
-    // its length to the config).  These bounds cover them with margin; they are
-    // the real decimator residual, not a loosening — the top octave (no
-    // decimation) is still held to the tight `CQT_TOL` for both magnitude and
-    // complex.
-    let deep_mag_tol = T::lit(3e-3);
-    let deep_complex_tol = T::lit(7e-2);
+    // compensation, for the complex value).  The gain compensation removes the
+    // magnitude droop (down from ≈ 0.24 uncompensated) and the asymmetric Kaiser
+    // decimator avoids the 23d half-band's octave-aliasing reflections; the
+    // remaining deep residual is documented next to the tolerances below.
+    // (Ticket 26) A deep octave's newest produced sample lags "now" by the
+    // decimator group delay (the causal continuous decimator has not emitted the
+    // `offset` group-delay samples yet), so its analysis window ends `offset*2^o`
+    // top-rate samples before the decimation-free reference's window does.  The
+    // streaming plan phase-compensates that lag, keeping the **complex** residual
+    // at the decimator-phase floor, but the window covers a slightly different span
+    // of the signal, so a small **magnitude** residual remains — the genuine,
+    // irreducible difference between a causal multirate path and a decimation-free
+    // oracle that sees `offset*2^o` more recent samples.  Updated measured
+    // worst-case: magnitude ≈ 3.6e-2 (the deepest bin, largest lag), complex
+    // ≈ 7.0e-2.  Still the real residual, not a loosening — the top octave (no
+    // decimation, no lag) is held to the tight `CQT_TOL` for both.
+    let deep_mag_tol = T::lit(5e-2);
+    let deep_complex_tol = T::lit(8e-2);
 
     // ── Trait mechanics: max_output_columns bounds the emitted count. ──
     for &len in &[0usize, 1, hop, hop + 1, 2 * hop + 3] {
@@ -1012,13 +1022,15 @@ where
             let col = &q_out[c * nb..(c + 1) * nb];
             for (k, (s, o)) in col.iter().zip(&ref_col).enumerate() {
                 // Low quality's shorter decimator leaves a slightly larger
-                // residual, so the deeper octaves use a looser magnitude bound
-                // here than the default-high check above; the top octave (no
-                // decimation) is unaffected by quality and stays tight.
+                // residual, and the deep octaves carry the group-delay
+                // window-position residual against the decimation-free oracle
+                // (ticket 26), so the deeper octaves use the looser deep magnitude
+                // bound here; the top octave (no decimation) is unaffected by
+                // quality and stays tight.
                 let mag_tol = if k >= top_octave_lo {
                     T::CQT_TOL
                 } else {
-                    T::lit(2e-2)
+                    deep_mag_tol
                 };
                 assert!(
                     (s.norm() - o.norm()).abs() <= mag_tol * (T::one() + o.norm()),
