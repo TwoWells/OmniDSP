@@ -105,7 +105,7 @@ impl CqtEngine {
             f64::from(min_freq),
             MAX_FREQ,
             BINS_PER_OCTAVE,
-            &Window::<f32>::Hann,
+            &Window::<f32>::BlackmanHarris,
         )
         .map_err(|e| format!("CQT design failed at {sample_rate} Hz (min {min_freq} Hz): {e}"))?;
 

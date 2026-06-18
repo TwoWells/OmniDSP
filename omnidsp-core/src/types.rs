@@ -69,6 +69,9 @@ pub enum Window<T> {
     Bartlett,
     /// Blackman window.
     Blackman,
+    /// Blackman–Harris window: a 4-term cosine-sum, low-sidelobe window
+    /// (≈ −92 dB peak sidelobes). Good for separating loud adjacent tones.
+    BlackmanHarris,
     /// Flat-top window (used for amplitude calibration).
     FlatTop,
     /// Gaussian window with the given standard deviation parameter
@@ -81,6 +84,9 @@ pub enum Window<T> {
     /// Kaiser window with the given shape parameter controlling the trade-off
     /// between main-lobe width and side-lobe level.
     Kaiser(T),
+    /// Nuttall window: scipy's minimum 4-term cosine-sum, low-sidelobe window
+    /// (≈ −93 dB peak sidelobes). Good for separating loud adjacent tones.
+    Nuttall,
     /// Rectangular (all ones) window.
     Rectangular,
     /// Triangular (non-zero endpoints) window.
@@ -118,6 +124,15 @@ impl<T: Float> Window<T> {
     /// Returns [`InvalidSpec`](crate::error::Error::InvalidSpec) if `length` is zero.
     pub fn blackman(length: usize) -> Result<Vec<T>> {
         Self::Blackman.coefficients(length)
+    }
+
+    /// Compute a Blackman–Harris window of the given length.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`InvalidSpec`](crate::error::Error::InvalidSpec) if `length` is zero.
+    pub fn blackman_harris(length: usize) -> Result<Vec<T>> {
+        Self::BlackmanHarris.coefficients(length)
     }
 
     /// Compute a flat-top window of the given length.
@@ -163,6 +178,15 @@ impl<T: Float> Window<T> {
     /// Returns [`InvalidSpec`](crate::error::Error::InvalidSpec) if `length` is zero or `beta < 0`.
     pub fn kaiser(beta: T, length: usize) -> Result<Vec<T>> {
         Self::Kaiser(beta).coefficients(length)
+    }
+
+    /// Compute a Nuttall window of the given length.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`InvalidSpec`](crate::error::Error::InvalidSpec) if `length` is zero.
+    pub fn nuttall(length: usize) -> Result<Vec<T>> {
+        Self::Nuttall.coefficients(length)
     }
 
     /// Compute a rectangular window of the given length.

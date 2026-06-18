@@ -46,11 +46,13 @@ pub fn compute<T: Float>(window: &Window<T>, length: usize) -> Result<Vec<T>> {
     match *window {
         Window::Bartlett => bartlett(length),
         Window::Blackman => blackman(length),
+        Window::BlackmanHarris => blackman_harris(length),
         Window::FlatTop => flat_top(length),
         Window::Gaussian(sigma) => gaussian(length, to_f64(sigma)?),
         Window::Hamming => hamming(length),
         Window::Hann => hann(length),
         Window::Kaiser(beta) => kaiser(length, to_f64(beta)?),
+        Window::Nuttall => nuttall(length),
         Window::Rectangular => rectangular(length),
         Window::Triangular => triangular(length),
         Window::Tukey(alpha) => tukey(length, to_f64(alpha)?),
@@ -91,6 +93,22 @@ fn blackman<T: Float>(n: usize) -> Result<Vec<T>> {
     collect_f64((0..n).map(|i| {
         let x = 2.0 * PI * i as f64 / nm1;
         0.42 - 0.5 * x.cos() + 0.08 * (2.0 * x).cos()
+    }))
+}
+
+/// Blackman–Harris window (4-term cosine sum, ≈ −92 dB peak sidelobes).
+///
+/// `w[n] = a0 − a1·cos(x) + a2·cos(2x) − a3·cos(3x)` where `x = 2πn/(N−1)`.
+fn blackman_harris<T: Float>(n: usize) -> Result<Vec<T>> {
+    const A0: f64 = 0.358_75;
+    const A1: f64 = 0.488_29;
+    const A2: f64 = 0.141_28;
+    const A3: f64 = 0.011_68;
+
+    let nm1 = (n - 1) as f64;
+    collect_f64((0..n).map(|i| {
+        let x = 2.0 * PI * i as f64 / nm1;
+        A0 - A1 * x.cos() + A2 * (2.0 * x).cos() - A3 * (3.0 * x).cos()
     }))
 }
 
@@ -160,6 +178,22 @@ fn kaiser<T: Float>(n: usize, beta: f64) -> Result<Vec<T>> {
         let t = 2.0 * i as f64 / nm1 - 1.0;
         let arg = beta * (1.0 - t * t).max(0.0).sqrt();
         bessel_i0(arg) / i0_beta
+    }))
+}
+
+/// Nuttall window (scipy's minimum 4-term cosine sum, ≈ −93 dB peak sidelobes).
+///
+/// `w[n] = a0 − a1·cos(x) + a2·cos(2x) − a3·cos(3x)` where `x = 2πn/(N−1)`.
+fn nuttall<T: Float>(n: usize) -> Result<Vec<T>> {
+    const A0: f64 = 0.363_581_9;
+    const A1: f64 = 0.489_177_5;
+    const A2: f64 = 0.136_599_5;
+    const A3: f64 = 0.010_641_1;
+
+    let nm1 = (n - 1) as f64;
+    collect_f64((0..n).map(|i| {
+        let x = 2.0 * PI * i as f64 / nm1;
+        A0 - A1 * x.cos() + A2 * (2.0 * x).cos() - A3 * (3.0 * x).cos()
     }))
 }
 
@@ -282,11 +316,13 @@ mod tests {
         let fns: Vec<Window<f64>> = vec![
             Window::Bartlett,
             Window::Blackman,
+            Window::BlackmanHarris,
             Window::FlatTop,
             Window::Gaussian(0.4),
             Window::Hamming,
             Window::Hann,
             Window::Kaiser(5.0),
+            Window::Nuttall,
             Window::Rectangular,
             Window::Triangular,
             Window::Tukey(0.5),
@@ -395,6 +431,116 @@ mod tests {
         // n=2: 0.42 + 0.5 + 0.08 = 1.0
         let c = win(&Window::Blackman, 5);
         assert_close(&c, &[0.0, 0.34, 1.0, 0.34, 0.0], "blackman(5)");
+    }
+
+    // ── Blackman–Harris ──────────────────────────────────────────
+
+    #[test]
+    fn blackman_harris_5() {
+        // scipy.signal.windows.blackmanharris(5):
+        // [0.00006, 0.21747, 1.0, 0.21747, 0.00006].
+        // At N=5, x=πn/2: n=0 → a0−a1+a2−a3, n=1 → a0−a2, n=2 → a0+a1+a2+a3.
+        let c = win(&Window::BlackmanHarris, 5);
+        let a0 = 0.358_75;
+        let a1 = 0.488_29;
+        let a2 = 0.141_28;
+        let a3 = 0.011_68;
+        let expected = [
+            a0 - a1 + a2 - a3,
+            a0 - a2,
+            a0 + a1 + a2 + a3,
+            a0 - a2,
+            a0 - a1 + a2 - a3,
+        ];
+        assert_close(&c, &expected, "blackman_harris(5)");
+        // Sanity against the published golden rounded to 5 digits.
+        assert!(
+            (c[0] - 0.00006).abs() < 1e-5,
+            "blackman_harris(5)[0] should be ≈0.00006, got {}",
+            c[0]
+        );
+        assert!(
+            (c[1] - 0.21747).abs() < 1e-5,
+            "blackman_harris(5)[1] should be ≈0.21747, got {}",
+            c[1]
+        );
+    }
+
+    #[test]
+    fn blackman_harris_symmetric() {
+        let c = win(&Window::BlackmanHarris, 64);
+        for i in 0..32 {
+            assert!(
+                (c[i] - c[63 - i]).abs() < TOL,
+                "blackman_harris(64) not symmetric at index {i}"
+            );
+        }
+    }
+
+    #[test]
+    fn blackman_harris_peak_near_one() {
+        // The peak of a Blackman–Harris window is 1.0 at the center.
+        let c = win(&Window::BlackmanHarris, 65);
+        assert!(
+            (c[32] - 1.0).abs() < 1e-6,
+            "blackman_harris(65) center should be ≈1.0, got {}",
+            c[32]
+        );
+    }
+
+    // ── Nuttall ──────────────────────────────────────────────────
+
+    #[test]
+    fn nuttall_5() {
+        // scipy.signal.windows.nuttall(5):
+        // [0.0003628, 0.2269824, 1.0, 0.2269824, 0.0003628].
+        // At N=5, x=πn/2: n=0 → a0−a1+a2−a3, n=1 → a0−a2, n=2 → a0+a1+a2+a3.
+        let c = win(&Window::Nuttall, 5);
+        let a0 = 0.363_581_9;
+        let a1 = 0.489_177_5;
+        let a2 = 0.136_599_5;
+        let a3 = 0.010_641_1;
+        let expected = [
+            a0 - a1 + a2 - a3,
+            a0 - a2,
+            a0 + a1 + a2 + a3,
+            a0 - a2,
+            a0 - a1 + a2 - a3,
+        ];
+        assert_close(&c, &expected, "nuttall(5)");
+        // Sanity against the published golden rounded to 7 digits.
+        assert!(
+            (c[0] - 0.000_362_8).abs() < 1e-7,
+            "nuttall(5)[0] should be ≈0.0003628, got {}",
+            c[0]
+        );
+        assert!(
+            (c[1] - 0.226_982_4).abs() < 1e-7,
+            "nuttall(5)[1] should be ≈0.2269824, got {}",
+            c[1]
+        );
+    }
+
+    #[test]
+    fn nuttall_symmetric() {
+        let c = win(&Window::Nuttall, 64);
+        for i in 0..32 {
+            assert!(
+                (c[i] - c[63 - i]).abs() < TOL,
+                "nuttall(64) not symmetric at index {i}"
+            );
+        }
+    }
+
+    #[test]
+    fn nuttall_peak_near_one() {
+        // The peak of a Nuttall window is 1.0 at the center.
+        let c = win(&Window::Nuttall, 65);
+        assert!(
+            (c[32] - 1.0).abs() < 1e-6,
+            "nuttall(65) center should be ≈1.0, got {}",
+            c[32]
+        );
     }
 
     // ── FlatTop ──────────────────────────────────────────────────
