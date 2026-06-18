@@ -808,7 +808,7 @@ mod tests {
             }
         }
         assert!(
-            worst < 5e-2,
+            worst < 2e-2,
             "demo-regime multirate vs decimation-free oracle: worst relative deviation {worst:.4} \
              at tone {} Hz, bin {} (multirate |{:.5}| vs oracle |{:.5}|) — aliasing/leakage the \
              static-tone oracle test (multi_octave_spec) does not exercise",

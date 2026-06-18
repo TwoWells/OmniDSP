@@ -779,18 +779,18 @@ where
 /// - **Top octave** (no decimation): identical frame end and kernel length, so
 ///   the streaming complex value matches the reference within
 ///   [`ConformanceFloat::CQT_TOL`].
-/// - **Deeper octaves**: the multirate path runs the signal through 1–2 windowed
-///   Kaiser ×2 decimation stages (ticket 24) whose response is not perfectly
-///   flat.  The per-bin **gain compensation** (ticket 23d) bakes the analytic
-///   inverse of the cascaded decimator passband response into the kernels, so the
-///   magnitude droop (the octave staircase) is removed; what remains is the
-///   filter's group-delay / finite-frame alignment (magnitude) and the decimator
-///   group-delay phase (complex).  The **top octave** (no decimation) is held to
-///   `CQT_TOL` for magnitude *and* complex; the **deeper octaves** are bounded by
-///   documented per-octave residual tolerances (`deep_mag_tol` ≈ 1.1e-2 measured
-///   — down from ≈ 0.24 uncompensated; `deep_complex_tol` ≈ 8.7e-2) — a real
-///   residual, not a loosening of the math (the undecimated top octave still
-///   matching to ~3e-5 proves the math).
+/// - **Deeper octaves**: the multirate path runs the signal through 1–2
+///   asymmetric windowed Kaiser ×2 decimation stages (ticket 24) whose response
+///   is not perfectly flat.  The per-bin **gain compensation** (ticket 23d) bakes
+///   the analytic inverse of the cascaded decimator passband response into the
+///   kernels, so the magnitude droop (the octave staircase) is removed; what
+///   remains is the filter's group-delay / finite-frame alignment (magnitude) and
+///   the decimator group-delay phase (complex).  The **top octave** (no
+///   decimation) is held to `CQT_TOL` for magnitude *and* complex; the **deeper
+///   octaves** are bounded by documented per-octave residual tolerances
+///   (`deep_mag_tol` ≈ 2.1e-3 measured — down from ≈ 0.24 uncompensated;
+///   `deep_complex_tol` ≈ 5.6e-2) — a real residual, not a loosening of the math
+///   (the undecimated top octave still matching to ~3e-5 proves the math).
 ///
 /// A **stationary cross-check** rides alongside it: on a single steady tone the
 /// streaming magnitude matches the oldest-anchored 05L batch (anchoring preserves
@@ -866,24 +866,25 @@ where
     // The top octave (no decimation) is the high-frequency tail of the bins.
     let top_octave_lo = nb - 12.min(nb);
     // Deep-octave residuals against the **decimation-free** reference.  The
-    // multirate streaming path runs deeper-octave bins through 1–2 windowed
-    // Kaiser ×2 decimation stages (ticket 24) whose amplitude/phase response is
+    // multirate streaming path runs deeper-octave bins through 1–2 asymmetric
+    // windowed Kaiser ×2 decimation stages (ticket 24: passband at the next
+    // octave's top, stopband planted at `fs/4`) whose amplitude/phase response is
     // not perfectly flat.  The per-bin **gain compensation** (ticket 23d,
     // retained) bakes the analytic inverse `1/G_k` of the cascaded decimator
     // passband response into each kernel, so the magnitude droop (the octave
     // staircase) is removed — what remains is the residual the compensation
-    // cannot model (the longer Kaiser filter's group-delay / finite-frame
-    // alignment for magnitude; the decimator group-delay *phase*, orthogonal to
-    // magnitude compensation, for the complex value).  Measured worst-case here
-    // (16 kHz, 125–1000 Hz, 12 b/oct): magnitude ≈ 1.1e-2 (down from ≈ 0.24
-    // uncompensated), complex ≈ 8.7e-2.  (The 23d equiripple half-band gave a
-    // smaller ≈ 1.7e-3 magnitude residual but caused octave-aliasing reflections
-    // in the demo regime — ticket 24.)  These bounds cover them with margin; they
-    // are the real decimator residual, not a loosening — the top octave (no
+    // cannot model (the Kaiser filter's group-delay / finite-frame alignment for
+    // magnitude; the decimator group-delay *phase*, orthogonal to magnitude
+    // compensation, for the complex value).  Measured worst-case here (16 kHz,
+    // 125–1000 Hz, 12 b/oct): magnitude ≈ 2.1e-3 (down from ≈ 0.24 uncompensated),
+    // complex ≈ 5.6e-2 — as tight as the 23d half-band's ≈ 1.7e-3 / 5.8e-2 but
+    // *without* its octave-aliasing reflections (the asymmetric decimator adapts
+    // its length to the config).  These bounds cover them with margin; they are
+    // the real decimator residual, not a loosening — the top octave (no
     // decimation) is still held to the tight `CQT_TOL` for both magnitude and
     // complex.
-    let deep_mag_tol = T::lit(1.5e-2);
-    let deep_complex_tol = T::lit(1.1e-1);
+    let deep_mag_tol = T::lit(3e-3);
+    let deep_complex_tol = T::lit(7e-2);
 
     // ── Trait mechanics: max_output_columns bounds the emitted count. ──
     for &len in &[0usize, 1, hop, hop + 1, 2 * hop + 3] {

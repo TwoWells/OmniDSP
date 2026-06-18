@@ -79,15 +79,15 @@ impl DecimatorQuality {
 
     /// The decimator's stopband attenuation target in dB.
     ///
-    /// Quality `q` maps to `50 + 5·q` dB — from `50` dB at quality 0 up to `80`
+    /// Quality `q` maps to `80 + 3·q` dB — from `80` dB at quality 0 up to `98`
     /// dB at the maximum (the high default).  The Kaiser shape parameter β and
     /// the filter length are derived from this target (Kaiser's β + order
     /// formulas), so a higher target yields a deeper stopband and a longer
-    /// filter.  `80` dB comfortably suppresses inter-octave aliasing (the demo
-    /// regime was already clean at the windowed ~53 dB floor).
+    /// filter.  High-fidelity audio CQT decimation cascades want 80–100 dB
+    /// (β > 8.5) to keep the aliasing noise floor from building across octaves.
     #[must_use]
     pub fn stop_atten_db(self) -> f64 {
-        50.0 + 5.0 * f64::from(self.0)
+        80.0 + 3.0 * f64::from(self.0)
     }
 }
 

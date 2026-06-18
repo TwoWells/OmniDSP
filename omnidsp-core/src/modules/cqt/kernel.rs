@@ -200,11 +200,15 @@ where
         .unwrap_or(0)
         + 1;
 
-    // The ×2 half-band equiripple decimation spec (option A), at the spec's
-    // decimator quality.  The prototype's linear-phase group delay is
-    // (proto_len-1)/2 at the stage input rate, i.e. (proto_len-1)/4 output
-    // samples per ×2 stage.
-    let decimate_spec = derive_decimate_spec::<T>(spec.decimator_quality())?;
+    // The ×2 windowed-Kaiser decimation spec (option A, ticket 24), at the spec's
+    // decimator quality.  Its passband must reach the *next* (lower) octave's top
+    // bin — ≈ `f_max/2` normalized to the current rate, plus an ~8% margin for
+    // that bin's bandwidth — while its stopband is planted at `fs/4` (the new
+    // Nyquist).  By self-similarity this single normalized passband edge serves
+    // every ×2 stage.  The prototype's linear-phase group delay is (proto_len-1)/4
+    // output samples per ×2 stage.
+    let passband_edge = (f_max / (2.0 * sr)) * 1.08;
+    let decimate_spec = derive_decimate_spec::<T>(spec.decimator_quality(), passband_edge)?;
     let proto_len = decimate_spec.prototype_filter().len();
     let proto_delay = (proto_len.saturating_sub(1)) as f64 / 4.0;
 
@@ -426,14 +430,10 @@ fn kernel_len_at(len: usize, scale: f64) -> usize {
     ((len as f64 * scale).round() as usize).max(1)
 }
 
-/// Normalized transition width of the CQT decimator's Kaiser lowpass.
-///
-/// The anti-alias transition spans `±DECIMATOR_TRANSITION` (normalized) about the
-/// `fs/4` cutoff; with the quality's attenuation target it sets the Kaiser order.
-/// `0.06` keeps the order modest (≈ 50–85 taps across the quality range) while
-/// the rolloff comfortably suppresses the sub-`fs/4` octave-overlap band that the
-/// half-band could not (ticket 24).
-const DECIMATOR_TRANSITION: f64 = 0.06;
+/// The ×2 decimator's stopband edge (normalized): the new Nyquist after
+/// downsampling, `fs/4` of the input rate.  Everything at or above this must be
+/// rejected so it cannot fold back into the kept band.
+const DECIMATOR_STOPBAND: f64 = 0.25;
 
 /// Kaiser shape parameter β for a target stopband attenuation (dB), per the
 /// standard Kaiser formula (Oppenheim & Schafer §7.6).
@@ -448,49 +448,64 @@ fn kaiser_beta(atten_db: f64) -> f64 {
 }
 
 /// Derive the ×2 **windowed Kaiser** decimation spec (`up = 1`, `down = 2`) for
-/// the requested [`DecimatorQuality`] (ticket 24 — supersedes 23d's equiripple
-/// half-band).
+/// the requested [`DecimatorQuality`] and `passband_edge` (ticket 24 — supersedes
+/// 23d's equiripple half-band).
 ///
-/// Designs a windowed-Kaiser lowpass at cutoff `fs/4` via [`fir::design`] — the
-/// standard Schörkhuber–Klapuri / librosa octave-decimation anti-alias filter —
-/// then drops it into [`ResampleSpec::new`] (the bring-your-own composition path,
-/// ADR-012 §1).  `quality` sets the stopband attenuation target, from which the
-/// Kaiser β and the filter order (Kaiser's order formula over
-/// [`DECIMATOR_TRANSITION`]) follow.  Unlike the equiripple half-band, a Kaiser
-/// lowpass has the rolloff needed to reject the CQT's sub-`fs/4` octave-overlap
-/// content, so it does not produce octave-aliasing reflections.
+/// Designs an **asymmetric** Kaiser-windowed lowpass via [`fir::design`] — the
+/// standard Schörkhuber–Klapuri / librosa octave-decimation anti-alias filter.
+/// The band edges are the CQT-correct ones:
 ///
-/// The filter is designed at a nominal rate of `4` with cutoff `1` so the
-/// normalized cutoff is exactly `0.25 = fs/4` — matching the `1/(2·max(1, 2))`
-/// polyphase anti-alias bound the cross-spec invariant checks (admitted with
-/// equality).  The coefficients are rate-independent; the resampler uses only the
-/// rational `1:2` factors.
+/// - **passband** to `passband_edge` (the highest center frequency of the bins in
+///   the *next* — target lower — octave plus half its bandwidth, normalized to the
+///   current rate), so the lower octaves' content survives the decimation;
+/// - **stopband** from [`DECIMATOR_STOPBAND`] (`fs/4`, the new Nyquist), so every
+///   alias that would fold back into the kept band is rejected to the requested
+///   `quality` attenuation.
+///
+/// The transition is the "don't care" gap between them (the *current* octave's
+/// lower content, already analysed).  This is the distinction the half-band could
+/// not honour: a half-band's skirt is symmetric about `fs/4`, so its stopband
+/// only begins at `fs/4 + δ` and content in `[fs/4, fs/4 + δ]` aliased.
+///
+/// The filter is designed at nominal rate `1`, so its cutoff `(passband_edge +
+/// fs/4)/2` is already normalized; the cutoff is `< fs/4`, satisfying the
+/// `1/(2·max(1, 2))` polyphase anti-alias bound the cross-spec invariant checks.
+/// The coefficients are rate-independent; the resampler uses only the `1:2`
+/// factors.
 #[allow(
     clippy::cast_precision_loss,
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
     reason = "the Kaiser order is a small positive integer exact in f64"
 )]
-fn derive_decimate_spec<T: DspFloat>(quality: DecimatorQuality) -> Result<ResampleSpec<T>> {
-    let four: T =
-        T::from(4.0_f64).ok_or_else(|| Error::Internal("cannot represent 4.0 in T".into()))?;
-    let one: T =
-        T::from(1.0_f64).ok_or_else(|| Error::Internal("cannot represent 1.0 in T".into()))?;
+fn derive_decimate_spec<T: DspFloat>(
+    quality: DecimatorQuality,
+    passband_edge: f64,
+) -> Result<ResampleSpec<T>> {
+    // Asymmetric transition [passband_edge, fs/4]; clamp to keep a sane width.
+    let fp = passband_edge.clamp(0.02, DECIMATOR_STOPBAND - 0.02);
+    let transition = DECIMATOR_STOPBAND - fp;
+    let cutoff_norm = f64::midpoint(fp, DECIMATOR_STOPBAND);
 
-    // Stopband attenuation target → Kaiser β + order (Kaiser's formulas).
+    // Stopband attenuation target → Kaiser β + order (Kaiser's formulas over the
+    // actual transition width).
     let atten_db = quality.stop_atten_db();
     let beta = kaiser_beta(atten_db);
-    let order_est = (atten_db - 7.95) / (2.285 * 2.0 * std::f64::consts::PI * DECIMATOR_TRANSITION);
+    let order_est = (atten_db - 7.95) / (2.285 * 2.0 * std::f64::consts::PI * transition);
     // Even order (Type-I linear-phase FIR), clamped to a sane range.
-    let order = ((order_est.ceil() as usize).clamp(16, 512) + 1) & !1;
+    let order = ((order_est.ceil() as usize).clamp(16, 1024) + 1) & !1;
 
+    let rate: T =
+        T::from(1.0_f64).ok_or_else(|| Error::Internal("cannot represent 1.0 in T".into()))?;
+    let cutoff: T = T::from(cutoff_norm)
+        .ok_or_else(|| Error::Internal("cannot represent cutoff in T".into()))?;
     let beta_t: T =
         T::from(beta).ok_or_else(|| Error::Internal("cannot represent Kaiser beta in T".into()))?;
     let filter = fir::design(
         FilterType::Lowpass,
         order,
-        four,
-        one,
+        rate,
+        cutoff,
         None,
         &FirMethod::Windowed {
             window: Window::Kaiser(beta_t),

@@ -822,33 +822,32 @@ mod tests {
 
     /// Magnitude tolerance for deeper-octave bins against the decimation-free
     /// reference.  The multirate path passes those bins through 1–2 windowed
-    /// Kaiser ×2 decimation stages (ticket 24) whose passband response is not
+    /// Kaiser ×2 decimation stages (ticket 24, asymmetric: passband at the next
+    /// octave's top, stopband planted at `fs/4`) whose passband response is not
     /// perfectly flat, so its magnitude would droop toward the band edge — except
     /// the per-bin gain compensation (ticket 23d, retained) bakes the analytic
     /// inverse `1/G_k` of that cascaded passband response into the kernel,
     /// flattening the octave seam.  **Before** compensation the deepest bin
     /// drooped to ≈ 0.24 (relative); **after**, the seam is flat and the measured
-    /// worst-case is ≈ 1.1e-2 — set by the longer Kaiser filter's group-delay /
-    /// finite-frame alignment residual (the deep stopband and the per-bin gain
-    /// compensation leave that as the floor; the half-band gave a smaller ≈ 1.7e-3
-    /// residual but caused octave-aliasing reflections, ticket 24).  The top
+    /// worst-case is ≈ 2.1e-3.  (The asymmetric decimator adapts its length to the
+    /// config — for this benign spec, bins far below `fs/4`, the transition is
+    /// wide and the filter short, so the group-delay residual is small.)  The top
     /// octave (no decimation) still matches to ≈ 2.7e-5, the proof this is a real
     /// decimation residual, not a loosening.
-    const DEEP_MAG_TOL: f64 = 1.5e-2;
+    const DEEP_MAG_TOL: f64 = 3e-3;
 
     /// Complex tolerance for deeper-octave bins against the decimation-free
-    /// reference.  The half-band ×2 decimator is not phase-exact, so a
+    /// reference.  The Kaiser ×2 decimator is not phase-exact, so a
     /// decimation-free reference and the multirate streaming path differ by a
     /// per-octave residual in the complex value.  Gain compensation corrects the
     /// **magnitude** droop (see [`DEEP_MAG_TOL`]) but is orthogonal to the
     /// decimator's group-delay *phase*, which dominates this complex residual —
     /// so it stays at the decimator-phase floor even as the magnitude residual
-    /// collapses (≈ 2.4e-1 → ≈ 5.8e-2 here, the phase the compensation does not
-    /// touch).  **Measured** worst-case here ≈ 8.7e-2 (relative, windowed Kaiser
-    /// decimator, ticket 24); this bound is ≈1.25×.  Not a loosening: the
-    /// streaming path is genuinely multirate and the reference is genuinely
-    /// decimation-free, so this residual is real.
-    const DEEP_COMPLEX_TOL: f64 = 1.1e-1;
+    /// collapses.  **Measured** worst-case here ≈ 5.6e-2 (relative, asymmetric
+    /// windowed Kaiser decimator, ticket 24); this bound is ≈1.25×.  Not a
+    /// loosening: the streaming path is genuinely multirate and the reference is
+    /// genuinely decimation-free, so this residual is real.
+    const DEEP_COMPLEX_TOL: f64 = 7e-2;
 
     /// The deepest-octave sample stride `2^(O−1)` "now" is quantised to.
     fn align_of(plan: &TestStreamPlan) -> usize {
