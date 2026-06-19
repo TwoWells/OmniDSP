@@ -124,6 +124,10 @@ async function bootstrap(): Promise<void> {
     const audio = new AudioEngine(ctx);
     const spectro = new Spectrogram(spectroCanvas, bins, DEFAULT_HISTORY, dbMin);
     const meter = new SpectrumMeter(meterCanvas, bins, dbMin);
+    // Meter delay line: sample each bin along a monotone cubic through the
+    // per-octave latency floors, so the bass blooms and the treble stays snappy
+    // without the octave-seam glitch (see meter.setLatencies).
+    meter.setLatencies(latencies, ctx.sampleRate, engine.bins_per_octave);
     drawOverlay(overlayCanvas, freqs, bins, engine.bins_per_octave);
     active = {
       engine,
