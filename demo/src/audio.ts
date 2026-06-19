@@ -155,32 +155,45 @@ export class AudioEngine {
 }
 
 /**
- * Synthesize a looping exponential sweep 20 Hz → 16 kHz. Reproducible, needs no
- * asset file or permissions, and exercises the full CQT range — the bright bin
- * climbs diagonally through every octave, an immediate visual sanity check.
+ * Synthesize a seamlessly-looping exponential sweep that ramps 20 Hz → 16 kHz
+ * **and back down**. Reproducible, needs no asset file or permissions, and
+ * exercises the full CQT range — the bright bin climbs the diagonal through
+ * every octave, then descends.
+ *
+ * Sweeping up *and* down keeps the instantaneous frequency continuous at both
+ * turning points (there is no 16 kHz → 20 Hz jump), so the loop has no broadband
+ * seam click — there is no transient to fade away. The clip is then trimmed to a
+ * whole number of carrier cycles so the wrap is phase-continuous too (both ends
+ * land on a rising zero-crossing at 20 Hz).
  */
 function makeSweepClip(ctx: AudioContext): AudioBuffer {
   const sr = ctx.sampleRate;
-  const n = Math.floor(CLIP_SECONDS * sr);
-  const buf = ctx.createBuffer(1, n, sr);
-  const d = buf.getChannelData(0);
-
+  const nMax = Math.floor(CLIP_SECONDS * sr);
   const f0 = 20;
   const f1 = 16000;
   const k = Math.log(f1 / f0);
+  const half = Math.floor(nMax / 2);
+
+  const all = new Float32Array(nMax);
   let phase = 0;
-  for (let i = 0; i < n; i++) {
-    const f = f0 * Math.exp((k * i) / n);
+  let loopLen = 0; // last index after which the phase completed a whole cycle
+  for (let i = 0; i < nMax; i++) {
+    all[i] = 0.3 * Math.sin(phase);
+    // Triangle in log-frequency: t ramps 0 → 1 (up) then 1 → 0 (down), so the
+    // frequency reverses smoothly at 16 kHz and at 20 Hz — no jump.
+    const t = i < half ? i / half : (nMax - 1 - i) / (nMax - 1 - half);
+    const f = f0 * Math.exp(k * t);
+    const before = phase;
     phase += (2 * Math.PI * f) / sr;
-    d[i] = 0.3 * Math.sin(phase);
+    // A rising zero-crossing (phase crossed a multiple of 2π): looping the clip
+    // here makes the wrap phase-continuous, not just frequency-continuous.
+    if (Math.floor(phase / (2 * Math.PI)) > Math.floor(before / (2 * Math.PI))) {
+      loopLen = i + 1;
+    }
   }
 
-  // Short fades to avoid a click at the loop seam.
-  const fade = Math.floor(0.01 * sr);
-  for (let i = 0; i < fade; i++) {
-    const g = i / fade;
-    d[i] *= g;
-    d[n - 1 - i] *= g;
-  }
+  const n = loopLen > 0 ? loopLen : nMax;
+  const buf = ctx.createBuffer(1, n, sr);
+  buf.getChannelData(0).set(all.subarray(0, n));
   return buf;
 }
