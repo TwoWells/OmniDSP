@@ -163,6 +163,17 @@
             <option value="120">120 s</option>
           </select>
         </label>
+        <label class="field" for="kernel">
+          kernel
+          <select id="kernel" title="Analysis-kernel window — the leakage 'ridge' vs sweep-width trade-off">
+            <option value="kaiser-70">Kaiser 70 dB</option>
+            <option value="kaiser-90" selected>Kaiser 90 dB</option>
+            <option value="hann">Hann</option>
+            <option value="blackman">Blackman</option>
+            <option value="blackman-harris">Blackman–Harris</option>
+            <option value="nuttall">Nuttall</option>
+          </select>
+        </label>
         <label class="field" for="sens">
           sensitivity
           <input id="sens" type="range" min="30" max="100" step="1" value="70"

@@ -65,6 +65,7 @@ async function bootstrap(): Promise<void> {
   const micBtn = $<HTMLButtonElement>("mic");
   const minFreqSel = $<HTMLSelectElement>("minfreq");
   const spanSel = $<HTMLSelectElement>("span");
+  const kernelSel = $<HTMLSelectElement>("kernel");
   const sensInput = $<HTMLInputElement>("sens");
   const stats = $("stats");
 
@@ -109,7 +110,7 @@ async function bootstrap(): Promise<void> {
 
     let engine: CqtEngine;
     try {
-      engine = new CqtEngine(ctx.sampleRate, minFreq);
+      engine = new CqtEngine(ctx.sampleRate, minFreq, kernelSel.value);
     } catch (err) {
       showError(`CqtEngine init failed at ${ctx.sampleRate} Hz / min ${minFreq} Hz:\n${err}`);
       return;
@@ -165,6 +166,8 @@ async function bootstrap(): Promise<void> {
       .catch(showError);
   });
   minFreqSel.addEventListener("change", () => rebuild(Number(minFreqSel.value)));
+  // The kernel window is baked into the spec, so changing it rebuilds the engine.
+  kernelSel.addEventListener("change", () => rebuild(Number(minFreqSel.value)));
   spanSel.addEventListener("change", () => {
     targetSec = Number(spanSel.value);
     updatePoolK(lastCps);

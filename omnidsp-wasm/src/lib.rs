@@ -94,8 +94,12 @@ pub struct CqtEngine {
 
 #[wasm_bindgen]
 impl CqtEngine {
-    /// Build the streaming CQT engine for a given audio-context sample rate and
-    /// low-edge frequency.
+    /// Build the streaming CQT engine for a given audio-context sample rate,
+    /// low-edge frequency, and analysis-kernel window.
+    ///
+    /// `kernel` selects the analysis window (the leakage/resolution trade-off):
+    /// `"kaiser-90"`, `"hann"`, `"blackman"`, `"blackman-harris"`, `"nuttall"`,
+    /// or anything else for the default Kaiser at 70 dB suppression.
     ///
     /// The `min_freq … 16 kHz` spec is built at **`sample_rate`** — the actual
     /// rate JS reports (commonly 48 kHz, sometimes 44.1 kHz). Do not hardcode a
@@ -113,12 +117,23 @@ impl CqtEngine {
     /// `min_freq … 16 kHz` range (max frequency must stay below Nyquist) or if
     /// plan construction otherwise fails.
     #[wasm_bindgen(constructor)]
-    pub fn new(sample_rate: f32, min_freq: f32) -> Result<CqtEngine, String> {
-        // The analysis-kernel window. β is solved from KERNEL_SIDELOBE_DB by the
-        // Kaiser formula, so the kernel sidelobes (the spectrogram "ridge") sit at
-        // a designed level rather than wherever a fixed window happens to put them.
-        let window = Window::<f32>::kaiser_for_attenuation(KERNEL_SIDELOBE_DB)
-            .map_err(|e| format!("kernel window design failed: {e}"))?;
+    pub fn new(sample_rate: f32, min_freq: f32, kernel: &str) -> Result<CqtEngine, String> {
+        // The analysis-kernel window, selectable so the demo can A/B the
+        // leakage/resolution trade-off. The Kaiser options solve β from a
+        // sidelobe-attenuation spec via the Kaiser formula (so the "ridge" sits at
+        // a designed level); the fixed cosine-sum windows are there for contrast.
+        let window: Window<f32> = match kernel {
+            "hann" => Window::Hann,
+            "blackman" => Window::Blackman,
+            "blackman-harris" => Window::BlackmanHarris,
+            "nuttall" => Window::Nuttall,
+            "kaiser-90" => Window::kaiser_for_attenuation(90.0)
+                .map_err(|e| format!("kernel window design failed: {e}"))?,
+            // Default: Kaiser at KERNEL_SIDELOBE_DB (70 dB) — the solved-from-spec
+            // kernel; matches any unrecognised id.
+            _ => Window::kaiser_for_attenuation(KERNEL_SIDELOBE_DB)
+                .map_err(|e| format!("kernel window design failed: {e}"))?,
+        };
         let spec: CqtSpec<f32> = cqt::design(
             f64::from(sample_rate),
             f64::from(min_freq),
