@@ -32,10 +32,8 @@
 //! See `README.md` for the `wasm-pack build --target web` packaging step.
 
 use omnidsp::OmniDSP;
-use omnidsp::RustBackend;
-use omnidsp::create::CreatePlan;
 use omnidsp_core::design::cqt::{self, CqtSpec};
-use omnidsp_core::modules::cqt::CqtStreamSpec;
+use omnidsp_core::modules::cqt::CqtStreamPlan;
 use omnidsp_core::types::Window;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -62,13 +60,12 @@ const KERNEL_SIDELOBE_DB: f64 = 70.0;
 /// arrived since the previous frame, never more than this.
 const INPUT_CAPACITY: usize = 8192;
 
-/// The concrete `RustBackend` streaming multirate CQT plan over `f32`.
-///
-/// Spelled via the backend's public `CreatePlan` associated type so the wasm
-/// crate never names the routed decimator sub-plan by hand; it resolves to
-/// `OmniCqtStreamPlan` over the floor's r2c plan, `ScalarVecOps`, and the
-/// continuous `OmniResample(1, 2)` decimator.
-type RustCqtStreamPlan = <RustBackend as CreatePlan<CqtStreamSpec<f32>>>::Plan;
+/// The streaming multirate CQT plan, behind the backend-agnostic
+/// [`CqtStreamPlan`] trait.  The trait carries the full surface the engine uses
+/// — metadata, `process_magnitude`, `reset` — so the engine stores it as a
+/// trait object and never names the concrete (unnameable-by-hand) routed plan
+/// type, nor commits to a specific backend.
+type StreamPlan = Box<dyn CqtStreamPlan<f32>>;
 
 /// Real-time streaming Constant-Q Transform engine for the browser visualiser.
 ///
@@ -77,7 +74,7 @@ type RustCqtStreamPlan = <RustBackend as CreatePlan<CqtStreamSpec<f32>>>::Plan;
 /// persistent plan emits newest-anchored magnitude columns at the hop rate.
 #[wasm_bindgen]
 pub struct CqtEngine {
-    plan: RustCqtStreamPlan,
+    plan: StreamPlan,
     /// PCM input scratch (capacity `INPUT_CAPACITY`); JS writes new samples here.
     input: Vec<f32>,
     /// Magnitude output scratch, sized for the most columns one full input chunk
@@ -142,9 +139,10 @@ impl CqtEngine {
         .map_err(|e| format!("CQT design failed at {sample_rate} Hz (min {min_freq} Hz): {e}"))?;
 
         let dsp = OmniDSP::rust();
-        let plan: RustCqtStreamPlan = dsp
-            .cqt_stream(&CqtStreamSpec::new(spec))
-            .map_err(|e| format!("CQT stream plan creation failed: {e}"))?;
+        let plan: StreamPlan = Box::new(
+            dsp.cqt_stream(&spec.into_streaming())
+                .map_err(|e| format!("CQT stream plan creation failed: {e}"))?,
+        );
 
         let num_bins = plan.num_bins();
         let max_columns = plan.max_output_columns(INPUT_CAPACITY);
