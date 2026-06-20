@@ -40,7 +40,13 @@ use crate::types::Window;
 /// Processing mode for resampling — controls output length semantics.
 ///
 /// The two modes produce identical sample values for the overlapping
-/// range; they differ only in how many output samples are emitted.
+/// range; they differ only in how many output samples are emitted.  Because
+/// the *plan shape is unchanged* (same `&mut self` plan, only a different
+/// output-count accounting), this is a field on one `ResampleSpec` rather than
+/// a distinct newtype dispatch key — the deliberate exception to the
+/// batch/streaming convention in the `spec` module (the CQT's batch and
+/// streaming analyzers, which are genuinely different plan types, do get
+/// separate specs).
 ///
 /// Which mode produces more output depends on the filter length `H`
 /// relative to the upsampling factor `L`:
