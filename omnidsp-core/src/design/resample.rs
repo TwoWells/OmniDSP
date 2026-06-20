@@ -192,11 +192,8 @@ impl<T: Float> ResampleSpec<T> {
                 "resample up_factor and down_factor must be positive".into(),
             ));
         }
-        if let Some(&cutoff) = filter.meta().normalized_cutoff() {
+        if let Some(cutoff_f64) = filter.meta().normalized_cutoff() {
             let max_factor = up_factor.max(down_factor);
-            let cutoff_f64 = cutoff
-                .to_f64()
-                .ok_or_else(|| Error::Internal("failed to convert cutoff to f64".into()))?;
             // cutoff ≤ 1 / (2·max(L, M)) — the anti-alias / anti-image bound.
             let bound = 1.0 / (2.0 * max_factor as f64);
             if cutoff_f64 > bound + CUTOFF_TOLERANCE {
@@ -335,7 +332,7 @@ pub fn design<T: Float>(
     // Re-wrap the designed coefficients in a FirFilter carrying the design
     // context the cross-spec invariant validates against: the prototype was
     // designed at the upsampled rate with normalized cutoff `cutoff_normalized`.
-    let meta = FirMeta::new(from_f64(upsampled_rate)?, from_f64(cutoff_normalized)?);
+    let meta = FirMeta::new(upsampled_rate, cutoff_normalized);
     let filter = FirFilter::new(fir_result.coefficients().to_vec(), meta)?;
 
     ResampleSpec::new(filter, up as usize, down as usize, mode)

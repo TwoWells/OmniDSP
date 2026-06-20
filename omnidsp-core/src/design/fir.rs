@@ -177,9 +177,12 @@ pub fn design<T: Float>(
     // Convert to target type
     let coefficients: Result<Vec<T>> = normalized.iter().map(|&v| from_f64(v)).collect();
 
-    // Record the design context: the primary normalized cutoff (cutoff1 / fs).
-    let normalized_cutoff = from_f64(validated.primary_cutoff)?;
-    FirFilter::new(coefficients?, FirMeta::new(sample_rate, normalized_cutoff))
+    // Record the design context (Hz is f64, surface-wide): the design sample
+    // rate and the primary normalized cutoff (cutoff1 / fs).
+    FirFilter::new(
+        coefficients?,
+        FirMeta::new(to_f64(sample_rate)?, validated.primary_cutoff),
+    )
 }
 
 /// Windowed-sinc design path: ideal impulse response, taper, gain normalize.

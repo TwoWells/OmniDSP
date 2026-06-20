@@ -34,18 +34,23 @@ use crate::error::{Error, Result};
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[allow(
     clippy::derive_partial_eq_without_eq,
-    reason = "T is a float (f32/f64) which is not Eq, so neither is FirMeta<T>"
+    reason = "fields are f64, which is not Eq, so neither is FirMeta"
 )]
-pub struct FirMeta<T> {
-    sample_rate: Option<T>,
-    normalized_cutoff: Option<T>,
+pub struct FirMeta {
+    sample_rate: Option<f64>,
+    normalized_cutoff: Option<f64>,
 }
 
-impl<T> FirMeta<T> {
+impl FirMeta {
     /// Metadata for a filter designed at a known `sample_rate` (Hz) and
     /// `normalized_cutoff` (cutoff frequency divided by the sample rate).
+    ///
+    /// The frequency context is `f64` regardless of the filter's coefficient
+    /// type `T` (the surface-wide "Hz is f64" rule — see the `spec` module): the
+    /// design math is f64 and the sole consumer compares against f64 polyphase
+    /// bounds, so storing f64 avoids a round-trip back through `T`.
     #[must_use]
-    pub const fn new(sample_rate: T, normalized_cutoff: T) -> Self {
+    pub const fn new(sample_rate: f64, normalized_cutoff: f64) -> Self {
         Self {
             sample_rate: Some(sample_rate),
             normalized_cutoff: Some(normalized_cutoff),
@@ -64,18 +69,18 @@ impl<T> FirMeta<T> {
 
     /// Sampling rate (Hz) the filter was designed for, if known.
     #[must_use]
-    pub const fn sample_rate(&self) -> Option<&T> {
-        self.sample_rate.as_ref()
+    pub const fn sample_rate(&self) -> Option<f64> {
+        self.sample_rate
     }
 
     /// Normalized cutoff (cutoff frequency / sample rate), if known.
     #[must_use]
-    pub const fn normalized_cutoff(&self) -> Option<&T> {
-        self.normalized_cutoff.as_ref()
+    pub const fn normalized_cutoff(&self) -> Option<f64> {
+        self.normalized_cutoff
     }
 }
 
-impl<T> Default for FirMeta<T> {
+impl Default for FirMeta {
     /// The same as [`FirMeta::unknown`] — no recorded design context.
     fn default() -> Self {
         Self::unknown()
@@ -106,7 +111,7 @@ impl<T> Default for FirMeta<T> {
 #[derive(Debug, Clone)]
 pub struct FirFilter<T> {
     coefficients: Vec<T>,
-    meta: FirMeta<T>,
+    meta: FirMeta,
 }
 
 impl<T> FirFilter<T> {
@@ -115,7 +120,7 @@ impl<T> FirFilter<T> {
     /// # Errors
     ///
     /// Returns [`Error::InvalidSpec`] if `coefficients` is empty.
-    pub fn new(coefficients: Vec<T>, meta: FirMeta<T>) -> Result<Self> {
+    pub fn new(coefficients: Vec<T>, meta: FirMeta) -> Result<Self> {
         if coefficients.is_empty() {
             return Err(Error::InvalidSpec(
                 "FIR filter requires at least one coefficient".into(),
@@ -136,7 +141,7 @@ impl<T> FirFilter<T> {
 
     /// Design metadata (rate / normalized cutoff, when known).
     #[must_use]
-    pub const fn meta(&self) -> &FirMeta<T> {
+    pub const fn meta(&self) -> &FirMeta {
         &self.meta
     }
 }
