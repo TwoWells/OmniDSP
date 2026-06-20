@@ -139,8 +139,8 @@ impl<T> CqtStreamSpec<T> {
 /// `max_output_columns` resolves that mismatch the way the resampler's
 /// `max_output_len` does: feed any chunk, get the hop-boundary columns it
 /// crossed.  Output is complex; the magnitude convenience
-/// ([`process_magnitude`](OmniCqtStreamPlan::process_magnitude)) stays inherent
-/// on [`OmniCqtStreamPlan`].
+/// ([`process_magnitude`](Self::process_magnitude)) is on the trait too,
+/// delegating to the concrete plan's efficient inherent implementation.
 pub trait CqtStreamPlan<T> {
     /// Number of frequency bins per column.
     fn num_bins(&self) -> usize;
@@ -174,6 +174,19 @@ pub trait CqtStreamPlan<T> {
     ///
     /// Returns an error if `out` is too short, or if execution fails.
     fn process(&mut self, input: &[T], out: &mut [Complex<T>]) -> Result<usize>;
+
+    /// Feed new samples and write the newest-anchored **magnitude** columns
+    /// (`|CQT[k]|` per bin) whose hop boundaries the input crossed; returns the
+    /// column count.  Same buffer contract as [`process`](Self::process): `out`
+    /// must hold at least
+    /// [`max_output_columns(input.len())`](Self::max_output_columns) columns,
+    /// each [`num_bins`](Self::num_bins) wide.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::BufferMismatch`] if `out` is too short, or propagates
+    /// execution failures.
+    fn process_magnitude(&mut self, input: &[T], out: &mut [T]) -> Result<usize>;
 
     /// Reset all state (decimator delay lines, per-octave rings) without
     /// recreating the plan — the [`ResamplePlan::reset`] analogue.
@@ -673,6 +686,10 @@ where
 
     fn process(&mut self, input: &[T], out: &mut [Complex<T>]) -> Result<usize> {
         self.process(input, out)
+    }
+
+    fn process_magnitude(&mut self, input: &[T], out: &mut [T]) -> Result<usize> {
+        self.process_magnitude(input, out)
     }
 
     fn reset(&mut self) {

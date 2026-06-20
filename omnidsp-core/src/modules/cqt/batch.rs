@@ -301,20 +301,43 @@ where
 /// [`DctPlan`](crate::traits::dct::DctPlan) (ADR-006 §2 eager plan traits,
 /// ADR-007 §6).  It lets the per-frame `process` be called generically (e.g.
 /// by the shared conformance suite covering the multirate CQT) without naming
-/// the concrete plan.  Implemented by [`OmniCqtPlan`]; vendor overrides may
-/// implement it directly.  The magnitude convenience
-/// ([`process_magnitude`](OmniCqtPlan::process_magnitude)) stays inherent.
+/// the concrete plan.  Beyond `process` it carries the buffer-sizing facts a
+/// generic caller needs ([`num_bins`](Self::num_bins),
+/// [`fft_length`](Self::fft_length) — the CQT's `process` has a size
+/// precondition the length-symmetric `ConvPlan`/`DctPlan` do not), the per-bin
+/// center frequencies, and the magnitude convenience.  Each method delegates to
+/// the inherent implementation on [`OmniCqtPlan`]; vendor overrides may
+/// implement the trait directly.
 pub trait CqtPlan<T>: Send + Sync {
+    /// Number of frequency bins per frame — the required `output` length for
+    /// [`process`](Self::process) / [`process_magnitude`](Self::process_magnitude).
+    fn num_bins(&self) -> usize;
+
+    /// Required input frame length (the spec's FFT length).
+    fn fft_length(&self) -> usize;
+
+    /// Per-bin center frequencies in Hz (pinned low → high).
+    fn bin_frequencies(&self) -> &[f64];
+
     /// Compute the complex CQT coefficients of one frame.
     ///
-    /// `input` must have length `fft_length`; `output` must have length
-    /// `num_bins`, in the pinned low → high order.
+    /// `input` must have length [`fft_length`](Self::fft_length); `output` must
+    /// have length [`num_bins`](Self::num_bins), in the pinned low → high order.
     ///
     /// # Errors
     ///
     /// Returns an error if either buffer length is wrong, or if execution
     /// fails.
     fn process(&self, input: &[T], output: &mut [Complex<T>]) -> Result<()>;
+
+    /// Compute the CQT **magnitude** spectrum of one frame, writing `|CQT[k]|`
+    /// to `output` (same buffer contract as [`process`](Self::process)).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::BufferMismatch`] if buffer lengths are wrong, or
+    /// propagates execution failures.
+    fn process_magnitude(&self, input: &[T], output: &mut [T]) -> Result<()>;
 }
 
 impl<T, RP, V, ResP> CqtPlan<T> for OmniCqtPlan<T, RP, V, ResP>
@@ -324,10 +347,26 @@ where
     V: VecOps<T>,
     ResP: ResamplePlan<T> + Send,
 {
+    // Each method delegates to the inherent one.  Inherent methods take
+    // precedence over trait methods in resolution, so these are not recursive.
+    fn num_bins(&self) -> usize {
+        self.num_bins()
+    }
+
+    fn fft_length(&self) -> usize {
+        self.fft_length()
+    }
+
+    fn bin_frequencies(&self) -> &[f64] {
+        self.bin_frequencies()
+    }
+
     fn process(&self, input: &[T], output: &mut [Complex<T>]) -> Result<()> {
-        // Delegate to the inherent `process`.  Inherent methods take precedence
-        // over trait methods in resolution, so this is not recursive.
         self.process(input, output)
+    }
+
+    fn process_magnitude(&self, input: &[T], output: &mut [T]) -> Result<()> {
+        self.process_magnitude(input, output)
     }
 }
 
