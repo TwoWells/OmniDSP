@@ -631,7 +631,7 @@ mod tests {
     use crate::modules::resample::{OmniResample, OmniResamplePlan};
     use crate::test_utils::{TestDftC2c, TestDftR2c, TestVecOps};
     use crate::traits::dft::{DftC2c, DftR2c};
-    use crate::types::Window;
+    use crate::window;
 
     // ── The multirate plan under test ──────────────────────────────
 
@@ -653,13 +653,13 @@ mod tests {
 
     /// One octave, 12 bins — degenerate (no decimation).
     fn one_octave_spec() -> CqtSpec<f64> {
-        cqt::design(44100.0, 440.0, 880.0, 12, &Window::Hann).expect("valid design")
+        cqt::design(44100.0, 440.0, 880.0, 12, &window::hann()).expect("valid design")
     }
 
     /// Three octaves at 16 kHz — exercises the decimation chain.  `f_max` sits
     /// at ~0.06·Nyquist, far below every decimation cutoff.
     fn multi_octave_spec() -> CqtSpec<f64> {
-        cqt::design(16000.0, 125.0, 1000.0, 12, &Window::Hann).expect("valid design")
+        cqt::design(16000.0, 125.0, 1000.0, 12, &window::hann()).expect("valid design")
     }
 
     // ── The single-FFT oracle (reference only) ─────────────────────
@@ -821,7 +821,7 @@ mod tests {
         reason = "sweep sample indices are small enough for f64"
     )]
     fn sweep_adds_no_low_octave_aliasing() {
-        let spec = cqt::design(48000.0, 100.0, 16000.0, 12, &Window::Hann).expect("design");
+        let spec = cqt::design(48000.0, 100.0, 16000.0, 12, &window::hann()).expect("design");
         let plan = make_plan(&spec);
         let n = plan.fft_length();
         let sr = 48000.0;
@@ -880,7 +880,7 @@ mod tests {
         reason = "sample indices are small enough for f64"
     )]
     fn matches_oracle_demo_regime() {
-        let spec = cqt::design(48000.0, 250.0, 16000.0, 12, &Window::Hann)
+        let spec = cqt::design(48000.0, 250.0, 16000.0, 12, &window::hann())
             .expect("valid demo-like design");
         let plan = make_plan(&spec);
         let n = plan.fft_length();
@@ -1126,7 +1126,7 @@ mod tests {
             CQT_PROC_MIN_FREQ,
             CQT_PROC_MAX_FREQ,
             CQT_PROC_BINS_PER_OCTAVE,
-            &Window::Hann,
+            &window::hann(),
         )
         .expect("valid design")
     }

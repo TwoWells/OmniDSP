@@ -59,7 +59,8 @@ use crate::design::resample::{ResampleMode, ResampleSpec};
 use crate::error::{Error, Result};
 use crate::modules::resample::ResamplePlan;
 use crate::traits::dft::{DftNorm, DftR2c, DftR2cSpec};
-use crate::types::{DspFloat, FilterType, Window};
+use crate::types::{DspFloat, FilterType};
+use crate::window;
 
 /// Where a bin's kernel sits inside its octave's `fft_len`-point frame.
 ///
@@ -504,10 +505,11 @@ fn derive_decimate_spec<T: DspFloat>(
     let transition = DECIMATOR_STOPBAND - fp;
     let cutoff_norm = f64::midpoint(fp, DECIMATOR_STOPBAND);
 
-    // Stopband attenuation target → Kaiser β + order (Kaiser's formulas over the
-    // actual transition width).
+    // Stopband attenuation target → Kaiser order (Kaiser's order formula over the
+    // actual transition width); the same target solves the window's β via
+    // `window::kaiser::attenuation` (ADR-013), so kernel and decimator share one
+    // spec without a hand-converted β.
     let atten_db = quality.stop_atten_db();
-    let beta = crate::design::window::kaiser_beta(atten_db);
     let order_est = (atten_db - 7.95) / (2.285 * 2.0 * std::f64::consts::PI * transition);
     // Even order (Type-I linear-phase FIR), clamped to a sane range.
     let order = ((order_est.ceil() as usize).clamp(16, 1024) + 1) & !1;
@@ -516,8 +518,6 @@ fn derive_decimate_spec<T: DspFloat>(
         T::from(1.0_f64).ok_or_else(|| Error::Internal("cannot represent 1.0 in T".into()))?;
     let cutoff: T = T::from(cutoff_norm)
         .ok_or_else(|| Error::Internal("cannot represent cutoff in T".into()))?;
-    let beta_t: T =
-        T::from(beta).ok_or_else(|| Error::Internal("cannot represent Kaiser beta in T".into()))?;
     let filter = fir::design(
         FilterType::Lowpass,
         order,
@@ -525,7 +525,7 @@ fn derive_decimate_spec<T: DspFloat>(
         cutoff,
         None,
         &FirMethod::Windowed {
-            window: Window::Kaiser(beta_t),
+            window: window::kaiser::attenuation(atten_db),
         },
     )?;
     ResampleSpec::new(filter, 1, 2, ResampleMode::Streaming)

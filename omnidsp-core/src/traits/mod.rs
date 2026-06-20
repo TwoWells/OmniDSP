@@ -8,7 +8,7 @@
 //! is the exception — it is stateless and uses direct methods instead.
 //!
 //! Window does not have a trait — coefficient generation is pure math
-//! ([`Window::coefficients`](crate::types::Window::coefficients)) and applying
+//! ([`Window::coefficients`](crate::window::Window::coefficients)) and applying
 //! a window is [`VecOps::mul_inplace`](vecops::VecOps::mul_inplace).
 //!
 //! See the [architecture docs](https://github.com/TwoWells/OmniDSP) for details.

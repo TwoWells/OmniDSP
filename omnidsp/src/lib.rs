@@ -14,9 +14,10 @@ pub use omnidsp_core::modules;
 pub use omnidsp_core::scalar;
 pub use omnidsp_core::traits;
 pub use omnidsp_core::types;
+pub use omnidsp_core::window;
 
 // Re-export Window at crate root for convenience
-pub use omnidsp_core::types::Window;
+pub use omnidsp_core::window::Window;
 
 pub mod create;
 mod omnidsp;
@@ -39,13 +40,16 @@ pub type Auto = OmniDSP<Best>;
 #[cfg(test)]
 #[allow(clippy::expect_used, reason = "expect is the preferred idiom in tests")]
 mod tests {
-    use super::Window;
     use super::traits::dft::{DftC2cSpec, DftNorm};
     use super::types::Direction;
+    use super::{Window, window};
 
     #[test]
     fn reexport_window() {
-        let w: Vec<f64> = Window::hann(64).expect("hann should succeed");
+        // Both the re-exported `Window` type and the `window` constructor
+        // namespace are reachable from the crate root.
+        let recipe: Window = window::hann();
+        let w: Vec<f64> = recipe.coefficients(64).expect("hann should succeed");
         assert_eq!(w.len(), 64, "window length should match");
     }
 

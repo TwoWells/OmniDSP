@@ -26,7 +26,8 @@ use omnidsp_core::traits::dft::{
 };
 use omnidsp_core::traits::fir::{FirFilter, FirMeta, FirPlan, FirSpec, FirStrategy};
 use omnidsp_core::traits::iir::{IirPlan, IirSpec};
-use omnidsp_core::types::{BiquadSection, Direction, Window};
+use omnidsp_core::types::{BiquadSection, Direction};
+use omnidsp_core::window;
 use omnidsp_rustfft::{RustDftC2c, RustDftC2r, RustDftR2c};
 
 // ─── Helpers ───────────────────────────────────────────────────────────
@@ -364,7 +365,7 @@ fn cqt_tone_detect_f64(dsp: &OmniDSP<RustBackend>) {
     let sr = 8000.0;
     let freq = 440.0;
     // Design covers one octave around the tone (220–880 Hz).
-    let spec = cqt::design::<f64>(sr, 220.0, 880.0, 12, &Window::Hann).expect("CQT design");
+    let spec = cqt::design::<f64>(sr, 220.0, 880.0, 12, &window::hann()).expect("CQT design");
     let plan = dsp.cqt(&spec).expect("CQT plan");
     let fft_len = plan.fft_length();
     let num_bins = plan.num_bins();
@@ -407,7 +408,7 @@ fn cqt_tone_detect_f64(dsp: &OmniDSP<RustBackend>) {
 fn cqt_tone_detect_f32(dsp: &OmniDSP<RustBackend>) {
     let sr = 8000.0;
     let freq = 440.0;
-    let spec = cqt::design::<f32>(sr, 220.0, 880.0, 12, &Window::Hann).expect("CQT design");
+    let spec = cqt::design::<f32>(sr, 220.0, 880.0, 12, &window::hann()).expect("CQT design");
     let plan = dsp.cqt(&spec).expect("CQT plan");
     let fft_len = plan.fft_length();
     let num_bins = plan.num_bins();

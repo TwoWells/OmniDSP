@@ -39,7 +39,8 @@ use num_traits::Float;
 use crate::design::remez;
 use crate::error::{Error, Result};
 use crate::traits::fir::{FirFilter, FirMeta};
-use crate::types::{FilterType, Window};
+use crate::types::FilterType;
+use crate::window::Window;
 
 // ─── Design method ────────────────────────────────────────────────────
 
@@ -58,7 +59,7 @@ use crate::types::{FilterType, Window};
 #[derive(Debug, Clone, PartialEq)]
 #[allow(
     clippy::derive_partial_eq_without_eq,
-    reason = "the Window<T> payload holds a float (f32/f64) which is not Eq"
+    reason = "the Equiripple payload holds floats (f32/f64) which are not Eq"
 )]
 #[non_exhaustive]
 pub enum FirMethod<T> {
@@ -66,7 +67,7 @@ pub enum FirMethod<T> {
     /// requested order and apply `window` to reduce spectral leakage.
     Windowed {
         /// Window applied to the ideal (sinc) impulse response.
-        window: Window<T>,
+        window: Window,
     },
 
     /// Equiripple (Parks–McClellan / Remez exchange) design: the
@@ -138,11 +139,12 @@ pub enum FirMethod<T> {
 ///
 /// ```
 /// use omnidsp_core::design::fir::{design, FirMethod};
-/// use omnidsp_core::types::{FilterType, Window};
+/// use omnidsp_core::types::FilterType;
+/// use omnidsp_core::window;
 ///
 /// let filter = design(
-///     FilterType::Lowpass, 30, 44100.0, 1000.0, None,
-///     &FirMethod::Windowed { window: Window::Hamming },
+///     FilterType::Lowpass, 30, 44100.0_f64, 1000.0, None,
+///     &FirMethod::Windowed { window: window::hamming() },
 /// ).unwrap();
 /// assert_eq!(filter.coefficients().len(), 31);
 /// ```
@@ -186,10 +188,10 @@ pub fn design<T: Float>(
 }
 
 /// Windowed-sinc design path: ideal impulse response, taper, gain normalize.
-fn design_windowed<T: Float>(
+fn design_windowed(
     filter_type: FilterType,
     validated: &ValidatedSpec,
-    window: &Window<T>,
+    window: &Window,
 ) -> Result<Vec<f64>> {
     // Compute ideal impulse response
     let ideal = match validated.cutoffs {
@@ -213,16 +215,18 @@ fn design_windowed<T: Float>(
         },
     };
 
-    // Generate and apply the method-specific taper.
-    let win_coeffs = window.coefficients(validated.num_taps)?;
-    let windowed: Result<Vec<f64>> = ideal
+    // Generate and apply the method-specific taper.  The window evaluates
+    // directly in f64 — the precision the windowed-sinc math runs in — so there
+    // is no per-coefficient `T → f64` round-trip (ADR-013).
+    let win_coeffs = window.coefficients::<f64>(validated.num_taps)?;
+    let windowed: Vec<f64> = ideal
         .iter()
         .zip(&win_coeffs)
-        .map(|(h, w)| to_f64(*w).map(|wf| *h * wf))
+        .map(|(h, w)| *h * *w)
         .collect();
 
     // Normalize gain
-    Ok(normalize(filter_type, &windowed?, &validated.cutoffs))
+    Ok(normalize(filter_type, &windowed, &validated.cutoffs))
 }
 
 /// Fraction of a cutoff frequency spanned by the equiripple half-transition.
@@ -636,10 +640,11 @@ fn eval_gain(taps: &[f64], f: f64) -> f64 {
 #[allow(clippy::expect_used, reason = "expect is the preferred idiom in tests")]
 mod tests {
     use super::*;
+    use crate::window;
 
     const TOL: f64 = 1e-8;
 
-    fn windowed(window: Window<f64>) -> FirMethod<f64> {
+    fn windowed(window: Window) -> FirMethod<f64> {
         FirMethod::Windowed { window }
     }
 
@@ -650,7 +655,7 @@ mod tests {
             44100.0,
             fc,
             None,
-            &windowed(Window::Hamming),
+            &windowed(window::hamming()),
         )
         .expect("LP design")
         .coefficients()
@@ -664,7 +669,7 @@ mod tests {
             44100.0,
             fc,
             None,
-            &windowed(Window::Hamming),
+            &windowed(window::hamming()),
         )
         .expect("HP design")
         .coefficients()
@@ -678,7 +683,7 @@ mod tests {
             44100.0,
             fc1,
             Some(fc2),
-            &windowed(Window::Hamming),
+            &windowed(window::hamming()),
         )
         .expect("BP design")
         .coefficients()
@@ -692,7 +697,7 @@ mod tests {
             44100.0,
             fc1,
             Some(fc2),
-            &windowed(Window::Hamming),
+            &windowed(window::hamming()),
         )
         .expect("BS design")
         .coefficients()
@@ -720,7 +725,7 @@ mod tests {
             44100.0,
             1000.0,
             None,
-            &windowed(Window::Hann),
+            &windowed(window::hann()),
         )
         .expect("lowpass design")
         .coefficients()
@@ -748,7 +753,7 @@ mod tests {
             2.0, // fs=2 → Nyquist=1, fc=0.25 means quarter-band
             0.25,
             None,
-            &windowed(Window::Rectangular),
+            &windowed(window::rectangular()),
         )
         .expect("lowpass design")
         .coefficients()
@@ -854,7 +859,7 @@ mod tests {
                 44100.0,
                 1000.0,
                 None,
-                &windowed(Window::Hann)
+                &windowed(window::hann())
             )
             .is_err(),
             "order 0 should be rejected"
@@ -870,7 +875,7 @@ mod tests {
                 -1.0,
                 0.25,
                 None,
-                &windowed(Window::Hann)
+                &windowed(window::hann())
             )
             .is_err(),
             "negative sample rate should be rejected"
@@ -886,7 +891,7 @@ mod tests {
                 44100.0,
                 22050.0,
                 None,
-                &windowed(Window::Hann)
+                &windowed(window::hann())
             )
             .is_err(),
             "cutoff at Nyquist should be rejected"
@@ -902,7 +907,7 @@ mod tests {
                 44100.0,
                 30000.0,
                 None,
-                &windowed(Window::Hann)
+                &windowed(window::hann())
             )
             .is_err(),
             "cutoff above Nyquist should be rejected"
@@ -918,7 +923,7 @@ mod tests {
                 44100.0,
                 1000.0,
                 None,
-                &windowed(Window::Hann)
+                &windowed(window::hann())
             )
             .is_err(),
             "bandpass without cutoff2 should be rejected"
@@ -934,7 +939,7 @@ mod tests {
                 44100.0,
                 5000.0,
                 Some(1000.0),
-                &windowed(Window::Hann),
+                &windowed(window::hann()),
             )
             .is_err(),
             "cutoff2 <= cutoff1 should be rejected"
@@ -950,7 +955,7 @@ mod tests {
                 44100.0,
                 1000.0,
                 Some(5000.0),
-                &windowed(Window::Hann),
+                &windowed(window::hann()),
             )
             .is_err(),
             "lowpass with cutoff2 should be rejected"
@@ -1003,7 +1008,7 @@ mod tests {
             1000.0_f32,
             None,
             &FirMethod::Windowed {
-                window: Window::Hamming,
+                window: window::hamming(),
             },
         )
         .expect("f32 lowpass");
@@ -1057,7 +1062,7 @@ mod tests {
             44100.0,
             10000.0,
             None,
-            &windowed(Window::Hann),
+            &windowed(window::hann()),
         )
         .expect("HP30 Hann design")
         .coefficients()
@@ -1085,7 +1090,7 @@ mod tests {
             2.0,
             0.25,
             None,
-            &windowed(Window::Rectangular),
+            &windowed(window::rectangular()),
         )
         .expect("LP4 rect design")
         .coefficients()

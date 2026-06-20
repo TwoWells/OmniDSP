@@ -33,7 +33,7 @@ use num_traits::Float;
 
 use crate::error::{Error, Result};
 use crate::traits::fir::{FirFilter, FirMeta};
-use crate::types::Window;
+use crate::window::Window;
 
 // ─── Spec (backend-agnostic) ─────────────────────────────────────────
 
@@ -123,13 +123,13 @@ impl ResampleQuality {
 ///     self, ResampleSpec, ResampleMode, ResampleQuality, DEFAULT_MAX_PHASES,
 /// };
 /// use omnidsp_core::traits::fir::{FirFilter, FirMeta};
-/// use omnidsp_core::types::Window;
+/// use omnidsp_core::window;
 ///
 /// // Via design():
 /// let spec = resample::design(
 ///     44100.0_f64, 48000.0,
 ///     ResampleQuality::new(5).unwrap(),
-///     &Window::Hamming,
+///     &window::hamming(),
 ///     DEFAULT_MAX_PHASES,
 ///     ResampleMode::Streaming,
 /// ).unwrap();
@@ -276,7 +276,7 @@ pub fn design<T: Float>(
     input_rate: T,
     output_rate: T,
     quality: ResampleQuality,
-    window: &Window<T>,
+    window: &Window,
     max_phases: usize,
     mode: ResampleMode,
 ) -> Result<ResampleSpec<T>> {
@@ -445,6 +445,7 @@ fn from_f64<T: Float>(val: f64) -> Result<T> {
 #[allow(clippy::expect_used, reason = "expect is the preferred idiom in tests")]
 mod tests {
     use super::*;
+    use crate::window;
 
     fn q(val: u8) -> ResampleQuality {
         ResampleQuality::new(val).expect("valid quality")
@@ -455,7 +456,7 @@ mod tests {
             sr_in,
             sr_out,
             q(quality),
-            &Window::Hamming,
+            &window::hamming(),
             DEFAULT_MAX_PHASES,
             ResampleMode::Streaming,
         )
@@ -472,7 +473,7 @@ mod tests {
             sr_in,
             sr_out,
             q(quality),
-            &Window::Hamming,
+            &window::hamming(),
             max_phases,
             ResampleMode::Streaming,
         )
@@ -512,7 +513,7 @@ mod tests {
                 0.0,
                 48000.0,
                 q(5),
-                &Window::<f64>::Hamming,
+                &window::hamming(),
                 DEFAULT_MAX_PHASES,
                 ResampleMode::Streaming
             )
@@ -528,7 +529,7 @@ mod tests {
                 -44100.0,
                 48000.0,
                 q(5),
-                &Window::<f64>::Hamming,
+                &window::hamming(),
                 DEFAULT_MAX_PHASES,
                 ResampleMode::Streaming
             )
@@ -544,7 +545,7 @@ mod tests {
                 44100.0,
                 0.0,
                 q(5),
-                &Window::<f64>::Hamming,
+                &window::hamming(),
                 DEFAULT_MAX_PHASES,
                 ResampleMode::Streaming
             )
@@ -560,7 +561,7 @@ mod tests {
                 44100.0,
                 -48000.0,
                 q(5),
-                &Window::<f64>::Hamming,
+                &window::hamming(),
                 DEFAULT_MAX_PHASES,
                 ResampleMode::Streaming
             )
@@ -831,7 +832,7 @@ mod tests {
             44100.0_f32,
             48000.0_f32,
             q(5),
-            &Window::Hamming,
+            &window::hamming(),
             DEFAULT_MAX_PHASES,
             ResampleMode::Streaming,
         )

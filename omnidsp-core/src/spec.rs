@@ -38,6 +38,46 @@
 //! - **Counts and lengths are `usize`** (`num_bins`, `fft_length`,
 //!   `max_output_*`, …).
 //! - **Signal samples and filter coefficients are the generic `T`.**
+//! - **Design scalars are `f64`** — Hz, normalized cutoffs, and **window shape
+//!   parameters** (Kaiser β, Gaussian σ, Tukey taper) are `f64` on the public
+//!   surface regardless of the operation's `T`; `T` is the signal/coefficient
+//!   type only.  A value like [`Window`](crate::window::Window) that carries
+//!   only design scalars is therefore **non-generic** — the precision is chosen
+//!   at evaluation ([`Window::coefficients::<T>`](crate::window::Window::coefficients)),
+//!   not pinned by the recipe (ADR-013 §1/§4).
+//!
+//! ## Value construction (ADR-013)
+//!
+//! A configured value is built one of two ways, and the choice is fixed up
+//! front, not earned later:
+//!
+//! - **Construction-shape tracks the parameters.** A parameterless kind is a
+//!   leaf constructor ([`window::hann`](crate::window::hann)); a *parameterized*
+//!   kind is a **sub-namespace with one named constructor per parameterization**
+//!   ([`window::kaiser::beta`](crate::window::kaiser::beta) /
+//!   [`window::kaiser::attenuation`](crate::window::kaiser::attenuation),
+//!   [`window::gaussian::sigma`](crate::window::gaussian::sigma),
+//!   [`window::tukey::taper`](crate::window::tukey::taper)).  The sub-namespace
+//!   is committed from the start for any parameterized value, because a
+//!   namespaced constructor cannot be retrofitted without breaking
+//!   (`gaussian(s)` → `gaussian::sigma(s)`); an *enum-argument* alternative
+//!   (`fir::design(…, FirMethod)`) can grow a `#[non_exhaustive]` variant
+//!   non-breakingly, so those stay earned.  **Namespace-retrofit is breaking;
+//!   enum-grow is not.**
+//! - **Value vs derivation.** A value type is constructed directly (or via its
+//!   `window::`-style namespace) and may *evaluate or transform itself*
+//!   (`coefficients`), but never gains a `_for_`/`_from_` constructor that
+//!   derives its parameter from a different requirement.  A derivation that
+//!   outputs a heavy `create_plan` artifact (coefficients, kernels) is a
+//!   `design::X::design(…)` function; a scalar reparameterization of a simple
+//!   value (a Kaiser β solved from an attenuation target) is **data on that
+//!   value** — a constructor in its namespace, never a false `design::` peer.
+//!   The test: does it output a `create_plan` input, or merely respell a value's
+//!   parameter?
+//! - **Alternatives as data.** Several parameterizations or algorithms producing
+//!   the same output are expressed as **data, not a fan of methods** — an enum
+//!   argument (growable, earned) or a namespaced constructor set (committed up
+//!   front).  Never `x_for_a` / `x_from_b`.
 //!
 //! ## Plan traits
 //!

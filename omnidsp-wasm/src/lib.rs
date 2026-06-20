@@ -34,7 +34,7 @@
 use omnidsp::OmniDSP;
 use omnidsp_core::design::cqt::{self, CqtSpec};
 use omnidsp_core::modules::cqt::CqtStreamPlan;
-use omnidsp_core::types::Window;
+use omnidsp_core::window::{self, Window};
 use wasm_bindgen::prelude::wasm_bindgen;
 
 /// Upper edge of the demo CQT range (must stay below Nyquist).
@@ -47,7 +47,7 @@ const BINS_PER_OCTAVE: u32 = 12;
 ///
 /// Sets the faint leakage "ridge" that parallels a tone in the spectrogram. The
 /// Kaiser shape parameter β is **solved** from this spec via the Kaiser formula
-/// (Oppenheim & Schafer §7.6, [`Window::kaiser_for_attenuation`]) — not
+/// (Oppenheim & Schafer §7.6, [`window::kaiser::attenuation`]) — not
 /// hand-tuned: 70 dB ≈ the demo's display dynamic range, giving
 /// β = 0.1102·(70 − 8.7) ≈ 6.75. The realized suppression of the finite
 /// constant-Q kernels is a few dB less (measured ridge ≈ −51…−63 dB vs Hann's
@@ -119,15 +119,15 @@ impl CqtEngine {
         // leakage/resolution trade-off. The Kaiser options solve β from a
         // sidelobe-attenuation spec via the Kaiser formula (so the "ridge" sits at
         // a designed level); the fixed cosine-sum windows are there for contrast.
-        let window: Window<f32> = match kernel {
-            "hann" => Window::Hann,
-            "blackman" => Window::Blackman,
-            "blackman-harris" => Window::BlackmanHarris,
-            "nuttall" => Window::Nuttall,
-            "kaiser-90" => Window::kaiser_for_attenuation(90.0),
+        let window: Window = match kernel {
+            "hann" => window::hann(),
+            "blackman" => window::blackman(),
+            "blackman-harris" => window::blackman_harris(),
+            "nuttall" => window::nuttall(),
+            "kaiser-90" => window::kaiser::attenuation(90.0),
             // Default: Kaiser at KERNEL_SIDELOBE_DB (70 dB) — the solved-from-spec
             // kernel; matches any unrecognised id.
-            _ => Window::kaiser_for_attenuation(KERNEL_SIDELOBE_DB),
+            _ => window::kaiser::attenuation(KERNEL_SIDELOBE_DB),
         };
         let spec: CqtSpec<f32> = cqt::design(
             f64::from(sample_rate),

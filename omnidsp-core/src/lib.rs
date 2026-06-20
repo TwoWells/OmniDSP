@@ -19,6 +19,7 @@ pub mod scalar;
 pub mod spec;
 pub mod traits;
 pub mod types;
+pub mod window;
 
 #[cfg(test)]
 pub(crate) mod test_utils;

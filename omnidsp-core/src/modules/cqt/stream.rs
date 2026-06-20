@@ -788,7 +788,7 @@ mod tests {
     use crate::test_utils::{TestDftR2c, TestVecOps};
     use crate::traits::dft::{DftNorm, DftR2c, DftR2cPlan, DftR2cSpec};
     use crate::traits::vecops::VecOps;
-    use crate::types::Window;
+    use crate::window;
 
     type TestStreamPlan = OmniCqtStreamPlan<
         f64,
@@ -824,7 +824,7 @@ mod tests {
 
     /// Three octaves at 16 kHz — exercises the continuous decimation chain.
     fn multi_octave_spec() -> CqtSpec<f64> {
-        cqt::design(16000.0, 125.0, 1000.0, 12, &Window::Hann).expect("valid design")
+        cqt::design(16000.0, 125.0, 1000.0, 12, &window::hann()).expect("valid design")
     }
 
     // ── Independent newest-anchored single-FFT reference (the oracle) ──
@@ -1004,7 +1004,7 @@ mod tests {
         // per-bin newest-anchored latency must be one value per bin, all positive,
         // and monotonically *decreasing* with frequency (low bins look further
         // back — `window/2 + decimation group delay`, both ∝ deeper octave).
-        let spec = cqt::design(48000.0, 110.0, 16000.0, 12, &Window::Hann)
+        let spec = cqt::design(48000.0, 110.0, 16000.0, 12, &window::hann())
             .expect("valid demo-regime design");
         let plan = make_stream(&spec);
         let nb = plan.num_bins();
@@ -1296,7 +1296,7 @@ mod tests {
         reason = "sample indices are small enough for f64"
     )]
     fn demo_regime_top_tone_does_not_leak_into_deep_octaves() {
-        let spec = cqt::design(48000.0, 250.0, 16000.0, 12, &Window::Hann)
+        let spec = cqt::design(48000.0, 250.0, 16000.0, 12, &window::hann())
             .expect("valid demo-like design");
         let mut stream = make_stream(&spec);
         let nb = stream.num_bins();
@@ -1367,7 +1367,7 @@ mod tests {
     )]
     fn demo_regime_deep_octave_skirt_matches_batch() {
         let spec =
-            cqt::design(48000.0, 100.0, 16000.0, 12, &Window::Hann).expect("valid demo design");
+            cqt::design(48000.0, 100.0, 16000.0, 12, &window::hann()).expect("valid demo design");
         let nb = spec.num_bins();
         let fft = spec.fft_length();
         let sr = spec.sample_rate();

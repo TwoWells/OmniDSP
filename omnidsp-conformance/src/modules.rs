@@ -26,7 +26,8 @@ use omnidsp_core::traits::dft::{DftNorm, DftR2c, DftR2cPlan, DftR2cSpec};
 use omnidsp_core::traits::fir::{FirFilter, FirMeta, FirPlan, FirSpec, FirStrategy};
 use omnidsp_core::traits::iir::{IirPlan, IirSpec};
 use omnidsp_core::traits::vecops::VecOps;
-use omnidsp_core::types::{BiquadSection, Window};
+use omnidsp_core::types::BiquadSection;
+use omnidsp_core::window;
 
 use omnidsp_testdata::{
     cqt_process_numpy as cqtp, dct_scipy as dct, fir_lfilter_scipy as firl, hilbert_scipy as hil,
@@ -598,7 +599,7 @@ where
         cqtp::CQT_PROC_MIN_FREQ,
         cqtp::CQT_PROC_MAX_FREQ,
         cqtp::CQT_PROC_BINS_PER_OCTAVE,
-        &Window::Hann,
+        &window::hann(),
     )
     .expect("valid cqt design");
     assert_eq!(
@@ -834,7 +835,7 @@ where
     <B as CreatePlan<CqtStreamSpec<T>>>::Plan: CqtStreamPlan<T>,
 {
     let spec =
-        cqt::design::<T>(16000.0, 125.0, 1000.0, 12, &Window::Hann).expect("valid cqt design");
+        cqt::design::<T>(16000.0, 125.0, 1000.0, 12, &window::hann()).expect("valid cqt design");
     // The plan under test is built **through dispatch** (`CreatePlan<CqtStreamSpec>`,
     // wired by `gen_cqt` in 22c), so `run_all<B>` drives the streaming plan the
     // same way a consumer reaches it via `OmniDSP::cqt_stream`.
