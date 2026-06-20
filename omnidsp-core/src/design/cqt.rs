@@ -226,6 +226,19 @@ impl<T> CqtSpec<T> {
         self
     }
 
+    /// Wrap this batch spec as a streaming spec for the newest-anchored CQT.
+    ///
+    /// The fluent inverse of
+    /// [`CqtStreamSpec::into_spec`](crate::modules::cqt::CqtStreamSpec::into_spec):
+    /// the streaming and batch paths describe the same transform and differ only
+    /// in execution state, so `design(...)?.into_streaming()` is the canonical
+    /// way to build a streaming spec — no second designer (see the
+    /// `spec`-module surface conventions).
+    #[must_use]
+    pub const fn into_streaming(self) -> crate::modules::cqt::CqtStreamSpec<T> {
+        crate::modules::cqt::CqtStreamSpec::new(self)
+    }
+
     /// Sample rate in Hz.
     #[must_use]
     pub const fn sample_rate(&self) -> f64 {
