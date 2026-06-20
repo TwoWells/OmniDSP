@@ -191,25 +191,23 @@ impl<T: Float> Window<T> {
     /// designed from one spec. Higher `atten_db` lowers the sidelobes at the cost
     /// of a wider main lobe.
     ///
-    /// # Errors
-    ///
-    /// Returns [`Internal`](crate::error::Error::Internal) if the resulting β is
-    /// not representable in `T` (does not arise for the finite β this produces).
+    /// Infallible: the small finite β this produces is always representable in
+    /// the supported float types (`f32`/`f64`); the conversion falls back to
+    /// zero only for an exotic `T` that cannot hold it, matching the total
+    /// `f64 → T` idiom used in the streaming kernels.
     ///
     /// # Examples
     ///
     /// ```
     /// use omnidsp_core::types::Window;
     /// // 70 dB sidelobe suppression → β ≈ 6.75.
-    /// let w = Window::<f64>::kaiser_for_attenuation(70.0).unwrap();
+    /// let w = Window::<f64>::kaiser_for_attenuation(70.0);
     /// assert!(matches!(w, Window::Kaiser(b) if (b - 6.7553).abs() < 1e-3));
     /// ```
-    pub fn kaiser_for_attenuation(atten_db: f64) -> Result<Self> {
+    #[must_use]
+    pub fn kaiser_for_attenuation(atten_db: f64) -> Self {
         let beta = crate::design::window::kaiser_beta(atten_db);
-        let beta_t = T::from(beta).ok_or_else(|| {
-            crate::error::Error::Internal("Kaiser β not representable in target type".into())
-        })?;
-        Ok(Self::Kaiser(beta_t))
+        Self::Kaiser(T::from(beta).unwrap_or_else(T::zero))
     }
 
     /// Compute a Nuttall window of the given length.

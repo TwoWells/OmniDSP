@@ -127,12 +127,10 @@ impl CqtEngine {
             "blackman" => Window::Blackman,
             "blackman-harris" => Window::BlackmanHarris,
             "nuttall" => Window::Nuttall,
-            "kaiser-90" => Window::kaiser_for_attenuation(90.0)
-                .map_err(|e| format!("kernel window design failed: {e}"))?,
+            "kaiser-90" => Window::kaiser_for_attenuation(90.0),
             // Default: Kaiser at KERNEL_SIDELOBE_DB (70 dB) — the solved-from-spec
             // kernel; matches any unrecognised id.
-            _ => Window::kaiser_for_attenuation(KERNEL_SIDELOBE_DB)
-                .map_err(|e| format!("kernel window design failed: {e}"))?,
+            _ => Window::kaiser_for_attenuation(KERNEL_SIDELOBE_DB),
         };
         let spec: CqtSpec<f32> = cqt::design(
             f64::from(sample_rate),
