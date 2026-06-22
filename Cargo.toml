@@ -52,6 +52,12 @@ missing_errors_doc = "warn"
 missing_panics_doc = "warn"
 missing_safety_doc = "warn"
 
+[workspace.lints.rustdoc]
+# A dangling `[`item`]` intra-doc link is a hard error, not a warning — the
+# `cargo doc` step in `make check` otherwise lets a link to a renamed/removed
+# item slip through silently (e.g. when a constructor namespace becomes an enum).
+broken_intra_doc_links = "deny"
+
 [profile.release]
 panic = "abort"
 lto = true
