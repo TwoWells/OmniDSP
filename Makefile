@@ -98,10 +98,10 @@ deny:
 doc:
 	@cargo doc --no-deps --document-private-items
 
-# --- WASM floor (DEMO-00 prerequisite) ---
+# --- WASM floor (demo prerequisite) ---
 
 # Smoke-build the RustBackend floor for the browser target the CQT visualiser
-# runs on (demo workstream, DEMO-00). Confirms omnidsp + rustfft/realfft
+# runs on. Confirms omnidsp + rustfft/realfft
 # compile to wasm32-unknown-unknown with simd128 — the auto-vectorisation knob
 # the in-browser real-time budget depends on. Installs the target if missing.
 # This proves the floor *builds* for wasm; it does NOT prove real-time headroom
@@ -113,7 +113,7 @@ wasm-check:
 	  cargo build --target wasm32-unknown-unknown -p omnidsp
 	@echo "wasm-check: omnidsp builds for wasm32-unknown-unknown (+simd128)"
 
-# Build the DEMO-00 visualiser engine (`omnidsp-wasm`, the wasm-bindgen binding
+# Build the visualiser engine (`omnidsp-wasm`, the wasm-bindgen binding
 # the browser app consumes). This crate is OUTSIDE the core lint workspace
 # (root Cargo.toml `[workspace.exclude]`), so it is built by manifest path, not
 # `-p`. If `wasm-pack` is installed it emits the `pkg/` ESM glue for the app;
@@ -134,7 +134,7 @@ wasm-pack:
 	  echo "wasm-pack: omnidsp-wasm builds for wasm32-unknown-unknown (+simd128); install wasm-pack to emit pkg/ glue"; \
 	fi
 
-# Build the wasm engine and run the demo visualiser dev server (DEMO-00).
+# Build the wasm engine and run the demo visualiser dev server.
 # Requires `wasm-pack` (the app imports the pkg/ glue it emits) and npm. Opens a
 # local Vite dev server; Ctrl-C to stop.
 demo: wasm-pack

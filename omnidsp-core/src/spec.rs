@@ -13,7 +13,7 @@
 //!
 //! # Surface conventions
 //!
-//! These rules are normative for the public API (surface-lock): new modules
+//! These rules are normative for the public API: new modules
 //! follow them, and existing drift from them is a bug to fix, not a precedent.
 //!
 //! ## Specs are valid-by-construction
@@ -129,4 +129,4 @@ pub use crate::traits::dct::DctSpec;
 pub use crate::traits::dft::{DftC2cSpec, DftC2rSpec, DftR2cSpec};
 pub use crate::traits::fir::FirSpec;
 pub use crate::traits::iir::IirSpec;
-// AutoCorrSpec / PsdSpec / DwtSpec join as they land (tickets 18/19/20).
+// AutoCorrSpec / PsdSpec / DwtSpec join as they land.

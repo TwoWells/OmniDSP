@@ -5,13 +5,13 @@
 //!
 //! Two execution paths share one octave decomposition:
 //!
-//! - [`batch`] — the per-frame multirate CQT (surface-lock capstone `05L`).
+//! - [`batch`] — the per-frame multirate CQT (the multirate capstone).
 //!   [`OmniCqt`] / [`OmniCqtPlan`] anchor every bin's kernel at the **oldest**
 //!   sample of the frame (causal, index 0).  It is the public batch CQT and the
 //!   streaming path's **stationary cross-check** (steady-state magnitude/phase);
 //!   the streaming path's primary oracle is an independent newest-anchored
 //!   reference (see [`stream`]).
-//! - [`stream`] — the **newest-anchored** streaming CQT (ticket 22).
+//! - [`stream`] — the **newest-anchored** streaming CQT.
 //!   [`OmniCqtStreamPlan`] is a stateful `&mut self` analyzer mirroring
 //!   [`ResamplePlan`](crate::modules::resample::ResamplePlan): feed any chunk of
 //!   samples, get the hop-boundary feature columns it crossed, each referenced

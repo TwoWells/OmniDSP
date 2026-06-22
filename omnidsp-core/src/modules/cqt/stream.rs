@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Two Wells <contact@twowells.dev>
 
-//! Streaming, newest-anchored multirate CQT (ticket 22).
+//! Streaming, newest-anchored multirate CQT.
 //!
 //! [`OmniCqtStreamPlan`] is the streaming analogue of the batch
 //! [`OmniCqtPlan`](super::batch::OmniCqtPlan): a stateful `&mut self` plan that
@@ -33,7 +33,7 @@
 //! **only for signals stationary across the frame** — a steady-state
 //! cross-check, not the general law (see `check_cqt_stream`).
 //!
-//! # State: persistent continuous decimation (22b)
+//! # State: persistent continuous decimation
 //!
 //! 1. **Continuous decimators.**  One [`ResamplePlan`] per octave transition
 //!    (`o−1 → o`), advanced as samples arrive and **never reset per frame**.
@@ -48,7 +48,7 @@
 //!
 //! `check_cqt_stream` verifies each settled column against an **independent**
 //! newest-anchored reference: a decimation-free single-FFT CQT with end-placed
-//! kernels over the newest `fft_length` samples (mirroring how the batch 05L
+//! kernels over the newest `fft_length` samples (mirroring how the batch
 //! path is validated against the single-FFT oracle).  The streaming path matches
 //! it because:
 //!
@@ -57,7 +57,7 @@
 //!   accumulated decimator group delay (the band's `offset`) to `now >> o`.  The
 //!   top octave (no decimation) matches the single-FFT reference complex; deeper
 //!   octaves match in magnitude, with a small per-octave decimation-phase
-//!   residual in the complex value (the same class of residual the multirate 05L
+//!   residual in the complex value (the same class of residual the multirate
 //!   batch carries against its own single-FFT oracle).
 //! - **Window taper + warm-up.**  The continuous decimator carries real history
 //!   where a from-scratch decimation would see zeros; that difference lands at
@@ -65,7 +65,7 @@
 //!   is negligible once warmed up.  `check_cqt_stream` verifies only **settled**
 //!   columns (`now ≥ 2·fft_length`, with "now" snapped to the deepest octave's
 //!   grid).  A steady-state magnitude/phase cross-check against the oldest-
-//!   anchored 05L batch rides alongside it.
+//!   anchored batch rides alongside it.
 
 use std::f64::consts::TAU;
 use std::ops::{AddAssign, MulAssign};
@@ -91,7 +91,7 @@ use crate::types::DspFloat;
 /// describe the **same** transform (same bins, windows, sample rate, FFT
 /// length) and differ only in *state*, not math.  Wrapping rather than aliasing
 /// keeps `CreatePlan<CqtStreamSpec>` a distinct dispatch route from
-/// `CreatePlan<CqtSpec>` (wired in ticket 22c), so a backend can build either
+/// `CreatePlan<CqtSpec>`, so a backend can build either
 /// plan from the same configuration.
 ///
 /// The top-octave hop length ([`CqtSpec::hop_length`]) is the streaming
@@ -128,7 +128,7 @@ impl<T> CqtStreamSpec<T> {
 ///
 /// The named, stateful plan trait for the streaming CQT, mirroring
 /// [`ResamplePlan`] exactly (the locked
-/// `&mut self` streaming-plan category, SL-09): it is
+/// `&mut self` streaming-plan category): it is
 /// mutable, carries **no** `Send + Sync` supertrait, exposes a
 /// [`reset`](Self::reset), and has a variable-count [`process`](Self::process)
 /// paired with a [`max_output_columns`](Self::max_output_columns) sizing method.
@@ -555,7 +555,7 @@ where
     /// the rings, with each bin's end-anchored kernel, and write the column to
     /// `dst`.
     ///
-    /// This is the newest-anchoring crux (ticket 22).  For octave `o` the frame
+    /// This is the newest-anchoring crux.  For octave `o` the frame
     /// is the `fft_len_o` decimated samples whose newest sample corresponds to
     /// the top-rate instant "now": it **ends** at the group-delay-compensated
     /// decimated index
@@ -577,7 +577,7 @@ where
     /// (`Δ` = the lag, `rate_o` = `sr/2^o`) re-references each deep bin to "now" —
     /// the correct realisation of the group-delay compensation the `+ offset`
     /// frame-end projection used to attempt by reading non-existent (zero) samples
-    /// (the deep-octave skirt: ticket 26).
+    /// (the deep-octave skirt).
     ///
     /// Contrast the batch path, whose frame *starts* at the (group-delay-skipped)
     /// frame origin with kernels at index 0 — analysing the **oldest** samples,
@@ -741,7 +741,7 @@ impl<R, V> OmniCqt<R, V> {
         // and its end-placed kernels reference that sample directly.  A deep
         // octave's newest produced sample lags "now" by the decimator group delay
         // (`offset` decimated samples); `emit_column` phase-compensates that lag
-        // per bin so the deep octaves stay referenced to "now" (ticket 26).
+        // per bin so the deep octaves stay referenced to "now".
 
         let rings = new_octave_rings(&layout, fft_length);
 
@@ -832,7 +832,7 @@ mod tests {
     // A decimation-free single-FFT CQT with **end-placed** kernels over the
     // newest `fft_length` samples — the same anchoring the streaming plan
     // produces, computed without the streaming plan, its rings, or its
-    // decimators (mirroring how the batch 05L path is validated against the
+    // decimators (mirroring how the batch path is validated against the
     // single-FFT oracle).  Each bin's full-rate kernel `(1/N_k)·w[n]·
     // exp(+j·2π·f_k·n/sr)` is placed at indices `fft_length−N_k … fft_length−1`
     // of an `fft_length`-point r2c frame, so the bin analyses the newest `N_k`
@@ -919,24 +919,24 @@ mod tests {
     /// length) they agree to the half-spectrum-leakage floor, so the complex
     /// values match within this bound.  For **deeper octaves** the half-band
     /// decimator introduces a per-octave phase/group-delay residual (the same
-    /// class the multirate 05L batch carries against its single-FFT oracle), so
+    /// class the multirate batch carries against its single-FFT oracle), so
     /// only the **magnitude** is asserted at this bound there; the full complex
     /// residual is measured and bounded separately by [`DEEP_COMPLEX_TOL`].
     const REF_TOL: f64 = 1e-3;
 
     /// Magnitude tolerance for deeper-octave bins against the decimation-free
     /// reference.  The multirate path passes those bins through 1–2 windowed
-    /// Kaiser ×2 decimation stages (ticket 24, asymmetric: passband at the next
+    /// Kaiser ×2 decimation stages (asymmetric: passband at the next
     /// octave's top, stopband planted at `fs/4`) whose passband response is not
     /// perfectly flat, so its magnitude would droop toward the band edge — except
-    /// the per-bin gain compensation (ticket 23d, retained) bakes the analytic
+    /// the per-bin gain compensation (retained) bakes the analytic
     /// inverse `1/G_k` of that cascaded passband response into the kernel,
     /// flattening the octave seam.  **Before** compensation the deepest bin
     /// drooped to ≈ 0.24 (relative); **after**, the seam is flat.
     ///
     /// A deep octave's newest produced sample lags "now" by the decimator group
     /// delay, so its analysis window ends `offset·2^o` top-rate samples before the
-    /// decimation-free reference's window does (ticket 26).  `emit_column`
+    /// decimation-free reference's window does.  `emit_column`
     /// phase-compensates that lag (keeping the *complex* residual at the
     /// decimator-phase floor, [`DEEP_COMPLEX_TOL`]), but the window covers a
     /// slightly different span of the signal, so a small **magnitude** residual
@@ -953,10 +953,10 @@ mod tests {
     /// per-octave residual in the complex value.  Gain compensation corrects the
     /// **magnitude** droop (see [`DEEP_MAG_TOL`]) but is orthogonal to the
     /// decimator's group-delay *phase*; with `emit_column`'s per-bin group-delay
-    /// phase compensation (ticket 26) re-referencing each deep bin to "now", the
+    /// phase compensation re-referencing each deep bin to "now", the
     /// remaining complex residual stays at the decimator-phase floor.
     /// **Measured** worst-case here ≈ 7.0e-2 (relative, asymmetric windowed Kaiser
-    /// decimator, ticket 24).  Not a loosening: the streaming path is genuinely
+    /// decimator).  Not a loosening: the streaming path is genuinely
     /// multirate and the reference is genuinely decimation-free, so this residual
     /// is real.
     const DEEP_COMPLEX_TOL: f64 = 8e-2;
@@ -992,7 +992,7 @@ mod tests {
         );
     }
 
-    // ── Per-bin newest-anchored latency (ticket 27) ────────────────
+    // ── Per-bin newest-anchored latency ───────────────────────────
 
     #[test]
     #[allow(
@@ -1281,15 +1281,15 @@ mod tests {
         );
     }
 
-    /// Demo-regime streaming guard (ticket 24): a pure tone in the **top** octave
+    /// Demo-regime streaming guard: a pure tone in the **top** octave
     /// must not leak into the **deep** octaves.
     ///
     /// `multi_octave_spec` keeps `f_max` ≈ 0.06·Nyquist (far below the decimator
     /// transition) and so never exercises octave-aliasing; this uses `f_max` ≈
-    /// 0.67·Nyquist like the WASM demo — the regime where 23d's equiripple
+    /// 0.67·Nyquist like the WASM demo — the regime where the earlier equiripple
     /// half-band produced full-amplitude octave-aliasing phantoms (an 11 kHz tone
     /// folding down to ≈ 1 kHz, four octaves below). The windowed Kaiser
-    /// decimator (ticket 24) has the rolloff to keep the deep octaves clean.
+    /// decimator has the rolloff to keep the deep octaves clean.
     #[test]
     #[allow(
         clippy::cast_precision_loss,
@@ -1337,7 +1337,7 @@ mod tests {
         );
     }
 
-    /// Demo-regime deep-octave near-skirt conformance (ticket 26): the streaming
+    /// Demo-regime deep-octave near-skirt conformance: the streaming
     /// plan's sub-fundamental main-lobe shoulder must be as clean as the batch
     /// plan's at the **deepest** octaves, in the regime the WASM demo runs.
     ///
@@ -1423,7 +1423,7 @@ mod tests {
             assert!(
                 stream_skirt <= -45.0,
                 "demo-regime streaming near skirt {stream_skirt:.1} dB at {ftone} Hz exceeds \
-                 −45 dB — the deep-octave window is truncated (ticket 26 regression)"
+                 −45 dB — the deep-octave window is truncated"
             );
             // (b) Streaming matches batch (the constant-Q transform is correct in
             // batch): the two skirts agree to a tight margin, so streaming is not
@@ -1470,7 +1470,7 @@ mod tests {
         const SEAM_TOL: f64 = 0.06;
 
         // Direct evidence the per-bin gain compensation removes the octave
-        // staircase (ticket 23d).  Drive a broadband input with an *equal* tone
+        // staircase.  Drive a broadband input with an *equal* tone
         // at every bin frequency; against the decimation-free oracle each bin
         // should read ≈ the same magnitude (the input is flat across the
         // spectrum), so the per-octave mean of |stream|/|oracle| must sit at ≈ 1
@@ -1628,7 +1628,7 @@ mod tests {
         }
     }
 
-    // ── Stationary cross-check against the oldest-anchored 05L batch ──
+    // ── Stationary cross-check against the oldest-anchored batch ──────
 
     #[test]
     #[allow(
@@ -1639,7 +1639,7 @@ mod tests {
         // On a steady tone (stationary across the frame), newest- and oldest-
         // anchoring cover the same signal, so |streaming| matches |batch| and the
         // complex values differ by the per-bin linear phase exp(-j·2π·f_k·Δ/sr).
-        // This is the one thing the oldest-anchored 05L batch is still good for —
+        // This is the one thing the oldest-anchored batch is still good for —
         // a steady-state cross-check, never the transient oracle.
         let spec = multi_octave_spec();
         let mut stream = make_stream(&spec);

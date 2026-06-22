@@ -218,7 +218,7 @@ pub struct TestDftC2r;
 /// A **raw, bare primitive**: it assumes a clean Hermitian
 /// half-spectrum and does **no** DC/Nyquist projection — that shaping lives in
 /// [`HermitianC2r`](crate::hermitian::HermitianC2r), matching `RustDftC2r`'s
-/// post-05de floor.  Taking the real part of the inverse transform already
+/// floor.  Taking the real part of the inverse transform already
 /// discards any DC/Nyquist imaginary drift, so it is harmless here but is not
 /// the double's responsibility to clean.
 #[derive(Debug)]
@@ -498,7 +498,7 @@ mod tests {
     }
 
     // The c2r DC/(even-`N`)Nyquist drift-tolerance test moved to
-    // `crate::hermitian` in 05de: drift projection is now a property of the
+    // `crate::hermitian`: drift projection is now a property of the
     // `HermitianC2r` shaping decorator, not of the bare `TestDftC2r` primitive.
 
     #[test]

@@ -376,7 +376,7 @@ fn gen_cqt(input: &BackendInput) -> TokenStream2 {
     let mut tokens = TokenStream2::new();
 
     for float in float_idents() {
-        // Multirate CQT capstone (05L): octave-recursive
+        // Multirate CQT capstone: octave-recursive
         // r2c analysis with an `OmniResample(1, 2)` decimator routed as a sub-plan.
         // The backend itself (`self`) is threaded as the `CreatePlan<ResampleSpec>`
         // factory, so a vendor that overrides resampling accelerates the CQT
@@ -411,7 +411,7 @@ fn gen_cqt(input: &BackendInput) -> TokenStream2 {
             }
         });
 
-        // Streaming, newest-anchored CQT (ticket 22): the streaming analogue of
+        // Streaming, newest-anchored CQT: the streaming analogue of
         // the batch impl above, gated together under the same `"cqt"` module key.
         // `OmniCqt::create_stream_plan` mirrors `create_plan`, building one
         // continuous decimator sub-plan per octave transition from the routed

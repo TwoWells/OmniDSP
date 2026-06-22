@@ -33,10 +33,10 @@ use crate::types::DspFloat;
 
 /// Normalization applied to the cross-correlation output.
 ///
-/// Reserved field (surface-lock item 8): only
+/// Reserved field: only
 /// [`None`](Self::None) — today's raw behaviour — exists for now.  The
-/// normalized variants land with the `AutoCorr` / `PSD` normalization work
-/// (tickets 18/19).  Marked `#[non_exhaustive]` so adding variants later is
+/// normalized variants land with the `AutoCorr` / `PSD` normalization work.
+/// Marked `#[non_exhaustive]` so adding variants later is
 /// not a breaking change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[non_exhaustive]

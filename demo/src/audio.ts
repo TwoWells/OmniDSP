@@ -4,7 +4,7 @@
 // Web Audio plumbing for the CQT visualiser.
 //
 // v1 is deliberately simple and main-thread (no AudioWorklet, no
-// SharedArrayBuffer — keeps the demo on free static hosting, see DEMO-00).
+// SharedArrayBuffer — keeps the demo on free static hosting).
 // A ScriptProcessorNode taps the live audio graph and fills a circular PCM
 // buffer; the render loop drains the newly-arrived samples each frame and feeds
 // them to the streaming CQT (each sample consumed once).

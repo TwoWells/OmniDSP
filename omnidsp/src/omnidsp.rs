@@ -166,7 +166,7 @@ impl<B> OmniDSP<B> {
         self.create_plan(spec)
     }
 
-    /// Create a streaming, newest-anchored CQT plan (ticket 22).
+    /// Create a streaming, newest-anchored CQT plan.
     ///
     /// The streaming analogue of [`cqt`](Self::cqt): a stateful `&mut self`
     /// analyzer whose per-bin latency collapses to the Gabor floor `Q/f` rather

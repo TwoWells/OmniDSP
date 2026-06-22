@@ -739,7 +739,7 @@ omnidsp_macros::impl_generic_backend! {
 
 /// The composite plan type the hand-written conv override returns — the same
 /// shape the macro would emit (r2c forward + Hermitian-shaped c2r inverse).
-/// The `Conv` factory trait was dropped (SL-01), so the type is spelled out.
+/// The `Conv` factory trait was dropped, so the type is spelled out.
 type SkipConvPlan<T> = omnidsp_core::modules::conv::OmniConvPlan<
     T,
     <RustDftR2c as omnidsp_core::traits::dft::DftR2c<T>>::Plan,

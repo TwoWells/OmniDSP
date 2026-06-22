@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Two Wells <contact@twowells.dev>
 
-//! `omnidsp-wasm` — the browser CQT visualiser engine (DEMO-00).
+//! `omnidsp-wasm` — the browser CQT visualiser engine.
 //!
 //! A thin [`wasm-bindgen`] binding over the OmniDSP `RustBackend` **streaming,
-//! newest-anchored** multirate Constant-Q Transform (ticket 22). It builds the
+//! newest-anchored** multirate Constant-Q Transform. It builds the
 //! CQT **once** at construction (at the real audio-context sample rate handed in
 //! from JavaScript) and then exposes a [`process`](CqtEngine::process) entry
 //! point that consumes **newly-arrived** PCM and emits the hop-boundary feature

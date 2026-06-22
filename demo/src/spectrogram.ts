@@ -21,7 +21,7 @@ const EPS = 1e-6;
  * `dbMin` is the magnitude floor (sensitivity): raise it to suppress faint
  * detail, lower it to pull it up.
  *
- * ## Per-bin latency compensation (ticket 27)
+ * ## Per-bin latency compensation
  *
  * The streaming CQT is newest-anchored: each bin's value at "now" reflects the
  * signal at `now − latency_bin` (`latency = window/2 + decimation group delay`,

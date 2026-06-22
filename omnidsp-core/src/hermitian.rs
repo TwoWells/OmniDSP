@@ -251,8 +251,8 @@ mod tests {
 
     /// `HermitianC2r` projects a DC/(even-`N`)Nyquist-perturbed half-spectrum
     /// back onto the valid Hermitian spectrum **in place** and reconstructs the
-    /// same real signal as the clean input — the 05d drift case, now exercised
-    /// through the wrapper (ticket 05de testing).
+    /// same real signal as the clean input — the drift case, now exercised
+    /// through the wrapper.
     #[test]
     fn c2r_projects_dc_nyquist_drift_in_place() {
         for n in [7_usize, 8] {
@@ -340,7 +340,7 @@ mod tests {
     }
 
     /// `HermitianR2c → HermitianC2r` is the identity (round-trip) under
-    /// `DftNorm::Inverse`, the shaped path 05e composes (ticket 05de testing).
+    /// `DftNorm::Inverse`, which the shaped path composes.
     #[test]
     fn shaped_round_trip_identity() {
         for n in [1_usize, 2, 7, 8, 16] {

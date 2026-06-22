@@ -24,7 +24,7 @@
 //!   ```
 //!
 //!   so each bin analyses the **oldest** `N_k` samples of its octave frame.  This
-//!   matches the single-FFT reference and is the **05L** capstone's placement —
+//!   matches the single-FFT reference and is the batch capstone's placement —
 //!   it must not change (the stationary cross-check and shipped path).
 //!
 //! - `Anchor::End` (streaming, newest-anchored) — the same kernel shifted to
@@ -32,7 +32,7 @@
 //!   samples of its octave frame.  With the streaming `emit_column` gathering
 //!   each octave's frame to *end at "now"*, a bin's analysis then ends at the
 //!   most recent sample and its onset latency collapses to its Gabor floor
-//!   `Q/f` (ticket 22).  This relocates *which samples each bin analyses*; it is
+//!   `Q/f`.  This relocates *which samples each bin analyses*; it is
 //!   not a pure phase shift, and it is **streaming-only**.
 //!
 //! Both anchors share the identical window/frequency math (same `window`, `f_k`,
@@ -45,7 +45,7 @@
 //! correlation up to negligible negative-frequency leakage (no factor-of-two:
 //! dropped terms, not a one-sided power sum).  The `Anchor::Start` placement
 //! differs from librosa's centered placement by a benign half-kernel time offset
-//! (see the single-FFT reference; ticket-10 lesson).
+//! (see the single-FFT reference).
 
 use std::f64::consts::TAU;
 use std::ops::{AddAssign, MulAssign};
@@ -65,9 +65,9 @@ use crate::window::{self, Window};
 /// Where a bin's kernel sits inside its octave's `fft_len`-point frame.
 ///
 /// The single thing the two CQT paths place differently: the batch path anchors
-/// at the frame **start** (oldest samples, the 05L capstone placement), the
-/// streaming path at the frame **end** (newest samples — newest-anchoring,
-/// ticket 22).  Every other term of the kernel math is shared.
+/// at the frame **start** (oldest samples, the batch capstone placement), the
+/// streaming path at the frame **end** (newest samples — newest-anchoring).
+/// Every other term of the kernel math is shared.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Anchor {
     /// Kernel at indices `0 … N_k−1` — analyses the oldest `N_k` samples.
@@ -135,7 +135,7 @@ pub(super) struct StreamOctaveLayout<T, RP, ResP> {
     /// Per-bin newest-anchored analysis-center latency in **top-rate input
     /// samples**, pinned low → high (parallel to `bin_frequencies`): the
     /// newest-anchored value at "now" reflects the signal at `now − latency`,
-    /// `latency = window_len/2 + decimation group delay` (ticket 27).
+    /// `latency = window_len/2 + decimation group delay`.
     pub bin_latencies: Vec<f64>,
     /// Total number of frequency bins.
     pub num_bins: usize,
@@ -155,7 +155,7 @@ struct OctaveBands<T, RP> {
     bin_frequencies: Vec<f64>,
     /// Per-bin newest-anchored analysis-center latency in **top-rate input
     /// samples**, pinned low → high (parallel to `bin_frequencies`).  Used by
-    /// the streaming layout only (display latency compensation, ticket 27).
+    /// the streaming layout only (display latency compensation).
     bin_latencies: Vec<f64>,
     num_bins: usize,
     fft_length: usize,
@@ -210,7 +210,7 @@ where
         .unwrap_or(0)
         + 1;
 
-    // The ×2 windowed-Kaiser decimation spec (option A, ticket 24), at the spec's
+    // The ×2 windowed-Kaiser decimation spec (option A), at the spec's
     // decimator quality.  Its passband must reach the *next* (lower) octave's top
     // bin — ≈ `f_max/2` normalized to the current rate, plus an ~8% margin for
     // that bin's bandwidth — while its stopband is planted at `fs/4` (the new
@@ -227,7 +227,7 @@ where
     // its cumulative passband gain is the product of the decimator's magnitude
     // response at the bin's normalized frequency at each stage's input rate.
     // Baking the analytic inverse `1/G_k` into the kernel flattens the octave
-    // staircase (ticket 23d) — the exact inverse of the known
+    // staircase — the exact inverse of the known
     // filter's known response, no fudge factor.  The half-band's DC gain is ~1
     // and the ×2 decimator applies no L-scaling (up = 1), so `G_k` is the true
     // end-to-end per-octave passband gain.
@@ -239,7 +239,7 @@ where
 
     let bin_frequencies: Vec<f64> = bins.iter().map(|b| b.frequency).collect();
     // Per-bin newest-anchored analysis-center latency, top-rate samples, written
-    // into each bin's global index (ticket 27).  See the accumulation below.
+    // into each bin's global index.  See the accumulation below.
     let mut bin_latencies = vec![0.0_f64; num_bins];
 
     let mut octaves = Vec::with_capacity(octaves_count);
@@ -274,7 +274,7 @@ where
         let r2c_spec = DftR2cSpec::new(fft_len, DftNorm::None)?;
         let r2c = dftr2c.create_plan(&r2c_spec)?;
 
-        // Per-bin newest-anchored latency (ticket 27), in top-rate input
+        // Per-bin newest-anchored latency, in top-rate input
         // samples: a bin's newest-anchored value at "now" reflects the signal at
         // `now − latency`.  Two terms, both projected to the top rate:
         //   • `window_len/2` — the smooth window-center delay (the bin's full-rate
@@ -371,7 +371,7 @@ where
     RF: CreatePlan<ResampleSpec<T>>,
     <RF as CreatePlan<ResampleSpec<T>>>::Plan: ResamplePlan<T>,
 {
-    // Batch (05L) is oldest-anchored: kernels at the frame start.
+    // Batch is oldest-anchored: kernels at the frame start.
     let bands = build_bands::<T, R>(dftr2c, spec, Anchor::Start)?;
 
     // The single per-frame-reset decimator (option A): built through the routed
@@ -418,7 +418,7 @@ where
     RF: CreatePlan<ResampleSpec<T>>,
     <RF as CreatePlan<ResampleSpec<T>>>::Plan: ResamplePlan<T>,
 {
-    // Streaming (ticket 22) is newest-anchored: kernels at the frame end, so
+    // Streaming is newest-anchored: kernels at the frame end, so
     // each bin analyses its newest `N_k` samples.  `emit_column` then gathers
     // each octave's frame to end at "now", giving per-bin latency ≈ `Q/f`.
     let bands = build_bands::<T, R>(dftr2c, spec, Anchor::End)?;
@@ -465,8 +465,8 @@ fn kernel_len_at(len: usize, scale: f64) -> usize {
 const DECIMATOR_STOPBAND: f64 = 0.25;
 
 /// Derive the ×2 **windowed Kaiser** decimation spec (`up = 1`, `down = 2`) for
-/// the requested [`DecimatorQuality`] and `passband_edge` (ticket 24 — supersedes
-/// 23d's equiripple half-band).
+/// the requested [`DecimatorQuality`] and `passband_edge` (supersedes the
+/// equiripple half-band).
 ///
 /// Designs an **asymmetric** Kaiser-windowed lowpass via [`fir::design`] — the
 /// standard Schörkhuber–Klapuri / librosa octave-decimation anti-alias filter.
@@ -532,7 +532,7 @@ fn derive_decimate_spec<T: DspFloat>(
 
 /// The per-bin gain-compensation factor `1/G_k` for a bin at `freq` Hz in
 /// octave `octave` (0 = top), given the decimator coefficients `coeffs` and the
-/// top sample rate `sr` (ticket 23d).
+/// top sample rate `sr`.
 ///
 /// The bin passed through `octave` cascaded ×2 half-band decimators.  At stage
 /// `j` (1..=octave) the input rate is `sr / 2^(j-1)`, so the bin sat at

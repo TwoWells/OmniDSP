@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Two Wells <contact@twowells.dev>
 
-//! Batch (per-frame) multirate CQT — the surface-lock capstone (`05L`).
+//! Batch (per-frame) multirate CQT — the multirate capstone.
 //!
 //! [`OmniCqt`] is the public CQT factory, generic over a real-to-complex DFT
 //! ([`DftR2c`]) and [`VecOps`].  It builds [`OmniCqtPlan`]s from a
@@ -11,14 +11,13 @@
 //! is lowpassed and decimated ×2 and the next-lower octave is analysed at half
 //! the rate, and so on.  Roughly an order of magnitude less compute than sizing
 //! one FFT for the lowest bin — the property that makes the CQT comfortable in a
-//! `wasm32` real-time visualiser (the founding feature, surface-lock
-//! capstone 5L).
+//! `wasm32` real-time visualiser (the founding feature).
 //!
 //! The per-octave kernel design and octave partitioning live in the shared
 //! [`kernel`] submodule; this batch file owns the per-frame `process`.
 //! It anchors every bin's kernel at the **oldest** sample of the frame
 //! (`kernel::Anchor::Start`); it is the streaming CQT's **stationary
-//! cross-check** ([`stream`](super::stream), ticket 22) — on a steady tone the
+//! cross-check** ([`stream`](super::stream)) — on a steady tone the
 //! streaming magnitude matches this batch transform, and the per-bin phase
 //! relationship holds — while the streaming path's primary oracle is an
 //! independent newest-anchored reference.
@@ -103,7 +102,7 @@ impl<R, V> OmniCqt<R, V> {
 /// Created by [`OmniCqt::create_plan`].  `Send + Sync`; each call to
 /// [`process`](Self::process) computes the CQT of one frame independently — the
 /// stateful decimator is reset per frame, so no state is carried between calls
-/// (batch v1; cross-frame octave state is the streaming extension, ticket 22).
+/// (batch v1; cross-frame octave state is the streaming extension).
 ///
 /// Type parameters: `RP` the per-octave [`DftR2cPlan`], `V` the [`VecOps`],
 /// `ResP` the concrete decimator [`ResamplePlan`] (the routed sub-plan).
@@ -433,7 +432,7 @@ impl<R, V> OmniCqt<R, V> {
 ///
 /// Sizes one FFT for the lowest bin and correlates every bin against that one
 /// spectrum (`Σ X[m]·conj(K[m])`).  It is **not** part of the shipped surface —
-/// surface-lock 5L resolved the CQT to a single public type, the multirate
+/// the public API exposes a single CQT type, the multirate
 /// [`OmniCqt`] — so it is compiled only under `cfg(test)` or the `bench`
 /// feature, serving as the equivalence oracle and as the naive baseline the
 /// `cqt` benchmark times the multirate path against.
@@ -665,8 +664,8 @@ mod tests {
     // ── The single-FFT oracle (reference only) ─────────────────────
     //
     // The simple, numpy-validated single-FFT CQT ([`SingleFftCqt`]) retained
-    // ONLY as the test oracle the multirate path is checked against (surface-lock
-    // 5L: one public type — the multirate `OmniCqt`).  It is c2c and computes
+    // ONLY as the test oracle the multirate path is checked against (one public
+    // type — the multirate `OmniCqt`).  It is c2c and computes
     // each bin as the full-spectrum correlation `Σ X[m]·conj(K[m])`.
 
     fn oracle_plan(

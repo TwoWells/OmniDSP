@@ -37,9 +37,9 @@ use crate::window::Window;
 ///
 /// The 1:2 decimation **ratio** stays driven/internal; this exposes only the
 /// decimator's *FIR design quality*.  The decimator is a **windowed Kaiser**
-/// lowpass at cutoff `fs/4` (ticket 24 — the standard Schörkhuber–Klapuri /
-/// librosa octave-decimation filter; it superseded the 23d equiripple half-band,
-/// which could not reject the CQT's sub-`fs/4` octave-overlap band and caused
+/// lowpass at cutoff `fs/4` (the standard Schörkhuber–Klapuri / librosa
+/// octave-decimation filter; it superseded an equiripple half-band, which
+/// could not reject the CQT's sub-`fs/4` octave-overlap band and caused
 /// octave-aliasing reflections).  Higher quality maps to a deeper **stopband
 /// attenuation** target, from which the Kaiser shape parameter β and the filter
 /// length follow — a sharper anti-alias at a modest cost in taps and group delay.
