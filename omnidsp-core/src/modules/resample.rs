@@ -387,7 +387,7 @@ mod tests {
     use crate::design::resample::{self, DEFAULT_MAX_PHASES, ResampleMode, ResampleQuality};
     use crate::test_utils::TestVecOps;
     use crate::traits::fir::{FirFilter, FirMeta};
-    use crate::window;
+    use crate::window::Window;
 
     fn factory() -> OmniResample<TestVecOps> {
         OmniResample::new(TestVecOps)
@@ -402,7 +402,7 @@ mod tests {
             sr_in,
             sr_out,
             q(quality),
-            &window::hamming(),
+            &Window::Hamming,
             DEFAULT_MAX_PHASES,
             ResampleMode::Streaming,
         )

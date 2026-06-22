@@ -140,11 +140,11 @@ pub enum FirMethod<T> {
 /// ```
 /// use omnidsp_core::design::fir::{design, FirMethod};
 /// use omnidsp_core::types::FilterType;
-/// use omnidsp_core::window;
+/// use omnidsp_core::window::Window;
 ///
 /// let filter = design(
 ///     FilterType::Lowpass, 30, 44100.0_f64, 1000.0, None,
-///     &FirMethod::Windowed { window: window::hamming() },
+///     &FirMethod::Windowed { window: Window::Hamming },
 /// ).unwrap();
 /// assert_eq!(filter.coefficients().len(), 31);
 /// ```
@@ -640,7 +640,6 @@ fn eval_gain(taps: &[f64], f: f64) -> f64 {
 #[allow(clippy::expect_used, reason = "expect is the preferred idiom in tests")]
 mod tests {
     use super::*;
-    use crate::window;
 
     const TOL: f64 = 1e-8;
 
@@ -655,7 +654,7 @@ mod tests {
             44100.0,
             fc,
             None,
-            &windowed(window::hamming()),
+            &windowed(Window::Hamming),
         )
         .expect("LP design")
         .coefficients()
@@ -669,7 +668,7 @@ mod tests {
             44100.0,
             fc,
             None,
-            &windowed(window::hamming()),
+            &windowed(Window::Hamming),
         )
         .expect("HP design")
         .coefficients()
@@ -683,7 +682,7 @@ mod tests {
             44100.0,
             fc1,
             Some(fc2),
-            &windowed(window::hamming()),
+            &windowed(Window::Hamming),
         )
         .expect("BP design")
         .coefficients()
@@ -697,7 +696,7 @@ mod tests {
             44100.0,
             fc1,
             Some(fc2),
-            &windowed(window::hamming()),
+            &windowed(Window::Hamming),
         )
         .expect("BS design")
         .coefficients()
@@ -725,7 +724,7 @@ mod tests {
             44100.0,
             1000.0,
             None,
-            &windowed(window::hann()),
+            &windowed(Window::Hann),
         )
         .expect("lowpass design")
         .coefficients()
@@ -753,7 +752,7 @@ mod tests {
             2.0, // fs=2 → Nyquist=1, fc=0.25 means quarter-band
             0.25,
             None,
-            &windowed(window::rectangular()),
+            &windowed(Window::Rectangular),
         )
         .expect("lowpass design")
         .coefficients()
@@ -859,7 +858,7 @@ mod tests {
                 44100.0,
                 1000.0,
                 None,
-                &windowed(window::hann())
+                &windowed(Window::Hann)
             )
             .is_err(),
             "order 0 should be rejected"
@@ -875,7 +874,7 @@ mod tests {
                 -1.0,
                 0.25,
                 None,
-                &windowed(window::hann())
+                &windowed(Window::Hann)
             )
             .is_err(),
             "negative sample rate should be rejected"
@@ -891,7 +890,7 @@ mod tests {
                 44100.0,
                 22050.0,
                 None,
-                &windowed(window::hann())
+                &windowed(Window::Hann)
             )
             .is_err(),
             "cutoff at Nyquist should be rejected"
@@ -907,7 +906,7 @@ mod tests {
                 44100.0,
                 30000.0,
                 None,
-                &windowed(window::hann())
+                &windowed(Window::Hann)
             )
             .is_err(),
             "cutoff above Nyquist should be rejected"
@@ -923,7 +922,7 @@ mod tests {
                 44100.0,
                 1000.0,
                 None,
-                &windowed(window::hann())
+                &windowed(Window::Hann)
             )
             .is_err(),
             "bandpass without cutoff2 should be rejected"
@@ -939,7 +938,7 @@ mod tests {
                 44100.0,
                 5000.0,
                 Some(1000.0),
-                &windowed(window::hann()),
+                &windowed(Window::Hann),
             )
             .is_err(),
             "cutoff2 <= cutoff1 should be rejected"
@@ -955,7 +954,7 @@ mod tests {
                 44100.0,
                 1000.0,
                 Some(5000.0),
-                &windowed(window::hann()),
+                &windowed(Window::Hann),
             )
             .is_err(),
             "lowpass with cutoff2 should be rejected"
@@ -1008,7 +1007,7 @@ mod tests {
             1000.0_f32,
             None,
             &FirMethod::Windowed {
-                window: window::hamming(),
+                window: Window::Hamming,
             },
         )
         .expect("f32 lowpass");
@@ -1062,7 +1061,7 @@ mod tests {
             44100.0,
             10000.0,
             None,
-            &windowed(window::hann()),
+            &windowed(Window::Hann),
         )
         .expect("HP30 Hann design")
         .coefficients()
@@ -1090,7 +1089,7 @@ mod tests {
             2.0,
             0.25,
             None,
-            &windowed(window::rectangular()),
+            &windowed(Window::Rectangular),
         )
         .expect("LP4 rect design")
         .coefficients()

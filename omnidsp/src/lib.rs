@@ -40,15 +40,14 @@ pub type Auto = OmniDSP<Best>;
 #[cfg(test)]
 #[allow(clippy::expect_used, reason = "expect is the preferred idiom in tests")]
 mod tests {
+    use super::Window;
     use super::traits::dft::{DftC2cSpec, DftNorm};
     use super::types::Direction;
-    use super::{Window, window};
 
     #[test]
     fn reexport_window() {
-        // Both the re-exported `Window` type and the `window` constructor
-        // namespace are reachable from the crate root.
-        let recipe: Window = window::hann();
+        // The re-exported `Window` enum is reachable from the crate root.
+        let recipe: Window = Window::Hann;
         let w: Vec<f64> = recipe.coefficients(64).expect("hann should succeed");
         assert_eq!(w.len(), 64, "window length should match");
     }

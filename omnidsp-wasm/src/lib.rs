@@ -120,14 +120,14 @@ impl CqtEngine {
         // sidelobe-attenuation spec via the Kaiser formula (so the "ridge" sits at
         // a designed level); the fixed cosine-sum windows are there for contrast.
         let window: Window = match kernel {
-            "hann" => window::hann(),
-            "blackman" => window::blackman(),
-            "blackman-harris" => window::blackman_harris(),
-            "nuttall" => window::nuttall(),
-            "kaiser-90" => window::kaiser::attenuation(90.0),
+            "hann" => Window::Hann,
+            "blackman" => Window::Blackman,
+            "blackman-harris" => Window::BlackmanHarris,
+            "nuttall" => Window::Nuttall,
+            "kaiser-90" => Window::Kaiser(window::kaiser::attenuation(90.0)),
             // Default: Kaiser at KERNEL_SIDELOBE_DB (70 dB) — the solved-from-spec
             // kernel; matches any unrecognised id.
-            _ => window::kaiser::attenuation(KERNEL_SIDELOBE_DB),
+            _ => Window::Kaiser(window::kaiser::attenuation(KERNEL_SIDELOBE_DB)),
         };
         let spec: CqtSpec<f32> = cqt::design(
             f64::from(sample_rate),

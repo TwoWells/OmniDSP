@@ -44,40 +44,36 @@
 //!   type only.  A value like [`Window`](crate::window::Window) that carries
 //!   only design scalars is therefore **non-generic** — the precision is chosen
 //!   at evaluation ([`Window::coefficients::<T>`](crate::window::Window::coefficients)),
-//!   not pinned by the recipe (ADR-013 §1/§4).
+//!   not pinned by the description (ADR-014).
 //!
-//! ## Value construction (ADR-013)
+//! ## Value construction (ADR-013, ADR-014)
 //!
 //! A configured value is built one of two ways, and the choice is fixed up
 //! front, not earned later:
 //!
-//! - **Construction-shape tracks the parameters.** A parameterless kind is a
-//!   leaf constructor ([`window::hann`](crate::window::hann)); a *parameterized*
-//!   kind is a **sub-namespace with one named constructor per parameterization**
-//!   ([`window::kaiser::beta`](crate::window::kaiser::beta) /
-//!   [`window::kaiser::attenuation`](crate::window::kaiser::attenuation),
-//!   [`window::gaussian::sigma`](crate::window::gaussian::sigma),
-//!   [`window::tukey::taper`](crate::window::tukey::taper)).  The sub-namespace
-//!   is committed from the start for any parameterized value, because a
-//!   namespaced constructor cannot be retrofitted without breaking
-//!   (`gaussian(s)` → `gaussian::sigma(s)`); an *enum-argument* alternative
-//!   (`fir::design(…, FirMethod)`) can grow a `#[non_exhaustive]` variant
-//!   non-breakingly, so those stay earned.  **Namespace-retrofit is breaking;
-//!   enum-grow is not.**
-//! - **Value vs derivation.** A value type is constructed directly (or via its
-//!   `window::`-style namespace) and may *evaluate or transform itself*
+//! - **A small, closed set of kinds is a `#[non_exhaustive]` enum.** A
+//!   [`Window`](crate::window::Window) is a plain enum: parameterless kinds are
+//!   unit variants ([`Window::Hann`](crate::window::Window::Hann)), parameterized
+//!   kinds carry their `f64` design scalar
+//!   ([`Window::Kaiser`](crate::window::Window::Kaiser)).  `#[non_exhaustive]`
+//!   lets new variants be added non-breakingly, the same way an *enum-argument*
+//!   alternative (`fir::design(…, FirMethod)`) can grow a variant.  **Enum-grow
+//!   is not breaking** (ADR-014).
+//! - **Value vs derivation.** A value type is constructed directly (`Window::Hann`,
+//!   `Window::Kaiser(β)`) and may *evaluate or transform itself*
 //!   (`coefficients`), but never gains a `_for_`/`_from_` constructor that
 //!   derives its parameter from a different requirement.  A derivation that
 //!   outputs a heavy `create_plan` artifact (coefficients, kernels) is a
 //!   `design::X::design(…)` function; a scalar reparameterization of a simple
-//!   value (a Kaiser β solved from an attenuation target) is **data on that
-//!   value** — a constructor in its namespace, never a false `design::` peer.
-//!   The test: does it output a `create_plan` input, or merely respell a value's
-//!   parameter?
+//!   value — a Kaiser β solved from an attenuation target
+//!   ([`window::kaiser::attenuation`](crate::window::kaiser::attenuation)) — is a
+//!   free helper returning the scalar, which the caller wraps in the variant
+//!   (`Window::Kaiser(…)`), never a false `design::` peer.  The test: does it
+//!   output a `create_plan` input, or merely respell a value's parameter?
 //! - **Alternatives as data.** Several parameterizations or algorithms producing
 //!   the same output are expressed as **data, not a fan of methods** — an enum
-//!   argument (growable, earned) or a namespaced constructor set (committed up
-//!   front).  Never `x_for_a` / `x_from_b`.
+//!   argument or variant (growable under `#[non_exhaustive]`), not a fan of
+//!   methods.  Never `x_for_a` / `x_from_b`.
 //!
 //! ## Plan traits
 //!

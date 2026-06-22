@@ -60,7 +60,7 @@ use crate::error::{Error, Result};
 use crate::modules::resample::ResamplePlan;
 use crate::traits::dft::{DftNorm, DftR2c, DftR2cSpec};
 use crate::types::{DspFloat, FilterType};
-use crate::window;
+use crate::window::{self, Window};
 
 /// Where a bin's kernel sits inside its octave's `fft_len`-point frame.
 ///
@@ -525,7 +525,7 @@ fn derive_decimate_spec<T: DspFloat>(
         cutoff,
         None,
         &FirMethod::Windowed {
-            window: window::kaiser::attenuation(atten_db),
+            window: Window::Kaiser(window::kaiser::attenuation(atten_db)),
         },
     )?;
     ResampleSpec::new(filter, 1, 2, ResampleMode::Streaming)

@@ -38,7 +38,7 @@ use omnidsp_core::design::cqt;
 use omnidsp_core::modules::cqt::{OmniCqt, SingleFftCqt};
 use omnidsp_core::modules::resample::OmniResample;
 use omnidsp_core::scalar::ScalarVecOps;
-use omnidsp_core::window;
+use omnidsp_core::window::Window;
 use omnidsp_rustfft::{RustDftC2c, RustDftR2c};
 
 /// Median wall-clock of `f` over `iters` runs, after a short warmup.
@@ -67,7 +67,7 @@ fn frame(n: usize) -> Vec<f64> {
 }
 
 fn run(label: &str, sr: f64, fmin: f64, fmax: f64, bpo: u32) {
-    let spec = cqt::design::<f64>(sr, fmin, fmax, bpo, &window::hann()).expect("cqt design");
+    let spec = cqt::design::<f64>(sr, fmin, fmax, bpo, &Window::Hann).expect("cqt design");
     let n = spec.fft_length();
     let bins = spec.num_bins();
 

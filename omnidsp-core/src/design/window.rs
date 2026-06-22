@@ -24,15 +24,15 @@ use std::f64::consts::PI;
 use num_traits::Float;
 
 use crate::error::{Error, Result};
-use crate::window::{Kind, Window};
+use crate::window::Window;
 
 // ─── Public entry point ───────────────────────────────────────────────
 
-/// Compute window coefficients for the given recipe and length.
+/// Compute window coefficients for the given window and length.
 ///
 /// Called by [`Window::coefficients`](crate::window::Window::coefficients).
 /// The output precision `T` is chosen by the caller; shape parameters are the
-/// recipe's own `f64` design scalars (ADR-013), so the coefficient path no
+/// window's own `f64` design scalars (ADR-014), so the coefficient path no
 /// longer converts a `T`-typed parameter.
 ///
 /// # Errors
@@ -46,19 +46,19 @@ pub fn compute<T: Float>(window: &Window, length: usize) -> Result<Vec<T>> {
         return Ok(vec![from_f64(1.0)?]);
     }
 
-    match window.kind() {
-        Kind::Bartlett => bartlett(length),
-        Kind::Blackman => blackman(length),
-        Kind::BlackmanHarris => blackman_harris(length),
-        Kind::FlatTop => flat_top(length),
-        Kind::Gaussian(sigma) => gaussian(length, sigma),
-        Kind::Hamming => hamming(length),
-        Kind::Hann => hann(length),
-        Kind::Kaiser(beta) => kaiser(length, beta),
-        Kind::Nuttall => nuttall(length),
-        Kind::Rectangular => rectangular(length),
-        Kind::Triangular => triangular(length),
-        Kind::Tukey(alpha) => tukey(length, alpha),
+    match *window {
+        Window::Bartlett => bartlett(length),
+        Window::Blackman => blackman(length),
+        Window::BlackmanHarris => blackman_harris(length),
+        Window::FlatTop => flat_top(length),
+        Window::Gaussian(sigma) => gaussian(length, sigma),
+        Window::Hamming => hamming(length),
+        Window::Hann => hann(length),
+        Window::Kaiser(beta) => kaiser(length, beta),
+        Window::Nuttall => nuttall(length),
+        Window::Rectangular => rectangular(length),
+        Window::Triangular => triangular(length),
+        Window::Tukey(alpha) => tukey(length, alpha),
     }
 }
 
@@ -301,7 +301,6 @@ pub fn kaiser_beta(atten_db: f64) -> f64 {
 #[allow(clippy::expect_used, reason = "expect is the preferred idiom in tests")]
 mod tests {
     use super::*;
-    use crate::window;
 
     /// Tolerance for f64 comparisons.
     const TOL: f64 = 1e-10;
@@ -333,25 +332,25 @@ mod tests {
 
     #[test]
     fn length_zero_is_error() {
-        let result = compute::<f64>(&window::hann(), 0);
+        let result = compute::<f64>(&Window::Hann, 0);
         assert!(result.is_err(), "length 0 should return error");
     }
 
     #[test]
     fn length_one_returns_one_for_all_types() {
         let fns: Vec<Window> = vec![
-            window::bartlett(),
-            window::blackman(),
-            window::blackman_harris(),
-            window::flat_top(),
-            window::gaussian::sigma(0.4),
-            window::hamming(),
-            window::hann(),
-            window::kaiser::beta(5.0),
-            window::nuttall(),
-            window::rectangular(),
-            window::triangular(),
-            window::tukey::taper(0.5),
+            Window::Bartlett,
+            Window::Blackman,
+            Window::BlackmanHarris,
+            Window::FlatTop,
+            Window::Gaussian(0.4),
+            Window::Hamming,
+            Window::Hann,
+            Window::Kaiser(5.0),
+            Window::Nuttall,
+            Window::Rectangular,
+            Window::Triangular,
+            Window::Tukey(0.5),
         ];
         for winfn in &fns {
             let c = win(winfn, 1);
@@ -368,7 +367,7 @@ mod tests {
 
     #[test]
     fn rectangular_all_ones() {
-        let c = win(&window::rectangular(), 8);
+        let c = win(&Window::Rectangular, 8);
         assert_close(&c, &[1.0; 8], "rectangular(8)");
     }
 
@@ -376,13 +375,13 @@ mod tests {
 
     #[test]
     fn bartlett_5() {
-        let c = win(&window::bartlett(), 5);
+        let c = win(&Window::Bartlett, 5);
         assert_close(&c, &[0.0, 0.5, 1.0, 0.5, 0.0], "bartlett(5)");
     }
 
     #[test]
     fn bartlett_endpoints_are_zero() {
-        let c = win(&window::bartlett(), 64);
+        let c = win(&Window::Bartlett, 64);
         assert!(c[0].abs() < TOL, "bartlett left endpoint should be 0");
         assert!(c[63].abs() < TOL, "bartlett right endpoint should be 0");
     }
@@ -392,7 +391,7 @@ mod tests {
     #[test]
     fn triangular_5() {
         // Odd N: w[n] = 2*(min(n,N-1-n)+1)/(N+1)
-        let c = win(&window::triangular(), 5);
+        let c = win(&Window::Triangular, 5);
         let expected = [1.0 / 3.0, 2.0 / 3.0, 1.0, 2.0 / 3.0, 1.0 / 3.0];
         assert_close(&c, &expected, "triangular(5)");
     }
@@ -400,13 +399,13 @@ mod tests {
     #[test]
     fn triangular_4() {
         // Even N: w[n] = (2*min(n,N-1-n)+1)/N
-        let c = win(&window::triangular(), 4);
+        let c = win(&Window::Triangular, 4);
         assert_close(&c, &[0.25, 0.75, 0.75, 0.25], "triangular(4)");
     }
 
     #[test]
     fn triangular_endpoints_nonzero() {
-        let c = win(&window::triangular(), 64);
+        let c = win(&Window::Triangular, 64);
         assert!(c[0] > 0.0, "triangular left endpoint should be > 0");
         assert!(c[63] > 0.0, "triangular right endpoint should be > 0");
     }
@@ -415,13 +414,13 @@ mod tests {
 
     #[test]
     fn hann_5() {
-        let c = win(&window::hann(), 5);
+        let c = win(&Window::Hann, 5);
         assert_close(&c, &[0.0, 0.5, 1.0, 0.5, 0.0], "hann(5)");
     }
 
     #[test]
     fn hann_symmetric() {
-        let c = win(&window::hann(), 64);
+        let c = win(&Window::Hann, 64);
         for i in 0..32 {
             assert!(
                 (c[i] - c[63 - i]).abs() < TOL,
@@ -434,13 +433,13 @@ mod tests {
 
     #[test]
     fn hamming_5() {
-        let c = win(&window::hamming(), 5);
+        let c = win(&Window::Hamming, 5);
         assert_close(&c, &[0.08, 0.54, 1.0, 0.54, 0.08], "hamming(5)");
     }
 
     #[test]
     fn hamming_endpoints_nonzero() {
-        let c = win(&window::hamming(), 64);
+        let c = win(&Window::Hamming, 64);
         assert!(
             (c[0] - 0.08).abs() < TOL,
             "hamming left endpoint should be ≈0.08"
@@ -455,7 +454,7 @@ mod tests {
         // n=0: 0.42 - 0.5 + 0.08 = 0.0
         // n=1: 0.42 - 0.5*cos(π/2) + 0.08*cos(π) = 0.42 - 0 - 0.08 = 0.34
         // n=2: 0.42 + 0.5 + 0.08 = 1.0
-        let c = win(&window::blackman(), 5);
+        let c = win(&Window::Blackman, 5);
         assert_close(&c, &[0.0, 0.34, 1.0, 0.34, 0.0], "blackman(5)");
     }
 
@@ -466,7 +465,7 @@ mod tests {
         // scipy.signal.windows.blackmanharris(5):
         // [0.00006, 0.21747, 1.0, 0.21747, 0.00006].
         // At N=5, x=πn/2: n=0 → a0−a1+a2−a3, n=1 → a0−a2, n=2 → a0+a1+a2+a3.
-        let c = win(&window::blackman_harris(), 5);
+        let c = win(&Window::BlackmanHarris, 5);
         let a0 = 0.358_75;
         let a1 = 0.488_29;
         let a2 = 0.141_28;
@@ -494,7 +493,7 @@ mod tests {
 
     #[test]
     fn blackman_harris_symmetric() {
-        let c = win(&window::blackman_harris(), 64);
+        let c = win(&Window::BlackmanHarris, 64);
         for i in 0..32 {
             assert!(
                 (c[i] - c[63 - i]).abs() < TOL,
@@ -506,7 +505,7 @@ mod tests {
     #[test]
     fn blackman_harris_peak_near_one() {
         // The peak of a Blackman–Harris window is 1.0 at the center.
-        let c = win(&window::blackman_harris(), 65);
+        let c = win(&Window::BlackmanHarris, 65);
         assert!(
             (c[32] - 1.0).abs() < 1e-6,
             "blackman_harris(65) center should be ≈1.0, got {}",
@@ -521,7 +520,7 @@ mod tests {
         // scipy.signal.windows.nuttall(5):
         // [0.0003628, 0.2269824, 1.0, 0.2269824, 0.0003628].
         // At N=5, x=πn/2: n=0 → a0−a1+a2−a3, n=1 → a0−a2, n=2 → a0+a1+a2+a3.
-        let c = win(&window::nuttall(), 5);
+        let c = win(&Window::Nuttall, 5);
         let a0 = 0.363_581_9;
         let a1 = 0.489_177_5;
         let a2 = 0.136_599_5;
@@ -549,7 +548,7 @@ mod tests {
 
     #[test]
     fn nuttall_symmetric() {
-        let c = win(&window::nuttall(), 64);
+        let c = win(&Window::Nuttall, 64);
         for i in 0..32 {
             assert!(
                 (c[i] - c[63 - i]).abs() < TOL,
@@ -561,7 +560,7 @@ mod tests {
     #[test]
     fn nuttall_peak_near_one() {
         // The peak of a Nuttall window is 1.0 at the center.
-        let c = win(&window::nuttall(), 65);
+        let c = win(&Window::Nuttall, 65);
         assert!(
             (c[32] - 1.0).abs() < 1e-6,
             "nuttall(65) center should be ≈1.0, got {}",
@@ -574,7 +573,7 @@ mod tests {
     #[test]
     fn flat_top_peak_near_one() {
         // The peak of a flat-top window is 1.0 at the center.
-        let c = win(&window::flat_top(), 65);
+        let c = win(&Window::FlatTop, 65);
         assert!(
             (c[32] - 1.0).abs() < 1e-6,
             "flat_top(65) center should be ≈1.0, got {}",
@@ -585,7 +584,7 @@ mod tests {
     #[test]
     fn flat_top_has_negative_sidelobes() {
         // Flat-top windows characteristically go negative near the edges.
-        let c = win(&window::flat_top(), 64);
+        let c = win(&Window::FlatTop, 64);
         assert!(
             c.iter().any(|&v| v < 0.0),
             "flat_top should have negative values"
@@ -597,7 +596,7 @@ mod tests {
     #[test]
     fn gaussian_peak_at_center() {
         // Odd length: center sample is exactly at (N-1)/2, so exp(0) = 1.
-        let c = win(&window::gaussian::sigma(0.4), 65);
+        let c = win(&Window::Gaussian(0.4), 65);
         assert!(
             (c[32] - 1.0).abs() < TOL,
             "gaussian(65) center should be 1.0, got {}",
@@ -607,7 +606,7 @@ mod tests {
 
     #[test]
     fn gaussian_symmetric() {
-        let c = win(&window::gaussian::sigma(0.4), 65);
+        let c = win(&Window::Gaussian(0.4), 65);
         for i in 0..32 {
             assert!(
                 (c[i] - c[64 - i]).abs() < TOL,
@@ -619,11 +618,11 @@ mod tests {
     #[test]
     fn gaussian_invalid_sigma() {
         assert!(
-            compute::<f64>(&window::gaussian::sigma(0.0), 64).is_err(),
+            compute::<f64>(&Window::Gaussian(0.0), 64).is_err(),
             "sigma=0 should error"
         );
         assert!(
-            compute::<f64>(&window::gaussian::sigma(-1.0), 64).is_err(),
+            compute::<f64>(&Window::Gaussian(-1.0), 64).is_err(),
             "sigma<0 should error"
         );
     }
@@ -633,7 +632,7 @@ mod tests {
     #[test]
     fn kaiser_beta_zero_is_rectangular() {
         // I₀(0) = 1 for all n, so Kaiser with β=0 is rectangular.
-        let c = win(&window::kaiser::beta(0.0), 8);
+        let c = win(&Window::Kaiser(0.0), 8);
         assert_close(&c, &[1.0; 8], "kaiser(8, beta=0)");
     }
 
@@ -662,7 +661,7 @@ mod tests {
 
     #[test]
     fn kaiser_symmetric() {
-        let c = win(&window::kaiser::beta(5.0), 64);
+        let c = win(&Window::Kaiser(5.0), 64);
         for i in 0..32 {
             assert!(
                 (c[i] - c[63 - i]).abs() < TOL,
@@ -674,7 +673,7 @@ mod tests {
     #[test]
     fn kaiser_peak_at_center() {
         // Center sample: t=0, arg=beta, I₀(β)/I₀(β) = 1.
-        let c = win(&window::kaiser::beta(14.0), 5);
+        let c = win(&Window::Kaiser(14.0), 5);
         assert!(
             (c[2] - 1.0).abs() < TOL,
             "kaiser(5, beta=14) center should be 1.0, got {}",
@@ -685,7 +684,7 @@ mod tests {
     #[test]
     fn kaiser_endpoints_equal() {
         // Endpoints: t = ±1, arg = 0, I₀(0)/I₀(β) = 1/I₀(β) — both equal.
-        let c = win(&window::kaiser::beta(14.0), 5);
+        let c = win(&Window::Kaiser(14.0), 5);
         assert!(
             (c[0] - c[4]).abs() < TOL,
             "kaiser(5, beta=14) endpoints should be equal"
@@ -701,7 +700,7 @@ mod tests {
     #[test]
     fn kaiser_invalid_beta() {
         assert!(
-            compute::<f64>(&window::kaiser::beta(-1.0), 64).is_err(),
+            compute::<f64>(&Window::Kaiser(-1.0), 64).is_err(),
             "negative beta should error"
         );
     }
@@ -710,20 +709,20 @@ mod tests {
 
     #[test]
     fn tukey_alpha_zero_is_rectangular() {
-        let c = win(&window::tukey::taper(0.0), 8);
+        let c = win(&Window::Tukey(0.0), 8);
         assert_close(&c, &[1.0; 8], "tukey(8, alpha=0)");
     }
 
     #[test]
     fn tukey_alpha_one_is_hann() {
-        let tukey_w = win(&window::tukey::taper(1.0), 64);
-        let hann_w = win(&window::hann(), 64);
+        let tukey_w = win(&Window::Tukey(1.0), 64);
+        let hann_w = win(&Window::Hann, 64);
         assert_close(&tukey_w, &hann_w, "tukey(64, alpha=1) vs hann(64)");
     }
 
     #[test]
     fn tukey_symmetric() {
-        let c = win(&window::tukey::taper(0.5), 64);
+        let c = win(&Window::Tukey(0.5), 64);
         for i in 0..32 {
             assert!(
                 (c[i] - c[63 - i]).abs() < TOL,
@@ -735,11 +734,11 @@ mod tests {
     #[test]
     fn tukey_invalid_alpha() {
         assert!(
-            compute::<f64>(&window::tukey::taper(-0.1), 64).is_err(),
+            compute::<f64>(&Window::Tukey(-0.1), 64).is_err(),
             "alpha<0 should error"
         );
         assert!(
-            compute::<f64>(&window::tukey::taper(1.1), 64).is_err(),
+            compute::<f64>(&Window::Tukey(1.1), 64).is_err(),
             "alpha>1 should error"
         );
     }
@@ -766,8 +765,8 @@ mod tests {
 
     #[test]
     fn f32_hann_matches_f64() {
-        let c32 = compute::<f32>(&window::hann(), 5).expect("f32 hann should succeed");
-        let c64 = win(&window::hann(), 5);
+        let c32 = compute::<f32>(&Window::Hann, 5).expect("f32 hann should succeed");
+        let c64 = win(&Window::Hann, 5);
         assert_eq!(c32.len(), c64.len(), "f32/f64 length mismatch");
         for (i, (a, b)) in c32.iter().zip(&c64).enumerate() {
             assert!(
