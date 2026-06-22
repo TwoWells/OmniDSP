@@ -7,8 +7,8 @@
 //! are immutable and take `&self` — DCT is a stateless transform with no delay
 //! line or streaming state.  The generic
 //! [`OmniDct`](crate::modules::dct::OmniDct) module builds plans via an
-//! inherent `create_plan` — the `Dct` factory trait was dropped (ADR-006 §1;
-//! nothing was generic over it).
+//! inherent `create_plan` — the `Dct` factory trait was dropped because
+//! nothing was generic over it.
 
 use std::marker::PhantomData;
 
@@ -52,7 +52,7 @@ pub enum DctNorm {
 /// The type parameter `T` ties the spec to a specific float type, making
 /// specs fully self-describing for the dispatch layer's `CreatePlan<S>` trait.
 /// `T` is carried via [`PhantomData`] and hidden behind the constructor.
-/// Fields are private and the spec is valid-by-construction (ADR-006 §4).
+/// Fields are private and the spec is valid-by-construction.
 ///
 /// # Examples
 ///

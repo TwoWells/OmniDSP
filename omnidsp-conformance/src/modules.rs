@@ -432,7 +432,7 @@ where
 ///
 /// Compares against `scipy.signal.correlate` golden vectors (asymmetric, equal,
 /// and sinusoidal-delay cases).  Only [`CrossCorrNorm::None`] exists today
-/// (the reserved field, ADR-007 §4), so the default-constructed spec covers it.
+/// (the reserved field), so the default-constructed spec covers it.
 ///
 /// [`CrossCorrNorm::None`]: omnidsp_core::modules::xcorr::CrossCorrNorm::None
 ///
@@ -577,7 +577,7 @@ where
 }
 
 /// Conformance for the multirate CQT ([`OmniCqt`]) —
-/// the surface-lock capstone (ADR-006 §2a).
+/// the surface-lock capstone.
 ///
 /// Designs the numpy reference spec, then compares the multirate transform's bin
 /// **magnitudes** against the committed numpy golden vectors (the half-spectrum
@@ -993,7 +993,7 @@ where
         T::WIDTH,
     );
 
-    // ── The decimator quality is a *free* knob (ADR-012 §5): exercise ≥2
+    // ── The decimator quality is a *free* knob: exercise ≥2
     // levels against the oracle. ──
     // The main verification above used the default-high quality; here a **low**
     // quality (shorter half-band, shallower stopband) must still converge to the

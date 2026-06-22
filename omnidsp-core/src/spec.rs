@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Two Wells <contact@twowells.dev>
 
-//! Specification façade — the single import path for every operation spec
-//! (ADR-006 §5), and the home of the library's public-surface conventions.
+//! Specification façade — the single import path for every operation spec,
+//! and the home of the library's public-surface conventions.
 //!
 //! This module re-exports every `*Spec` under one path so callers can `use
 //! omnidsp_core::spec::*` to build any spec directly, without tracking which
@@ -44,9 +44,9 @@
 //!   type only.  A value like [`Window`](crate::window::Window) that carries
 //!   only design scalars is therefore **non-generic** — the precision is chosen
 //!   at evaluation ([`Window::coefficients::<T>`](crate::window::Window::coefficients)),
-//!   not pinned by the description (ADR-014).
+//!   not pinned by the description.
 //!
-//! ## Value construction (ADR-013, ADR-014)
+//! ## Value construction
 //!
 //! A configured value is built one of two ways, and the choice is fixed up
 //! front, not earned later:
@@ -58,7 +58,7 @@
 //!   ([`Window::Kaiser`](crate::window::Window::Kaiser)).  `#[non_exhaustive]`
 //!   lets new variants be added non-breakingly, the same way an *enum-argument*
 //!   alternative (`fir::design(…, FirMethod)`) can grow a variant.  **Enum-grow
-//!   is not breaking** (ADR-014).
+//!   is not breaking.**
 //! - **Value vs derivation.** A value type is constructed directly (`Window::Hann`,
 //!   `Window::Kaiser(β)`) and may *evaluate or transform itself*
 //!   (`coefficients`), but never gains a `_for_`/`_from_` constructor that
@@ -98,7 +98,7 @@
 //! When two modes produce **differently-shaped plans** — the CQT batch `&self`
 //! analyzer vs the streaming `&mut self` newest-anchored analyzer — they get
 //! **distinct spec types** so dispatch stays compile-time via `CreatePlan<S>`
-//! (ADR-006: the spec *type* selects the route; no runtime match).  The
+//! (the spec *type* selects the route; no runtime match).  The
 //! streaming spec is a **newtype wrapping the batch spec** (`CqtStreamSpec` over
 //! `CqtSpec`), reached by **spec conversion** (`CqtSpec::into_streaming`), never
 //! a second designer — there is exactly one `design` entry per module, flavored

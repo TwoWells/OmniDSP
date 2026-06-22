@@ -235,9 +235,9 @@ where
 
 /// Execution object for a configured streaming resampler.
 ///
-/// The named plan trait for the resampler module, the stateful analogue of
-/// [`FirPlan`](crate::traits::fir::FirPlan) (ADR-006 §2 eager plan traits,
-/// ADR-007 §6).  Like `FirPlan` it is mutable (`&mut self`) and carries no
+/// The named plan trait for the resampler module, the stateful analogue of the
+/// eager plan trait [`FirPlan`](crate::traits::fir::FirPlan).  Like `FirPlan`
+/// it is mutable (`&mut self`) and carries no
 /// `Send + Sync` supertrait — the plan holds a delay line and phase counter
 /// that persist across calls.  Unlike `FirPlan`, the output length varies with
 /// the conversion ratio, so [`max_output_len`](Self::max_output_len) is part of
@@ -300,8 +300,8 @@ impl<V> OmniResample<V> {
     ///
     /// Returns an error if the up-factor cannot be represented in `T`.  The
     /// spec invariants (positive factors, non-empty prototype) are enforced by
-    /// [`ResampleSpec::new`](crate::design::resample::ResampleSpec::new)
-    /// (ADR-006 §4), so they are not re-checked here.
+    /// [`ResampleSpec::new`](crate::design::resample::ResampleSpec::new),
+    /// so they are not re-checked here.
     pub fn create_plan<T>(&self, spec: &ResampleSpec<T>) -> Result<OmniResamplePlan<T, V>>
     where
         T: Float + AddAssign + MulAssign + Send + Sync,

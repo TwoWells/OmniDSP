@@ -110,7 +110,7 @@ impl ResampleQuality {
 
 /// Resampling specification — plan-ready data for a polyphase resampler.
 ///
-/// Composes a designed anti-aliasing [`FirFilter`] (ADR-012 §4 — replacing
+/// Composes a designed anti-aliasing [`FirFilter`] (replacing
 /// the bare `prototype_filter: Vec<T>`) with the rational conversion factors
 /// and processing mode.  Construct via [`design`] for automatic filter
 /// generation, or via [`ResampleSpec::new`] from a [`FirFilter`] built directly
@@ -171,7 +171,7 @@ impl<T: Float> ResampleSpec<T> {
     /// # Cross-spec invariant
     ///
     /// Validates that the composed `filter` is compatible with the polyphase
-    /// factorization (ADR-012 §4 — *valid-by-construction* now checks the
+    /// factorization (*valid-by-construction* now checks the
     /// composition, not just the parts):
     ///
     /// - `up_factor` and `down_factor` must both be positive (`≥ 1`).
@@ -231,7 +231,7 @@ impl<T> ResampleSpec<T> {
         self.down_factor
     }
 
-    /// The composed anti-aliasing filter (ADR-012 §4 — the reused artifact).
+    /// The composed anti-aliasing filter (the reused artifact).
     #[must_use]
     pub const fn filter(&self) -> &FirFilter<T> {
         &self.filter

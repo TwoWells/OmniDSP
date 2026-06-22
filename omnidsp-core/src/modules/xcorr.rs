@@ -7,11 +7,11 @@
 //! real-valued signals using the frequency-domain method:
 //! `xcorr(a, b) = c2r(r2c(a) · conj(r2c(b)))`.
 //!
-//! Generic over any [`DftR2c`] / [`DftC2r`] and [`VecOps`] implementation
-//! (ADR-009 §6): `r2c(a)` and `conj(r2c(b))` are both Hermitian, so their
+//! Generic over any [`DftR2c`] / [`DftC2r`] and [`VecOps`] implementation:
+//! `r2c(a)` and `conj(r2c(b))` are both Hermitian, so their
 //! product is the half-spectrum of the (real) cross-correlation.  The inverse
 //! c2r factory is Hermitian-shaped ([`HermitianC2r`]) so the DC/Nyquist
-//! boundary is projected before the transform (ADR-010 §2/§5).  Internal
+//! boundary is projected before the transform.  Internal
 //! scratch buffers are behind a [`Mutex`] so that the plan satisfies
 //! `Send + Sync` while taking `&self`.
 
@@ -33,7 +33,7 @@ use crate::types::DspFloat;
 
 /// Normalization applied to the cross-correlation output.
 ///
-/// Reserved field (ADR-007 §4, surface-lock item 8): only
+/// Reserved field (surface-lock item 8): only
 /// [`None`](Self::None) — today's raw behaviour — exists for now.  The
 /// normalized variants land with the `AutoCorr` / `PSD` normalization work
 /// (tickets 18/19).  Marked `#[non_exhaustive]` so adding variants later is
@@ -53,7 +53,7 @@ pub enum CrossCorrNorm {
 ///
 /// The type parameter `T` ties the spec to a specific float type, making
 /// specs fully self-describing for the dispatch layer's `CreatePlan<S>` trait.
-/// Fields are private and the spec is valid-by-construction (ADR-006 §4).
+/// Fields are private and the spec is valid-by-construction.
 ///
 /// # Examples
 ///
@@ -137,7 +137,7 @@ impl<T> CrossCorrSpec<T> {
 /// Creates [`OmniCrossCorrPlan`]s for specific input lengths.  The factory owns
 /// the real-DFT factories (`r2c` forward, `c2r` inverse) and the `VecOps`
 /// instance; plans own their sub-plans.  The c2r factory is Hermitian-shaped
-/// internally (ADR-010 §5).
+/// internally.
 #[derive(Debug, Clone)]
 pub struct OmniCrossCorr<R, C, V> {
     r2c: R,
@@ -309,10 +309,10 @@ where
 /// Execution object for a configured cross-correlation.
 ///
 /// The named, `Send + Sync` plan trait for the cross-correlation module,
-/// mirroring [`ConvPlan`](crate::traits::conv::ConvPlan) /
-/// [`DctPlan`](crate::traits::dct::DctPlan) (ADR-006 §2 eager plan traits,
-/// ADR-007 §6).  It lets `process` be called generically (e.g. by the shared
-/// conformance suite) without naming the concrete plan.  Implemented by
+/// mirroring the eager plan traits [`ConvPlan`](crate::traits::conv::ConvPlan) /
+/// [`DctPlan`](crate::traits::dct::DctPlan).  It lets `process` be called
+/// generically (e.g. by the shared conformance suite) without naming the
+/// concrete plan.  Implemented by
 /// [`OmniCrossCorrPlan`]; vendor overrides may implement it directly.
 pub trait CrossCorrPlan<T>: Send + Sync {
     /// Compute the full linear cross-correlation of `a` and `b`, writing the
@@ -357,8 +357,8 @@ impl<R, C, V> OmniCrossCorr<R, C, V> {
     /// # Errors
     ///
     /// Returns an error if the FFT length overflows or DFT plan creation
-    /// fails.  The length invariants are enforced by [`CrossCorrSpec::new`]
-    /// (ADR-006 §4), so they are not re-checked here.
+    /// fails.  The length invariants are enforced by [`CrossCorrSpec::new`],
+    /// so they are not re-checked here.
     pub fn create_plan<T>(&self, spec: &CrossCorrSpec<T>) -> Result<ShapedCrossCorrPlan<T, R, C, V>>
     where
         T: DspFloat + AddAssign + MulAssign,
@@ -378,7 +378,7 @@ impl<R, C, V> OmniCrossCorr<R, C, V> {
         let fwd = self.r2c.create_plan(&fwd_spec)?;
         // Hermitian-shaped inverse: the product of two Hermitian half-spectra
         // is Hermitian, but float drift leaves ~epsilon imaginary at DC/Nyquist
-        // that the projection clears before the inverse (ADR-010 §2/§5).
+        // that the projection clears before the inverse.
         let inv_spec = DftC2rSpec::new(fft_len, DftNorm::Inverse)?;
         let inv = HermitianC2r::new(self.c2r.clone()).create_plan(&inv_spec)?;
 

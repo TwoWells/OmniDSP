@@ -3,7 +3,7 @@
 
 //! DFT (Discrete Fourier Transform) primitive traits.
 //!
-//! The DFT is three **peer primitives** (ADR-009), not one trait with modes:
+//! The DFT is three **peer primitives**, not one trait with modes:
 //!
 //! - [`DftC2c`] — complex → complex.  Direction (forward/inverse) is a
 //!   runtime field on [`DftC2cSpec`] because both share the
@@ -22,7 +22,7 @@
 //! Plans are immutable — a single plan can be reused across many calls and
 //! shared between threads.
 //!
-//! Specs are **valid-by-construction** (ADR-006 §4): each `new` is fallible,
+//! Specs are **valid-by-construction**: each `new` is fallible,
 //! enforces its invariants once, and exposes its data through accessors so a
 //! constructed spec can never be mutated into an invalid state.
 
@@ -269,7 +269,7 @@ pub trait DftR2cPlan<T>: Send + Sync {
     /// `input` must have the spec's `length` real samples; `output` must have
     /// `length / 2 + 1` complex bins (the half-spectrum).
     ///
-    /// **Input is consumed** (ADR-010 §1): the transform may overwrite `input`
+    /// **Input is consumed**: the transform may overwrite `input`
     /// with scratch (the `realfft` floor hands it straight to the kernel as
     /// working memory).  Copy it first if you still need the time-domain
     /// samples afterwards.
@@ -307,7 +307,7 @@ pub trait DftR2c<T> {
 ///
 /// `length` is the **real output length `N`**: it cannot be recovered from the
 /// `N / 2 + 1` complex input alone (both `N = 2k` and `N = 2k - 1` produce a
-/// `k`-bin half-spectrum), so it must be carried explicitly (ADR-009 §2).
+/// `k`-bin half-spectrum), so it must be carried explicitly.
 ///
 /// `T` is carried via [`PhantomData`].  Fields are private and the spec is
 /// valid-by-construction.
@@ -378,15 +378,15 @@ pub trait DftC2rPlan<T>: Send + Sync {
     /// `input` must have `length / 2 + 1` complex bins (the half-spectrum);
     /// `output` must have `length` real samples.
     ///
-    /// **Input is consumed** (ADR-010 §1): the transform may overwrite `input`
+    /// **Input is consumed**: the transform may overwrite `input`
     /// with scratch.  Copy it first if you still need the half-spectrum
     /// afterwards.
     ///
     /// The bare primitive assumes a **clean Hermitian** half-spectrum — DC, and
     /// for even `length` Nyquist, purely real.  Drift-tolerant projection onto
     /// the nearest valid spectrum is the job of the
-    /// [`HermitianC2r`](crate::hermitian::HermitianC2r) shaping decorator
-    /// (ADR-010 §2), not of the primitive: a direct call with a dirty DC/Nyquist
+    /// [`HermitianC2r`](crate::hermitian::HermitianC2r) shaping decorator,
+    /// not of the primitive: a direct call with a dirty DC/Nyquist
     /// surfaces the kernel's native behavior.
     ///
     /// # Errors

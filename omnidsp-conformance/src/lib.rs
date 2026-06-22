@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Two Wells <contact@twowells.dev>
 
-//! Shared backend-conformance suite for `OmniDSP` (ADR-007).
+//! Shared backend-conformance suite for `OmniDSP`.
 //!
 //! One golden-vector test surface that **every** backend — the `RustBackend`
 //! floor, future IPP / Accelerate / oneMKL crates, and any third-party backend
@@ -141,7 +141,7 @@ where
 
 /// Run the full conformance suite against `b` over both `f32` and `f64`.
 ///
-/// One line per backend (ADR-007 §2):
+/// One line per backend:
 ///
 /// ```ignore
 /// #[test]

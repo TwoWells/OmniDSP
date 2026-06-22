@@ -10,10 +10,10 @@
 //!
 //! The FFT path transforms the real inputs through the real-DFT primitives
 //! ([`DftR2c`] forward, [`DftC2r`] inverse) rather than embedding them in a
-//! complex transform (ADR-009 §6), so it pays no ~2× complex-embedding tax.
+//! complex transform, so it pays no ~2× complex-embedding tax.
 //! The inverse c2r factory is wrapped in [`HermitianC2r`] so the DC/Nyquist
 //! boundary is projected onto the nearest valid Hermitian spectrum before the
-//! transform (ADR-010 §2/§5) — the round-trip drift every `r2c → ⊙ → c2r`
+//! transform — the round-trip drift every `r2c → ⊙ → c2r`
 //! chain accumulates cannot reach the kernel.
 //!
 //! The [`recommend_method`] function provides an operation-count heuristic
@@ -77,8 +77,8 @@ pub fn recommend_method(a_len: usize, b_len: usize) -> ConvMethod {
 ///
 /// Creates [`OmniConvPlan`]s for specific input lengths.  The factory owns the
 /// real-DFT factories (`r2c` forward, `c2r` inverse) and the `VecOps` instance;
-/// plans own their sub-plans.  The c2r factory is Hermitian-shaped internally
-/// (ADR-010 §5), so any backend that reuses `OmniConv` inherits the projection.
+/// plans own their sub-plans.  The c2r factory is Hermitian-shaped internally,
+/// so any backend that reuses `OmniConv` inherits the projection.
 #[derive(Debug, Clone)]
 pub struct OmniConv<R, C, V> {
     r2c: R,
@@ -269,12 +269,12 @@ impl<R, C, V> OmniConv<R, C, V> {
     /// The plan preallocates any internal buffers so that execution is
     /// allocation-free.  The FFT path wraps the inverse c2r factory in
     /// [`HermitianC2r`] so the round-trip DC/Nyquist drift is projected away
-    /// before the inverse transform (ADR-010 §2/§5).
+    /// before the inverse transform.
     ///
     /// # Errors
     ///
     /// Returns [`Error::InvalidSpec`] if the FFT length overflows.  The input
-    /// length invariants are enforced by [`ConvSpec::new`] (ADR-006 §4), so
+    /// length invariants are enforced by [`ConvSpec::new`], so
     /// they are not re-checked here.
     #[allow(
         clippy::type_complexity,
@@ -313,7 +313,7 @@ impl<R, C, V> OmniConv<R, C, V> {
                 let fwd_spec = DftR2cSpec::new(fft_len, DftNorm::Inverse)?;
                 let fwd = self.r2c.create_plan(&fwd_spec)?;
 
-                // The c2r factory is Hermitian-shaped (ADR-010 §2/§5): the
+                // The c2r factory is Hermitian-shaped: the
                 // product of two Hermitian half-spectra is Hermitian, but float
                 // drift leaves ~epsilon imaginary at DC/Nyquist that the
                 // projection clears before the inverse transform.

@@ -6,8 +6,8 @@
 //! [`ConvPlan`] is the execution object for a one-shot (full) convolution,
 //! configured from a [`ConvSpec`].  Plans are immutable and take `&self`.  The
 //! generic [`OmniConv`](crate::modules::conv::OmniConv) module builds plans via
-//! an inherent `create_plan` — the `Conv` factory trait was dropped (ADR-006
-//! §1; nothing was generic over it).  For streaming convolution, see the FIR
+//! an inherent `create_plan` — the `Conv` factory trait was dropped because
+//! nothing was generic over it.  For streaming convolution, see the FIR
 //! filter primitive.
 
 use std::marker::PhantomData;
@@ -40,7 +40,7 @@ pub enum ConvMethod {
 /// The type parameter `T` ties the spec to a specific float type, making
 /// specs fully self-describing for the dispatch layer's `CreatePlan<S>` trait.
 /// `T` is carried via [`PhantomData`] and hidden behind the constructor.
-/// Fields are private and the spec is valid-by-construction (ADR-006 §4).
+/// Fields are private and the spec is valid-by-construction.
 ///
 /// # Examples
 ///

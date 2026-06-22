@@ -1,17 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Two Wells <contact@twowells.dev>
 
-//! Direct-primitive dispatch — shaped r2c/c2r, bare c2c (ADR-010 §5, ADR-011 §2).
+//! Direct-primitive dispatch — shaped r2c/c2r, bare c2c.
 //!
 //! A backend exposes its three *raw* DFT factories through [`RawDft`]; this
 //! module provides blanket [`CreatePlan`] impls over that accessor that wrap the
 //! real transforms in the Hermitian boundary shaping
-//! ([`HermitianR2c`] / [`HermitianC2r`], ADR-010 §3/§2) and pass the complex
-//! transform through bare (ADR-010 §3b).
+//! ([`HermitianR2c`] / [`HermitianC2r`]) and pass the complex
+//! transform through bare.
 //!
 //! The shaping is therefore written **once**, in core, and inherited by every
 //! backend: a hand-written custom backend that implements only [`RawDft`] still
-//! cannot ship an unshaped direct r2c/c2r plan (ADR-011 §2 "central wrapping").
+//! cannot ship an unshaped direct r2c/c2r plan, because the shaping is wrapped
+//! centrally rather than left to each backend.
 //! The `impl_generic_backend!` macro emits the [`RawDft`] impl; the backend
 //! never writes the `CreatePlan<Dft*Spec>` impls itself.
 
@@ -25,15 +26,15 @@ use crate::types::DspFloat;
 ///
 /// Implemented per float type (`RawDft<f32>`, `RawDft<f64>`) — usually by the
 /// `impl_generic_backend!` macro.  The factories returned are **raw**: the
-/// Hermitian boundary shaping (ADR-010) lives in the blanket [`CreatePlan`]
+/// Hermitian boundary shaping lives in the blanket [`CreatePlan`]
 /// impls in this module, never in the backend.
 ///
 /// Accessors return the factory **by value** (not `&self`-borrowed) so the
 /// macro can materialize a defaulted realfft floor (`RustDftR2c` / `RustDftC2r`)
 /// inline for an omitted slot, with no backing struct field — the
-/// "vendor omits; macro materializes" rule (ADR-011 §3).
+/// "vendor omits; macro materializes" rule.
 pub trait RawDft<T> {
-    /// The raw complex-to-complex factory (the required base, ADR-009 §3).
+    /// The raw complex-to-complex factory (the required base).
     type C2c: DftC2c<T>;
     /// The raw real-to-complex factory (native or the realfft floor).
     type R2c: DftR2c<T>;
@@ -50,7 +51,7 @@ pub trait RawDft<T> {
 
 // ─── Blanket dispatch over the raw accessor ──────────────────────────────
 
-/// c2c — exposed **bare** (ADR-010 §3b): no Hermitian convention to enforce.
+/// c2c — exposed **bare**: no Hermitian convention to enforce.
 impl<T, B> CreatePlan<DftC2cSpec<T>> for B
 where
     T: DspFloat,
@@ -63,7 +64,7 @@ where
     }
 }
 
-/// r2c — Hermitian-cleaned **output** (ADR-010 §3): bit-exactly-real DC/Nyquist.
+/// r2c — Hermitian-cleaned **output**: bit-exactly-real DC/Nyquist.
 impl<T, B> CreatePlan<DftR2cSpec<T>> for B
 where
     T: DspFloat,
@@ -76,7 +77,7 @@ where
     }
 }
 
-/// c2r — Hermitian-projected **input** (ADR-010 §2): the load-bearing drift guard.
+/// c2r — Hermitian-projected **input**: the load-bearing drift guard.
 impl<T, B> CreatePlan<DftC2rSpec<T>> for B
 where
     T: DspFloat,

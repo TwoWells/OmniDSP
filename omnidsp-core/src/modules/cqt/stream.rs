@@ -128,7 +128,7 @@ impl<T> CqtStreamSpec<T> {
 ///
 /// The named, stateful plan trait for the streaming CQT, mirroring
 /// [`ResamplePlan`] exactly (the locked
-/// `&mut self` streaming-plan category, SL-09 / ADR-006 §2 / ADR-007 §6): it is
+/// `&mut self` streaming-plan category, SL-09): it is
 /// mutable, carries **no** `Send + Sync` supertrait, exposes a
 /// [`reset`](Self::reset), and has a variable-count [`process`](Self::process)
 /// paired with a [`max_output_columns`](Self::max_output_columns) sizing method.
@@ -705,7 +705,7 @@ impl<R, V> OmniCqt<R, V> {
     /// Mirrors [`create_plan`](OmniCqt::create_plan): `resample_factory` (any
     /// `CreatePlan<ResampleSpec>`) builds one continuous decimator sub-plan per
     /// octave transition and is then dropped — the plan stores only the concrete
-    /// decimators (option A, ADR-006 §2a).
+    /// decimators (option A).
     ///
     /// # Errors
     ///
@@ -1566,7 +1566,7 @@ mod tests {
         reason = "sample indices are small enough for f64"
     )]
     fn decimator_quality_levels_track_reference() {
-        // The decimator quality is a *free* knob on `CqtSpec` (ADR-012 §5); both
+        // The decimator quality is a *free* knob on `CqtSpec`; both
         // a low and the default-high level must converge to the decimation-free
         // oracle in magnitude (the equiripple stopband + gain compensation hold
         // at every quality, the deeper stopband simply lowers the residual).

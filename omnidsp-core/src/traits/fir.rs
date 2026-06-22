@@ -6,10 +6,10 @@
 //! [`FirPlan`] is the execution object configured from a [`FirSpec`].  Plans
 //! are mutable — they maintain state across calls and take `&mut self`.  The
 //! generic [`OmniFir`](crate::modules::fir::OmniFir) module builds plans via an
-//! inherent `create_plan` — the `Fir` factory trait was dropped (ADR-006 §1;
-//! nothing was generic over it).
+//! inherent `create_plan` — the `Fir` factory trait was dropped because
+//! nothing was generic over it.
 //!
-//! The designed-filter / filtering-operation split (ADR-012 §2):
+//! The designed-filter / filtering-operation split:
 //!
 //! - [`FirFilter`] is the **designed artifact** — coefficients plus minimal
 //!   [`FirMeta`] (rate / normalized cutoff), the reusable unit produced by
@@ -28,7 +28,7 @@ use crate::error::{Error, Result};
 /// Carries the sampling rate and normalized cutoff that produced the
 /// coefficients, when known.  Both are `None` for bring-your-own coefficients
 /// whose design context is unavailable.  This is the minimal data a composing
-/// spec needs to validate cross-spec invariants (ADR-012 §2/§4) — for example,
+/// spec needs to validate cross-spec invariants — for example,
 /// that a resampler's prototype cutoff is compatible with its polyphase
 /// factorization.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -89,7 +89,7 @@ impl Default for FirMeta {
 
 /// A designed FIR filter — tap coefficients plus minimal [`FirMeta`].
 ///
-/// This is the **reusable artifact** of the design layer (ADR-012 §2): the
+/// This is the **reusable artifact** of the design layer: the
 /// output of [`design::fir::design`](crate::design::fir::design) and a
 /// directly-constructible struct ([`FirFilter::new`]) for bring-your-own
 /// coefficients (a filter designed in scipy/MATLAB).  It carries no window
@@ -107,7 +107,7 @@ impl Default for FirMeta {
 /// assert_eq!(filter.coefficients().len(), 3);
 /// ```
 ///
-/// Fields are private and the filter is valid-by-construction (ADR-006 §4).
+/// Fields are private and the filter is valid-by-construction.
 #[derive(Debug, Clone)]
 pub struct FirFilter<T> {
     coefficients: Vec<T>,
@@ -168,8 +168,8 @@ pub enum FirStrategy {
 
 /// FIR filter specification — the FIR **module's** execution spec.
 ///
-/// Composes a designed [`FirFilter`] with a preferred [`FirStrategy`]
-/// (ADR-012 §2).  This is the contract between the design layer (which computes
+/// Composes a designed [`FirFilter`] with a preferred [`FirStrategy`].
+/// This is the contract between the design layer (which computes
 /// the [`FirFilter`]) and any backend (which executes it).
 ///
 /// Construct via [`FirSpec::new`] from a [`FirFilter`] — obtained from
@@ -187,7 +187,7 @@ pub enum FirStrategy {
 /// assert_eq!(spec.coefficients().len(), 3);
 /// ```
 ///
-/// Fields are private and the spec is valid-by-construction (ADR-006 §4) — the
+/// Fields are private and the spec is valid-by-construction — the
 /// non-empty-coefficients invariant is established by [`FirFilter::new`].
 #[derive(Debug, Clone)]
 pub struct FirSpec<T> {

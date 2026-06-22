@@ -11,8 +11,8 @@
 //! is lowpassed and decimated ×2 and the next-lower octave is analysed at half
 //! the rate, and so on.  Roughly an order of magnitude less compute than sizing
 //! one FFT for the lowest bin — the property that makes the CQT comfortable in a
-//! `wasm32` real-time visualiser (the founding feature, ADR-006 §2a / ADR-009
-//! §6, surface-lock capstone 5L).
+//! `wasm32` real-time visualiser (the founding feature, surface-lock
+//! capstone 5L).
 //!
 //! The per-octave kernel design and octave partitioning live in the shared
 //! [`kernel`] submodule; this batch file owns the per-frame `process`.
@@ -29,8 +29,8 @@
 //! half-band sub-plan (`up = 1`, `down = 2`), built through a
 //! `CreatePlan<ResampleSpec>` factory passed
 //! to [`create_plan`](OmniCqt::create_plan) and **dropped immediately** — the
-//! plan stores only the concrete decimator plan, never the factory (ADR-006
-//! §2a).  On a vendor backend the decimator drops onto the native resampler;
+//! plan stores only the concrete decimator plan, never the factory.  On a
+//! vendor backend the decimator drops onto the native resampler;
 //! on the `RustBackend` floor it is
 //! [`OmniResample`](crate::modules::resample::OmniResample) over
 //! [`ScalarVecOps`](crate::scalar::ScalarVecOps).  This is the first consumer of
@@ -296,12 +296,12 @@ where
 
 /// Execution object for a configured Constant-Q Transform.
 ///
-/// The named, `Send + Sync` plan trait for the CQT module, mirroring
-/// [`ConvPlan`](crate::traits::conv::ConvPlan) /
-/// [`DctPlan`](crate::traits::dct::DctPlan) (ADR-006 §2 eager plan traits,
-/// ADR-007 §6).  It lets the per-frame `process` be called generically (e.g.
-/// by the shared conformance suite covering the multirate CQT) without naming
-/// the concrete plan.  Beyond `process` it carries the buffer-sizing facts a
+/// The named, `Send + Sync` plan trait for the CQT module, mirroring the eager
+/// plan traits [`ConvPlan`](crate::traits::conv::ConvPlan) /
+/// [`DctPlan`](crate::traits::dct::DctPlan).  It lets the per-frame `process`
+/// be called generically (e.g. by the shared conformance suite covering the
+/// multirate CQT) without naming the concrete plan.  Beyond `process` it
+/// carries the buffer-sizing facts a
 /// generic caller needs ([`num_bins`](Self::num_bins),
 /// [`fft_length`](Self::fft_length) — the CQT's `process` has a size
 /// precondition the length-symmetric `ConvPlan`/`DctPlan` do not), the per-bin
@@ -377,7 +377,7 @@ impl<R, V> OmniCqt<R, V> {
     ///
     /// `resample_factory` is the backend (any `CreatePlan<ResampleSpec>`); it
     /// builds the per-octave ×2 decimator sub-plan and is then **dropped** —
-    /// the plan stores only the concrete decimator (option A, ADR-006 §2a).
+    /// the plan stores only the concrete decimator (option A).
     ///
     /// The spec provides per-bin center frequencies and window coefficients.
     /// Construct one via [`design`](crate::design::cqt::design) or

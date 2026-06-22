@@ -1,32 +1,32 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Two Wells <contact@twowells.dev>
 
-//! Hermitian boundary-shaping decorators for the real-DFT primitives (ADR-010).
+//! Hermitian boundary-shaping decorators for the real-DFT primitives.
 //!
 //! The DFT of a real signal is Hermitian: its DC bin — and, for even `length`,
 //! its Nyquist bin — are purely real.  Float rounding leaves ~epsilon imaginary
 //! there, and every `r2c → multiply → c2r` chain (Conv/FIR/CrossCorr/DCT)
 //! accumulates a little more.  Rather than leave each vendor kernel to tolerate
 //! (or reject) that drift, `OmniDSP` enforces the shape **once, at the
-//! composition layer** ([ADR-010](https://github.com/TwoWells/OmniDSP)):
+//! composition layer**:
 //!
 //! - [`HermitianC2r`] projects the half-spectrum onto the nearest valid
 //!   Hermitian spectrum (`in[0].im = 0`, even-`N` `in[N/2].im = 0`) **before**
-//!   the inverse transform.  This is **load-bearing** (ADR-010 §2): it stops a
+//!   the inverse transform.  This is **load-bearing**: it stops a
 //!   `realfft`-style "non-real DC/Nyquist" error — or a kernel that honors the
 //!   imaginary part — from diverging on legitimate round-trip drift.
 //! - [`HermitianR2c`] cleans the same bins on the **output** of the forward
-//!   transform.  This is **hygiene, not safety** (ADR-010 §3): the c2r-side
+//!   transform.  This is **hygiene, not safety**: the c2r-side
 //!   projection already absorbs round-trip drift, so its sole value is a
 //!   bit-exactly-real DC/Nyquist for consumers that inspect the raw
 //!   half-spectrum directly.
 //!
 //! Both project **in place** — no scratch, no copy — around an inner plan.  The
-//! inner real-DFT primitives consume their `&mut` input (ADR-010 §1), so the
+//! inner real-DFT primitives consume their `&mut` input, so the
 //! c2r projection writes the caller's buffer it was going to lose anyway.
 //!
 //! The bare [`DftC2c`](crate::traits::dft::DftC2c) primitive has no Hermitian
-//! convention to enforce and so gets no wrapper (ADR-010 §3b); only the two real
+//! convention to enforce and so gets no wrapper; only the two real
 //! transforms are shaped.
 
 use num_complex::Complex;
@@ -35,7 +35,7 @@ use crate::error::Result;
 use crate::traits::dft::{DftC2r, DftC2rPlan, DftC2rSpec, DftR2c, DftR2cPlan, DftR2cSpec};
 use crate::types::DspFloat;
 
-// ─── c2r: input-projecting decorator (load-bearing, ADR-010 §2) ──────
+// ─── c2r: input-projecting decorator (load-bearing) ──────────────────
 
 /// Factory decorator that Hermitian-projects a [`DftC2r`] plan's input.
 ///
@@ -43,7 +43,7 @@ use crate::types::DspFloat;
 /// for even `length`, the Nyquist bin — imaginary parts **in place** on the
 /// caller's `&mut` half-spectrum before delegating to the inner c2r plan.
 ///
-/// This is the shaped, drift-tolerant form modules compose (ADR-010 §5); the
+/// This is the shaped, drift-tolerant form modules compose; the
 /// inner primitive stays raw.
 #[derive(Debug, Clone, Copy)]
 pub struct HermitianC2r<C> {
@@ -86,8 +86,8 @@ where
 {
     fn process(&self, input: &mut [Complex<T>], output: &mut [T]) -> Result<()> {
         let bins = self.length / 2 + 1;
-        // Project in place onto the nearest valid Hermitian spectrum (ADR-010
-        // §2).  Skip on a length mismatch — the inner plan owns that error so it
+        // Project in place onto the nearest valid Hermitian spectrum.
+        // Skip on a length mismatch — the inner plan owns that error so it
         // is reported (rather than panicking here on an out-of-range index).
         if input.len() == bins {
             input[0].im = T::zero();
@@ -114,7 +114,7 @@ where
     }
 }
 
-// ─── r2c: output-cleaning decorator (hygiene, ADR-010 §3) ────────────
+// ─── r2c: output-cleaning decorator (hygiene) ────────────────────────
 
 /// Factory decorator that cleans a [`DftR2c`] plan's output to be Hermitian.
 ///
@@ -122,7 +122,7 @@ where
 /// plan, then zeroes the DC bin — and, for even `length`, the Nyquist bin —
 /// imaginary parts **in place** on the output half-spectrum.
 ///
-/// This is hygiene, not safety (ADR-010 §3): it guarantees a bit-exactly-real
+/// This is hygiene, not safety: it guarantees a bit-exactly-real
 /// DC/Nyquist for consumers inspecting the raw half-spectrum, identically across
 /// backends.  Modules that only feed the spectrum back through c2r need not wrap
 /// r2c (the c2r-side projection absorbs the drift).
@@ -201,7 +201,7 @@ where
     clippy::cast_precision_loss,
     clippy::float_cmp,
     reason = "tests use expect for clarity, small exact usize→f64 casts, and assert \
-              the decorator sets DC/Nyquist imaginaries to bit-exact zero (ADR-010 §3)"
+              the decorator sets DC/Nyquist imaginaries to bit-exact zero"
 )]
 mod tests {
     use num_complex::Complex;
@@ -252,7 +252,7 @@ mod tests {
     /// `HermitianC2r` projects a DC/(even-`N`)Nyquist-perturbed half-spectrum
     /// back onto the valid Hermitian spectrum **in place** and reconstructs the
     /// same real signal as the clean input — the 05d drift case, now exercised
-    /// through the wrapper (ADR-010 §2; ticket 05de testing).
+    /// through the wrapper (ticket 05de testing).
     #[test]
     fn c2r_projects_dc_nyquist_drift_in_place() {
         for n in [7_usize, 8] {
@@ -289,7 +289,7 @@ mod tests {
     }
 
     /// `HermitianR2c` forces the output DC/(even-`N`)Nyquist imaginary parts to
-    /// be exactly zero while leaving every other value untouched (ADR-010 §3).
+    /// be exactly zero while leaving every other value untouched.
     #[test]
     fn r2c_cleans_output_dc_nyquist() {
         for n in [7_usize, 8] {

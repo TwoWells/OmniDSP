@@ -31,9 +31,9 @@ use crate::window::Window;
 
 // ─── Decimator quality ──────────────────────────────────────────────
 
-/// Quality of the multirate CQT's ×2 anti-alias decimator (ADR-012 §5 — the
+/// Quality of the multirate CQT's ×2 anti-alias decimator — the
 /// *free* knob a composing spec surfaces, with a high default the casual caller
-/// never sees).
+/// never sees.
 ///
 /// The 1:2 decimation **ratio** stays driven/internal; this exposes only the
 /// decimator's *FIR design quality*.  The decimator is a **windowed Kaiser**
@@ -213,7 +213,7 @@ impl<T> CqtSpec<T> {
         })
     }
 
-    /// Override the multirate decimator quality (the *free* knob, ADR-012 §5).
+    /// Override the multirate decimator quality (the *free* knob).
     ///
     /// Defaults to [`DecimatorQuality::HIGH`]; the casual caller never sets it.
     /// A builder (rather than a `new` argument) keeps the constructor signature
@@ -269,7 +269,7 @@ impl<T> CqtSpec<T> {
         self.bins.len()
     }
 
-    /// The multirate decimator quality (the *free* knob, ADR-012 §5).
+    /// The multirate decimator quality (the *free* knob).
     #[must_use]
     pub const fn decimator_quality(&self) -> DecimatorQuality {
         self.decimator_quality

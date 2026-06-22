@@ -2,12 +2,12 @@
 // Copyright (C) 2026 Two Wells <contact@twowells.dev>
 
 //! Conformance checks for the three DFT primitives (`DftC2c` / `DftR2c` /
-//! `DftC2r`, ADR-009) and the Hermitian-shaping contract (ADR-010).
+//! `DftC2r`) and the Hermitian-shaping contract.
 //!
 //! These exercise the **output-affecting** spec fields — direction
 //! (forward/inverse) and normalization (`None`/`Inverse`/`Ortho`) — across
 //! representative lengths (even, odd, prime, `len == 1`), plus the
-//! drift-tolerant c2r contract (ADR-009 §4).
+//! drift-tolerant c2r contract.
 
 use num_complex::Complex;
 
@@ -111,7 +111,7 @@ where
 /// Conformance for the real-to-complex DFT ([`DftR2c`](omnidsp_core::traits::dft::DftR2c)).
 ///
 /// Covers a known constant→DC half-spectrum, the Hermitian-shaping contract
-/// (ADR-010 §3: bit-exactly-real DC and even-`N` Nyquist), and an error case,
+/// (bit-exactly-real DC and even-`N` Nyquist), and an error case,
 /// over even and odd lengths.
 ///
 /// # Panics
@@ -147,7 +147,7 @@ where
             &format!("r2c constant→DC spectrum n={n}"),
         );
 
-        // Hermitian shaping (ADR-010 §3): a generic real input's DC — and, for
+        // Hermitian shaping: a generic real input's DC — and, for
         // even N, Nyquist — imaginary parts come out bit-exactly zero.
         let mut signal = to_vec::<T>(
             &(0..n)
@@ -159,13 +159,13 @@ where
             .expect("r2c process");
         assert!(
             spectrum[0].im.is_zero(),
-            "r2c [{}]: DC imaginary must be bit-exactly zero (ADR-010 §3)",
+            "r2c [{}]: DC imaginary must be bit-exactly zero",
             T::WIDTH,
         );
         if n % 2 == 0 {
             assert!(
                 spectrum[bins - 1].im.is_zero(),
-                "r2c [{}]: even-N Nyquist imaginary must be bit-exactly zero (ADR-010 §3)",
+                "r2c [{}]: even-N Nyquist imaginary must be bit-exactly zero",
                 T::WIDTH,
             );
         }
@@ -182,9 +182,9 @@ where
 }
 
 /// Conformance for the complex-to-real DFT ([`DftC2r`](omnidsp_core::traits::dft::DftC2r)),
-/// including the drift-tolerant DC/Nyquist contract (ADR-009 §4).
+/// including the drift-tolerant DC/Nyquist contract.
 ///
-/// The shaped c2r (ADR-010 §2) projects its half-spectrum input onto the nearest
+/// The shaped c2r projects its half-spectrum input onto the nearest
 /// valid Hermitian spectrum before transforming, so a DC/Nyquist bin carrying
 /// the ~1e-15 imaginary drift the r2c → multiply → c2r chain produces in
 /// practice must neither error nor change the output.
@@ -230,7 +230,7 @@ where
     let result = plan.process(&mut drift, &mut out_drift);
     assert!(
         result.is_ok(),
-        "c2r [{}]: near-zero DC/Nyquist imaginary drift must not error (ADR-009 §4)",
+        "c2r [{}]: near-zero DC/Nyquist imaginary drift must not error",
         T::WIDTH,
     );
     assert_real_t(

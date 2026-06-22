@@ -17,7 +17,7 @@
 //! are converted to the target type `T`.
 //!
 //! The design method is selected via [`FirMethod`]; the windowed-sinc method
-//! lives in its [`FirMethod::Windowed`] variant (ADR-012 §2/§3).  The returned
+//! lives in its [`FirMethod::Windowed`] variant.  The returned
 //! [`FirFilter`] is the reusable designed artifact — compose it into a
 //! [`FirSpec`](crate::traits::fir::FirSpec) (via
 //! [`FirSpec::new`](crate::traits::fir::FirSpec::new)) to obtain a plan-ready
@@ -44,7 +44,7 @@ use crate::window::Window;
 
 // ─── Design method ────────────────────────────────────────────────────
 
-/// FIR design method — the algorithm family used by [`design`] (ADR-012 §2/§3).
+/// FIR design method — the algorithm family used by [`design`].
 ///
 /// Each variant carries the data specific to its method; the plain response
 /// parameters (filter type, rate, band edges) are passed to [`design`]
@@ -77,7 +77,7 @@ pub enum FirMethod<T> {
     /// tolerances directly, so its attenuation is *truthful* — the realized
     /// stopband meets the requested `stop_atten`.  For a ×2 decimation lowpass
     /// (cutoff `fs/4` with a symmetric transition) the design is a **half-band**
-    /// filter whose even-indexed taps, bar the center, are zero (ADR-012 §3).
+    /// filter whose even-indexed taps, bar the center, are zero.
     ///
     /// # Units and Remez weighting
     ///
@@ -162,7 +162,7 @@ pub fn design<T: Float>(
 
     let validated = validate(filter_type, order, sr, c1, c2)?;
 
-    // Dispatch over the design method (ADR-012 §3); each produces f64 taps.
+    // Dispatch over the design method; each produces f64 taps.
     let normalized: Vec<f64> = match method {
         FirMethod::Windowed { window } => design_windowed(filter_type, &validated, window)?,
         FirMethod::Equiripple {
@@ -217,7 +217,7 @@ fn design_windowed(
 
     // Generate and apply the method-specific taper.  The window evaluates
     // directly in f64 — the precision the windowed-sinc math runs in — so there
-    // is no per-coefficient `T → f64` round-trip (ADR-013).
+    // is no per-coefficient `T → f64` round-trip.
     let win_coeffs = window.coefficients::<f64>(validated.num_taps)?;
     let windowed: Vec<f64> = ideal
         .iter()
@@ -243,7 +243,7 @@ const EQ_TRANSITION_FRACTION: f64 = 0.25;
 /// edges from the validated cutoffs (a symmetric transition of half-width
 /// `cutoff · EQ_TRANSITION_FRACTION` about each cutoff), and dispatches to the
 /// Remez engine.  A lowpass at cutoff ≈ `fs/4` takes the **half-band** path:
-/// design then zero the alternate taps (ADR-012 §3, the ×2 decimation case).
+/// design then zero the alternate taps (the ×2 decimation case).
 #[allow(
     clippy::too_many_lines,
     reason = "the per-filter-type band construction is one cohesive match"
@@ -376,7 +376,7 @@ fn design_equiripple(
 
 /// Design a half-band equiripple lowpass at cutoff `fs/4` and zero the
 /// alternate (even-indexed, off-center) taps — the optimal ×2 decimation
-/// filter (ADR-012 §3).
+/// filter.
 ///
 /// A true half-band has even-symmetric bands about `fs/4` and equal pass/stop
 /// weighting; the Remez solution then has its even-indexed taps (bar the

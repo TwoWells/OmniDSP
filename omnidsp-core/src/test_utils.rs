@@ -215,7 +215,7 @@ pub struct TestDftC2r;
 
 /// Complex-to-real DFT plan for tests.  Respects [`DftNorm`] (inverse slice).
 ///
-/// A **raw, bare primitive** (ADR-010 §1/§2): it assumes a clean Hermitian
+/// A **raw, bare primitive**: it assumes a clean Hermitian
 /// half-spectrum and does **no** DC/Nyquist projection — that shaping lives in
 /// [`HermitianC2r`](crate::hermitian::HermitianC2r), matching `RustDftC2r`'s
 /// post-05de floor.  Taking the real part of the inverse transform already
@@ -244,7 +244,7 @@ impl DftC2rPlan<f64> for TestDftC2rPlan {
             });
         }
 
-        // Raw bare primitive (ADR-010 §2): no DC/Nyquist projection here — the
+        // Raw bare primitive: no DC/Nyquist projection here — the
         // input is assumed clean-Hermitian, and any drift is shaped upstream by
         // `HermitianC2r`.  Mirror the lower half into the conjugate-symmetric
         // upper half and take the real part of the inverse transform.
@@ -385,7 +385,7 @@ mod tests {
     fn r2c(n: usize, norm: DftNorm, input: &[f64]) -> Vec<Complex<f64>> {
         let spec = DftR2cSpec::<f64>::new(n, norm).expect("valid r2c spec");
         let plan = DftR2c::<f64>::create_plan(&TestDftR2c, &spec).expect("r2c plan");
-        // r2c consumes its input (ADR-010 §1) — hand it a throwaway copy.
+        // r2c consumes its input — hand it a throwaway copy.
         let mut scratch = input.to_vec();
         let mut out = vec![Complex::new(0.0, 0.0); n / 2 + 1];
         plan.process(&mut scratch, &mut out).expect("r2c process");
@@ -395,7 +395,7 @@ mod tests {
     fn c2r(n: usize, norm: DftNorm, input: &[Complex<f64>]) -> Vec<f64> {
         let spec = DftC2rSpec::<f64>::new(n, norm).expect("valid c2r spec");
         let plan = DftC2r::<f64>::create_plan(&TestDftC2r, &spec).expect("c2r plan");
-        // c2r consumes its input (ADR-010 §1) — hand it a throwaway copy.
+        // c2r consumes its input — hand it a throwaway copy.
         let mut scratch = input.to_vec();
         let mut out = vec![0.0_f64; n];
         plan.process(&mut scratch, &mut out).expect("c2r process");
@@ -499,8 +499,7 @@ mod tests {
 
     // The c2r DC/(even-`N`)Nyquist drift-tolerance test moved to
     // `crate::hermitian` in 05de: drift projection is now a property of the
-    // `HermitianC2r` shaping decorator, not of the bare `TestDftC2r` primitive
-    // (ADR-010 §1/§2).
+    // `HermitianC2r` shaping decorator, not of the bare `TestDftC2r` primitive.
 
     #[test]
     fn buffer_mismatch_errors() {

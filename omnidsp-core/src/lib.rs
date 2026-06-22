@@ -5,7 +5,7 @@
 //!
 //! Test reference vectors live in the [`omnidsp-testdata`] crate (a
 //! dev-dependency) rather than inline here, so the `omnidsp-conformance` suite
-//! can share the exact same golden data without a dependency cycle (ADR-007 §3).
+//! can share the exact same golden data without a dependency cycle.
 //!
 //! [`omnidsp-testdata`]: https://github.com/TwoWells/OmniDSP
 

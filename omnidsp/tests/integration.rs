@@ -550,7 +550,7 @@ struct MacroTestBackend {
 }
 
 // Omits `iir:` — the macro materializes the `ScalarIir` default inline, with
-// no backing struct field (ADR-011 §3).
+// no backing struct field.
 omnidsp_macros::impl_generic_backend! {
     backend: MacroTestBackend,
     dftc2c: RustDftC2c,
@@ -808,7 +808,7 @@ fn skip_conv_backend_other_modules_work() {
 // ═══════════════════════════════════════════════════════════════════════
 
 /// A backend declaring **only** `dftc2c:` — `dftr2c`/`dftc2r`/`vecops`/`iir`
-/// take their realfft/scalar defaults (ADR-009 §3, ADR-011 §3).  It carries a
+/// take their realfft/scalar defaults.  It carries a
 /// single field; the macro materializes the omitted floors inline, so no
 /// backing struct field is needed for them.
 struct MinimalBackend {
@@ -824,7 +824,7 @@ omnidsp_macros::impl_generic_backend! {
 fn minimal_backend_defaults_materialize() {
     let dsp = OmniDSP::new(MinimalBackend { dftc2c: RustDftC2c });
 
-    // c2c via the bare blanket (ADR-010 §3b); the rest compose the defaulted
+    // c2c via the bare blanket; the rest compose the defaulted
     // realfft floor / ScalarVecOps / ScalarIir.
     dft_round_trip(&dsp, 1e-12);
     conv_verify(&dsp, 1e-12);
@@ -837,7 +837,7 @@ fn minimal_backend_shaped_direct_r2c_c2r() {
     let dsp = OmniDSP::new(MinimalBackend { dftc2c: RustDftC2c });
 
     // The `dft_r2c` / `dft_c2r` convenience methods dispatch through the core
-    // blanket: shaped plans over the defaulted realfft floor (ADR-011 §2).
+    // blanket: shaped plans over the defaulted realfft floor.
     let original = vec![1.0_f64, -2.0, 3.0, 0.5, -1.5, 2.0, 0.0, 4.0];
     let n = original.len();
     let r2c_spec = DftR2cSpec::<f64>::new(n, DftNorm::Inverse).expect("r2c spec");

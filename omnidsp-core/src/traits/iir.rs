@@ -34,7 +34,7 @@ use crate::types::BiquadSection;
 /// assert_eq!(spec.sections().len(), 1);
 /// ```
 ///
-/// The field is private and the spec is valid-by-construction (ADR-006 §4).
+/// The field is private and the spec is valid-by-construction.
 #[derive(Debug, Clone)]
 pub struct IirSpec<T> {
     sections: Vec<BiquadSection<T>>,

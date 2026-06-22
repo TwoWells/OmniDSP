@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Two Wells <contact@twowells.dev>
 
-//! Window functions as a non-generic description (ADR-014).
+//! Window functions as a non-generic description.
 //!
 //! A [`Window`] is a plain enum describing a window function — its kind plus any
 //! shape parameters — and nothing more.  It is **not** generic over the signal
@@ -38,7 +38,7 @@ use num_traits::Float;
 
 use crate::error::Result;
 
-/// A window function: its kind plus any `f64` shape parameters (ADR-014).
+/// A window function: its kind plus any `f64` shape parameters.
 ///
 /// A non-generic *description* — the precision is chosen at evaluation by
 /// [`coefficients::<T>`](Self::coefficients), not pinned here.  `#[non_exhaustive]`
@@ -102,7 +102,7 @@ impl Window {
     }
 }
 
-/// Kaiser window β derivation (ADR-014).
+/// Kaiser window β derivation.
 ///
 /// The Kaiser window has one shape parameter, β; it can be written directly into
 /// [`Window::Kaiser`], or **solved from a target side-lobe / stopband

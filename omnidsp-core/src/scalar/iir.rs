@@ -94,8 +94,8 @@ impl<T: DspFloat> Iir<T> for ScalarIir {
     type Plan = ScalarIirPlan<T>;
 
     fn create_plan(&self, spec: &IirSpec<T>) -> Result<Self::Plan> {
-        // The non-empty-sections invariant is enforced by `IirSpec::new`
-        // (ADR-006 §4), so it is not re-checked here.
+        // The non-empty-sections invariant is enforced by `IirSpec::new`,
+        // so it is not re-checked here.
         let state = vec![[T::zero(); 2]; spec.sections().len()];
 
         Ok(ScalarIirPlan {

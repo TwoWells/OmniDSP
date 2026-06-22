@@ -22,7 +22,7 @@
 //! Hilbert is the one real-input module that mixes a real forward transform with
 //! a *complex* inverse (its output is complex, not real), so it composes
 //! [`DftR2c`] + bare [`DftC2c`] — no [`HermitianC2r`](crate::hermitian::HermitianC2r)
-//! shaping is involved (ADR-009 §6; ADR-010 §3b).
+//! shaping is involved.
 //!
 //! Internal scratch buffers are behind a [`Mutex`] so that the plan satisfies
 //! `Send + Sync` while taking `&self`.
@@ -47,7 +47,7 @@ use crate::types::Direction;
 /// Describes the signal length for the analytic signal computation.
 /// The type parameter `T` ties the spec to a specific float type for
 /// dispatch-layer integration.  The field is private and the spec is
-/// valid-by-construction (ADR-006 §4).
+/// valid-by-construction.
 ///
 /// # Examples
 ///
@@ -240,10 +240,11 @@ where
 /// Execution object for a configured Hilbert transform.
 ///
 /// The named, `Send + Sync` plan trait for the Hilbert module — the analytic
-/// counterpart to [`ConvPlan`](crate::traits::conv::ConvPlan) /
-/// [`DctPlan`](crate::traits::dct::DctPlan) (ADR-006 §2 eager plan traits,
-/// ADR-007 §6).  It lets the analytic-signal `process` be called generically
-/// (e.g. by the shared conformance suite) without naming the concrete plan.
+/// counterpart to the eager plan traits
+/// [`ConvPlan`](crate::traits::conv::ConvPlan) /
+/// [`DctPlan`](crate::traits::dct::DctPlan).  It lets the analytic-signal
+/// `process` be called generically (e.g. by the shared conformance suite)
+/// without naming the concrete plan.
 /// Implemented by [`OmniHilbertPlan`]; vendor overrides may implement it
 /// directly.
 pub trait HilbertPlan<T>: Send + Sync {
@@ -283,7 +284,7 @@ impl<R, C, V> OmniHilbert<R, C, V> {
     /// # Errors
     ///
     /// Returns an error if DFT plan creation fails.  The length invariant is
-    /// enforced by [`HilbertSpec::new`] (ADR-006 §4), so it is not re-checked here.
+    /// enforced by [`HilbertSpec::new`], so it is not re-checked here.
     pub fn create_plan<T>(
         &self,
         spec: &HilbertSpec<T>,

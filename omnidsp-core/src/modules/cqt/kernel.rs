@@ -227,7 +227,7 @@ where
     // its cumulative passband gain is the product of the decimator's magnitude
     // response at the bin's normalized frequency at each stage's input rate.
     // Baking the analytic inverse `1/G_k` into the kernel flattens the octave
-    // staircase (ticket 23d / ADR-012 §5) — the exact inverse of the known
+    // staircase (ticket 23d) — the exact inverse of the known
     // filter's known response, no fudge factor.  The half-band's DC gain is ~1
     // and the ×2 decimator applies no L-scaling (up = 1), so `G_k` is the true
     // end-to-end per-octave passband gain.
@@ -350,8 +350,7 @@ where
 ///
 /// `dftr2c` builds each band's forward real-DFT plan; `resample_factory` (any
 /// `CreatePlan<ResampleSpec>`) builds the ×2 decimator sub-plan and is then
-/// **dropped** — only the concrete decimator is returned (option A, ADR-006
-/// §2a).
+/// **dropped** — only the concrete decimator is returned (option A).
 ///
 /// # Errors
 ///
@@ -396,7 +395,7 @@ where
 ///
 /// `resample_factory` builds `octaves_count − 1` decimator sub-plans (one per
 /// `o−1 → o` transition) and is then **dropped** — the layout stores only the
-/// concrete decimators (option A, ADR-006 §2a).  Unlike the batch path, these
+/// concrete decimators (option A).  Unlike the batch path, these
 /// decimators are advanced continuously and never reset per frame, so each must
 /// be a distinct plan with its own polyphase delay line.
 ///
@@ -507,7 +506,7 @@ fn derive_decimate_spec<T: DspFloat>(
 
     // Stopband attenuation target → Kaiser order (Kaiser's order formula over the
     // actual transition width); the same target solves the window's β via
-    // `window::kaiser::attenuation` (ADR-013), so kernel and decimator share one
+    // `window::kaiser::attenuation`, so kernel and decimator share one
     // spec without a hand-converted β.
     let atten_db = quality.stop_atten_db();
     let order_est = (atten_db - 7.95) / (2.285 * 2.0 * std::f64::consts::PI * transition);
@@ -533,7 +532,7 @@ fn derive_decimate_spec<T: DspFloat>(
 
 /// The per-bin gain-compensation factor `1/G_k` for a bin at `freq` Hz in
 /// octave `octave` (0 = top), given the decimator coefficients `coeffs` and the
-/// top sample rate `sr` (ticket 23d / ADR-012 §5).
+/// top sample rate `sr` (ticket 23d).
 ///
 /// The bin passed through `octave` cascaded ×2 half-band decimators.  At stage
 /// `j` (1..=octave) the input rate is `sr / 2^(j-1)`, so the bin sat at

@@ -42,6 +42,7 @@ Rust workspace. `omnidsp-core` is the library (traits, modules, omni implementat
   // Copyright (C) 2026 Two Wells <contact@twowells.dev>
   ```
 - **Documentation:** All public APIs must have documentation comments.
+- **No internal IDs in source:** Code and doc comments must read as self-contained prose. Never cite internal design artifacts — ADR numbers (`ADR-NNN`), surface-lock ticket IDs (`SL-12a`), workstream/issue references — in published source: a reader on docs.rs or in the AGPL source tree cannot resolve them. State the *rationale* in words; the decision record lives in the private OmniDSPInternal repo, not the code. External citations (papers, ISO standards, scipy/librosa) are fine and encouraged.
 - **Testing:** All new features must include tests.
 
 ## Setup

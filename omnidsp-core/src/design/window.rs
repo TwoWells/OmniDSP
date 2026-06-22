@@ -32,7 +32,7 @@ use crate::window::Window;
 ///
 /// Called by [`Window::coefficients`](crate::window::Window::coefficients).
 /// The output precision `T` is chosen by the caller; shape parameters are the
-/// window's own `f64` design scalars (ADR-014), so the coefficient path no
+/// window's own `f64` design scalars, so the coefficient path no
 /// longer converts a `T`-typed parameter.
 ///
 /// # Errors

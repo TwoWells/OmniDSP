@@ -202,7 +202,7 @@ impl<B> OmniDSP<B> {
     /// ([`DftR2c`](omnidsp_core::traits::dft::DftR2c)): `length` real samples →
     /// a `length / 2 + 1` complex half-spectrum.
     ///
-    /// The plan is Hermitian-shaped (ADR-010 §3): its DC bin — and, for even
+    /// The plan is Hermitian-shaped: its DC bin — and, for even
     /// `length`, its Nyquist bin — imaginary parts come out bit-exactly zero.
     ///
     /// # Errors
@@ -219,7 +219,7 @@ impl<B> OmniDSP<B> {
     /// ([`DftC2r`](omnidsp_core::traits::dft::DftC2r)): a `length / 2 + 1`
     /// complex half-spectrum → `length` real samples.
     ///
-    /// The plan is Hermitian-shaped (ADR-010 §2): it projects the half-spectrum
+    /// The plan is Hermitian-shaped: it projects the half-spectrum
     /// onto the nearest valid Hermitian spectrum — consuming its `&mut` input —
     /// before transforming, so legitimate round-trip drift never reaches the
     /// kernel.

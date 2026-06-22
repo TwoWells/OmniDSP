@@ -7,7 +7,7 @@
 //! `CreatePlan<S>` implementations (via generic composition from `omnidsp-core`
 //! modules) plus the `RawDft` accessor that
 //! lets core's blanket impls expose the backend's shaped direct r2c/c2r and
-//! bare c2c plans (ADR-009 §6, ADR-010 §5, ADR-011 §2).
+//! bare c2c plans.
 //!
 //! The macro params mirror the **primitive** taxonomy (`dftc2c` required;
 //! `dftr2c`/`dftc2r`/`vecops`/`iir` optional with realfft/scalar defaults), and
@@ -44,7 +44,7 @@ fn float_idents() -> [Ident; 2] {
 
 struct BackendInput {
     backend: Type,
-    /// Required: the complex-to-complex DFT base (ADR-009 §3).
+    /// Required: the complex-to-complex DFT base.
     dftc2c: Type,
     /// Optional: native r2c; defaults to the realfft floor `RustDftR2c`.
     dftr2c: Option<Type>,
@@ -139,7 +139,7 @@ impl BackendInput {
     ///
     /// Provided → read `self.<field>.clone()`; omitted → materialize the
     /// `default` floor inline (a unit struct usable as both type and value),
-    /// so an omitting backend needs no backing struct field (ADR-011 §3).
+    /// so an omitting backend needs no backing struct field.
     fn optional_handle(
         field: &str,
         ty: Option<&Type>,
@@ -202,7 +202,7 @@ type ModuleGenerator = fn(&BackendInput) -> TokenStream2;
 ///
 /// The direct DFT-primitive `CreatePlan<Dft*Spec>` impls are **not** emitted
 /// here: core's blanket impls over `RawDft`
-/// provide them, wrapping r2c/c2r in the Hermitian shaping (ADR-011 §2).  `iir`
+/// provide them, wrapping r2c/c2r in the Hermitian shaping.  `iir`
 /// is always emitted (it is overridden via the `iir:` param, not via `skip`).
 fn generate_impls(input: &BackendInput) -> TokenStream2 {
     let mut tokens = gen_raw_dft_accessor(input);
@@ -227,7 +227,7 @@ fn generate_impls(input: &BackendInput) -> TokenStream2 {
     tokens
 }
 
-// ─── Direct-primitive dispatch (ADR-011 §2) ─────────────────────────────
+// ─── Direct-primitive dispatch ──────────────────────────────────────────
 
 /// Emit the `RawDft` accessor impls (one per
 /// float), exposing the backend's **raw** c2c/r2c/c2r factories.  Core's
@@ -376,7 +376,7 @@ fn gen_cqt(input: &BackendInput) -> TokenStream2 {
     let mut tokens = TokenStream2::new();
 
     for float in float_idents() {
-        // Multirate CQT capstone (05L, ADR-006 §2a / ADR-009 §6): octave-recursive
+        // Multirate CQT capstone (05L): octave-recursive
         // r2c analysis with an `OmniResample(1, 2)` decimator routed as a sub-plan.
         // The backend itself (`self`) is threaded as the `CreatePlan<ResampleSpec>`
         // factory, so a vendor that overrides resampling accelerates the CQT
@@ -492,7 +492,7 @@ fn gen_hilbert(input: &BackendInput) -> TokenStream2 {
             > for #backend
             {
                 // Hilbert mixes a real forward (r2c) with a complex inverse
-                // (c2c) — its analytic output is complex (ADR-009 §6).
+                // (c2c) — its analytic output is complex.
                 type Plan = ::omnidsp_core::modules::hilbert::OmniHilbertPlan<
                     #float,
                     <#r2c_ty as ::omnidsp_core::traits::dft::DftR2c<#float>>::Plan,
@@ -617,9 +617,9 @@ fn gen_xcorr(input: &BackendInput) -> TokenStream2 {
 ///
 /// For each provided slot the macro reads `self.<field>`; for an omitted slot
 /// it materializes the default floor inline, so an omitting backend needs no
-/// backing field (ADR-011 §3).  It emits the per-module impls plus a
+/// backing field.  It emits the per-module impls plus a
 /// `RawDft` accessor; core's blanket impls
-/// then provide the shaped direct r2c/c2r and bare c2c plans (ADR-011 §2) — the
+/// then provide the shaped direct r2c/c2r and bare c2c plans — the
 /// macro itself emits no `CreatePlan<Dft*Spec>`.
 ///
 /// # Module names for `skip`

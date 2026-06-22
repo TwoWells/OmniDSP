@@ -828,7 +828,7 @@ mod cqt_integration {
     /// reference.  This spec is a single octave, so the multirate path runs no
     /// decimation and reduces to the half-spectrum correlation of the same
     /// frame the reference computes in full — they agree up to negligible
-    /// negative-frequency leakage (dropped upper-half terms, ADR-009 §6).
+    /// negative-frequency leakage (dropped upper-half terms).
     const CQT_LIB_TOL: f64 = 2e-4;
 
     /// Helper: create a multirate CQT plan with real primitives, routing the

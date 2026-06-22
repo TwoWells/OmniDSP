@@ -6,14 +6,14 @@
 //! These wrap [`realfft`](https://crates.io/crates/realfft), the real-FFT
 //! companion to the `rustfft` already backing [`RustDftC2c`](crate::RustDftC2c).
 //! Together they are the **universal real-FFT floor**: a backend with no native
-//! real kernel inherits them (ADR-009 §4).  `realfft` is pure safe Rust, so
+//! real kernel inherits them.  `realfft` is pure safe Rust, so
 //! `#![forbid(unsafe_code)]` still holds.
 //!
 //! Both plans hold the `realfft` scratch behind a [`Mutex`], matching the
 //! `RustFFT` scratch pattern in [`RustDftC2cPlan`](crate::RustDftC2cPlan).  The
 //! `realfft` `process_with_scratch` API consumes its input as working memory, so
 //! the plans take their input by `&mut` and hand the caller's buffer straight to
-//! the kernel — no internal copy (ADR-010 §1).
+//! the kernel — no internal copy.
 //!
 //! Normalization follows the family-level [`DftNorm`] convention via the shared
 //! [`norm_scale`] helper, so module round-trips compose identically across c2c
@@ -95,7 +95,7 @@ pub struct RustDftR2c;
 /// Holds the precomputed transform plus the `realfft` scratch behind a single
 /// [`Mutex`] (keeping `Send + Sync` with allocation-free execution).  The
 /// caller's `&mut` input is handed straight to `realfft`, which consumes it as
-/// working memory (ADR-010 §1) — there is no internal input copy.
+/// working memory — there is no internal input copy.
 pub struct RustDftR2cPlan<T> {
     engine: Box<dyn DftR2cEngine<T>>,
     length: usize,
@@ -151,12 +151,12 @@ pub struct RustDftC2r;
 ///
 /// Holds the precomputed transform plus the `realfft` scratch behind a single
 /// [`Mutex`].  The caller's `&mut` half-spectrum is handed straight to
-/// `realfft`, which consumes it as working memory (ADR-010 §1) — there is no
+/// `realfft`, which consumes it as working memory — there is no
 /// internal input copy.
 ///
 /// # DC / Nyquist convention
 ///
-/// This is the **raw** primitive (ADR-010 §2): it performs **no** DC/Nyquist
+/// This is the **raw** primitive: it performs **no** DC/Nyquist
 /// projection.  A half-spectrum that is the transform of a real signal is
 /// Hermitian — its DC bin (index 0), and, when `length` is even, its Nyquist
 /// bin (index `length / 2`), are purely real — and `realfft` flags non-zero
@@ -320,7 +320,7 @@ mod tests {
     {
         let spec = DftR2cSpec::<T>::new(n, norm).expect("valid r2c spec");
         let plan = DftR2c::<T>::create_plan(&RustDftR2c, &spec).expect("r2c plan");
-        // r2c consumes its input (ADR-010 §1) — hand it a throwaway copy.
+        // r2c consumes its input — hand it a throwaway copy.
         let mut scratch = input.to_vec();
         let mut out = czeros::<T>(n / 2 + 1);
         plan.process(&mut scratch, &mut out).expect("r2c process");
@@ -333,7 +333,7 @@ mod tests {
     {
         let spec = DftC2rSpec::<T>::new(n, norm).expect("valid c2r spec");
         let plan = DftC2r::<T>::create_plan(&RustDftC2r, &spec).expect("c2r plan");
-        // c2r consumes its input (ADR-010 §1) — hand it a throwaway copy.
+        // c2r consumes its input — hand it a throwaway copy.
         let mut scratch = input.to_vec();
         let mut out = vec![T::zero(); n];
         plan.process(&mut scratch, &mut out).expect("c2r process");

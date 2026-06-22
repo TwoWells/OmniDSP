@@ -5,7 +5,7 @@
 //!
 //! Every conformance check is generic over [`ConformanceFloat`], implemented for
 //! `f64` (the tight-tolerance reference width) and `f32` (the primary DSP width,
-//! carrying the looser tolerance — ADR-007 §7).
+//! carrying the looser tolerance).
 //!
 //! All tolerances are **documented shared constants** on the trait, applied with
 //! the mixed absolute/relative rule

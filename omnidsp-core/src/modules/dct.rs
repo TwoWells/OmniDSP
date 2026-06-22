@@ -8,11 +8,11 @@
 //! and type III with optional orthonormal normalization.
 //!
 //! The algorithm uses symmetric extension to convert the real DCT into a
-//! transform of twice the length (ADR-009 §6).  DCT-II runs the real `2N`-point
+//! transform of twice the length.  DCT-II runs the real `2N`-point
 //! symmetric extension through a forward [`DftR2c`] (taking the first `N` of the
 //! `N + 1` half-spectrum bins) and a twiddle multiply; DCT-III builds the
 //! `N + 1`-bin Hermitian half-spectrum and runs it through a [`HermitianC2r`]-
-//! shaped inverse [`DftC2r`] (ADR-010 §2/§5).
+//! shaped inverse [`DftC2r`].
 //!
 //! Internal scratch buffers are behind a [`Mutex`] so that the plan
 //! satisfies `Send + Sync` while taking `&self`.
@@ -39,7 +39,7 @@ use crate::types::DspFloat;
 /// Creates [`OmniDctPlan`]s for specific lengths and DCT types.  The factory
 /// owns the real-DFT factories (`r2c` for DCT-II forward, `c2r` for DCT-III
 /// inverse) and the `VecOps` instance; plans own their sub-plans.  The c2r
-/// factory is Hermitian-shaped internally (ADR-010 §5).
+/// factory is Hermitian-shaped internally.
 #[derive(Debug, Clone)]
 pub struct OmniDct<R, C, V> {
     r2c: R,
@@ -274,12 +274,12 @@ impl<R, C, V> OmniDct<R, C, V> {
     /// Create a plan for a DCT described by `spec`.
     ///
     /// DCT-II runs a forward [`DftR2c`]; DCT-III runs a [`HermitianC2r`]-shaped
-    /// inverse [`DftC2r`] (ADR-010 §2/§5).
+    /// inverse [`DftC2r`].
     ///
     /// # Errors
     ///
     /// Returns an error if DFT plan creation fails.  The length invariant is
-    /// enforced by [`DctSpec::new`] (ADR-006 §4), so it is not re-checked here.
+    /// enforced by [`DctSpec::new`], so it is not re-checked here.
     #[allow(
         clippy::type_complexity,
         reason = "composite real-DFT plan type (r2c forward + Hermitian-shaped c2r \
