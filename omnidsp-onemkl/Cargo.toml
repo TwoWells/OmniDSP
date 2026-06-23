@@ -45,6 +45,10 @@ omnidsp-conformance = { path = "../omnidsp-conformance" }
 name = "dft"
 harness = false
 
+[[bench]]
+name = "vecops"
+harness = false
+
 # Give the rustfft/realfft floor its fair showing in the head-to-head (MKL ships
 # as a precompiled, runtime-dispatched .so; the Rust side is compiled from source
 # here). opt-level 3 + LTO matches the workspace release intent. Not built with

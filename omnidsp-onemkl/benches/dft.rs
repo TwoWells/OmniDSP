@@ -41,7 +41,7 @@
 )]
 
 use std::hint::black_box;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use num_complex::Complex;
 
@@ -52,19 +52,25 @@ use omnidsp_core::types::Direction;
 use omnidsp_onemkl::{OneMklDftC2c, OneMklDftR2c};
 use omnidsp_rustfft::{RustDftC2c, RustDftR2c};
 
-/// Median wall-clock of `f` over `iters` runs, after a short warmup.
-fn median<F: FnMut()>(mut f: F, iters: usize) -> Duration {
-    for _ in 0..5 {
+/// Median per-call time (microseconds) of `f`, timed in batches so small
+/// transforms are not dominated by `Instant` overhead: `batch` calls are timed
+/// together and divided, and the median of `samples` such batches is returned.
+fn per_call_us<F: FnMut()>(mut f: F, n: usize) -> f64 {
+    let batch = (2_000_000 / n.max(1)).clamp(1, 500);
+    let samples = 100;
+    for _ in 0..batch.max(8) {
         f();
     }
-    let mut samples = Vec::with_capacity(iters);
-    for _ in 0..iters {
+    let mut times = Vec::with_capacity(samples);
+    for _ in 0..samples {
         let start = Instant::now();
-        f();
-        samples.push(start.elapsed());
+        for _ in 0..batch {
+            f();
+        }
+        times.push(start.elapsed().as_secs_f64() / batch as f64);
     }
-    samples.sort_unstable();
-    samples[samples.len() / 2]
+    times.sort_by(f64::total_cmp);
+    times[times.len() / 2] * 1e6
 }
 
 /// A deterministic broadband-ish real signal: a few summed sinusoids.
@@ -77,11 +83,6 @@ fn signal(n: usize) -> Vec<f64> {
         .collect()
 }
 
-/// Iterations scaled to the transform size so each row measures a sane span.
-fn iters_for(n: usize) -> usize {
-    (40_000_000 / n).clamp(50, 4000)
-}
-
 /// Median per-call `execute` time (µs) of a complex-forward DFT factory.
 fn time_c2c<F: DftC2c<f64>>(factory: &F, n: usize) -> f64 {
     let spec = DftC2cSpec::new(n, Direction::Forward, DftNorm::Inverse).expect("c2c spec");
@@ -91,14 +92,13 @@ fn time_c2c<F: DftC2c<f64>>(factory: &F, n: usize) -> f64 {
         .map(|v| Complex::new(v, 0.0))
         .collect();
     let mut output = vec![Complex::new(0.0, 0.0); n];
-    let dur = median(
+    per_call_us(
         || {
             plan.execute(black_box(&input), black_box(&mut output))
                 .expect("c2c execute");
         },
-        iters_for(n),
-    );
-    dur.as_secs_f64() * 1e6
+        n,
+    )
 }
 
 /// Median per-call `execute` time (µs) of a real-forward DFT factory.
@@ -110,14 +110,13 @@ fn time_r2c<F: DftR2c<f64>>(factory: &F, n: usize) -> f64 {
     let plan = factory.create_plan(&spec).expect("r2c plan");
     let mut input = signal(n);
     let mut output = vec![Complex::new(0.0, 0.0); n / 2 + 1];
-    let dur = median(
+    per_call_us(
         || {
             plan.execute(black_box(&mut input), black_box(&mut output))
                 .expect("r2c execute");
         },
-        iters_for(n),
-    );
-    dur.as_secs_f64() * 1e6
+        n,
+    )
 }
 
 fn row(n: usize) {
@@ -133,18 +132,23 @@ fn row(n: usize) {
 }
 
 fn main() {
-    println!("DFT per-call execute throughput (f64): rustfft/realfft floor vs Intel oneMKL DFTI");
-    println!("lower µs is better; speedup = rust / mkl (>1 means MKL faster)\n");
+    println!("DFT per-call execute (f64, µs/call): rustfft/realfft floor vs Intel oneMKL DFTI");
+    println!(
+        "target-cpu=native, single-threaded; lower µs is better; speedup = rust / mkl \
+         (>1 means MKL faster)\n"
+    );
     println!(
         "{:>7}  |  {:>9} {:>9} {:>7}  |  {:>9} {:>9} {:>7}",
         "len", "rust c2c", "mkl c2c", "speedup", "rust r2c", "mkl r2c", "speedup",
     );
     println!("{}", "-".repeat(74));
-    for &n in &[1024, 4096, 16384, 65536, 262_144] {
+    for &n in &[
+        256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131_072, 262_144, 524_288, 1_048_576,
+    ] {
         row(n);
     }
     println!("  (non-power-of-two lengths — mixed-radix / Bluestein territory)");
-    for &n in &[1000, 6000, 44100] {
+    for &n in &[1000, 6000, 44100, 48000] {
         row(n);
     }
 }
