@@ -169,6 +169,34 @@ struct OctaveBands<T, RP> {
     decimate_spec: ResampleSpec,
 }
 
+/// Octave index of a bin at `freq` Hz (0 = top), given the top bin frequency
+/// `f_max`.  Bands are contiguous because bins ascend in frequency; an epsilon
+/// nudges exact boundaries downward.  Shared by `build_bands` and
+/// `rematerialize_kernels` so both partition the octaves identically.
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "the octave index is a small non-negative integer exact in f64"
+)]
+fn octave_of(f_max: f64, freq: f64) -> usize {
+    let ratio = (f_max / freq).max(1.0);
+    (ratio.log2() + 1e-9).floor().max(0.0) as usize
+}
+
+/// The ×2 windowed-Kaiser octave decimation spec for a [`CqtSpec`].
+///
+/// Its passband must reach the *next* (lower) octave's top bin — ≈ `f_max/2`
+/// normalized to the current rate, plus an ~8% margin for that bin's bandwidth —
+/// while its stopband is planted at `fs/4` (the new Nyquist).  By self-similarity
+/// this single normalized passband edge serves every ×2 stage.  Shared by
+/// `build_bands` and `rematerialize_kernels` so a re-materialized kernel's
+/// decimator cannot drift from a fresh build's.
+fn octave_decimate_spec(spec: &CqtSpec, f_max: f64) -> Result<ResampleSpec> {
+    let passband_edge = (f_max / (2.0 * spec.sample_rate())) * 1.08;
+    derive_decimate_spec(spec.decimator_quality(), passband_edge)
+}
+
 /// Build the per-octave bands and the shared decimation spec for a [`CqtSpec`].
 ///
 /// This is the kernel/partition construction common to both CQT paths; it does
@@ -195,28 +223,19 @@ where
         .ok_or_else(|| Error::Internal("CqtSpec has no bins".into()))?
         .frequency;
 
-    // Octave index per bin (0 = top); bands are contiguous because bins
-    // ascend in frequency.  An epsilon nudges exact boundaries downward.
-    let octave_of = |freq: f64| -> usize {
-        let ratio = (f_max / freq).max(1.0);
-        (ratio.log2() + 1e-9).floor().max(0.0) as usize
-    };
+    // Octave index per bin (0 = top) via the shared `octave_of`; bands are
+    // contiguous because bins ascend in frequency.
     let octaves_count = bins
         .iter()
-        .map(|b| octave_of(b.frequency))
+        .map(|b| octave_of(f_max, b.frequency))
         .max()
         .unwrap_or(0)
         + 1;
 
-    // The ×2 windowed-Kaiser decimation spec (option A), at the spec's
-    // decimator quality.  Its passband must reach the *next* (lower) octave's top
-    // bin — ≈ `f_max/2` normalized to the current rate, plus an ~8% margin for
-    // that bin's bandwidth — while its stopband is planted at `fs/4` (the new
-    // Nyquist).  By self-similarity this single normalized passband edge serves
-    // every ×2 stage.  The prototype's linear-phase group delay is (proto_len-1)/4
-    // output samples per ×2 stage.
-    let passband_edge = (f_max / (2.0 * sr)) * 1.08;
-    let decimate_spec = derive_decimate_spec(spec.decimator_quality(), passband_edge)?;
+    // The ×2 windowed-Kaiser decimation spec (option A), at the spec's decimator
+    // quality, via the shared `octave_decimate_spec`.  The prototype's
+    // linear-phase group delay is (proto_len-1)/4 output samples per ×2 stage.
+    let decimate_spec = octave_decimate_spec(spec, f_max)?;
     let proto_len = decimate_spec.prototype_filter().len();
     let proto_delay = (proto_len.saturating_sub(1)) as f64 / 4.0;
 
@@ -246,7 +265,7 @@ where
 
         // Bins in this octave (a contiguous slice of the ascending array).
         let band_idx: Vec<usize> = (0..num_bins)
-            .filter(|&i| octave_of(bins[i].frequency) == o)
+            .filter(|&i| octave_of(f_max, bins[i].frequency) == o)
             .collect();
         let out_start = band_idx.first().copied().unwrap_or(0);
 
@@ -530,21 +549,16 @@ where
         .ok_or_else(|| Error::Internal("CqtSpec has no bins".into()))?
         .frequency;
 
-    // The octave partition and decimator recipe are derived exactly as
-    // `build_bands` does, so the re-materialized kernels match a fresh build.
-    let octave_of = |freq: f64| -> usize {
-        let ratio = (f_max / freq).max(1.0);
-        (ratio.log2() + 1e-9).floor().max(0.0) as usize
-    };
-    let passband_edge = (f_max / (2.0 * sr)) * 1.08;
-    let decimate_spec = derive_decimate_spec(spec.decimator_quality(), passband_edge)?;
+    // The octave partition and decimator recipe are derived by the same shared
+    // helpers as `build_bands`, so the re-materialized kernels match a fresh build.
+    let decimate_spec = octave_decimate_spec(spec, f_max)?;
     let decim_coeffs: Vec<f64> = decimate_spec.prototype_filter().to_vec();
 
     let mut scale = 1.0_f64; // 1 / 2^o
     for (o, band) in octaves.iter_mut().enumerate() {
         let rate_o = sr * scale;
         let band_idx: Vec<usize> = (0..num_bins)
-            .filter(|&i| octave_of(bins[i].frequency) == o)
+            .filter(|&i| octave_of(f_max, bins[i].frequency) == o)
             .collect();
         // The streaming path is always newest-anchored.
         band.kernels = build_octave_kernels::<T>(
