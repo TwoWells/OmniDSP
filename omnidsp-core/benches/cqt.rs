@@ -5,9 +5,11 @@
 //! [`SingleFftCqt`] baseline, across frequency ranges of growing octave span.
 //!
 //! Run with `make bench` (or `cargo bench -p omnidsp-core --features bench`).
-//! Prints, per range, the median per-frame `process` time of each path and the
-//! speedup.  Both run on the `RustBackend` floor (`RustFFT` / `realfft` +
-//! `ScalarVecOps`) — the same primitives the WASM demo ships.
+//! Prints, per range, the median per-frame `execute` time of each path and the
+//! speedup.  Both run on the same primitives `RustBackend` ships — `RustFFT` /
+//! `realfft` + `ScalarVecOps` — assembled here as a local `BenchBackend` so the
+//! bench (in `omnidsp-core`) need not reach the facade crate.  These are the same
+//! primitives the WASM demo ships.
 //!
 //! This is a coarse wall-clock harness (warmup + median), not a statistical
 //! benchmark; it is meant to confirm the order-of-magnitude compute argument,
@@ -31,15 +33,68 @@
 )]
 
 use std::hint::black_box;
+use std::ops::{AddAssign, MulAssign};
 use std::time::{Duration, Instant};
 
 use num_complex::Complex;
+use omnidsp_core::create::CreateProc;
 use omnidsp_core::design::cqt;
+use omnidsp_core::design::resample::ResampleSpec;
+use omnidsp_core::dispatch::{Backend, RawDft};
+use omnidsp_core::error::Result;
 use omnidsp_core::modules::cqt::{OmniCqt, SingleFftCqt};
-use omnidsp_core::modules::resample::OmniResample;
+use omnidsp_core::modules::resample::{OmniResample, OmniResampleProcessor};
 use omnidsp_core::scalar::ScalarVecOps;
+use omnidsp_core::traits::vecops::VecOps;
+use omnidsp_core::types::DspFloat;
 use omnidsp_core::window::Window;
-use omnidsp_rustfft::{RustDftC2c, RustDftR2c};
+use omnidsp_rustfft::{RustDftC2c, RustDftC2r, RustDftR2c};
+
+/// A minimal `RustFFT`-backed backend for the benchmark: the realfft DFT family
+/// plus scalar `VecOps`, routing resampling through [`OmniResample`].
+///
+/// The same primitives `RustBackend` ships, assembled locally so the bench need
+/// not depend on the facade crate.  Only the resampler-factory role is exercised
+/// here — the multirate CQT routes its per-octave ×2 decimator through it; the
+/// DFT family satisfies the [`Backend`] contract, while the measured FFTs run
+/// through the `OmniCqt` / `SingleFftCqt` factories' own `RustFFT` plans.
+#[derive(Debug, Clone)]
+struct BenchBackend;
+
+impl RawDft<f64> for BenchBackend {
+    type C2c = RustDftC2c;
+    type R2c = RustDftR2c;
+    type C2r = RustDftC2r;
+
+    fn raw_dftc2c(&self) -> RustDftC2c {
+        RustDftC2c
+    }
+    fn raw_dftr2c(&self) -> RustDftR2c {
+        RustDftR2c
+    }
+    fn raw_dftc2r(&self) -> RustDftC2r {
+        RustDftC2r
+    }
+}
+
+// Its own scalar-default `VecOps` provider (the same scalar ops `ScalarVecOps`
+// uses), so it satisfies the foundational `Backend<f64>` contract.
+impl VecOps<f64> for BenchBackend {}
+
+impl CreateProc<ResampleSpec> for BenchBackend {
+    type Proc<T>
+        = OmniResampleProcessor<T>
+    where
+        Self: Backend<T>;
+
+    fn create_proc<T>(&self, spec: &ResampleSpec) -> Result<Self::Proc<T>>
+    where
+        Self: Backend<T>,
+        T: DspFloat + AddAssign + MulAssign,
+    {
+        OmniResample::new().create_proc::<T>(spec)
+    }
+}
 
 /// Median wall-clock of `f` over `iters` runs, after a short warmup.
 fn median<F: FnMut()>(mut f: F, iters: usize) -> Duration {
@@ -67,15 +122,15 @@ fn frame(n: usize) -> Vec<f64> {
 }
 
 fn run(label: &str, sr: f64, fmin: f64, fmax: f64, bpo: u32) {
-    let spec = cqt::design::<f64>(sr, fmin, fmax, bpo, &Window::Hann).expect("cqt design");
+    let spec = cqt::design(sr, fmin, fmax, bpo, &Window::Hann).expect("cqt design");
     let n = spec.fft_length();
     let bins = spec.num_bins();
 
     let naive = SingleFftCqt::new(RustDftC2c, ScalarVecOps)
-        .create_plan(&spec)
+        .create_plan::<f64>(&spec)
         .expect("single-fft plan");
     let multi = OmniCqt::new(RustDftR2c, ScalarVecOps)
-        .create_plan(&spec, &OmniResample::new(ScalarVecOps))
+        .create_plan::<f64, _>(&spec, &BenchBackend)
         .expect("multirate plan");
     let octaves = multi.num_octaves();
 
@@ -89,16 +144,16 @@ fn run(label: &str, sr: f64, fmin: f64, fmax: f64, bpo: u32) {
     let t_naive = median(
         || {
             naive
-                .process(black_box(&input), black_box(&mut out_naive))
-                .expect("naive process");
+                .execute(black_box(&input), black_box(&mut out_naive))
+                .expect("naive execute");
         },
         iters,
     );
     let t_multi = median(
         || {
             multi
-                .process(black_box(&input), black_box(&mut out_multi))
-                .expect("multirate process");
+                .execute(black_box(&input), black_box(&mut out_multi))
+                .expect("multirate execute");
         },
         iters,
     );
