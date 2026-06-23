@@ -106,10 +106,12 @@ impl<B> OmniDSP<B> {
 
     /// The backend, as the [`VecOps`] provider — the seam for direct vector math.
     ///
-    /// The omni modules route their glue through the backend's `VecOps`
-    /// transitively (choosing a tuned backend accelerates the whole pipeline
-    /// with no extra API).  For *custom* accelerated glue, reach the same tuned
-    /// vector math directly: `dsp.vecops().dot(&a, &b)`.
+    /// The omni modules route their frequency-domain glue through the backend's
+    /// `VecOps` transitively (choosing a tuned backend accelerates the
+    /// bulk-transform modules with no extra API; the time-domain leaves — IIR,
+    /// resampling — are native-or-scalar, not VecOps-routed).  For *custom*
+    /// accelerated glue, reach the same tuned vector math directly:
+    /// `dsp.vecops().dot(&a, &b)`.
     #[must_use]
     pub const fn vecops(&self) -> &B {
         &self.backend

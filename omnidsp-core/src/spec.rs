@@ -178,7 +178,16 @@
 //!   never a per-sample FFI penalty.
 //! - **Modules** — convolution, FIR, DCT, Hilbert, cross-correlation, window,
 //!   CQT.  Realized over the backend's primitives (a bulk transform plus a
-//!   whole-buffer vector pass), so a tuned backend accelerates them for free.
+//!   whole-buffer vector pass), so a tuned backend accelerates the
+//!   frequency-domain path for free.  Convolution and FIR **straddle**: their
+//!   scaling form (FFT / overlap-save) composes and accelerates, but for a small
+//!   kernel — the `Auto` default at short lengths — they drop to a correct
+//!   in-core scalar fast-path, because pushing a tiny filter through an FFT is
+//!   wasteful.  That fast-path neither accelerates nor regresses on a vendor
+//!   backend; it has no per-sample FFI crossing to penalize.  So the honest
+//!   pitch is *frequency-domain modules accelerate for free; time-domain leaves
+//!   (IIR, resampling) and small-kernel direct paths are native-or-correct-scalar,
+//!   never a regression* — not "every module everywhere."
 //! - **Composers** — operations that route a *module* sub-plan.  None today; a
 //!   module that merely routes a *leaf* (the multirate CQT routes the resampler)
 //!   is still a module.
