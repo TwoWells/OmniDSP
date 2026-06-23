@@ -7,7 +7,7 @@
 #   make release-major   # 0.1.0 -> 1.0.0
 #   make release V=0.2.0 # explicit version
 
-.PHONY: bench build-release wasm-check wasm-pack demo check deny doc gen-cqt-reference gen-cqt-process-reference gen-cqt-librosa-reference gen-fir-reference gen-fir-lfilter-reference gen-remez-reference gen-hilbert-reference gen-iir-reference gen-iir-sosfilt-reference gen-resample-reference gen-resample-poly-reference gen-xcorr-reference machete mutants setup setup-hooks setup-tools test release release-patch release-minor release-major publish tag-current
+.PHONY: bench build-release wasm-check wasm-pack demo check deny doc onemkl-check gen-cqt-reference gen-cqt-process-reference gen-cqt-librosa-reference gen-fir-reference gen-fir-lfilter-reference gen-remez-reference gen-hilbert-reference gen-iir-reference gen-iir-sosfilt-reference gen-resample-reference gen-resample-poly-reference gen-xcorr-reference machete mutants setup setup-hooks setup-tools test release release-patch release-minor release-major publish tag-current
 
 # Get current version from Cargo.toml
 CURRENT_VERSION := $(shell grep '^version = ' omnidsp-core/Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
@@ -101,6 +101,26 @@ deny:
 
 doc:
 	@cargo doc --no-deps --document-private-items
+
+# --- Intel oneMKL vendor gate ---
+
+# Build, lint, and test the Intel oneMKL vendor crates. Requires Intel oneMKL
+# (libmkl_rt) at link time, so it runs ONLY in the `ghcr.io/twowells/omnidsp-ci`
+# image (MKLROOT preset) or on a host with oneMKL installed — the floor
+# `make check` deliberately excludes these crates (it cannot link MKL). The
+# crates are workspace-excluded, so they build by manifest path, not `-p`
+# (mirrors the wasm targets). The conformance one-liner inside
+# `omnidsp-onemkl/tests/` holds the backend to the same golden vectors as the
+# floor, so a vendor cannot silently drift.
+onemkl-check:
+	@cargo fmt --manifest-path omnidsp-onemkl-sys/Cargo.toml -- --check
+	@cargo fmt --manifest-path omnidsp-onemkl/Cargo.toml -- --check
+	@cargo clippy --manifest-path omnidsp-onemkl-sys/Cargo.toml --all-targets -- -D warnings
+	@cargo clippy --manifest-path omnidsp-onemkl/Cargo.toml --all-targets -- -D warnings
+	@cargo nextest run --manifest-path omnidsp-onemkl-sys/Cargo.toml --no-fail-fast --no-tests=pass
+	@cargo nextest run --manifest-path omnidsp-onemkl/Cargo.toml --no-fail-fast --no-tests=pass
+	@cargo test --manifest-path omnidsp-onemkl/Cargo.toml --doc
+	@echo "onemkl-check: oneMKL vendor crates build, lint, and pass conformance"
 
 # --- WASM floor (demo prerequisite) ---
 

@@ -12,8 +12,19 @@ members = [
 # lint workspace: its generated glue does not meet the library's
 # pedantic/nursery/forbid(unsafe_code) bar, and excluding it keeps `make check`
 # clean and fast. Build it via `make wasm-pack`.
+#
+# The Intel oneMKL vendor crates are excluded for two reasons: (1) they require
+# `unsafe` (FFI), which cannot live under the workspace's inherited
+# `forbid(unsafe_code)` / `[lints] workspace = true`, so each carries its own
+# `[lints]`; (2) they link `libmkl_rt`, which is absent on the floor — keeping
+# them out of the `--workspace` set means `make check` stays green without MKL.
+# They build and test only in the Intel CI image (`make onemkl-check`), and
+# `omnidsp` reaches `omnidsp-onemkl` as an optional path dependency behind the
+# `onemkl` feature (a path dep needs no workspace membership).
 exclude = [
     "omnidsp-wasm",
+    "omnidsp-onemkl-sys",
+    "omnidsp-onemkl",
 ]
 
 [workspace.lints.rust]

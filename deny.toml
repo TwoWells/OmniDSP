@@ -35,6 +35,8 @@ exceptions = [
     { name = "omnidsp", allow = ["AGPL-3.0-or-later"] },
     { name = "omnidsp-testdata", allow = ["AGPL-3.0-or-later"] },
     { name = "omnidsp-conformance", allow = ["AGPL-3.0-or-later"] },
+    { name = "omnidsp-onemkl-sys", allow = ["AGPL-3.0-or-later"] },
+    { name = "omnidsp-onemkl", allow = ["AGPL-3.0-or-later"] },
 ]
 
 [licenses.private]
