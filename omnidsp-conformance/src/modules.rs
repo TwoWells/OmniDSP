@@ -15,7 +15,7 @@ use omnidsp_core::create::{CreatePlan, CreateProc};
 use omnidsp_core::design::cqt::{self, CqtSpec, DecimatorQuality};
 use omnidsp_core::design::resample::ResampleSpec;
 use omnidsp_core::dispatch::Backend;
-use omnidsp_core::error::Result;
+use omnidsp_core::error::{Error, Result};
 use omnidsp_core::modules::cqt::{CqtPlan, CqtProcessor, OmniCqt};
 use omnidsp_core::modules::hilbert::{HilbertPlan, HilbertSpec};
 use omnidsp_core::modules::resample::ResampleProcessor;
@@ -26,6 +26,7 @@ use omnidsp_core::traits::dct::{DctNorm, DctPlan, DctSpec, DctType};
 use omnidsp_core::traits::dft::{DftNorm, DftR2c, DftR2cPlan, DftR2cSpec};
 use omnidsp_core::traits::fir::{FirFilter, FirMeta, FirProcessor, FirSpec, FirStrategy};
 use omnidsp_core::traits::iir::{IirProcessor, IirSpec};
+use omnidsp_core::traits::reconfigure::Reconfigure;
 use omnidsp_core::traits::vecops::VecOps;
 use omnidsp_core::types::{BiquadSection, DspFloat};
 use omnidsp_core::window::Window;
@@ -35,7 +36,9 @@ use omnidsp_testdata::{
     iir_sosfilt_scipy as sos, resample_poly_scipy as rp, xcorr_scipy as xc,
 };
 
-use crate::support::{ConformanceFloat, assert_complex, assert_magnitude, assert_real, to_vec};
+use crate::support::{
+    ConformanceFloat, assert_complex, assert_magnitude, assert_real, assert_real_t, to_vec,
+};
 
 /// Conformance for convolution ([`OmniConv`](omnidsp_core::modules::conv::OmniConv)).
 ///
@@ -1132,6 +1135,225 @@ where
             T::WIDTH,
             a,
             e,
+        );
+    }
+}
+
+/// Conformance for live FIR retuning
+/// ([`Reconfigure<FirFilter>`](omnidsp_core::traits::reconfigure::Reconfigure)).
+///
+/// The hard contract is **behavioural**: after `reconfigure(&filter)` succeeds,
+/// subsequent processing uses `filter`.  The in-place, state-preserving update is
+/// quality-of-implementation, not contract, so the check verifies the behaviour
+/// backend-agnostically via **zero-state equivalence** — a processor built with
+/// taps A and reconfigured to taps B *before any input* must process identically
+/// to a fresh processor built with taps B (both start from zero state, so only
+/// the coefficients can differ).  The contracted rejection is also checked: a
+/// tap-count change resizes the delay line / FFT block, so it must return
+/// [`StructuralMismatch`](omnidsp_core::error::Error::StructuralMismatch).
+///
+/// # Panics
+///
+/// Panics if the reconfigured output deviates from the fresh-built reference
+/// beyond [`ConformanceFloat::FIR_TOL`], or if a tap-count change is not rejected
+/// with `StructuralMismatch`.
+pub fn check_reconfigure_fir<B, T>(b: &B)
+where
+    T: ConformanceFloat + std::ops::MulAssign,
+    B: CreateProc<FirSpec> + Backend<T>,
+    B::Proc<T>: FirProcessor<T> + Reconfigure<FirFilter>,
+{
+    let mk = |taps: &[f64]| {
+        FirSpec::new(
+            FirFilter::new(taps.to_vec(), FirMeta::unknown()).expect("valid fir filter"),
+            FirStrategy::Auto,
+        )
+    };
+    let taps_a = [0.25, 0.5, 0.25];
+    let taps_b = [0.1, -0.2, 0.7];
+    let input = to_vec::<T>(&[1.0, -0.5, 2.0, 0.0, 1.5, -1.0, 0.5, 3.0]);
+
+    // Zero-state equivalence: build with A, reconfigure to B before any input.
+    let mut reconf = b.create_proc::<T>(&mk(&taps_a)).expect("fir processor");
+    reconf
+        .reconfigure(
+            &FirFilter::new(taps_b.to_vec(), FirMeta::unknown()).expect("valid fir filter"),
+        )
+        .expect("fir reconfigure (same tap count) must succeed");
+    let mut fresh = b.create_proc::<T>(&mk(&taps_b)).expect("fir processor");
+
+    let mut out_reconf = vec![T::zero(); input.len()];
+    let mut out_fresh = vec![T::zero(); input.len()];
+    reconf
+        .process(&input, &mut out_reconf)
+        .expect("fir process");
+    fresh.process(&input, &mut out_fresh).expect("fir process");
+    assert_real_t(&out_reconf, &out_fresh, T::FIR_TOL, "fir reconfigure apply");
+
+    // Structural mismatch: a different tap count must be rejected.
+    let mut proc = b.create_proc::<T>(&mk(&taps_a)).expect("fir processor");
+    let four =
+        FirFilter::new(vec![0.1, 0.2, 0.3, 0.4], FirMeta::unknown()).expect("valid fir filter");
+    let err = proc
+        .reconfigure(&four)
+        .expect_err("fir tap-count change must error");
+    assert!(
+        matches!(err, Error::StructuralMismatch(_)),
+        "fir [{}]: tap-count change must be StructuralMismatch, got {err:?}",
+        T::WIDTH,
+    );
+}
+
+/// Conformance for live IIR retuning
+/// ([`Reconfigure<[BiquadSection<f64>]>`](omnidsp_core::traits::reconfigure::Reconfigure)).
+///
+/// Same contract and **zero-state equivalence** check as [`check_reconfigure_fir`]:
+/// a cascade built with sections A and reconfigured to same-count sections B
+/// before any input must process identically to a fresh cascade built with B.
+/// A section-count change resizes the per-section state, so it must return
+/// [`StructuralMismatch`](omnidsp_core::error::Error::StructuralMismatch).
+///
+/// # Panics
+///
+/// Panics if the reconfigured output deviates from the fresh-built reference
+/// beyond [`ConformanceFloat::IIR_TOL`], or if a section-count change is not
+/// rejected with `StructuralMismatch`.
+pub fn check_reconfigure_iir<B, T>(b: &B)
+where
+    T: ConformanceFloat + std::ops::MulAssign,
+    B: CreateProc<IirSpec> + Backend<T>,
+    B::Proc<T>: IirProcessor<T> + Reconfigure<[BiquadSection<f64>]>,
+{
+    let sections_a = vec![BiquadSection {
+        b0: 1.0,
+        b1: 0.0,
+        b2: 0.0,
+        a1: 0.0,
+        a2: 0.0,
+    }];
+    let sections_b = vec![BiquadSection {
+        b0: 0.5,
+        b1: 0.25,
+        b2: 0.1,
+        a1: -0.2,
+        a2: 0.05,
+    }];
+    let input = to_vec::<T>(&[1.0, -0.5, 2.0, 0.0, 1.5, -1.0, 0.5, 3.0]);
+
+    let mut reconf = b
+        .create_proc::<T>(&IirSpec::new(sections_a.clone()).expect("valid iir spec"))
+        .expect("iir processor");
+    reconf
+        .reconfigure(sections_b.as_slice())
+        .expect("iir reconfigure (same section count) must succeed");
+    let mut fresh = b
+        .create_proc::<T>(&IirSpec::new(sections_b.clone()).expect("valid iir spec"))
+        .expect("iir processor");
+
+    let mut out_reconf = vec![T::zero(); input.len()];
+    let mut out_fresh = vec![T::zero(); input.len()];
+    reconf
+        .process(&input, &mut out_reconf)
+        .expect("iir process");
+    fresh.process(&input, &mut out_fresh).expect("iir process");
+    assert_real_t(&out_reconf, &out_fresh, T::IIR_TOL, "iir reconfigure apply");
+
+    // Structural mismatch: a different section count must be rejected.
+    let mut proc = b
+        .create_proc::<T>(&IirSpec::new(sections_a).expect("valid iir spec"))
+        .expect("iir processor");
+    let unity = BiquadSection {
+        b0: 1.0,
+        b1: 0.0,
+        b2: 0.0,
+        a1: 0.0,
+        a2: 0.0,
+    };
+    let two = [unity, unity];
+    let err = proc
+        .reconfigure(two.as_slice())
+        .expect_err("iir section-count change must error");
+    assert!(
+        matches!(err, Error::StructuralMismatch(_)),
+        "iir [{}]: section-count change must be StructuralMismatch, got {err:?}",
+        T::WIDTH,
+    );
+}
+
+/// Conformance for live streaming-CQT window retuning
+/// ([`Reconfigure<Window>`](omnidsp_core::traits::reconfigure::Reconfigure)).
+///
+/// The analysis window is orthogonal to the kernel sizes, so a window swap never
+/// changes the layout and (unlike FIR/IIR) has no `StructuralMismatch` case; only
+/// the **zero-state equivalence** of the behavioural apply is checked — a
+/// processor built with window A and reconfigured to window B before any input
+/// must produce the same columns as a fresh processor built with window B.  This
+/// also guards the kernel re-materialization against the create-path build:
+/// divergence would surface here.
+///
+/// # Panics
+///
+/// Panics if the reconfigured columns deviate from the fresh-built reference
+/// beyond [`ConformanceFloat::CQT_TOL`], or if the column cadence differs.
+pub fn check_reconfigure_cqt_stream<B, T>(b: &B)
+where
+    T: ConformanceFloat + std::ops::MulAssign,
+    B: CreateProc<CqtSpec> + Backend<T>,
+    B::Proc<T>: CqtProcessor<T> + Reconfigure<Window>,
+{
+    let design = |w: &Window| cqt::design(16000.0, 125.0, 1000.0, 12, w).expect("valid cqt design");
+
+    let mut reconf = b
+        .create_proc::<T>(&design(&Window::Hann))
+        .expect("cqt stream processor");
+    reconf
+        .reconfigure(&Window::Hamming)
+        .expect("cqt window swap must succeed");
+    let mut fresh = b
+        .create_proc::<T>(&design(&Window::Hamming))
+        .expect("cqt stream processor");
+
+    let spec = design(&Window::Hamming);
+    let nb = reconf.num_bins();
+    let zero = Complex::new(T::zero(), T::zero());
+    let fft = spec.fft_length();
+    let hop = spec.hop_length().max(1);
+    let sr = spec.sample_rate();
+    let freqs: Vec<f64> = reconf.bin_frequencies().to_vec();
+    let total = 3 * fft + 6 * hop;
+    let signal: Vec<T> = (0..total)
+        .map(|i| {
+            let s: f64 = freqs
+                .iter()
+                .map(|&f| (std::f64::consts::TAU * f * i as f64 / sr).sin())
+                .sum();
+            T::lit(s)
+        })
+        .collect();
+
+    let mut out_reconf = vec![zero; reconf.max_output_columns(total) * nb];
+    let mut out_fresh = vec![zero; fresh.max_output_columns(total) * nb];
+    let cols_reconf = reconf
+        .process(&signal, &mut out_reconf)
+        .expect("cqt stream process");
+    let cols_fresh = fresh
+        .process(&signal, &mut out_fresh)
+        .expect("cqt stream process");
+    assert_eq!(
+        cols_reconf,
+        cols_fresh,
+        "cqt reconfigure [{}]: reconfigured column cadence must match fresh",
+        T::WIDTH,
+    );
+    for (k, (a, e)) in out_reconf[..cols_reconf * nb]
+        .iter()
+        .zip(&out_fresh)
+        .enumerate()
+    {
+        assert!(
+            (*a - *e).norm() <= T::CQT_TOL * (T::one() + e.norm()),
+            "cqt reconfigure [{}]: index {k}: reconfigured {a:?} vs fresh {e:?}",
+            T::WIDTH,
         );
     }
 }

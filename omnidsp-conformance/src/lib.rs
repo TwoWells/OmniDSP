@@ -70,12 +70,16 @@ use omnidsp_core::traits::dct::{DctPlan, DctSpec};
 use omnidsp_core::traits::dft::{
     DftC2cPlan, DftC2cSpec, DftC2rPlan, DftC2rSpec, DftR2cPlan, DftR2cSpec,
 };
-use omnidsp_core::traits::fir::{FirProcessor, FirSpec};
+use omnidsp_core::traits::fir::{FirFilter, FirProcessor, FirSpec};
 use omnidsp_core::traits::iir::{IirProcessor, IirSpec};
+use omnidsp_core::traits::reconfigure::Reconfigure;
+use omnidsp_core::types::BiquadSection;
+use omnidsp_core::window::Window;
 
 pub use modules::{
     check_conv, check_cqt, check_cqt_stream, check_dct, check_fir, check_hilbert, check_iir,
-    check_resample, check_xcorr,
+    check_reconfigure_cqt_stream, check_reconfigure_fir, check_reconfigure_iir, check_resample,
+    check_xcorr,
 };
 pub use primitives::{check_dft_c2c, check_dft_c2r, check_dft_r2c, check_dft_real_round_trip};
 pub use support::ConformanceFloat;
@@ -95,14 +99,14 @@ pub trait BackendUnderTest<T>:
     + CreatePlan<DftR2cSpec, Plan<T>: DftR2cPlan<T>>
     + CreatePlan<DftC2rSpec, Plan<T>: DftC2rPlan<T>>
     + CreatePlan<ConvSpec, Plan<T>: ConvPlan<T>>
-    + CreateProc<FirSpec, Proc<T>: FirProcessor<T>>
-    + CreateProc<IirSpec, Proc<T>: IirProcessor<T>>
+    + CreateProc<FirSpec, Proc<T>: FirProcessor<T> + Reconfigure<FirFilter>>
+    + CreateProc<IirSpec, Proc<T>: IirProcessor<T> + Reconfigure<[BiquadSection<f64>]>>
     + CreatePlan<DctSpec, Plan<T>: DctPlan<T>>
     + CreatePlan<HilbertSpec, Plan<T>: HilbertPlan<T>>
     + CreatePlan<CrossCorrSpec, Plan<T>: CrossCorrPlan<T>>
     + CreateProc<ResampleSpec, Proc<T>: ResampleProcessor<T>>
     + CreatePlan<CqtSpec, Plan<T>: CqtPlan<T>>
-    + CreateProc<CqtSpec, Proc<T>: CqtProcessor<T>>
+    + CreateProc<CqtSpec, Proc<T>: CqtProcessor<T> + Reconfigure<Window>>
 where
     T: omnidsp_core::types::DspFloat + std::ops::AddAssign + std::ops::MulAssign,
 {
@@ -116,14 +120,14 @@ where
         + CreatePlan<DftR2cSpec, Plan<T>: DftR2cPlan<T>>
         + CreatePlan<DftC2rSpec, Plan<T>: DftC2rPlan<T>>
         + CreatePlan<ConvSpec, Plan<T>: ConvPlan<T>>
-        + CreateProc<FirSpec, Proc<T>: FirProcessor<T>>
-        + CreateProc<IirSpec, Proc<T>: IirProcessor<T>>
+        + CreateProc<FirSpec, Proc<T>: FirProcessor<T> + Reconfigure<FirFilter>>
+        + CreateProc<IirSpec, Proc<T>: IirProcessor<T> + Reconfigure<[BiquadSection<f64>]>>
         + CreatePlan<DctSpec, Plan<T>: DctPlan<T>>
         + CreatePlan<HilbertSpec, Plan<T>: HilbertPlan<T>>
         + CreatePlan<CrossCorrSpec, Plan<T>: CrossCorrPlan<T>>
         + CreateProc<ResampleSpec, Proc<T>: ResampleProcessor<T>>
         + CreatePlan<CqtSpec, Plan<T>: CqtPlan<T>>
-        + CreateProc<CqtSpec, Proc<T>: CqtProcessor<T>>,
+        + CreateProc<CqtSpec, Proc<T>: CqtProcessor<T> + Reconfigure<Window>>,
 {
 }
 
@@ -147,6 +151,9 @@ where
     modules::check_resample::<B, T>(b);
     modules::check_cqt::<B, T>(b);
     modules::check_cqt_stream::<B, T>(b);
+    modules::check_reconfigure_fir::<B, T>(b);
+    modules::check_reconfigure_iir::<B, T>(b);
+    modules::check_reconfigure_cqt_stream::<B, T>(b);
 }
 
 /// Run the full conformance suite against `b` over both `f32` and `f64`.
