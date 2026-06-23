@@ -170,8 +170,21 @@ async function bootstrap(): Promise<void> {
       .catch(showError);
   });
   minFreqSel.addEventListener("change", () => rebuild(Number(minFreqSel.value)));
-  // The kernel window is baked into the spec, so changing it rebuilds the engine.
-  kernelSel.addEventListener("change", () => rebuild(Number(minFreqSel.value)));
+  // The window is orthogonal to the bin layout, so swapping it is a glitch-free
+  // in-place reconfigure: keep the engine, audio, and spectrogram history, and
+  // just re-materialize the analysis kernels for the new window. (The low edge,
+  // by contrast, changes the bin set, so it still rebuilds.)
+  kernelSel.addEventListener("change", () => {
+    if (!active) {
+      rebuild(Number(minFreqSel.value));
+      return;
+    }
+    try {
+      active.engine.reconfigure_window(kernelSel.value);
+    } catch (err) {
+      showError(err);
+    }
+  });
   spanSel.addEventListener("change", () => {
     targetSec = Number(spanSel.value);
     updatePoolK(lastCps);

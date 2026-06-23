@@ -29,7 +29,8 @@ use num_traits::Float;
 use crate::error::{Error, Result};
 use crate::hermitian::{HermitianC2r, HermitianC2rPlan};
 use crate::traits::dft::{DftC2r, DftC2rPlan, DftC2rSpec, DftNorm, DftR2c, DftR2cPlan, DftR2cSpec};
-use crate::traits::fir::{FirProcessor, FirSpec, FirStrategy};
+use crate::traits::fir::{FirFilter, FirProcessor, FirSpec, FirStrategy};
+use crate::traits::reconfigure::Reconfigure;
 use crate::traits::vecops::VecOps;
 use crate::types::DspFloat;
 
@@ -365,6 +366,72 @@ where
             output_pos += new_samples;
         }
 
+        Ok(())
+    }
+}
+
+// ─── Reconfigure ───────────────────────────────────────────────────────
+
+impl<T, RP, CP, V> Reconfigure<FirFilter> for OmniFirProcessor<T, RP, CP, V>
+where
+    T: Float + AddAssign + MulAssign + Send + Sync,
+    RP: DftR2cPlan<T>,
+    CP: DftC2rPlan<T>,
+    V: VecOps<T>,
+{
+    /// Retune the filter taps in place from `filter`, preserving the delay-line /
+    /// overlap state so the stream continues uninterrupted.
+    ///
+    /// The tap count is structural: it sizes the delay line (direct) and the FFT
+    /// block (overlap-save).  A `filter` whose tap count differs from the current
+    /// one would change that layout, so it is rejected with
+    /// [`Error::StructuralMismatch`] — the caller should rebuild the processor.
+    /// When the tap count matches, only the coefficient *values* change: the
+    /// direct path re-reverses the casts in place, and the overlap-save path
+    /// re-transforms the new taps to refresh the frequency-domain coefficients,
+    /// both leaving the running state untouched.
+    fn reconfigure(&mut self, filter: &FirFilter) -> Result<()> {
+        let new_taps = filter.coefficients().len();
+        let cur_taps = self.tail_len() + 1;
+        if new_taps != cur_taps {
+            return Err(Error::StructuralMismatch(format!(
+                "FIR tap count changed ({cur_taps} → {new_taps}); a different length resizes \
+                 the delay line / FFT block — rebuild the processor"
+            )));
+        }
+
+        // Cast the new f64 design coefficients to the operation's precision `T`,
+        // exactly as `create_proc` does.
+        let coeffs_t: Vec<T> = filter
+            .coefficients()
+            .iter()
+            .map(|&c| {
+                T::from(c)
+                    .ok_or_else(|| Error::Internal("cannot represent FIR coefficient in T".into()))
+            })
+            .collect::<Result<_>>()?;
+
+        match &mut self.inner {
+            PlanInner::Direct { state } => {
+                // Coefficients are stored reversed (oldest-first MAC); re-reverse
+                // the new casts in place.  `delay` / `write_pos` are preserved.
+                state.coeffs.clear();
+                state.coeffs.extend(coeffs_t.iter().rev().copied());
+            }
+            PlanInner::OverlapSave { state } => {
+                // Re-derive the half-spectrum filter coefficients `H[k]` from the
+                // new taps via the existing forward plan (the block size is fixed
+                // by the unchanged tap count).  The overlap buffer and plans are
+                // preserved.
+                for x in &mut state.buf_time {
+                    *x = T::zero();
+                }
+                state.buf_time[..new_taps].copy_from_slice(&coeffs_t);
+                state
+                    .fwd
+                    .execute(&mut state.buf_time, &mut state.freq_coeffs)?;
+            }
+        }
         Ok(())
     }
 }
@@ -925,6 +992,128 @@ mod tests {
             1e-10,
             "HP30 Hann lfilter",
         );
+    }
+
+    // ── Reconfigure (live tap retuning) ───────────────────────────────
+
+    /// A straight scalar FIR reference that keeps its own delay line, so the
+    /// taps can be swapped *in place* mid-stream while state is preserved — the
+    /// behavioural contract the omni `reconfigure` must match.
+    struct ScalarFirRef {
+        taps: Vec<f64>,
+        delay: Vec<f64>, // newest-first history, length == taps.len()
+    }
+
+    impl ScalarFirRef {
+        fn new(taps: Vec<f64>) -> Self {
+            let n = taps.len();
+            Self {
+                taps,
+                delay: vec![0.0; n],
+            }
+        }
+
+        /// Swap the taps in place (must keep the same length), preserving the
+        /// delay line — the reference for an in-place reconfigure.
+        fn reconfigure(&mut self, taps: Vec<f64>) {
+            assert_eq!(
+                taps.len(),
+                self.taps.len(),
+                "reference reconfigure must keep the tap count"
+            );
+            self.taps = taps;
+        }
+
+        fn process(&mut self, input: &[f64], output: &mut [f64]) {
+            for (&x, out) in input.iter().zip(output.iter_mut()) {
+                self.delay.rotate_right(1);
+                self.delay[0] = x;
+                *out = self
+                    .taps
+                    .iter()
+                    .zip(&self.delay)
+                    .map(|(&t, &d)| t * d)
+                    .sum();
+            }
+        }
+    }
+
+    /// Mid-stream reconfigure: after the swap the output must reflect the new
+    /// taps applied to the *preserved* delay line, matching the in-place scalar
+    /// reference (not a fresh processor with no history).
+    fn test_reconfigure_mid_stream(strategy: FirStrategy) {
+        let factory = make_factory();
+        let taps_a = vec![0.2, 0.3, 0.3, 0.2, 0.1];
+        let taps_b = vec![1.0, -0.5, 0.25, -0.1, 0.05];
+
+        let spec_a = fir_spec(taps_a.clone(), strategy);
+        let mut plan = factory.create_proc(&spec_a).expect("plan creation");
+
+        let mut reference = ScalarFirRef::new(taps_a);
+
+        let input: Vec<f64> = (0..40).map(|i| ((f64::from(i)) * 0.21).sin()).collect();
+        let split = 17;
+
+        let mut out_plan = vec![0.0; input.len()];
+        let mut out_ref = vec![0.0; input.len()];
+
+        // Phase 1: filter A.
+        plan.process(&input[..split], &mut out_plan[..split])
+            .expect("phase 1 process");
+        reference.process(&input[..split], &mut out_ref[..split]);
+
+        // Reconfigure to filter B, preserving state.
+        let filter_b = FirFilter::new(taps_b.clone(), FirMeta::unknown()).expect("filter b");
+        plan.reconfigure(&filter_b).expect("reconfigure");
+        reference.reconfigure(taps_b);
+
+        // Phase 2: filter B over the preserved history.
+        plan.process(&input[split..], &mut out_plan[split..])
+            .expect("phase 2 process");
+        reference.process(&input[split..], &mut out_ref[split..]);
+
+        assert_approx_eq(
+            &out_plan,
+            &out_ref,
+            EPSILON,
+            &format!("reconfigure mid-stream ({strategy:?})"),
+        );
+    }
+
+    #[test]
+    fn reconfigure_mid_stream_direct() {
+        test_reconfigure_mid_stream(FirStrategy::Direct);
+    }
+
+    #[test]
+    fn reconfigure_mid_stream_overlap_save() {
+        test_reconfigure_mid_stream(FirStrategy::OverlapSave);
+    }
+
+    fn test_reconfigure_tap_count_mismatch(strategy: FirStrategy) {
+        let factory = make_factory();
+        let spec = fir_spec(vec![1.0, 2.0, 3.0], strategy);
+        let mut plan = factory.create_proc(&spec).expect("plan creation");
+
+        // A different tap count changes the layout → StructuralMismatch.
+        let longer = FirFilter::new(vec![1.0, 2.0, 3.0, 4.0], FirMeta::unknown()).expect("filter");
+        let err = plan
+            .reconfigure(&longer)
+            .expect_err("different tap count must error");
+        assert!(
+            matches!(err, Error::StructuralMismatch(_)),
+            "different tap count must yield StructuralMismatch, got {err:?} ({strategy:?})"
+        );
+    }
+
+    #[test]
+    fn reconfigure_tap_count_mismatch_direct() {
+        test_reconfigure_tap_count_mismatch(FirStrategy::Direct);
+    }
+
+    #[test]
+    fn reconfigure_tap_count_mismatch_overlap_save() {
+        test_reconfigure_tap_count_mismatch(FirStrategy::OverlapSave);
     }
 
     #[test]

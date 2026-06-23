@@ -54,7 +54,7 @@ use std::ops::{AddAssign, MulAssign};
 use num_complex::Complex;
 
 use crate::create::CreateProc;
-use crate::design::cqt::{CqtSpec, DecimatorQuality};
+use crate::design::cqt::{CqtBinSpec, CqtSpec, DecimatorQuality};
 use crate::design::fir::{self, FirMethod};
 use crate::design::resample::ResampleSpec;
 use crate::dispatch::Backend;
@@ -283,40 +283,18 @@ where
             bin_latencies[i] = bins[i].kernel_len as f64 / 2.0 + offset_top;
         }
 
-        let mut kernels = Vec::with_capacity(band_idx.len());
-        for &i in &band_idx {
-            // Materialize this bin's full-rate window directly in f64 (the design
-            // precision) from the spec's recipe — the kernel is accumulated in
-            // f64 and cast to `T` once, never round-tripped through `T`.
-            let window = spec.window().coefficients::<f64>(bins[i].kernel_len)?;
-            let nk = kernel_len_at(bins[i].kernel_len, scale);
-            // Placement of this bin's `nk`-sample kernel inside the `fft_len`
-            // frame: the frame start (oldest) for the batch path, the frame end
-            // (newest) for the streaming path.
-            let kernel_start = match anchor {
-                Anchor::Start => 0,
-                Anchor::End => fft_len - nk,
-            };
-            let mut kernel = build_half_kernel::<T>(
-                &window,
-                bins[i].frequency,
-                rate_o,
-                nk,
-                fft_len,
-                kernel_start,
-            )?;
-            // Bake the analytic inverse of the cascaded decimator passband
-            // response into the kernel: a bin in octave `o` accumulated gain
-            // G_k = ∏_{j=1}^{o} |H(ω_j)|, with ω_j = 2π·f_k·2^(j-1)/sr the bin's
-            // normalized frequency at stage j's input rate sr/2^(j-1).  Scaling
-            // the kernel coefficients by 1/G_k removes the octave droop.  The
-            // top octave (o = 0) has an empty product → 1.0, so it is untouched.
-            let comp = compensation_factor::<T>(&decim_coeffs, bins[i].frequency, sr, o)?;
-            for c in &mut kernel {
-                *c = *c * comp;
-            }
-            kernels.push(kernel);
-        }
+        let kernels = build_octave_kernels::<T>(
+            spec.window(),
+            bins,
+            &band_idx,
+            &decim_coeffs,
+            sr,
+            o,
+            scale,
+            rate_o,
+            fft_len,
+            anchor,
+        )?;
 
         octaves.push(OctaveBand {
             r2c,
@@ -443,6 +421,147 @@ where
         max_fft: bands.max_fft,
         next_cap: next_cap.max(1),
     })
+}
+
+/// Build the conjugated, scaled, gain-compensated half-spectrum kernels for one
+/// octave band — the per-bin kernel materialization shared by the initial
+/// [`build_bands`] loop and the in-place [`rematerialize_kernels`] window swap.
+///
+/// `band_idx` are this band's global bin indices (low → high); `scale = 1/2^o`,
+/// `rate_o = sr/2^o`, and `fft_len` are the octave's geometry; `decim_coeffs` and
+/// `octave` drive the per-bin gain compensation.  The window is materialized in
+/// f64 (the design precision) at each bin's own `kernel_len` and the kernel is
+/// accumulated in f64, cast to `T` once — never round-tripped through `T`.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the octave geometry is several scalars; bundling them into a struct \
+              would not reduce the call sites (only two) and would obscure the math"
+)]
+fn build_octave_kernels<T>(
+    window_recipe: &Window,
+    bins: &[CqtBinSpec],
+    band_idx: &[usize],
+    decim_coeffs: &[f64],
+    sr: f64,
+    octave: usize,
+    scale: f64,
+    rate_o: f64,
+    fft_len: usize,
+    anchor: Anchor,
+) -> Result<Vec<Vec<Complex<T>>>>
+where
+    T: DspFloat + AddAssign + MulAssign,
+{
+    let mut kernels = Vec::with_capacity(band_idx.len());
+    for &i in band_idx {
+        // Materialize this bin's full-rate window directly in f64 (the design
+        // precision) from the recipe — the kernel is accumulated in f64 and cast
+        // to `T` once, never round-tripped through `T`.
+        let window = window_recipe.coefficients::<f64>(bins[i].kernel_len)?;
+        let nk = kernel_len_at(bins[i].kernel_len, scale);
+        // Placement of this bin's `nk`-sample kernel inside the `fft_len` frame:
+        // the frame start (oldest) for the batch path, the frame end (newest) for
+        // the streaming path.
+        let kernel_start = match anchor {
+            Anchor::Start => 0,
+            Anchor::End => fft_len - nk,
+        };
+        let mut kernel = build_half_kernel::<T>(
+            &window,
+            bins[i].frequency,
+            rate_o,
+            nk,
+            fft_len,
+            kernel_start,
+        )?;
+        // Bake the analytic inverse of the cascaded decimator passband response
+        // into the kernel: a bin in octave `o` accumulated gain
+        // G_k = ∏_{j=1}^{o} |H(ω_j)|, with ω_j = 2π·f_k·2^(j-1)/sr the bin's
+        // normalized frequency at stage j's input rate sr/2^(j-1).  Scaling the
+        // kernel coefficients by 1/G_k removes the octave droop.  The top octave
+        // (o = 0) has an empty product → 1.0, so it is untouched.  This factor is
+        // independent of the window, so a window swap reproduces it exactly.
+        let comp = compensation_factor::<T>(decim_coeffs, bins[i].frequency, sr, octave)?;
+        for c in &mut kernel {
+            *c = *c * comp;
+        }
+        kernels.push(kernel);
+    }
+    Ok(kernels)
+}
+
+/// Re-materialize every bin's newest-anchored ([`Anchor::End`]) half-spectrum
+/// kernel from a **new** window, in place, at each octave's existing geometry.
+///
+/// The streaming CQT's window is orthogonal to the kernel sizes: a different
+/// window changes only the coefficient *values*, never any `kernel_len`,
+/// `fft_len`, octave partition, or decimator.  So this re-runs only the per-bin
+/// kernel math (the same [`build_octave_kernels`] the initial build uses) for the
+/// new window and overwrites each band's `kernels`, leaving the r2c plans,
+/// offsets, and partition untouched.  The caller preserves all stream state
+/// (decimators, rings, hop phase) — the window swap is glitch-free.
+///
+/// `octaves` must be the bands this `spec` produced (top → bottom); the spec
+/// supplies the per-bin frequencies / kernel lengths and the decimator recipe.
+///
+/// # Errors
+///
+/// Returns an error only if a kernel coefficient or the gain-compensation factor
+/// cannot be represented in `T`, or if the new window's coefficients are invalid.
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "octave indices and offsets are small non-negative values exact in f64"
+)]
+pub(super) fn rematerialize_kernels<T, RP>(
+    octaves: &mut [OctaveBand<T, RP>],
+    spec: &CqtSpec,
+    new_window: &Window,
+) -> Result<()>
+where
+    T: DspFloat + AddAssign + MulAssign,
+{
+    let sr = spec.sample_rate();
+    let bins = spec.bins();
+    let num_bins = bins.len();
+    let f_max = bins
+        .last()
+        .ok_or_else(|| Error::Internal("CqtSpec has no bins".into()))?
+        .frequency;
+
+    // The octave partition and decimator recipe are derived exactly as
+    // `build_bands` does, so the re-materialized kernels match a fresh build.
+    let octave_of = |freq: f64| -> usize {
+        let ratio = (f_max / freq).max(1.0);
+        (ratio.log2() + 1e-9).floor().max(0.0) as usize
+    };
+    let passband_edge = (f_max / (2.0 * sr)) * 1.08;
+    let decimate_spec = derive_decimate_spec(spec.decimator_quality(), passband_edge)?;
+    let decim_coeffs: Vec<f64> = decimate_spec.prototype_filter().to_vec();
+
+    let mut scale = 1.0_f64; // 1 / 2^o
+    for (o, band) in octaves.iter_mut().enumerate() {
+        let rate_o = sr * scale;
+        let band_idx: Vec<usize> = (0..num_bins)
+            .filter(|&i| octave_of(bins[i].frequency) == o)
+            .collect();
+        // The streaming path is always newest-anchored.
+        band.kernels = build_octave_kernels::<T>(
+            new_window,
+            bins,
+            &band_idx,
+            &decim_coeffs,
+            sr,
+            o,
+            scale,
+            rate_o,
+            band.fft_len,
+            Anchor::End,
+        )?;
+        scale /= 2.0;
+    }
+    Ok(())
 }
 
 /// Kernel length at a decimated rate: the full-rate `len` scaled by `scale =

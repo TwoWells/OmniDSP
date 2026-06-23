@@ -51,6 +51,21 @@ pub enum Error {
     #[error("design did not converge: {0}")]
     DidNotConverge(String),
 
+    /// A live reconfiguration was rejected because the new parameter would
+    /// change the processor's buffer / state layout, not just its coefficient
+    /// values.
+    ///
+    /// Reconfiguration preserves stream state, so it is only valid for a
+    /// parameter that retunes coefficient *values* at the existing layout — a
+    /// FIR filter with the same tap count, an IIR cascade with the same number
+    /// of sections.  A parameter that changes the layout (a different tap count
+    /// resizes the delay line / FFT block; a different section count resizes the
+    /// per-section state) cannot be applied in place; the caller should rebuild
+    /// the processor from the new spec instead.  The message names what
+    /// mismatched.
+    #[error("structural mismatch: {0}")]
+    StructuralMismatch(String),
+
     /// An internal error not covered by other variants.
     #[error("{0}")]
     Internal(String),

@@ -251,6 +251,19 @@ impl CqtSpec {
         self
     }
 
+    /// Replace the analysis window, leaving the bin layout (frequencies, kernel
+    /// lengths, FFT / hop sizes) unchanged.
+    ///
+    /// The window is orthogonal to the bin geometry — it is evaluated per bin at
+    /// each bin's own `kernel_len` when the kernels materialize — so swapping it
+    /// keeps the recipe valid by construction.  This is the recipe-level
+    /// counterpart of the streaming processor's live window reconfiguration.
+    #[must_use]
+    pub const fn with_window(mut self, window: Window) -> Self {
+        self.window = window;
+        self
+    }
+
     /// Sample rate in Hz.
     #[must_use]
     pub const fn sample_rate(&self) -> f64 {

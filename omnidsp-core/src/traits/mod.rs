@@ -18,4 +18,5 @@ pub mod dct;
 pub mod dft;
 pub mod fir;
 pub mod iir;
+pub mod reconfigure;
 pub mod vecops;

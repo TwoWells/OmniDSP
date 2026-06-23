@@ -106,6 +106,56 @@
 //! When the two forms share state (resampling, FIR, IIR) there is a single
 //! Processor, driven either way.
 //!
+//! ## Reconfigure — the live-retuning capability
+//!
+//! A Processor whose parameter changes only coefficient *values*, not its
+//! buffer / state *layout*, can be retuned live without losing stream state.
+//! Such Processors additionally implement
+//! [`Reconfigure<P>`](crate::traits::reconfigure::Reconfigure): `reconfigure(&p)`
+//! re-derives the coefficients from `p` in place, preserving the delay line /
+//! per-section state / decimator history, and errors with
+//! [`StructuralMismatch`](crate::error::Error::StructuralMismatch) if `p` would
+//! change the layout (so the caller rebuilds instead).  The reconfigurable
+//! Processors are **FIR** (`Reconfigure<FirFilter>` — keeps the delay line; a
+//! changed tap count is structural), **IIR** (`Reconfigure<[BiquadSection]>` —
+//! keeps the per-section state; a changed section count is structural), and the
+//! **streaming CQT** (`Reconfigure<Window>` — keeps the decimators / rings /
+//! hop phase and re-materializes every bin's kernel; the window is orthogonal to
+//! the kernel sizes, so it is never structural).  It is **not** on resampling
+//! (the knob worth retuning, the rate, is structural to the L/M polyphase
+//! factorisation — a live rate change is a different algorithm) and **not** on
+//! any Plan (no state, so changing a parameter is just a free rebuild).
+//!
+//! `Reconfigure` is a *capability*, not a third execution kind: a reconfigurable
+//! Processor is the same kind as any Processor, differing by one method.  The
+//! hard contract is **behavioural** — after `reconfigure(&p)`, processing uses
+//! `p`; doing it glitch-free and zero-alloc (the in-place state-preserving
+//! update the omni Processors perform) is a quality-of-implementation property,
+//! like throughput, never a guaranteed part of the contract.
+//!
+//! ## The realization edge — recipe vs. coefficient artifact
+//!
+//! A spec carries a *description*, and *where* its numbers turn into materialized
+//! `T`-typed buffers is the **realization edge** (the create verb).  Two kinds of
+//! spec sit on opposite sides of that edge:
+//!
+//! - A **description** spec carries a **recipe**, never materialized `Vec<T>`
+//!   artifacts: a window *kind* plus lengths, per-bin frequencies and sizes, FFT
+//!   lengths.  The heavy `T`-typed buffers (a CQT's per-bin frequency-domain
+//!   kernels) are built at `create_*`, the window evaluated per bin at its own
+//!   length and accumulated in f64, cast to `T` once.  `CqtSpec` is the example —
+//!   it holds a [`Window`](crate::window::Window) recipe and per-bin
+//!   `{frequency, kernel_len}`, not coefficients, which is exactly what lets the
+//!   streaming processor re-materialize its kernels for a new window on a live
+//!   reconfigure.
+//! - The one exception is the **coefficient-bearing artifact** spec — FIR
+//!   (`FirFilter`), IIR (biquad sections), resample (prototype filter).  Here the
+//!   coefficients *are* the bring-your-own-able artifact, so the spec carries
+//!   them directly; they are **f64-canonical** (the design precision) and cast to
+//!   `T` at the realization edge.  That single cast is the rule: design and store
+//!   in f64, cast once at `create_*`, never round-trip a `T` artifact back
+//!   through f64.
+//!
 //! ## The trait is the complete contract
 //!
 //! A Plan or Processor trait is the backend-agnostic, `dyn`-usable surface, and

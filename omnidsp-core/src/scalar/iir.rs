@@ -11,6 +11,7 @@
 
 use crate::error::{Error, Result};
 use crate::traits::iir::{Iir, IirProcessor, IirSpec};
+use crate::traits::reconfigure::Reconfigure;
 use crate::types::{BiquadSection, DspFloat};
 
 // ─── Public types ──────────────────────────────────────────────────────
@@ -102,6 +103,45 @@ impl<T: DspFloat> IirProcessor<T> for ScalarIirProcessor<T> {
         for st in &mut self.state {
             *st = [T::zero(); 2];
         }
+    }
+}
+
+// ─── Reconfigure ───────────────────────────────────────────────────────
+
+impl<T: DspFloat> Reconfigure<[BiquadSection<f64>]> for ScalarIirProcessor<T> {
+    /// Retune the cascade's section coefficients in place from `sections`,
+    /// preserving each section's per-section delay state (`z1`/`z2`) so the
+    /// stream continues uninterrupted.
+    ///
+    /// The number of sections is structural: it sizes the per-section state
+    /// vector.  A `sections` slice with a different count would change that
+    /// layout, so it is rejected with [`Error::StructuralMismatch`] — the caller
+    /// should rebuild the processor.  When the count matches, only the
+    /// coefficient *values* change: each section's f64 coefficients are re-cast
+    /// to `T` in place (exactly as `create_proc` does), and the delay state is
+    /// left untouched.
+    fn reconfigure(&mut self, sections: &[BiquadSection<f64>]) -> Result<()> {
+        if sections.len() != self.sections.len() {
+            return Err(Error::StructuralMismatch(format!(
+                "IIR section count changed ({} → {}); a different count resizes the per-section \
+                 state — rebuild the processor",
+                self.sections.len(),
+                sections.len(),
+            )));
+        }
+
+        // Cast the new f64 sections to `T` in place; the per-section delay state
+        // (`self.state`) is preserved.
+        for (dst, src) in self.sections.iter_mut().zip(sections) {
+            *dst = BiquadSection {
+                b0: cast(src.b0)?,
+                b1: cast(src.b1)?,
+                b2: cast(src.b2)?,
+                a1: cast(src.a1)?,
+                a2: cast(src.a2)?,
+            };
+        }
+        Ok(())
     }
 }
 
@@ -467,6 +507,146 @@ mod tests {
         assert!(
             plan.process(&input, &mut output).is_err(),
             "mismatched buffer lengths should return error"
+        );
+    }
+
+    // ── Reconfigure (live coefficient retuning) ──────────────────────
+
+    /// A straight DF2T biquad-cascade reference that keeps its own per-section
+    /// state, so the section coefficients can be swapped *in place* mid-stream
+    /// with state preserved — the behavioural contract `reconfigure` must match.
+    struct ScalarIirRef {
+        sections: Vec<BiquadSection<f64>>,
+        state: Vec<[f64; 2]>,
+    }
+
+    impl ScalarIirRef {
+        fn new(sections: Vec<BiquadSection<f64>>) -> Self {
+            let n = sections.len();
+            Self {
+                sections,
+                state: vec![[0.0; 2]; n],
+            }
+        }
+
+        /// Swap the section coefficients in place (same count), preserving the
+        /// per-section delay state.
+        fn reconfigure(&mut self, sections: Vec<BiquadSection<f64>>) {
+            assert_eq!(
+                sections.len(),
+                self.sections.len(),
+                "reference reconfigure must keep the section count"
+            );
+            self.sections = sections;
+        }
+
+        // Plain mul+add (not `mul_add`) so the reference's arithmetic is
+        // bit-identical to the generic `ScalarIirProcessor::process` it mirrors —
+        // an `mul_add` would diverge by a rounding step and accumulate through the
+        // IIR feedback.
+        #[allow(
+            clippy::suboptimal_flops,
+            reason = "must match the production DF2T recurrence bit-for-bit"
+        )]
+        fn process(&mut self, input: &[f64], output: &mut [f64]) {
+            for (&x, out) in input.iter().zip(output.iter_mut()) {
+                let mut y = x;
+                for (sec, st) in self.sections.iter().zip(self.state.iter_mut()) {
+                    let s1 = st[0];
+                    let s2 = st[1];
+                    let w = sec.b0 * y + s1;
+                    st[0] = sec.b1 * y - sec.a1 * w + s2;
+                    st[1] = sec.b2 * y - sec.a2 * w;
+                    y = w;
+                }
+                *out = y;
+            }
+        }
+    }
+
+    #[test]
+    fn reconfigure_mid_stream_preserves_state() {
+        let factory = make_factory();
+        let sections_a = vec![
+            BiquadSection {
+                b0: 0.2,
+                b1: 0.3,
+                b2: 0.1,
+                a1: -0.5,
+                a2: -0.1,
+            },
+            BiquadSection {
+                b0: 0.5,
+                b1: 0.0,
+                b2: 0.0,
+                a1: 0.2,
+                a2: 0.05,
+            },
+        ];
+        let sections_b = vec![
+            BiquadSection {
+                b0: 1.0,
+                b1: -0.4,
+                b2: 0.2,
+                a1: -0.3,
+                a2: 0.1,
+            },
+            BiquadSection {
+                b0: 0.8,
+                b1: 0.1,
+                b2: -0.05,
+                a1: 0.4,
+                a2: -0.2,
+            },
+        ];
+
+        let mut plan =
+            Iir::<f64>::create_proc(&factory, &spec(sections_a.clone())).expect("plan creation");
+        let mut reference = ScalarIirRef::new(sections_a);
+
+        let input: Vec<f64> = (0..40).map(|i| (f64::from(i) * 0.17).sin()).collect();
+        let split = 15;
+
+        let mut out_plan = vec![0.0; input.len()];
+        let mut out_ref = vec![0.0; input.len()];
+
+        // Phase 1: cascade A.
+        plan.process(&input[..split], &mut out_plan[..split])
+            .expect("phase 1");
+        reference.process(&input[..split], &mut out_ref[..split]);
+
+        // Reconfigure to cascade B, preserving the per-section state.
+        plan.reconfigure(sections_b.as_slice())
+            .expect("reconfigure");
+        reference.reconfigure(sections_b);
+
+        // Phase 2: cascade B over the preserved state.
+        plan.process(&input[split..], &mut out_plan[split..])
+            .expect("phase 2");
+        reference.process(&input[split..], &mut out_ref[split..]);
+
+        assert_approx_eq(
+            &out_plan,
+            &out_ref,
+            EPSILON,
+            "reconfigure mid-stream preserves per-section state",
+        );
+    }
+
+    #[test]
+    fn reconfigure_section_count_mismatch() {
+        let factory = make_factory();
+        let mut plan = Iir::<f64>::create_proc(&factory, &spec(vec![passthrough_section()]))
+            .expect("plan creation");
+
+        // Two sections where there was one → layout change → StructuralMismatch.
+        let two = vec![passthrough_section(), gain_section(2.0)];
+        let err = plan
+            .reconfigure(two.as_slice())
+            .expect_err("different section count must error");
+        assert!(
+            matches!(err, Error::StructuralMismatch(_)),
+            "different section count must yield StructuralMismatch, got {err:?}"
         );
     }
 

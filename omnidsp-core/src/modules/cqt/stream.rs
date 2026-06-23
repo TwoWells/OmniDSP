@@ -82,8 +82,10 @@ use crate::modules::cqt::batch::OmniCqt;
 use crate::modules::cqt::kernel::{self, OctaveBand};
 use crate::modules::resample::ResampleProcessor;
 use crate::traits::dft::{DftR2c, DftR2cPlan};
+use crate::traits::reconfigure::Reconfigure;
 use crate::traits::vecops::VecOps;
 use crate::types::DspFloat;
+use crate::window::Window;
 
 // ─── Processor trait ──────────────────────────────────────────────────
 
@@ -266,6 +268,13 @@ where
 /// per-octave [`DftR2cPlan`], `V` the [`VecOps`], `ResP` the routed decimator
 /// [`ResampleProcessor`].
 pub struct OmniCqtProcessor<T, RP, V, ResP> {
+    /// The recipe this processor was built from, retained so a window swap can
+    /// re-materialize every bin's kernel at its existing length (see
+    /// [`Reconfigure<Window>`](crate::traits::reconfigure::Reconfigure)).  It
+    /// carries the per-bin frequencies / kernel lengths, the sample rate, and the
+    /// decimator quality — everything the kernel math needs except the window,
+    /// which the swap supplies.
+    spec: CqtSpec,
     /// Per-octave bands (kernels, r2c plan, group-delay offset), top → bottom.
     octaves: Vec<OctaveBand<T, RP>>,
     /// Continuous ×2 decimators, one per octave transition (`o−1 → o`); element
@@ -702,6 +711,33 @@ where
     }
 }
 
+// ─── Reconfigure ──────────────────────────────────────────────────────
+
+impl<T, RP, V, ResP> Reconfigure<Window> for OmniCqtProcessor<T, RP, V, ResP>
+where
+    T: DspFloat + AddAssign + MulAssign,
+{
+    /// Swap the analysis window in place, re-materializing every bin's
+    /// frequency-domain kernel from the new window at its existing length, and
+    /// preserving all stream state (decimators, per-octave rings, hop phase).
+    ///
+    /// The window is **orthogonal** to the kernel sizes: a different window
+    /// changes only the kernel coefficient *values*, never any `kernel_len`,
+    /// `fft_len`, octave partition, or decimator.  So this never changes the
+    /// layout and never returns
+    /// [`StructuralMismatch`](crate::error::Error::StructuralMismatch) — the
+    /// running stream simply continues analysing its history through the new
+    /// window (the visualiser's glitch-free window swap).  The kernels are
+    /// materialized in f64 and cast to `T` once, exactly as `create_proc` does.
+    fn reconfigure(&mut self, window: &Window) -> Result<()> {
+        kernel::rematerialize_kernels(&mut self.octaves, &self.spec, window)?;
+        // Record the new window so a subsequent swap (or any future recipe read)
+        // reflects the current state.
+        self.spec = self.spec.clone().with_window(*window);
+        Ok(())
+    }
+}
+
 // ─── Factory ──────────────────────────────────────────────────────────
 
 impl<R, V> OmniCqt<R, V> {
@@ -759,6 +795,7 @@ impl<R, V> OmniCqt<R, V> {
 
         let zero = Complex::new(T::zero(), T::zero());
         Ok(OmniCqtProcessor {
+            spec: cqt_spec.clone(),
             octaves: layout.octaves,
             decimators: layout.decimators,
             rings,
@@ -1920,6 +1957,88 @@ mod tests {
         let input = vec![0.25_f64; 2 * hop];
         let produced = drive(&mut plan, &input);
         assert_eq!(produced, 2, "two hops via the trait → two columns");
+    }
+
+    // ── Reconfigure (live window swap) ─────────────────────────────
+
+    #[test]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "sample indices are small enough for f64"
+    )]
+    fn reconfigure_window_matches_in_place_swap() {
+        use crate::traits::reconfigure::Reconfigure;
+
+        // Behavioural contract: after a mid-stream window swap, the streaming
+        // processor's columns must reflect the NEW window over the PRESERVED
+        // stream state.  The reference `q` is built with the target window and
+        // fed the identical input history, so its decimator/ring state matches
+        // the reconfigured processor's exactly — the in-place-swap reference, not
+        // a fresh-built processor with no history.
+        let spec_a = cqt::design(16000.0, 125.0, 1000.0, 12, &Window::Hann).expect("valid design");
+        let spec_b =
+            cqt::design(16000.0, 125.0, 1000.0, 12, &Window::Blackman).expect("valid design");
+
+        let mut p = make_stream(&spec_a); // will be reconfigured A → B
+        let mut q = make_stream(&spec_b); // reference, always window B
+        let nb = p.num_bins();
+        let fft = p.fft_length();
+        let hop = p.hop_length();
+
+        // Feed an identical warm-up history to a hop boundary so both share the
+        // same decimator / ring state.
+        let warm = (3 * fft / hop) * hop; // a whole number of hops, well past warm-up
+        let warm_sig: Vec<f64> = (0..warm).map(|i| (i as f64 * 0.019).sin()).collect();
+        let mut scratch_p = vec![Complex::new(0.0, 0.0); p.max_output_columns(warm) * nb];
+        let mut scratch_q = vec![Complex::new(0.0, 0.0); q.max_output_columns(warm) * nb];
+        p.process(&warm_sig, &mut scratch_p).expect("warm p");
+        q.process(&warm_sig, &mut scratch_q).expect("warm q");
+
+        // Swap p's window to B in place (never structural for the CQT window).
+        p.reconfigure(&Window::Blackman).expect("reconfigure ok");
+
+        // Feed both the same next chunk; the emitted columns must now agree.
+        let chunk = 6 * hop;
+        let next: Vec<f64> = (0..chunk)
+            .map(|i| ((warm + i) as f64 * 0.019).sin())
+            .collect();
+        let mut out_p = vec![Complex::new(0.0, 0.0); p.max_output_columns(chunk) * nb];
+        let mut out_q = vec![Complex::new(0.0, 0.0); q.max_output_columns(chunk) * nb];
+        let cols_p = p.process(&next, &mut out_p).expect("p process");
+        let cols_q = q.process(&next, &mut out_q).expect("q process");
+
+        assert_eq!(
+            cols_p, cols_q,
+            "reconfigured and reference emit the same column count"
+        );
+        assert!(cols_p >= 1, "expected at least one post-swap column");
+        for (k, (a, b)) in out_p[..cols_p * nb].iter().zip(&out_q).enumerate() {
+            assert!(
+                (a - b).norm() < 1e-10,
+                "post-swap column index {k}: reconfigured {a} vs in-place-swap reference {b}"
+            );
+        }
+    }
+
+    #[test]
+    fn reconfigure_window_never_structural() {
+        use crate::traits::reconfigure::Reconfigure;
+
+        // The window is orthogonal to the kernel sizes, so a window swap is
+        // always Ok — it never returns StructuralMismatch.
+        let spec = multi_octave_spec();
+        let mut plan = make_stream(&spec);
+        for window in [
+            Window::Blackman,
+            Window::Hamming,
+            Window::Kaiser(8.0),
+            Window::Hann,
+        ] {
+            assert!(
+                plan.reconfigure(&window).is_ok(),
+                "window swap to {window:?} must succeed (never structural)"
+            );
+        }
     }
 
     // ── Debug formatting ───────────────────────────────────────────

@@ -31,9 +31,10 @@
 //!
 //! See `README.md` for the `wasm-pack build --target web` packaging step.
 
-use omnidsp::OmniDSP;
+use omnidsp::{OmniDSP, RustBackend};
+use omnidsp_core::create::CreateProc;
 use omnidsp_core::design::cqt::{self, CqtSpec};
-use omnidsp_core::modules::cqt::CqtProcessor;
+use omnidsp_core::traits::reconfigure::Reconfigure;
 use omnidsp_core::window::{self, Window};
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -60,12 +61,38 @@ const KERNEL_SIDELOBE_DB: f64 = 70.0;
 /// arrived since the previous frame, never more than this.
 const INPUT_CAPACITY: usize = 8192;
 
-/// The streaming multirate CQT processor, behind the backend-agnostic
-/// [`CqtProcessor`] trait.  The trait carries the full surface the engine uses
-/// — metadata, `process_magnitude`, `reset` — so the engine stores it as a
-/// trait object and never names the concrete (unnameable-by-hand) routed
-/// processor type, nor commits to a specific backend.
-type StreamPlan = Box<dyn CqtProcessor<f32>>;
+/// The streaming multirate CQT processor for the `RustBackend` floor, named
+/// through the dispatch GAT.
+///
+/// The engine drives it through the backend-agnostic
+/// [`CqtProcessor`](omnidsp_core::modules::cqt::CqtProcessor) trait (metadata,
+/// `process_magnitude`, `reset`) but also calls its
+/// [`Reconfigure<Window>`](omnidsp_core::traits::reconfigure::Reconfigure)
+/// capability for the live window swap — a capability that lives outside the
+/// `CqtProcessor` contract — so it holds the concrete processor (via the GAT
+/// alias) rather than a `dyn CqtProcessor` trait object, which could not reach
+/// `reconfigure`.
+type StreamPlan = <RustBackend as CreateProc<CqtSpec>>::Proc<f32>;
+
+/// Map a kernel id from JS to the analysis window it selects.
+///
+/// `"hann"`, `"blackman"`, `"blackman-harris"`, `"nuttall"`, `"kaiser-90"`, or
+/// anything else for the default Kaiser at [`KERNEL_SIDELOBE_DB`] suppression.
+/// The Kaiser options solve β from a sidelobe-attenuation spec via the Kaiser
+/// formula (so the leakage "ridge" sits at a designed level); the fixed
+/// cosine-sum windows are there for contrast.
+fn window_for_kernel(kernel: &str) -> Window {
+    match kernel {
+        "hann" => Window::Hann,
+        "blackman" => Window::Blackman,
+        "blackman-harris" => Window::BlackmanHarris,
+        "nuttall" => Window::Nuttall,
+        "kaiser-90" => Window::Kaiser(window::kaiser::attenuation(90.0)),
+        // Default: Kaiser at KERNEL_SIDELOBE_DB (70 dB) — the solved-from-spec
+        // kernel; matches any unrecognised id.
+        _ => Window::Kaiser(window::kaiser::attenuation(KERNEL_SIDELOBE_DB)),
+    }
+}
 
 /// Real-time streaming Constant-Q Transform engine for the browser visualiser.
 ///
@@ -116,19 +143,8 @@ impl CqtEngine {
     #[wasm_bindgen(constructor)]
     pub fn new(sample_rate: f32, min_freq: f32, kernel: &str) -> Result<CqtEngine, String> {
         // The analysis-kernel window, selectable so the demo can A/B the
-        // leakage/resolution trade-off. The Kaiser options solve β from a
-        // sidelobe-attenuation spec via the Kaiser formula (so the "ridge" sits at
-        // a designed level); the fixed cosine-sum windows are there for contrast.
-        let window: Window = match kernel {
-            "hann" => Window::Hann,
-            "blackman" => Window::Blackman,
-            "blackman-harris" => Window::BlackmanHarris,
-            "nuttall" => Window::Nuttall,
-            "kaiser-90" => Window::Kaiser(window::kaiser::attenuation(90.0)),
-            // Default: Kaiser at KERNEL_SIDELOBE_DB (70 dB) — the solved-from-spec
-            // kernel; matches any unrecognised id.
-            _ => Window::Kaiser(window::kaiser::attenuation(KERNEL_SIDELOBE_DB)),
-        };
+        // leakage/resolution trade-off.
+        let window = window_for_kernel(kernel);
         let spec: CqtSpec = cqt::design(
             f64::from(sample_rate),
             f64::from(min_freq),
@@ -139,10 +155,9 @@ impl CqtEngine {
         .map_err(|e| format!("CQT design failed at {sample_rate} Hz (min {min_freq} Hz): {e}"))?;
 
         let dsp = OmniDSP::rust();
-        let plan: StreamPlan = Box::new(
-            dsp.cqt_proc::<f32>(&spec)
-                .map_err(|e| format!("CQT stream plan creation failed: {e}"))?,
-        );
+        let plan: StreamPlan = dsp
+            .cqt_proc::<f32>(&spec)
+            .map_err(|e| format!("CQT stream plan creation failed: {e}"))?;
 
         let num_bins = plan.num_bins();
         let max_columns = plan.max_output_columns(INPUT_CAPACITY);
@@ -187,6 +202,30 @@ impl CqtEngine {
     /// without rebuilding the plan.
     pub fn reset(&mut self) {
         self.plan.reset();
+    }
+
+    /// Swap the analysis-kernel window **in place**, preserving all stream state.
+    ///
+    /// `kernel` selects the new window with the same ids as the constructor
+    /// (`"hann"`, `"blackman"`, `"blackman-harris"`, `"nuttall"`, `"kaiser-90"`,
+    /// or anything else for the default Kaiser at 70 dB suppression). The window
+    /// is orthogonal to the bin layout, so this re-materializes every bin's
+    /// frequency-domain kernel from the new window while keeping the decimators,
+    /// per-octave rings, and hop phase intact — a glitch-free swap, with no
+    /// rebuild and no loss of the spectrogram's running history. The bin
+    /// frequencies, latencies, and count are unchanged, so the JS-side axis and
+    /// de-warping state need no update.
+    ///
+    /// # Errors
+    ///
+    /// Returns a JS string error only if kernel re-materialization fails (a
+    /// coefficient cannot be represented); the window can never change the layout,
+    /// so it never reports a structural mismatch.
+    pub fn reconfigure_window(&mut self, kernel: &str) -> Result<(), String> {
+        let window = window_for_kernel(kernel);
+        self.plan
+            .reconfigure(&window)
+            .map_err(|e| format!("CQT window reconfigure failed: {e}"))
     }
 
     /// Pointer to the PCM input buffer in wasm linear memory.
