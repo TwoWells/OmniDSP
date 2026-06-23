@@ -28,16 +28,14 @@
 //! `Send + Sync` while taking `&self`.
 
 use std::fmt;
-use std::ops::{AddAssign, MulAssign};
 use std::sync::Mutex;
 
 use num_complex::Complex;
-use num_traits::{Float, FromPrimitive};
 
 use crate::error::{Error, Result};
 use crate::traits::dft::{DftC2c, DftC2cPlan, DftC2cSpec, DftNorm, DftR2c, DftR2cPlan, DftR2cSpec};
 use crate::traits::vecops::VecOps;
-use crate::types::Direction;
+use crate::types::{Direction, DspFloat};
 
 // ─── Spec ────────────────────────────────────────────────────────────
 
@@ -153,7 +151,7 @@ struct HilbertScratch<T> {
 
 impl<T, RP, CP, V> OmniHilbertPlan<T, RP, CP, V>
 where
-    T: Float + AddAssign + MulAssign + FromPrimitive + Send + Sync + 'static,
+    T: DspFloat,
     RP: DftR2cPlan<T>,
     CP: DftC2cPlan<T>,
     V: VecOps<T>,
@@ -250,7 +248,7 @@ pub trait HilbertPlan<T>: Send + Sync {
 
 impl<T, RP, CP, V> HilbertPlan<T> for OmniHilbertPlan<T, RP, CP, V>
 where
-    T: Float + AddAssign + MulAssign + FromPrimitive + Send + Sync + 'static,
+    T: DspFloat,
     RP: DftR2cPlan<T>,
     CP: DftC2cPlan<T>,
     V: VecOps<T>,
@@ -276,7 +274,7 @@ impl<R, C, V> OmniHilbert<R, C, V> {
         spec: &HilbertSpec,
     ) -> Result<OmniHilbertPlan<T, R::Plan, C::Plan, V>>
     where
-        T: Float + AddAssign + MulAssign + FromPrimitive + Send + Sync + 'static,
+        T: DspFloat,
         R: DftR2c<T>,
         C: DftC2c<T>,
         V: VecOps<T>,

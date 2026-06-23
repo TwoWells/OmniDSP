@@ -3,18 +3,24 @@
 
 //! Core type aliases and enums.
 
+use std::ops::{AddAssign, MulAssign};
+
 use num_traits::{Float, FromPrimitive};
 
 pub use num_complex::{Complex32, Complex64};
 
 /// Floating-point type suitable for DSP operations.
 ///
-/// Bundles the numeric, conversion, and thread-safety bounds that all
-/// `OmniDSP` primitives require.  Implemented automatically for any type
-/// that satisfies the constituent bounds (`f32` and `f64` in practice).
-pub trait DspFloat: Float + FromPrimitive + Send + Sync + 'static {}
+/// The single canonical float bound across the `OmniDSP` primitives and
+/// modules: the numeric (`Float`), conversion (`FromPrimitive`), in-place
+/// arithmetic (`AddAssign` / `MulAssign`, which the vector ops and recurrences
+/// need), and thread-safety (`Send + Sync + 'static`) bounds, bundled so a
+/// primitive or `create_plan` writes `T: DspFloat` rather than respelling the
+/// combination.  Implemented automatically for any type that satisfies the
+/// constituents (`f32` and `f64` in practice).
+pub trait DspFloat: Float + FromPrimitive + AddAssign + MulAssign + Send + Sync + 'static {}
 
-impl<T: Float + FromPrimitive + Send + Sync + 'static> DspFloat for T {}
+impl<T: Float + FromPrimitive + AddAssign + MulAssign + Send + Sync + 'static> DspFloat for T {}
 
 /// Transform direction for DFT and related operations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -10,8 +10,6 @@ use std::f64::consts::TAU;
 
 use num_complex::Complex;
 
-use std::ops::{AddAssign, MulAssign};
-
 use crate::create::CreateProc;
 use crate::design::resample::ResampleSpec;
 use crate::dispatch::RawDft;
@@ -406,7 +404,7 @@ impl CreateProc<ResampleSpec> for TestBackend {
     fn create_proc<T>(&self, spec: &ResampleSpec) -> Result<Self::Proc<T>>
     where
         Self: crate::dispatch::Backend<T>,
-        T: DspFloat + AddAssign + MulAssign,
+        T: DspFloat,
     {
         OmniResample::new().create_proc::<T>(spec)
     }

@@ -24,7 +24,6 @@
 //! uncontended in the common single-threaded case.
 
 use std::fmt;
-use std::ops::{AddAssign, MulAssign};
 use std::sync::Mutex;
 
 use num_complex::Complex;
@@ -161,7 +160,7 @@ struct FftScratch<T> {
 
 impl<T, RP, CP, V> ConvPlan<T> for OmniConvPlan<T, RP, CP, V>
 where
-    T: Float + AddAssign + MulAssign + Send + Sync,
+    T: DspFloat,
     RP: DftR2cPlan<T>,
     CP: DftC2rPlan<T>,
     V: VecOps<T>,
@@ -198,7 +197,7 @@ where
 
 impl<T, RP, CP, V> OmniConvPlan<T, RP, CP, V>
 where
-    T: Float + AddAssign + MulAssign + Send + Sync,
+    T: DspFloat,
     RP: DftR2cPlan<T>,
     CP: DftC2rPlan<T>,
     V: VecOps<T>,
@@ -286,7 +285,7 @@ impl<R, C, V> OmniConv<R, C, V> {
         spec: &ConvSpec,
     ) -> Result<OmniConvPlan<T, <R as DftR2c<T>>::Plan, HermitianC2rPlan<<C as DftC2r<T>>::Plan>, V>>
     where
-        T: DspFloat + AddAssign + MulAssign,
+        T: DspFloat,
         R: DftR2c<T>,
         C: DftC2r<T> + Clone,
         V: VecOps<T>,

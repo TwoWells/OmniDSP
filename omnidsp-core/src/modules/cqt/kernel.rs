@@ -49,7 +49,6 @@
 //! (see the single-FFT reference).
 
 use std::f64::consts::TAU;
-use std::ops::{AddAssign, MulAssign};
 
 use num_complex::Complex;
 
@@ -211,7 +210,7 @@ fn octave_decimate_spec(spec: &CqtSpec, f_max: f64) -> Result<ResampleSpec> {
 )]
 fn build_bands<T, R>(dftr2c: &R, spec: &CqtSpec, anchor: Anchor) -> Result<OctaveBands<T, R::Plan>>
 where
-    T: DspFloat + AddAssign + MulAssign,
+    T: DspFloat,
     R: DftR2c<T>,
 {
     let sr = spec.sample_rate();
@@ -361,7 +360,7 @@ pub(super) fn build_octaves<T, R, RF>(
     resample_factory: &RF,
 ) -> Result<OctaveLayout<T, R::Plan, <RF as CreateProc<ResampleSpec>>::Proc<T>>>
 where
-    T: DspFloat + AddAssign + MulAssign,
+    T: DspFloat,
     R: DftR2c<T>,
     RF: CreateProc<ResampleSpec> + Backend<T>,
     <RF as CreateProc<ResampleSpec>>::Proc<T>: ResampleProcessor<T>,
@@ -408,7 +407,7 @@ pub(super) fn build_octaves_streaming<T, R, RF>(
     resample_factory: &RF,
 ) -> Result<StreamOctaveLayout<T, R::Plan, <RF as CreateProc<ResampleSpec>>::Proc<T>>>
 where
-    T: DspFloat + AddAssign + MulAssign,
+    T: DspFloat,
     R: DftR2c<T>,
     RF: CreateProc<ResampleSpec> + Backend<T>,
     <RF as CreateProc<ResampleSpec>>::Proc<T>: ResampleProcessor<T>,
@@ -469,7 +468,7 @@ fn build_octave_kernels<T>(
     anchor: Anchor,
 ) -> Result<Vec<Vec<Complex<T>>>>
 where
-    T: DspFloat + AddAssign + MulAssign,
+    T: DspFloat,
 {
     let mut kernels = Vec::with_capacity(band_idx.len());
     for &i in band_idx {
@@ -539,7 +538,7 @@ pub(super) fn rematerialize_kernels<T, RP>(
     new_window: &Window,
 ) -> Result<()>
 where
-    T: DspFloat + AddAssign + MulAssign,
+    T: DspFloat,
 {
     let sr = spec.sample_rate();
     let bins = spec.bins();

@@ -21,10 +21,7 @@
 //! calls so successive `process` calls form a continuous stream, and `finish`
 //! flushes the `num_taps − 1` ring-down tail at end-of-stream.
 
-use std::ops::{AddAssign, MulAssign};
-
 use num_complex::Complex;
-use num_traits::Float;
 
 use crate::error::{Error, Result};
 use crate::hermitian::{HermitianC2r, HermitianC2rPlan};
@@ -193,7 +190,7 @@ struct OverlapSaveState<T, RP, CP, V> {
 
 impl<T, RP, CP, V> FirProcessor<T> for OmniFirProcessor<T, RP, CP, V>
 where
-    T: Float + AddAssign + MulAssign + Send + Sync,
+    T: DspFloat,
     RP: DftR2cPlan<T>,
     CP: DftC2rPlan<T>,
     V: VecOps<T>,
@@ -273,7 +270,7 @@ where
 
 impl<T, RP, CP, V> OmniFirProcessor<T, RP, CP, V>
 where
-    T: Float + AddAssign + MulAssign + Send + Sync,
+    T: DspFloat,
     RP: DftR2cPlan<T>,
     CP: DftC2rPlan<T>,
     V: VecOps<T>,
@@ -392,7 +389,7 @@ where
 
 impl<T, RP, CP, V> Reconfigure<FirFilter> for OmniFirProcessor<T, RP, CP, V>
 where
-    T: Float + AddAssign + MulAssign + Send + Sync,
+    T: DspFloat,
     RP: DftR2cPlan<T>,
     CP: DftC2rPlan<T>,
     V: VecOps<T>,
@@ -480,7 +477,7 @@ impl<R, C, V> OmniFir<R, C, V> {
         OmniFirProcessor<T, <R as DftR2c<T>>::Plan, HermitianC2rPlan<<C as DftC2r<T>>::Plan>, V>,
     >
     where
-        T: DspFloat + AddAssign + MulAssign,
+        T: DspFloat,
         R: DftR2c<T>,
         C: DftC2r<T> + Clone,
         V: VecOps<T>,

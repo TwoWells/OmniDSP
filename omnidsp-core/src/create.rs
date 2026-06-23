@@ -25,8 +25,6 @@
 //! `CreatePlan<NewSpec>` / `CreateProc<NewSpec>` impl — no new trait
 //! definitions, no existing code breaks.
 
-use std::ops::{AddAssign, MulAssign};
-
 use crate::dispatch::Backend;
 use crate::error::Result;
 use crate::types::DspFloat;
@@ -57,7 +55,7 @@ pub trait CreatePlan<S> {
     fn create_plan<T>(&self, spec: &S) -> Result<Self::Plan<T>>
     where
         Self: Backend<T>,
-        T: DspFloat + AddAssign + MulAssign;
+        T: DspFloat;
 }
 
 /// A backend that can route a **sub-processor** of spec type `S` into a
@@ -119,5 +117,5 @@ pub trait CreateProc<S> {
     fn create_proc<T>(&self, spec: &S) -> Result<Self::Proc<T>>
     where
         Self: Backend<T>,
-        T: DspFloat + AddAssign + MulAssign;
+        T: DspFloat;
 }

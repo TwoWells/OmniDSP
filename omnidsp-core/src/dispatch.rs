@@ -20,12 +20,9 @@
 //! when the plan type is named — which a blanket bounded only by the trait's
 //! `Self: VecOps<T>` could not guarantee.
 
-use std::ops::{AddAssign, MulAssign};
-
-use num_traits::Float;
-
 use crate::traits::dft::{DftC2c, DftC2r, DftR2c};
 use crate::traits::vecops::VecOps;
+use crate::types::DspFloat;
 
 /// A complete backend at precision `T`.
 ///
@@ -42,13 +39,13 @@ use crate::traits::vecops::VecOps;
 /// kernels all are), so each family member is its own factory.
 pub trait Backend<T>: RawDft<T> + VecOps<T>
 where
-    T: Float + AddAssign + MulAssign,
+    T: DspFloat,
 {
 }
 
 impl<T, B> Backend<T> for B
 where
-    T: Float + AddAssign + MulAssign,
+    T: DspFloat,
     B: RawDft<T> + VecOps<T>,
 {
 }

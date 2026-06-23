@@ -19,11 +19,9 @@
 
 use std::f64::consts::PI;
 use std::fmt;
-use std::ops::{AddAssign, MulAssign};
 use std::sync::Mutex;
 
 use num_complex::Complex;
-use num_traits::Float;
 
 use crate::error::{Error, Result};
 use crate::hermitian::{HermitianC2r, HermitianC2rPlan};
@@ -117,7 +115,7 @@ struct DctScratch<T> {
 )]
 impl<T, RP, CP, V> DctPlan<T> for OmniDctPlan<T, RP, CP, V>
 where
-    T: Float + AddAssign + MulAssign + Send + Sync,
+    T: DspFloat,
     RP: DftR2cPlan<T>,
     CP: DftC2rPlan<T>,
     V: VecOps<T>,
@@ -149,7 +147,7 @@ where
 )]
 impl<T, RP, CP, V> OmniDctPlan<T, RP, CP, V>
 where
-    T: Float + AddAssign + MulAssign + Send + Sync,
+    T: DspFloat,
     RP: DftR2cPlan<T>,
     CP: DftC2rPlan<T>,
     V: VecOps<T>,
@@ -290,7 +288,7 @@ impl<R, C, V> OmniDct<R, C, V> {
         spec: &DctSpec,
     ) -> Result<OmniDctPlan<T, <R as DftR2c<T>>::Plan, HermitianC2rPlan<<C as DftC2r<T>>::Plan>, V>>
     where
-        T: DspFloat + AddAssign + MulAssign,
+        T: DspFloat,
         R: DftR2c<T>,
         C: DftC2r<T> + Clone,
         V: VecOps<T>,

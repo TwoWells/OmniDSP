@@ -15,12 +15,9 @@
 //! `process(everything) + finish` flushes the convolution tail and reproduces
 //! scipy's `upfirdn`; `process(chunk)` … streams.
 
-use std::ops::{AddAssign, MulAssign};
-
-use num_traits::Float;
-
 use crate::design::resample::ResampleSpec;
 use crate::error::{Error, Result};
+use crate::types::DspFloat;
 
 // ─── Public types ──────────────────────────────────────────────────────
 
@@ -110,7 +107,7 @@ impl<T: std::fmt::Debug> std::fmt::Debug for OmniResampleProcessor<T> {
 
 impl<T> OmniResampleProcessor<T>
 where
-    T: Float + AddAssign + MulAssign + Send + Sync,
+    T: DspFloat,
 {
     /// Resample the streaming `input`, writing to `output`; returns the number
     /// of output samples written.
@@ -370,7 +367,7 @@ pub trait ResampleProcessor<T> {
 
 impl<T> ResampleProcessor<T> for OmniResampleProcessor<T>
 where
-    T: Float + AddAssign + MulAssign + Send + Sync,
+    T: DspFloat,
 {
     // Each method delegates to the inherent one.  Inherent methods take
     // precedence over trait methods in resolution, so these are not recursive.
@@ -418,7 +415,7 @@ impl OmniResample {
     /// so they are not re-checked here.
     pub fn create_proc<T>(&self, spec: &ResampleSpec) -> Result<OmniResampleProcessor<T>>
     where
-        T: Float + AddAssign + MulAssign + Send + Sync,
+        T: DspFloat,
     {
         let up = spec.up_factor();
         let down = spec.down_factor();

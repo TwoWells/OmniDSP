@@ -16,7 +16,6 @@
 //! `Send + Sync` while taking `&self`.
 
 use std::fmt;
-use std::ops::{AddAssign, MulAssign};
 use std::sync::Mutex;
 
 use num_complex::Complex;
@@ -192,7 +191,7 @@ struct Scratch<T> {
 
 impl<T, RP, CP, V> OmniCrossCorrPlan<T, RP, CP, V>
 where
-    T: Float + AddAssign + MulAssign + Send + Sync,
+    T: DspFloat,
     RP: DftR2cPlan<T>,
     CP: DftC2rPlan<T>,
     V: VecOps<T>,
@@ -317,7 +316,7 @@ pub trait CrossCorrPlan<T>: Send + Sync {
 
 impl<T, RP, CP, V> CrossCorrPlan<T> for OmniCrossCorrPlan<T, RP, CP, V>
 where
-    T: Float + AddAssign + MulAssign + Send + Sync,
+    T: DspFloat,
     RP: DftR2cPlan<T>,
     CP: DftC2rPlan<T>,
     V: VecOps<T>,
@@ -349,7 +348,7 @@ impl<R, C, V> OmniCrossCorr<R, C, V> {
     /// so they are not re-checked here.
     pub fn create_plan<T>(&self, spec: &CrossCorrSpec) -> Result<ShapedCrossCorrPlan<T, R, C, V>>
     where
-        T: DspFloat + AddAssign + MulAssign,
+        T: DspFloat,
         R: DftR2c<T>,
         C: DftC2r<T> + Clone,
         V: VecOps<T>,

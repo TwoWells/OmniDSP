@@ -40,7 +40,6 @@
 //! is uncontended in the common single-threaded case.
 
 use std::fmt;
-use std::ops::{AddAssign, MulAssign};
 use std::sync::Mutex;
 
 use num_complex::Complex;
@@ -155,7 +154,7 @@ struct CqtScratch<T, ResP> {
 
 impl<T, RP, V, ResP> OmniCqtPlan<T, RP, V, ResP>
 where
-    T: DspFloat + AddAssign + MulAssign,
+    T: DspFloat,
     RP: DftR2cPlan<T>,
     V: VecOps<T>,
     ResP: ResampleProcessor<T>,
@@ -342,7 +341,7 @@ pub trait CqtPlan<T>: Send + Sync {
 
 impl<T, RP, V, ResP> CqtPlan<T> for OmniCqtPlan<T, RP, V, ResP>
 where
-    T: DspFloat + AddAssign + MulAssign,
+    T: DspFloat,
     RP: DftR2cPlan<T>,
     V: VecOps<T>,
     ResP: ResampleProcessor<T> + Send,
@@ -399,7 +398,7 @@ impl<R, V> OmniCqt<R, V> {
         resample_factory: &RF,
     ) -> Result<OmniCqtPlan<T, R::Plan, V, <RF as CreateProc<ResampleSpec>>::Proc<T>>>
     where
-        T: DspFloat + AddAssign + MulAssign,
+        T: DspFloat,
         R: DftR2c<T>,
         V: VecOps<T>,
         RF: CreateProc<ResampleSpec> + Backend<T>,
@@ -484,7 +483,7 @@ impl<T, P, V> fmt::Debug for SingleFftCqtPlan<T, P, V> {
 #[cfg(any(test, feature = "bench"))]
 impl<T, P, V> SingleFftCqtPlan<T, P, V>
 where
-    T: DspFloat + AddAssign + MulAssign,
+    T: DspFloat,
     P: DftC2cPlan<T>,
     V: VecOps<T>,
 {
@@ -562,7 +561,7 @@ impl<D, V> SingleFftCqt<D, V> {
     )]
     pub fn create_plan<T>(&self, spec: &CqtSpec) -> Result<SingleFftCqtPlan<T, D::Plan, V>>
     where
-        T: DspFloat + AddAssign + MulAssign,
+        T: DspFloat,
         D: DftC2c<T>,
         V: VecOps<T>,
     {

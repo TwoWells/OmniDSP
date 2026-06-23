@@ -12,12 +12,10 @@
 //! precompute.  No factory+plan pattern; methods are called directly on the
 //! implementor (typically a unit struct like `RustVecOps` or `HwyVecOps`).
 
-use std::ops::{AddAssign, MulAssign};
-
 use num_complex::Complex;
-use num_traits::Float;
 
 use crate::error::{Error, Result};
+use crate::types::DspFloat;
 
 /// Check that two slice lengths match.
 #[allow(
@@ -67,7 +65,7 @@ pub(crate) fn check_lengths_3(a_len: usize, b_len: usize, out_len: usize) -> Res
 /// Implementations are stateless and must be safely shareable across threads.
 /// `Clone` is required because composite modules store their own `VecOps`
 /// handle in each plan — for stateless unit structs this is zero-cost `Copy`.
-pub trait VecOps<T: Float + AddAssign + MulAssign>: Send + Sync + Clone {
+pub trait VecOps<T: DspFloat>: Send + Sync + Clone {
     /// Element-wise multiply: `out[i] = a[i] * b[i]`.
     ///
     /// All three slices must have the same length.

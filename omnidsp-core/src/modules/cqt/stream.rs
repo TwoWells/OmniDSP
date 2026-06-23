@@ -69,7 +69,6 @@
 //!   anchored batch rides alongside it.
 
 use std::f64::consts::TAU;
-use std::ops::{AddAssign, MulAssign};
 
 use num_complex::Complex;
 
@@ -341,7 +340,7 @@ impl<T, RP, V, ResP> std::fmt::Debug for OmniCqtProcessor<T, RP, V, ResP> {
 
 impl<T, RP, V, ResP> OmniCqtProcessor<T, RP, V, ResP>
 where
-    T: DspFloat + AddAssign + MulAssign,
+    T: DspFloat,
     RP: DftR2cPlan<T>,
     V: VecOps<T>,
     ResP: ResampleProcessor<T>,
@@ -680,7 +679,7 @@ where
 
 impl<T, RP, V, ResP> CqtProcessor<T> for OmniCqtProcessor<T, RP, V, ResP>
 where
-    T: DspFloat + AddAssign + MulAssign,
+    T: DspFloat,
     RP: DftR2cPlan<T>,
     V: VecOps<T>,
     ResP: ResampleProcessor<T>,
@@ -724,7 +723,7 @@ where
 
 impl<T, RP, V, ResP> Reconfigure<Window> for OmniCqtProcessor<T, RP, V, ResP>
 where
-    T: DspFloat + AddAssign + MulAssign,
+    T: DspFloat,
 {
     /// Swap the analysis window in place, re-materializing every bin's
     /// frequency-domain kernel from the new window at its existing length, and
@@ -772,7 +771,7 @@ impl<R, V> OmniCqt<R, V> {
         resample_factory: &RF,
     ) -> Result<OmniCqtProcessor<T, R::Plan, V, <RF as CreateProc<ResampleSpec>>::Proc<T>>>
     where
-        T: DspFloat + AddAssign + MulAssign,
+        T: DspFloat,
         R: DftR2c<T>,
         V: VecOps<T>,
         RF: CreateProc<ResampleSpec> + Backend<T>,
