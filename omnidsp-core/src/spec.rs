@@ -23,7 +23,7 @@
 //! enforce** — e.g. `ResampleSpec::new` checks the prototype cutoff against the
 //! polyphase factorization.  It is an **infallible `const fn new`** when the
 //! spec is a pure composition of already-validated parts (`FirSpec::new` over a
-//! `FirFilter`, `CqtStreamSpec::new` over a `CqtSpec`).  Fallibility tracks
+//! `FirFilter`).  Fallibility tracks
 //! invariants, not nesting; a `new` never returns `Result` solely to wrap a
 //! numeric conversion that cannot fail for the supported float types.
 //!
@@ -155,6 +155,41 @@
 //!   `T` at the realization edge.  That single cast is the rule: design and store
 //!   in f64, cast once at `create_*`, never round-trip a `T` artifact back
 //!   through f64.
+//!
+//! ## Module tiers — what composes what, and what a vendor owes
+//!
+//! Operations sit in tiers by **what they compose, and whether that composition
+//! is efficient** — a thing lives at the lowest tier it can be expressed at
+//! without losing to a tuned native implementation.  The cheap litmus is **where
+//! the primitive call sits relative to the hot loop**: outside it (once per
+//! buffer) → the operation composes; inside it (per sample / per tap) → the
+//! operation is a *leaf*, because a short call across a vendor's FFI boundary
+//! every sample is dominated by the crossing, not the work.
+//!
+//! - **Vendor primitives** — the real-DFT family and
+//!   [`VecOps`](crate::traits::vecops::VecOps): the closed, mandatory
+//!   [`Backend<T>`](crate::dispatch::Backend) contract.  A vendor must provide
+//!   them; everything else is built over them.
+//! - **Omni primitives** — IIR, resampling.  Leaf operations (a per-sample
+//!   recurrence; a per-output-sample polyphase dot) that *cannot* compose the
+//!   vendor primitives efficiently, so their realization is **concrete scalar and
+//!   takes no backend**.  A vendor should override them with a native kernel
+//!   (skip the omni impl and hand-write one); the floor stays correct scalar,
+//!   never a per-sample FFI penalty.
+//! - **Modules** — convolution, FIR, DCT, Hilbert, cross-correlation, window,
+//!   CQT.  Realized over the backend's primitives (a bulk transform plus a
+//!   whole-buffer vector pass), so a tuned backend accelerates them for free.
+//! - **Composers** — operations that route a *module* sub-plan.  None today; a
+//!   module that merely routes a *leaf* (the multirate CQT routes the resampler)
+//!   is still a module.
+//!
+//! Two of these boundaries are **type-enforced**, not advisory.  A module's
+//! dependency on the primitives is its `Self: Backend<T>` bound.  A routing
+//! operation's dependency on a sub-processor is a bound the compiler checks: a
+//! backend that drops a routed sub-module without supplying a native replacement
+//! fails to compile, with a message naming the missing dependency.  The tier
+//! *names* and the "a vendor should override this one" guidance are vocabulary;
+//! the dependency bounds are contract.
 //!
 //! ## The trait is the complete contract
 //!

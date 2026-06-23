@@ -60,6 +60,44 @@ pub trait CreatePlan<S> {
         T: DspFloat + AddAssign + MulAssign;
 }
 
+/// A backend that can route a **sub-processor** of spec type `S` into a
+/// composing (routing) module.
+///
+/// This is the *composition* peer of [`CreateProc`], and the two are
+/// equivalent: a blanket impl makes every `CreateProc<S>` backend a
+/// `RoutesSubProc<S>`.  The split exists for one reason — the **diagnostic**.
+/// Some modules are *composers*: they route another module as an internal
+/// sub-processor (the multirate CQT routes a half-band resample decimator per
+/// octave).  A composer's generated impl is bounded on `RoutesSubProc<TheSub>`
+/// rather than `CreateProc<TheSub>` directly, so when a backend keeps the
+/// composer but does not supply that sub-processor (e.g. the omni resampler was
+/// dropped from the backend's module set and nothing replaced it), the compiler
+/// reports the dependency in words — naming the missing capability and pointing
+/// at the fix — instead of an opaque trait-bound error deep in the composer's
+/// machinery.
+///
+/// The legitimate "drop the omni sub-module, hand-write a native one" path is
+/// unaffected: providing a `CreateProc<S>` impl satisfies the blanket, so the
+/// diagnostic never fires there.
+///
+/// [`CreateProc<S>`](CreateProc) is a supertrait, so a composer bounded on
+/// `Self: RoutesSubProc<S>` can still name the routed processor type
+/// `<Self as CreateProc<S>>::Proc<T>` — the marker adds the diagnostic without
+/// hiding the factory.
+#[diagnostic::on_unimplemented(
+    message = "the backend `{Self}` does not provide a sub-processor for `{S}`",
+    label = "this backend cannot route a `{S}` sub-processor",
+    note = "a composing module (for example the multirate CQT, which routes a \
+            half-band resample decimator) needs this sub-processor but the \
+            backend does not implement `CreateProc<{S}>` for it",
+    note = "either keep the omni sub-module that supplies it (do not list it in \
+            the backend macro's `skip:` set), or hand-write an \
+            `impl CreateProc<{S}>` for `{Self}`"
+)]
+pub trait RoutesSubProc<S>: CreateProc<S> {}
+
+impl<S, B> RoutesSubProc<S> for B where B: CreateProc<S> {}
+
 /// Factory trait producing a stateful **Processor** for a spec type.
 ///
 /// The stateful peer of [`CreatePlan`]: same spec-keyed dispatch and same

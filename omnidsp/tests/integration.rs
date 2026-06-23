@@ -838,6 +838,96 @@ fn skip_conv_backend_other_modules_work() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// impl_generic_backend! with skip: [resampler] + a hand-written native resampler
+// ═══════════════════════════════════════════════════════════════════════
+//
+// The legitimate "drop the omni sub-module, supply a native one" path for the
+// CQT's routed resample dependency.  The CQT composer is bounded on
+// `RoutesSubProc<ResampleSpec>`, which a hand-written `CreateProc<ResampleSpec>`
+// satisfies — so the composition diagnostic does NOT fire here and the CQT
+// builds and runs.  (The companion compile-fail fixture
+// `tests/ui/cqt_needs_resampler.rs` covers the skip-and-forget case, where the
+// same bound surfaces the worded error.)
+
+/// A backend that skips the omni resampler but hand-writes its own
+/// `CreateProc<ResampleSpec>` (here delegating to `OmniResample`, as a vendor
+/// with a native resampler would delegate to theirs), and keeps the CQT.
+#[derive(Clone)]
+struct NativeResampleBackend {
+    dftc2c: RustDftC2c,
+    dftr2c: RustDftR2c,
+    dftc2r: RustDftC2r,
+}
+
+impl omnidsp_core::traits::vecops::VecOps<f32> for NativeResampleBackend {}
+impl omnidsp_core::traits::vecops::VecOps<f64> for NativeResampleBackend {}
+
+omnidsp_macros::impl_generic_backend! {
+    backend: NativeResampleBackend,
+    dftc2c: RustDftC2c,
+    dftr2c: RustDftR2c,
+    dftc2r: RustDftC2r,
+    skip: [resampler],
+}
+
+// Hand-written native resample factory — what `skip: [resampler]` makes room
+// for.  Satisfies the CQT's `RoutesSubProc<ResampleSpec>` routing bound.
+impl CreateProc<ResampleSpec> for NativeResampleBackend {
+    type Proc<T>
+        = omnidsp_core::modules::resample::OmniResampleProcessor<T>
+    where
+        Self: Backend<T>;
+
+    fn create_proc<T>(&self, spec: &ResampleSpec) -> omnidsp_core::error::Result<Self::Proc<T>>
+    where
+        Self: Backend<T>,
+        T: omnidsp_core::types::DspFloat + std::ops::AddAssign + std::ops::MulAssign,
+    {
+        omnidsp_core::modules::resample::OmniResample::new().create_proc::<T>(spec)
+    }
+}
+
+#[test]
+fn skip_resampler_with_native_cqt_works() {
+    let b = NativeResampleBackend {
+        dftc2c: RustDftC2c,
+        dftr2c: RustDftR2c,
+        dftc2r: RustDftC2r,
+    };
+    let dsp = OmniDSP::new(b);
+
+    // The routed native resampler still works directly.
+    let proto =
+        FirFilter::new(vec![0.5, 1.0, 0.5], FirMeta::unknown()).expect("non-empty prototype");
+    let resample_spec = ResampleSpec::new(proto, 2, 1).expect("valid resample spec");
+    let mut resampler = dsp
+        .resample::<f64>(&resample_spec)
+        .expect("native resample proc");
+    let input: Vec<f64> = (0..16).map(f64::from).collect();
+    let mut out = vec![0.0; 64];
+    let written = resampler.process(&input, &mut out).expect("resample");
+    assert_eq!(written, 32, "native resampler should produce 2x samples");
+
+    // And the CQT — which routes that resampler — builds and runs.
+    let bins = vec![CqtBinSpec {
+        frequency: 440.0,
+        kernel_len: 5,
+    }];
+    let cqt_spec = CqtSpec::new(44100.0, 8, 2, bins, Window::Hann).expect("CQT spec");
+    let plan = dsp
+        .cqt::<f64>(&cqt_spec)
+        .expect("CQT plan over native resampler");
+
+    let signal = vec![0.0; 8];
+    let mut mags = vec![Complex::new(0.0, 0.0); 1];
+    plan.execute(&signal, &mut mags).expect("CQT process");
+    assert!(
+        mags[0].re.abs() < 1e-10,
+        "CQT of zero input should be ~zero",
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // impl_generic_backend! minimal — only `dftc2c:`, everything else defaulted
 // ═══════════════════════════════════════════════════════════════════════
 

@@ -54,6 +54,29 @@ const KNOWN_MODULES: &[&str] = &[
     "xcorr",
 ];
 
+/// The composition dependency graph: which **composer** module routes which
+/// other module as an internal sub-processor.
+///
+/// This is the single declarative source of truth for the routing tier of the
+/// module model.  Each `(composer, sub_module)` pair means "the generated
+/// `composer` impl routes a `sub_module` sub-processor, so it is bounded on the
+/// backend being able to supply it".  The composer's emitted bound uses the
+/// `RoutesSubProc` marker (not bare `CreateProc`) so a backend that keeps the
+/// composer but drops the sub-module gets a worded diagnostic naming the
+/// dependency, rather than an opaque trait-bound error inside the composer.
+///
+/// The graph grows here as composers are added; today the only routing module
+/// is the multirate CQT, which decimates an octave at a time through a
+/// half-band resampler.
+const COMPOSITION_DEPS: &[(&str, &str)] = &[("cqt", "resampler")];
+
+/// Whether `composer` routes `sub_module` per [`COMPOSITION_DEPS`].
+fn composer_routes(composer: &str, sub_module: &str) -> bool {
+    COMPOSITION_DEPS
+        .iter()
+        .any(|&(c, s)| c == composer && s == sub_module)
+}
+
 /// Return `f32` and `f64` idents for codegen iteration.
 fn float_idents() -> [Ident; 2] {
     [
@@ -487,15 +510,32 @@ fn gen_cqt(input: &BackendInput) -> TokenStream2 {
     // Multirate CQT capstone: octave-recursive r2c analysis with an
     // `OmniResample(1, 2)` decimator routed as a sub-processor.  The backend
     // itself (`self`) is threaded as the module `VecOps` `V` (for the CQT's bulk
-    // spectral multiply) and as the routed `CreateProc<ResampleSpec>` factory, so
-    // a vendor that overrides resampling accelerates the CQT decimation; an
-    // unoverriding backend gets the scalar `OmniResample` decimator (its
-    // per-sample polyphase dot stays scalar by design — never a per-sample FFI
-    // crossing).  The routed factory must be a `Backend<T>` (only a backend
-    // dispatches sub-processors); that holds for `Self` and additionally requires
-    // `Self: CreateProc<ResampleSpec>` — true unless `resampler` is skipped.  The
-    // forward r2c plan is reached through the `RawDft<T>` accessor.  One impl
-    // each, generic over the precision `T`.
+    // spectral multiply) and as the routed resample factory, so a vendor that
+    // overrides resampling accelerates the CQT decimation; an unoverriding
+    // backend gets the scalar `OmniResample` decimator (its per-sample polyphase
+    // dot stays scalar by design — never a per-sample FFI crossing).  The routed
+    // factory must be a `Backend<T>` (only a backend dispatches sub-processors);
+    // that holds for `Self` and additionally requires the backend to supply a
+    // resample sub-processor.
+    //
+    // That routing dependency — cqt routes resampler — is declared once in the
+    // `COMPOSITION_DEPS` graph (asserted below).  The emitted bound names the
+    // `RoutesSubProc<ResampleSpec>` marker rather than bare
+    // `CreateProc<ResampleSpec>`: both are equivalent (the marker is a blanket
+    // over `CreateProc`), but the marker carries the `on_unimplemented`
+    // diagnostic, so a backend that keeps `cqt` while dropping `resampler` (and
+    // not hand-writing a native one) gets a worded error naming the cqt→resample
+    // dependency instead of an opaque trait-bound failure inside the CQT
+    // machinery.  The associated processor type is still reached through the
+    // `CreateProc` supertrait projection.  The forward r2c plan is reached
+    // through the `RawDft<T>` accessor.  One impl each, generic over `T`.
+    assert!(
+        composer_routes("cqt", "resampler"),
+        "COMPOSITION_DEPS must declare that `cqt` routes `resampler`: the CQT \
+         dispatch routes a resample sub-processor, so the graph is the single \
+         source of truth for that dependency"
+    );
+
     quote! {
         impl ::omnidsp_core::create::CreatePlan<::omnidsp_core::design::cqt::CqtSpec>
             for #backend
@@ -511,7 +551,7 @@ fn gen_cqt(input: &BackendInput) -> TokenStream2 {
             >
             where
                 Self: ::omnidsp_core::dispatch::Backend<T>
-                    + ::omnidsp_core::create::CreateProc<
+                    + ::omnidsp_core::create::RoutesSubProc<
                         ::omnidsp_core::design::resample::ResampleSpec,
                     >;
 
@@ -521,7 +561,7 @@ fn gen_cqt(input: &BackendInput) -> TokenStream2 {
             ) -> ::omnidsp_core::error::Result<Self::Plan<T>>
             where
                 Self: ::omnidsp_core::dispatch::Backend<T>
-                    + ::omnidsp_core::create::CreateProc<
+                    + ::omnidsp_core::create::RoutesSubProc<
                         ::omnidsp_core::design::resample::ResampleSpec,
                     >,
                 T: ::omnidsp_core::types::DspFloat
@@ -543,8 +583,8 @@ fn gen_cqt(input: &BackendInput) -> TokenStream2 {
 
         // Streaming, newest-anchored CQT: reached via `CreateProc<CqtSpec>` over
         // the same spec.  Mirrors the batch impl, building one continuous
-        // decimator sub-processor per octave transition from the routed
-        // `CreateProc<ResampleSpec>` factory (`self`) and dropping it.
+        // decimator sub-processor per octave transition from the routed resample
+        // factory (`self`) and dropping it.
         impl ::omnidsp_core::create::CreateProc<::omnidsp_core::design::cqt::CqtSpec>
             for #backend
         {
@@ -559,7 +599,7 @@ fn gen_cqt(input: &BackendInput) -> TokenStream2 {
             >
             where
                 Self: ::omnidsp_core::dispatch::Backend<T>
-                    + ::omnidsp_core::create::CreateProc<
+                    + ::omnidsp_core::create::RoutesSubProc<
                         ::omnidsp_core::design::resample::ResampleSpec,
                     >;
 
@@ -569,7 +609,7 @@ fn gen_cqt(input: &BackendInput) -> TokenStream2 {
             ) -> ::omnidsp_core::error::Result<Self::Proc<T>>
             where
                 Self: ::omnidsp_core::dispatch::Backend<T>
-                    + ::omnidsp_core::create::CreateProc<
+                    + ::omnidsp_core::create::RoutesSubProc<
                         ::omnidsp_core::design::resample::ResampleSpec,
                     >,
                 T: ::omnidsp_core::types::DspFloat
