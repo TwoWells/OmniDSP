@@ -8,11 +8,6 @@
 name: bench-onemkl
 
 on:
-  # `workflow_dispatch` only works once this file is on the default branch.
-  # Until then, a branch-scoped push trigger lets the bench run on `feat/onemkl`.
-  # TEMPORARY — revert to dispatch-only after capturing the first numbers / merge.
-  push:
-    branches: [feat/onemkl]
   workflow_dispatch:
 
 jobs:
