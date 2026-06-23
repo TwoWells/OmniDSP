@@ -115,3 +115,12 @@ jobs:
       # (they are workspace-excluded). Links libmkl_rt from the image.
       - name: make onemkl-check
         run: make onemkl-check
+
+      # The `omnidsp` integration: the `onemkl` feature wires OneMklBackend as the
+      # Best/Auto alias plus the `OmniDSP::onemkl()` constructor. The floor `check`
+      # job lints and tests `omnidsp` with the feature OFF, so this cfg-gated
+      # vendor path is only exercised here.
+      - name: omnidsp --features onemkl
+        run: |
+          cargo clippy -p omnidsp --features onemkl --all-targets -- -D warnings
+          cargo nextest run -p omnidsp --features onemkl --no-fail-fast --no-tests=pass

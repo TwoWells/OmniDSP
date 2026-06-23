@@ -25,10 +25,21 @@ mod omnidsp;
 pub use create::{CreatePlan, CreateProc};
 pub use omnidsp::{OmniDSP, RustBackend};
 
+/// The Intel oneMKL backend, re-exported when the `onemkl` feature is enabled.
+#[cfg(feature = "onemkl")]
+pub use omnidsp_onemkl::OneMklBackend;
+
 /// The best available backend, selected at compile time.
 ///
-/// Defaults to [`RustBackend`] (pure Rust fallback).  Updated when
-/// vendor features (IPP, Accelerate, oneMKL) are enabled.
+/// Defaults to [`RustBackend`] (pure Rust fallback).  With the `onemkl` feature
+/// enabled it resolves to [`OneMklBackend`].  As more vendor features land (IPP,
+/// Accelerate) this becomes a `cfg` priority ladder.
+#[cfg(feature = "onemkl")]
+pub type Best = OneMklBackend;
+
+/// The best available backend, selected at compile time (pure-Rust floor when no
+/// vendor feature is enabled).
+#[cfg(not(feature = "onemkl"))]
 pub type Best = RustBackend;
 
 /// Convenience alias: [`OmniDSP`] with the best compiled-in backend.

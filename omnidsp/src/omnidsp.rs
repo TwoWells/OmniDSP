@@ -334,6 +334,19 @@ impl OmniDSP<RustBackend> {
     }
 }
 
+#[cfg(feature = "onemkl")]
+impl OmniDSP<crate::OneMklBackend> {
+    /// Create an engine using the Intel oneMKL backend.
+    ///
+    /// Uses oneMKL DFTI FFTs with accelerated VM/BLAS vector ops; convolution
+    /// and cross-correlation compose for free over the accelerated DFT.  Requires
+    /// Intel oneMKL to be installed and linked (the `onemkl` Cargo feature).
+    #[must_use]
+    pub const fn onemkl() -> Self {
+        Self::new(crate::OneMklBackend::new())
+    }
+}
+
 impl crate::Auto {
     /// Create an engine using the best compiled-in backend.
     #[must_use]
