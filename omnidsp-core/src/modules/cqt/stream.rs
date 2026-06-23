@@ -837,14 +837,10 @@ mod tests {
         f64,
         <TestDftR2c as DftR2c<f64>>::Plan,
         TestVecOps,
-        OmniResampleProcessor<f64, TestVecOps>,
+        OmniResampleProcessor<f64>,
     >;
-    type TestBatchPlan = OmniCqtPlan<
-        f64,
-        <TestDftR2c as DftR2c<f64>>::Plan,
-        TestVecOps,
-        OmniResampleProcessor<f64, TestVecOps>,
-    >;
+    type TestBatchPlan =
+        OmniCqtPlan<f64, <TestDftR2c as DftR2c<f64>>::Plan, TestVecOps, OmniResampleProcessor<f64>>;
 
     fn factory() -> OmniCqt<TestDftR2c, TestVecOps> {
         OmniCqt::new(TestDftR2c, TestVecOps)

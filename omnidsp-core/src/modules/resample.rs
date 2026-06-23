@@ -21,29 +21,33 @@ use num_traits::Float;
 
 use crate::design::resample::ResampleSpec;
 use crate::error::{Error, Result};
-use crate::traits::vecops::VecOps;
 
 // ─── Public types ──────────────────────────────────────────────────────
 
-/// Polyphase FIR resampler factory backed by a [`VecOps`] implementation.
+/// Polyphase FIR resampler factory.
 ///
-/// Creates [`OmniResampleProcessor`]s from [`ResampleSpec`]s.  The factory
-/// owns the `VecOps` instance; processors own a clone of it.
+/// Creates [`OmniResampleProcessor`]s from [`ResampleSpec`]s.  The resampler is
+/// a **concrete scalar module**: its hot path is a per-output-sample dot
+/// product — a tight inner loop — so it stays scalar rather than composing
+/// [`VecOps`](crate::traits::vecops::VecOps).  A `VecOps` `dot` per output
+/// sample would cross a vendor's FFI boundary on *every* sample, where the
+/// crossing cost dwarfs a short dot (bulk `VecOps` amortizes that cost over a
+/// buffer; a per-sample call cannot).  A vendor that wants accelerated
+/// resampling supplies a native resampler through the dispatch override
+/// instead.
 ///
 /// There is no `Resample` trait — this is a standalone factory.
 /// The spec/processor contract is the same as the trait-based modules:
 /// construct a spec, pass it to `create_proc`, call `process`/`finish` on the
 /// processor.
-#[derive(Debug, Clone)]
-pub struct OmniResample<V> {
-    vecops: V,
-}
+#[derive(Debug, Clone, Default)]
+pub struct OmniResample;
 
-impl<V> OmniResample<V> {
+impl OmniResample {
     /// Create a new resampler factory.
     #[must_use]
-    pub const fn new(vecops: V) -> Self {
-        Self { vecops }
+    pub const fn new() -> Self {
+        Self
     }
 }
 
@@ -58,7 +62,7 @@ impl<V> OmniResample<V> {
 ///
 /// **Memory:** `L × taps_per_phase` for the polyphase coefficients plus
 /// `2 × taps_per_phase` for the doubled delay buffer.
-pub struct OmniResampleProcessor<T, V> {
+pub struct OmniResampleProcessor<T> {
     /// Polyphase coefficients: `up_factor` phases × `taps_per_phase`,
     /// flat layout with stride `taps_per_phase`.  Each phase is stored
     /// reversed for direct dot product with the delay line.  Scaled by
@@ -90,11 +94,9 @@ pub struct OmniResampleProcessor<T, V> {
     /// the convolution tail exactly: the finite-convolution (`upfirdn`) length
     /// minus the streaming count the `process` calls already emitted.
     samples_in: usize,
-    /// `VecOps` handle for dot products.
-    vecops: V,
 }
 
-impl<T: std::fmt::Debug, V> std::fmt::Debug for OmniResampleProcessor<T, V> {
+impl<T: std::fmt::Debug> std::fmt::Debug for OmniResampleProcessor<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("OmniResampleProcessor")
             .field("up_factor", &self.up_factor)
@@ -106,10 +108,9 @@ impl<T: std::fmt::Debug, V> std::fmt::Debug for OmniResampleProcessor<T, V> {
 
 // ─── Plan methods ─────────────────────────────────────────────────────
 
-impl<T, V> OmniResampleProcessor<T, V>
+impl<T> OmniResampleProcessor<T>
 where
     T: Float + AddAssign + MulAssign + Send + Sync,
-    V: VecOps<T>,
 {
     /// Resample the streaming `input`, writing to `output`; returns the number
     /// of output samples written.
@@ -147,9 +148,18 @@ where
                 let coeffs = &self.phases[coeffs_start..coeffs_start + tpp];
                 let pos = self.write_pos;
 
-                // Single contiguous dot product — the doubled buffer
-                // guarantees `delay[pos..pos + tpp]` is always valid.
-                let y = self.vecops.dot(coeffs, &self.delay[pos..pos + tpp])?;
+                // In-core scalar dot — the doubled buffer guarantees
+                // `delay[pos..pos + tpp]` is always valid.  This per-output-sample
+                // inner product is a tight loop, so it stays scalar rather than
+                // routing through `VecOps`: a `VecOps::dot` here would cross a
+                // vendor's FFI boundary once per output sample, where the crossing
+                // cost dominates a short dot.  The `fold` matches the scalar
+                // `VecOps::dot` arithmetic exactly, so resampling values are
+                // unchanged.
+                let y = coeffs
+                    .iter()
+                    .zip(&self.delay[pos..pos + tpp])
+                    .fold(T::zero(), |acc, (&c, &d)| acc + c * d);
 
                 // The streaming count `⌈N·L/M⌉` is exactly `max_output_len`, and
                 // `output` is checked to hold it, so `out_idx` stays in bounds.
@@ -358,10 +368,9 @@ pub trait ResampleProcessor<T> {
     fn reset(&mut self);
 }
 
-impl<T, V> ResampleProcessor<T> for OmniResampleProcessor<T, V>
+impl<T> ResampleProcessor<T> for OmniResampleProcessor<T>
 where
     T: Float + AddAssign + MulAssign + Send + Sync,
-    V: VecOps<T>,
 {
     // Each method delegates to the inherent one.  Inherent methods take
     // precedence over trait methods in resolution, so these are not recursive.
@@ -392,7 +401,7 @@ where
 
 // ─── Factory ──────────────────────────────────────────────────────────
 
-impl<V> OmniResample<V> {
+impl OmniResample {
     /// Create a resampling processor from a [`ResampleSpec`].
     ///
     /// The spec provides rational conversion factors and a prototype FIR
@@ -407,10 +416,9 @@ impl<V> OmniResample<V> {
     /// in `T`.  The spec invariants (positive factors, non-empty prototype) are
     /// enforced by [`ResampleSpec::new`](crate::design::resample::ResampleSpec::new),
     /// so they are not re-checked here.
-    pub fn create_proc<T>(&self, spec: &ResampleSpec) -> Result<OmniResampleProcessor<T, V>>
+    pub fn create_proc<T>(&self, spec: &ResampleSpec) -> Result<OmniResampleProcessor<T>>
     where
         T: Float + AddAssign + MulAssign + Send + Sync,
-        V: Clone,
     {
         let up = spec.up_factor();
         let down = spec.down_factor();
@@ -460,7 +468,6 @@ impl<V> OmniResample<V> {
             phase: 0,
             proto_len: proto.len(),
             samples_in: 0,
-            vecops: self.vecops.clone(),
         })
     }
 }
@@ -472,12 +479,11 @@ impl<V> OmniResample<V> {
 mod tests {
     use super::*;
     use crate::design::resample::{self, DEFAULT_MAX_PHASES, ResampleQuality};
-    use crate::test_utils::TestVecOps;
     use crate::traits::fir::{FirFilter, FirMeta};
     use crate::window::Window;
 
-    fn factory() -> OmniResample<TestVecOps> {
-        OmniResample::new(TestVecOps)
+    fn factory() -> OmniResample {
+        OmniResample::new()
     }
 
     fn q(val: u8) -> ResampleQuality {
@@ -501,7 +507,7 @@ mod tests {
     fn create_plan_44100_to_48000() {
         let f = factory();
         let plan = f
-            .create_proc(&spec(44100.0, 48000.0, 5))
+            .create_proc::<f64>(&spec(44100.0, 48000.0, 5))
             .expect("create plan");
         assert_eq!(plan.up_factor(), 160, "L should be 160");
         assert_eq!(plan.down_factor(), 147, "M should be 147");
@@ -511,7 +517,7 @@ mod tests {
     fn create_plan_passthrough() {
         let f = factory();
         let plan = f
-            .create_proc(&spec(44100.0, 44100.0, 3))
+            .create_proc::<f64>(&spec(44100.0, 44100.0, 3))
             .expect("create plan");
         assert_eq!(plan.up_factor(), 1, "L should be 1");
         assert_eq!(plan.down_factor(), 1, "M should be 1");
@@ -521,7 +527,7 @@ mod tests {
     fn create_plan_2x_interpolation() {
         let f = factory();
         let plan = f
-            .create_proc(&spec(22050.0, 44100.0, 5))
+            .create_proc::<f64>(&spec(22050.0, 44100.0, 5))
             .expect("create plan");
         assert_eq!(plan.up_factor(), 2, "L should be 2");
         assert_eq!(plan.down_factor(), 1, "M should be 1");
@@ -531,7 +537,7 @@ mod tests {
     fn create_plan_2x_decimation() {
         let f = factory();
         let plan = f
-            .create_proc(&spec(44100.0, 22050.0, 5))
+            .create_proc::<f64>(&spec(44100.0, 22050.0, 5))
             .expect("create plan");
         assert_eq!(plan.up_factor(), 1, "L should be 1");
         assert_eq!(plan.down_factor(), 2, "M should be 2");
@@ -542,28 +548,36 @@ mod tests {
     #[test]
     fn max_output_len_passthrough() {
         let f = factory();
-        let plan = f.create_proc(&spec(44100.0, 44100.0, 3)).expect("plan");
+        let plan = f
+            .create_proc::<f64>(&spec(44100.0, 44100.0, 3))
+            .expect("plan");
         assert_eq!(plan.max_output_len(100), 100, "1:1 ratio");
     }
 
     #[test]
     fn max_output_len_2x_interpolation() {
         let f = factory();
-        let plan = f.create_proc(&spec(22050.0, 44100.0, 5)).expect("plan");
+        let plan = f
+            .create_proc::<f64>(&spec(22050.0, 44100.0, 5))
+            .expect("plan");
         assert_eq!(plan.max_output_len(100), 200, "2x interpolation");
     }
 
     #[test]
     fn max_output_len_2x_decimation() {
         let f = factory();
-        let plan = f.create_proc(&spec(44100.0, 22050.0, 5)).expect("plan");
+        let plan = f
+            .create_proc::<f64>(&spec(44100.0, 22050.0, 5))
+            .expect("plan");
         assert_eq!(plan.max_output_len(100), 50, "2x decimation");
     }
 
     #[test]
     fn max_output_len_44100_to_48000() {
         let f = factory();
-        let plan = f.create_proc(&spec(44100.0, 48000.0, 5)).expect("plan");
+        let plan = f
+            .create_proc::<f64>(&spec(44100.0, 48000.0, 5))
+            .expect("plan");
         // ceil(1000 * 160 / 147) = ceil(1088.435...) = 1089
         let max = plan.max_output_len(1000);
         assert_eq!(max, 1089, "44100→48000 max output for 1000 samples");
@@ -572,14 +586,18 @@ mod tests {
     #[test]
     fn max_output_len_zero_input() {
         let f = factory();
-        let plan = f.create_proc(&spec(44100.0, 48000.0, 5)).expect("plan");
+        let plan = f
+            .create_proc::<f64>(&spec(44100.0, 48000.0, 5))
+            .expect("plan");
         assert_eq!(plan.max_output_len(0), 0, "zero input → zero output");
     }
 
     #[test]
     fn max_output_len_is_upper_bound() {
         let f = factory();
-        let mut plan = f.create_proc(&spec(44100.0, 48000.0, 0)).expect("plan");
+        let mut plan = f
+            .create_proc::<f64>(&spec(44100.0, 48000.0, 0))
+            .expect("plan");
         let input: Vec<f64> = (0..1000).map(|i| (f64::from(i) * 0.1).sin()).collect();
         let max = plan.max_output_len(input.len());
         let mut output = vec![0.0_f64; max];
@@ -595,7 +613,9 @@ mod tests {
     #[test]
     fn passthrough_output_length() {
         let f = factory();
-        let mut plan = f.create_proc(&spec(44100.0, 44100.0, 3)).expect("plan");
+        let mut plan = f
+            .create_proc::<f64>(&spec(44100.0, 44100.0, 3))
+            .expect("plan");
         let input = vec![1.0; 100];
         let mut output = vec![0.0; plan.max_output_len(input.len())];
         let n = plan.process(&input, &mut output).expect("process");
@@ -605,7 +625,9 @@ mod tests {
     #[test]
     fn interpolation_2x_output_length() {
         let f = factory();
-        let mut plan = f.create_proc(&spec(22050.0, 44100.0, 5)).expect("plan");
+        let mut plan = f
+            .create_proc::<f64>(&spec(22050.0, 44100.0, 5))
+            .expect("plan");
         let input = vec![1.0; 100];
         let mut output = vec![0.0; plan.max_output_len(input.len())];
         let n = plan.process(&input, &mut output).expect("process");
@@ -615,7 +637,9 @@ mod tests {
     #[test]
     fn decimation_2x_output_length() {
         let f = factory();
-        let mut plan = f.create_proc(&spec(44100.0, 22050.0, 5)).expect("plan");
+        let mut plan = f
+            .create_proc::<f64>(&spec(44100.0, 22050.0, 5))
+            .expect("plan");
         let input = vec![1.0; 100];
         let mut output = vec![0.0; plan.max_output_len(input.len())];
         let n = plan.process(&input, &mut output).expect("process");
@@ -629,7 +653,9 @@ mod tests {
         let f = factory();
 
         // Process in one shot.
-        let mut plan_single = f.create_proc(&spec(44100.0, 48000.0, 0)).expect("plan");
+        let mut plan_single = f
+            .create_proc::<f64>(&spec(44100.0, 48000.0, 0))
+            .expect("plan");
         let input: Vec<f64> = (0..200).map(|i| (f64::from(i) * 0.1).sin()).collect();
         let max_out = plan_single.max_output_len(input.len());
         let mut single_output = vec![0.0; max_out];
@@ -638,7 +664,9 @@ mod tests {
             .expect("single");
 
         // Process in chunks.
-        let mut plan_chunks = f.create_proc(&spec(44100.0, 48000.0, 0)).expect("plan");
+        let mut plan_chunks = f
+            .create_proc::<f64>(&spec(44100.0, 48000.0, 0))
+            .expect("plan");
         let mut chunk_output = Vec::new();
         for chunk in input.chunks(50) {
             let max = plan_chunks.max_output_len(chunk.len());
@@ -666,7 +694,9 @@ mod tests {
     #[test]
     fn reset_reproduces_output() {
         let f = factory();
-        let mut plan = f.create_proc(&spec(44100.0, 48000.0, 0)).expect("plan");
+        let mut plan = f
+            .create_proc::<f64>(&spec(44100.0, 48000.0, 0))
+            .expect("plan");
         let input: Vec<f64> = (0..100).map(|i| (f64::from(i) * 0.1).sin()).collect();
         let max = plan.max_output_len(input.len());
 
@@ -689,7 +719,9 @@ mod tests {
     #[test]
     fn process_rejects_small_output() {
         let f = factory();
-        let mut plan = f.create_proc(&spec(22050.0, 44100.0, 3)).expect("plan");
+        let mut plan = f
+            .create_proc::<f64>(&spec(22050.0, 44100.0, 3))
+            .expect("plan");
         let input = vec![1.0; 100];
         let mut output = vec![0.0; 10]; // way too small
         assert!(
@@ -701,7 +733,9 @@ mod tests {
     #[test]
     fn empty_input_produces_no_output() {
         let f = factory();
-        let mut plan = f.create_proc(&spec(44100.0, 48000.0, 5)).expect("plan");
+        let mut plan = f
+            .create_proc::<f64>(&spec(44100.0, 48000.0, 5))
+            .expect("plan");
         let input: &[f64] = &[];
         let mut output = vec![0.0; 10];
         let n = plan.process(input, &mut output).expect("process");
@@ -713,7 +747,9 @@ mod tests {
     #[test]
     fn dc_input_converges_to_unity() {
         let f = factory();
-        let mut plan = f.create_proc(&spec(44100.0, 48000.0, 0)).expect("plan");
+        let mut plan = f
+            .create_proc::<f64>(&spec(44100.0, 48000.0, 0))
+            .expect("plan");
         let input = vec![1.0_f64; 500];
         let max = plan.max_output_len(input.len());
         let mut output = vec![0.0; max];
@@ -739,7 +775,9 @@ mod tests {
     )]
     fn sine_below_nyquist_survives_interpolation() {
         let f = factory();
-        let mut plan = f.create_proc(&spec(22050.0, 44100.0, 5)).expect("plan");
+        let mut plan = f
+            .create_proc::<f64>(&spec(22050.0, 44100.0, 5))
+            .expect("plan");
 
         let freq = 1000.0;
         let sr_in = 22050.0;
@@ -801,7 +839,7 @@ mod tests {
 
         let f = factory();
         let mut plan = f
-            .create_proc(&spec(22050.0, 44100.0, 3))
+            .create_proc::<f64>(&spec(22050.0, 44100.0, 3))
             .expect("create plan");
         let input = vec![1.0_f64; 100];
         let n = check(&mut plan, &input);
@@ -837,7 +875,7 @@ mod tests {
         prototype: &[f64],
         up_factor: usize,
         down_factor: usize,
-    ) -> OmniResampleProcessor<f64, TestVecOps> {
+    ) -> OmniResampleProcessor<f64> {
         let filter = FirFilter::new(prototype.to_vec(), FirMeta::unknown())
             .expect("non-empty prototype filter");
         let spec = ResampleSpec::new(filter, up_factor, down_factor).expect("valid resample spec");
@@ -989,7 +1027,7 @@ mod tests {
 
     /// Drive a processor to end-of-stream: `process(all) + finish`, returning the
     /// concatenated output.
-    fn drive_batch(plan: &mut OmniResampleProcessor<f64, TestVecOps>, input: &[f64]) -> Vec<f64> {
+    fn drive_batch(plan: &mut OmniResampleProcessor<f64>, input: &[f64]) -> Vec<f64> {
         let mut out = vec![0.0; plan.max_output_len(input.len())];
         let n = plan.process(input, &mut out).expect("batch process");
         let mut tail = vec![0.0; plan.finish_output_len()];

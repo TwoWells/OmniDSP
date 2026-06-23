@@ -392,14 +392,14 @@ impl RawDft<f64> for TestBackend {
     }
 }
 
-// The test backend is its own (scalar-default) `VecOps` provider — the empty
-// impl inherits the same defaults `TestVecOps` uses, so its decimator math
-// matches the standalone `OmniResample<TestVecOps>` it routes through.
+// The test backend is its own (scalar-default) `VecOps` provider: the empty
+// impl inherits the scalar defaults (the same ones `TestVecOps` uses), which is
+// what the composed modules call for their bulk vector ops.
 impl VecOps<f64> for TestBackend {}
 
 impl CreateProc<ResampleSpec> for TestBackend {
     type Proc<T>
-        = OmniResampleProcessor<T, TestVecOps>
+        = OmniResampleProcessor<T>
     where
         Self: crate::dispatch::Backend<T>;
 
@@ -408,7 +408,7 @@ impl CreateProc<ResampleSpec> for TestBackend {
         Self: crate::dispatch::Backend<T>,
         T: DspFloat + AddAssign + MulAssign,
     {
-        OmniResample::new(TestVecOps).create_proc::<T>(spec)
+        OmniResample::new().create_proc::<T>(spec)
     }
 }
 

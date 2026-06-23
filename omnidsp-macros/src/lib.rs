@@ -457,7 +457,7 @@ fn gen_resampler(input: &BackendInput) -> TokenStream2 {
         > for #backend
         {
             type Proc<T> =
-                ::omnidsp_core::modules::resample::OmniResampleProcessor<T, Self>
+                ::omnidsp_core::modules::resample::OmniResampleProcessor<T>
             where
                 Self: ::omnidsp_core::dispatch::Backend<T>;
 
@@ -471,9 +471,10 @@ fn gen_resampler(input: &BackendInput) -> TokenStream2 {
                     + ::core::ops::AddAssign
                     + ::core::ops::MulAssign,
             {
-                let factory = ::omnidsp_core::modules::resample::OmniResample::new(
-                    ::core::clone::Clone::clone(self),
-                );
+                // The polyphase resampler is a concrete scalar module (its hot
+                // path is a per-output-sample dot), so it carries no `VecOps`
+                // handle — the backend is not threaded in here.
+                let factory = ::omnidsp_core::modules::resample::OmniResample::new();
                 factory.create_proc::<T>(spec)
             }
         }
@@ -485,14 +486,16 @@ fn gen_cqt(input: &BackendInput) -> TokenStream2 {
 
     // Multirate CQT capstone: octave-recursive r2c analysis with an
     // `OmniResample(1, 2)` decimator routed as a sub-processor.  The backend
-    // itself (`self`) is threaded both as the module `VecOps` `V` and as the
-    // routed `CreateProc<ResampleSpec>` factory, so a vendor that overrides
-    // resampling accelerates the CQT decimation; an unoverriding backend gets
-    // `OmniResample` over its own `VecOps`.  The routed factory must be a
-    // `Backend<T>` (only a backend dispatches sub-processors); that holds for
-    // `Self` and additionally requires `Self: CreateProc<ResampleSpec>` — true
-    // unless `resampler` is skipped.  The forward r2c plan is reached through the
-    // `RawDft<T>` accessor.  One impl each, generic over the precision `T`.
+    // itself (`self`) is threaded as the module `VecOps` `V` (for the CQT's bulk
+    // spectral multiply) and as the routed `CreateProc<ResampleSpec>` factory, so
+    // a vendor that overrides resampling accelerates the CQT decimation; an
+    // unoverriding backend gets the scalar `OmniResample` decimator (its
+    // per-sample polyphase dot stays scalar by design — never a per-sample FFI
+    // crossing).  The routed factory must be a `Backend<T>` (only a backend
+    // dispatches sub-processors); that holds for `Self` and additionally requires
+    // `Self: CreateProc<ResampleSpec>` — true unless `resampler` is skipped.  The
+    // forward r2c plan is reached through the `RawDft<T>` accessor.  One impl
+    // each, generic over the precision `T`.
     quote! {
         impl ::omnidsp_core::create::CreatePlan<::omnidsp_core::design::cqt::CqtSpec>
             for #backend

@@ -642,12 +642,8 @@ mod tests {
 
     // ── The multirate plan under test ──────────────────────────────
 
-    type TestCqtPlan = OmniCqtPlan<
-        f64,
-        <TestDftR2c as DftR2c<f64>>::Plan,
-        TestVecOps,
-        OmniResampleProcessor<f64, TestVecOps>,
-    >;
+    type TestCqtPlan =
+        OmniCqtPlan<f64, <TestDftR2c as DftR2c<f64>>::Plan, TestVecOps, OmniResampleProcessor<f64>>;
 
     /// Build a multirate CQT plan from a spec, routing the decimator through a
     /// [`TestBackend`] (the foundational `Backend` + `CreateProc<ResampleSpec>`).

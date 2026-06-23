@@ -70,7 +70,7 @@ impl VecOps<f64> for IntegrationBackend {}
 
 impl CreateProc<ResampleSpec> for IntegrationBackend {
     type Proc<T>
-        = OmniResampleProcessor<T, ScalarVecOps>
+        = OmniResampleProcessor<T>
     where
         Self: omnidsp_core::dispatch::Backend<T>;
 
@@ -79,7 +79,7 @@ impl CreateProc<ResampleSpec> for IntegrationBackend {
         Self: omnidsp_core::dispatch::Backend<T>,
         T: DspFloat + std::ops::AddAssign + std::ops::MulAssign,
     {
-        OmniResample::new(ScalarVecOps).create_proc::<T>(spec)
+        OmniResample::new().create_proc::<T>(spec)
     }
 }
 
@@ -441,7 +441,7 @@ mod resample_integration {
         assert_eq!(spec.up_factor(), 160, "L should be 160");
         assert_eq!(spec.down_factor(), 147, "M should be 147");
 
-        let factory = OmniResample::new(ScalarVecOps);
+        let factory = OmniResample::new();
         let mut plan = factory.create_proc(&spec).expect("resample plan");
 
         // Generate a 400 Hz sine at 44100 Hz.
@@ -481,7 +481,7 @@ mod resample_integration {
         )
         .expect("resample design");
 
-        let factory = OmniResample::new(ScalarVecOps);
+        let factory = OmniResample::new();
         let mut plan = factory.create_proc(&spec).expect("resample plan");
 
         let input = vec![1.0_f64; 500];
@@ -619,7 +619,7 @@ mod streaming_equivalence {
         )
         .expect("resample design");
 
-        let factory = OmniResample::new(ScalarVecOps);
+        let factory = OmniResample::new();
         let input: Vec<f64> = (0..512)
             .map(|i| (TAU * 400.0 * f64::from(i) / 44100.0).sin())
             .collect();
@@ -692,7 +692,7 @@ mod pipeline {
         )
         .expect("resample design");
 
-        let resample_factory = OmniResample::new(ScalarVecOps);
+        let resample_factory = OmniResample::new();
         let mut resample_plan = resample_factory
             .create_proc(&resample_spec)
             .expect("resample plan");
@@ -884,7 +884,7 @@ mod cqt_integration {
         f64,
         <RustDftR2c as DftR2c<f64>>::Plan,
         ScalarVecOps,
-        OmniResampleProcessor<f64, ScalarVecOps>,
+        OmniResampleProcessor<f64>,
     >;
 
     fn make_plan(spec: &omnidsp_core::design::cqt::CqtSpec) -> LibrosaPlan {
