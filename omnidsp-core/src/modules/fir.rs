@@ -140,7 +140,7 @@ impl<T, RP, CP, V> std::fmt::Debug for OmniFirProcessor<T, RP, CP, V> {
 )]
 enum PlanInner<T, RP, CP, V> {
     Direct {
-        state: DirectState<T, V>,
+        state: DirectState<T>,
     },
     OverlapSave {
         state: OverlapSaveState<T, RP, CP, V>,
@@ -148,7 +148,11 @@ enum PlanInner<T, RP, CP, V> {
 }
 
 /// State for the direct (time-domain) path.
-struct DirectState<T, V> {
+///
+/// Carries no `VecOps` handle: the per-output-sample MAC is computed in core
+/// (see [`OmniFirProcessor::process_direct`]) rather than crossing a primitive
+/// boundary once per sample.  Only the overlap-save path holds a `VecOps`.
+struct DirectState<T> {
     /// Filter coefficients (reversed for correlation-style MAC).
     coeffs: Vec<T>,
     /// Doubled delay buffer, length = `2 * num_taps`.
@@ -159,8 +163,6 @@ struct DirectState<T, V> {
     delay: Vec<T>,
     /// Write pointer into the delay buffer.
     write_pos: usize,
-    /// `VecOps` handle for dot products.
-    vecops: V,
 }
 
 /// State for the overlap-save (frequency-domain) path.
@@ -205,7 +207,7 @@ where
         }
 
         match &mut self.inner {
-            PlanInner::Direct { state } => Self::process_direct(state, input, output)?,
+            PlanInner::Direct { state } => Self::process_direct(state, input, output),
             PlanInner::OverlapSave { state } => Self::process_overlap_save(state, input, output)?,
         }
         Ok(input.len())
@@ -227,7 +229,7 @@ where
         let zeros = vec![T::zero(); tail];
         match &mut self.inner {
             PlanInner::Direct { state } => {
-                Self::process_direct(state, &zeros, &mut output[..tail])?;
+                Self::process_direct(state, &zeros, &mut output[..tail]);
             }
             PlanInner::OverlapSave { state } => {
                 Self::process_overlap_save(state, &zeros, &mut output[..tail])?;
@@ -288,7 +290,13 @@ where
     }
 
     /// Direct (time-domain) FIR: doubled buffer + single dot product.
-    fn process_direct(state: &mut DirectState<T, V>, input: &[T], output: &mut [T]) -> Result<()> {
+    ///
+    /// Infallible: the per-output-sample dot is computed in core with no
+    /// fallible primitive call, unlike [`process_overlap_save`], whose
+    /// transforms can error.
+    ///
+    /// [`process_overlap_save`]: Self::process_overlap_save
+    fn process_direct(state: &mut DirectState<T>, input: &[T], output: &mut [T]) {
         let num_taps = state.coeffs.len();
 
         for (out, &sample) in output.iter_mut().zip(input) {
@@ -300,13 +308,23 @@ where
             // Coefficients are stored reversed, so coeffs[0] corresponds to
             // the oldest sample and coeffs[N-1] to the newest.  The doubled
             // buffer guarantees a contiguous oldest-first window.
+            //
+            // In-core scalar dot — this per-output-sample inner product is a
+            // tight loop, so it stays scalar rather than routing through
+            // `VecOps`: a `VecOps::dot` here would cross a vendor's FFI boundary
+            // once per output sample, where the crossing cost dominates a short
+            // dot.  Bulk `VecOps` amortizes that crossing over a whole buffer; a
+            // per-sample call cannot.  The `fold` matches the scalar
+            // `VecOps::dot` arithmetic exactly, so the filtered values are
+            // unchanged.  (The overlap-save path keeps its bulk `VecOps` complex
+            // multiply, which is one crossing per block, not per sample.)
             let pos = state.write_pos;
             *out = state
-                .vecops
-                .dot(&state.coeffs, &state.delay[pos..pos + num_taps])?;
+                .coeffs
+                .iter()
+                .zip(&state.delay[pos..pos + num_taps])
+                .fold(T::zero(), |acc, (&c, &d)| acc + c * d);
         }
-
-        Ok(())
     }
 
     /// Overlap-save (frequency-domain) FIR.
@@ -493,7 +511,6 @@ impl<R, C, V> OmniFir<R, C, V> {
                         delay: vec![T::zero(); 2 * num_taps],
                         write_pos: 0,
                         coeffs,
-                        vecops: self.vecops.clone(),
                     },
                 }
             }
