@@ -20,6 +20,8 @@ use omnidsp_core::create::{CreatePlan, CreateProc};
 use omnidsp_core::design::cqt::{self, CqtBinSpec, CqtSpec};
 use omnidsp_core::design::resample::ResampleSpec;
 use omnidsp_core::dispatch::Backend;
+use omnidsp_core::modules::cqt::CqtPlan;
+use omnidsp_core::modules::resample::ResampleProcessor;
 use omnidsp_core::traits::conv::{ConvMethod, ConvPlan, ConvSpec};
 use omnidsp_core::traits::dft::{
     DftC2cPlan, DftC2cSpec, DftC2rPlan, DftC2rSpec, DftNorm, DftR2cPlan, DftR2cSpec,
@@ -305,7 +307,10 @@ fn rust_iir_first_order_f32() {
 
 /// 2× upsample with a simple prototype filter: output count should be
 /// exactly 2× input count (streaming mode).
-fn resample_upsample_f64(dsp: &OmniDSP<RustBackend>) {
+fn resample_upsample_f64<B>(dsp: &OmniDSP<B>)
+where
+    B: CreateProc<ResampleSpec, Proc<f64>: ResampleProcessor<f64>> + Backend<f64>,
+{
     let filter =
         FirFilter::new(vec![0.5, 1.0, 0.5], FirMeta::unknown()).expect("non-empty prototype");
     let spec = ResampleSpec::new(filter, 2, 1).expect("valid resample spec");
@@ -348,7 +353,10 @@ fn rust_resample_f32() {
 // ═══════════════════════════════════════════════════════════════════════
 
 /// Construct a minimal CQT plan and process a zero-input frame.
-fn cqt_smoke_f64(dsp: &OmniDSP<RustBackend>) {
+fn cqt_smoke_f64<B>(dsp: &OmniDSP<B>)
+where
+    B: CreatePlan<CqtSpec, Plan<f64>: CqtPlan<f64>> + Backend<f64>,
+{
     let bins = vec![CqtBinSpec {
         frequency: 440.0,
         kernel_len: 5,
