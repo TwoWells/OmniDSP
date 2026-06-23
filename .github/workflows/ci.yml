@@ -1,0 +1,67 @@
+# CI — lint, build, and test OmniDSP on every push.
+#
+# Runs on the self-hosted ARC pool `homeserver-pool` (ephemeral Linux pods,
+# minRunners: 0 — a fresh container is spun up per job and torn down after).
+# Mirrors the Lattice `rust-ci` pattern: the toolchain travels with the job via
+# the `ghcr.io/twowells/rust-ci` image rather than being baked into the runner.
+#
+# There is intentionally NO `pull_request` trigger. Fork PRs fire only
+# pull_request events (their push happened in the fork), so with
+# push/workflow_dispatch-only triggers a fork PR can never schedule a job onto
+# the self-hosted runners. For outside-contributor PR CI, add a SEPARATE
+# workflow with `on: pull_request` pinned to `runs-on: ubuntu-latest`
+# (GitHub-hosted, free on public repos, fork-safe).
+#
+# The Intel vendor backends (IPP / oneMKL) build on this same pool but in the
+# `ghcr.io/twowells/omnidsp-ci` image (rust-ci + oneMKL + IPP devel); Apple
+# Accelerate builds on the macOS runner. Those land as separate jobs when each
+# vendor crate is built (workstream 7).
+name: CI
+
+on:
+  push:
+  workflow_dispatch:
+
+# A new push to the same ref cancels the in-flight run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: homeserver-pool
+    # The ARC pod is a bare runner with no Rust. This image bakes in rustup + the
+    # pinned toolchain + cc/make/git, so the job doesn't reprovision every run.
+    container: ghcr.io/twowells/rust-ci:latest
+    # Inside a container job GitHub's default shell is sh (dash); force bash so
+    # run steps don't silently break on a bashism.
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+
+      # rustup reads rust-toolchain.toml (the pinned channel + rustfmt/clippy)
+      # and installs the toolchain if the runner doesn't have it yet.
+      - name: Materialize pinned Rust toolchain
+        run: |
+          rustup show
+          rustc --version && cargo --version
+
+      # Caches the registry, git deps, and target dir keyed on Cargo.lock so the
+      # ephemeral pods don't rebuild the world every push (cache lives GitHub-side).
+      - uses: Swatinem/rust-cache@v2
+
+      # Prebuilt binaries — far faster than `cargo install` from source on an
+      # ephemeral runner with no warm cache. These are the three tools `make
+      # check` invokes (cargo-mutants is only for `make mutants`).
+      - name: Install cargo tools
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest,cargo-deny,cargo-machete
+
+      # The project's single source of truth for "passing": fmt, clippy
+      # (-D warnings, incl. the bench-feature lint pass), deny, machete, cargo
+      # doc, and the nextest suite over f32 + f64. See the Makefile.
+      - name: make check
+        run: make check
