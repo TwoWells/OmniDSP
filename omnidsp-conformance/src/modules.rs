@@ -716,14 +716,21 @@ where
         let tau = std::f64::consts::TAU;
         let mut kernels = Vec::with_capacity(spec.num_bins());
         for bin in spec.bins() {
-            let nk = bin.window.len();
+            // Materialize the bin's window in f64 from the spec's recipe at its own
+            // kernel length — the reference is decimation-free, so it uses the
+            // full-rate window directly.
+            let window = spec
+                .window()
+                .coefficients::<f64>(bin.kernel_len)
+                .expect("reference window coefficients");
+            let nk = bin.kernel_len;
             let kernel_start = fft_length - nk; // end placement
             let inv_nk = 1.0 / nk as f64;
             let mut k = vec![Complex::new(T::zero(), T::zero()); half_len];
             for (m, slot) in k.iter_mut().enumerate() {
                 let mut acc_re = 0.0_f64;
                 let mut acc_im = 0.0_f64;
-                for (n, &wn) in bin.window.iter().enumerate() {
+                for (n, &wn) in window.iter().enumerate() {
                     let p = (kernel_start + n) as f64;
                     let angle =
                         tau * (bin.frequency * n as f64 / sr - (m as f64 * p) / fft_length as f64);

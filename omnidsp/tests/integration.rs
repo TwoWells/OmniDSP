@@ -351,9 +351,9 @@ fn rust_resample_f32() {
 fn cqt_smoke_f64(dsp: &OmniDSP<RustBackend>) {
     let bins = vec![CqtBinSpec {
         frequency: 440.0,
-        window: vec![0.0_f64, 0.5, 1.0, 0.5, 0.0],
+        kernel_len: 5,
     }];
-    let spec = CqtSpec::new(44100.0, 8, 2, bins).expect("CQT spec");
+    let spec = CqtSpec::new(44100.0, 8, 2, bins, Window::Hann).expect("CQT spec");
     let plan = dsp.cqt(&spec).expect("CQT plan");
 
     let input = vec![0.0_f64; 8];
@@ -370,9 +370,9 @@ fn cqt_smoke_f64(dsp: &OmniDSP<RustBackend>) {
 fn cqt_smoke_f32(dsp: &OmniDSP<RustBackend>) {
     let bins = vec![CqtBinSpec {
         frequency: 440.0,
-        window: vec![0.0_f64, 0.5, 1.0, 0.5, 0.0],
+        kernel_len: 5,
     }];
-    let spec = CqtSpec::new(44100.0, 8, 2, bins).expect("CQT spec");
+    let spec = CqtSpec::new(44100.0, 8, 2, bins, Window::Hann).expect("CQT spec");
     let plan = dsp.cqt(&spec).expect("CQT plan");
 
     let input = vec![0.0_f32; 8];
@@ -733,9 +733,9 @@ fn macro_create_cqt_f64() {
     let b = macro_backend();
     let bins = vec![CqtBinSpec {
         frequency: 440.0,
-        window: vec![0.0_f64, 0.5, 1.0, 0.5, 0.0],
+        kernel_len: 5,
     }];
-    let spec = CqtSpec::new(44100.0, 8, 2, bins).expect("CQT spec");
+    let spec = CqtSpec::new(44100.0, 8, 2, bins, Window::Hann).expect("CQT spec");
     let plan = CreatePlan::create_plan::<f64>(&b, &spec).expect("macro CQT plan");
 
     let input = vec![0.0; 8];

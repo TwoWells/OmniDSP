@@ -867,13 +867,20 @@ mod tests {
             let inv_n = 1.0 / fft_length as f64;
             let mut kernels = Vec::with_capacity(spec.num_bins());
             for bin in spec.bins() {
-                let nk = bin.window.len();
+                // Materialize the bin's window in f64 from the spec's recipe at its
+                // own kernel length — the reference is decimation-free, so it uses
+                // the full-rate window directly.
+                let window = spec
+                    .window()
+                    .coefficients::<f64>(bin.kernel_len)
+                    .expect("reference window coefficients");
+                let nk = bin.kernel_len;
                 let kernel_start = fft_length - nk; // end placement
                 let inv_nk = 1.0 / nk as f64;
                 let mut k = vec![Complex::new(0.0, 0.0); half_len];
                 for (m, slot) in k.iter_mut().enumerate() {
                     let mut acc = Complex::new(0.0, 0.0);
-                    for (n, &wn) in bin.window.iter().enumerate() {
+                    for (n, &wn) in window.iter().enumerate() {
                         let p = (kernel_start + n) as f64;
                         let angle = TAU
                             * (bin.frequency * n as f64 / sr - (m as f64 * p) / fft_length as f64);
@@ -1040,7 +1047,7 @@ mod tests {
         );
         // The window/2 term is the floor; the full latency must exceed it (the
         // decimation group delay is strictly positive for any decimated octave).
-        let window_half = spec.bins()[0].window.len() as f64 / 2.0;
+        let window_half = spec.bins()[0].kernel_len as f64 / 2.0;
         assert!(
             lat[0] > window_half,
             "deepest latency {} must exceed its window-center floor {window_half}",

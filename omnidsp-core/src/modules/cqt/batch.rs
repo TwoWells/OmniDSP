@@ -580,12 +580,16 @@ impl<D, V> SingleFftCqt<D, V> {
         let bins = spec.bins();
         let mut kernels = Vec::with_capacity(bins.len());
         for bin in bins {
-            let n_k = bin.window.len();
+            // Materialize this bin's window in f64 from the spec's recipe at the
+            // bin's own kernel length — the single-FFT reference does not decimate,
+            // so it uses the full-rate window directly.
+            let window = spec.window().coefficients::<f64>(bin.kernel_len)?;
+            let n_k = bin.kernel_len;
             let inv_nk = T::from(n_k)
                 .ok_or_else(|| Error::Internal("cannot convert kernel length to T".into()))?
                 .recip();
             kern_time.fill(zero);
-            for (n, &w) in bin.window.iter().enumerate() {
+            for (n, &w) in window.iter().enumerate() {
                 let angle = TAU * bin.frequency * n as f64 / spec.sample_rate();
                 let cos_v = T::from(angle.cos())
                     .ok_or_else(|| Error::Internal("cannot convert cos to T".into()))?;
@@ -1097,9 +1101,9 @@ mod tests {
         // The integration smoke-test shape: one bin, no octave structure.
         let bins = vec![crate::design::cqt::CqtBinSpec {
             frequency: 440.0,
-            window: vec![0.0_f64, 0.5, 1.0, 0.5, 0.0],
+            kernel_len: 5,
         }];
-        let spec = CqtSpec::new(44100.0, 8, 2, bins).expect("spec");
+        let spec = CqtSpec::new(44100.0, 8, 2, bins, Window::Hann).expect("spec");
         let plan = make_plan(&spec);
         assert_eq!(plan.num_octaves(), 1, "single bin → one octave");
 

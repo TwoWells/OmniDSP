@@ -258,7 +258,7 @@ where
         } else {
             band_idx
                 .iter()
-                .map(|&i| kernel_len_at(bins[i].window.len(), scale))
+                .map(|&i| kernel_len_at(bins[i].kernel_len, scale))
                 .max()
                 .unwrap_or(1)
                 .next_power_of_two()
@@ -280,12 +280,16 @@ where
         // the bin's global index (`band_idx` gives the global low→high indices).
         let offset_top = offset_f / scale;
         for &i in &band_idx {
-            bin_latencies[i] = bins[i].window.len() as f64 / 2.0 + offset_top;
+            bin_latencies[i] = bins[i].kernel_len as f64 / 2.0 + offset_top;
         }
 
         let mut kernels = Vec::with_capacity(band_idx.len());
         for &i in &band_idx {
-            let nk = kernel_len_at(bins[i].window.len(), scale);
+            // Materialize this bin's full-rate window directly in f64 (the design
+            // precision) from the spec's recipe — the kernel is accumulated in
+            // f64 and cast to `T` once, never round-tripped through `T`.
+            let window = spec.window().coefficients::<f64>(bins[i].kernel_len)?;
+            let nk = kernel_len_at(bins[i].kernel_len, scale);
             // Placement of this bin's `nk`-sample kernel inside the `fft_len`
             // frame: the frame start (oldest) for the batch path, the frame end
             // (newest) for the streaming path.
@@ -294,7 +298,7 @@ where
                 Anchor::End => fft_len - nk,
             };
             let mut kernel = build_half_kernel::<T>(
-                &bins[i].window,
+                &window,
                 bins[i].frequency,
                 rate_o,
                 nk,

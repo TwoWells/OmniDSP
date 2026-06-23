@@ -100,45 +100,49 @@ impl Default for DecimatorQuality {
 
 /// Per-bin specification for the CQT.
 ///
-/// Each bin carries its center frequency and pre-computed window
-/// coefficients.  The kernel length is `window.len()`.
-///
-/// The window coefficients are carried in **f64** (the design precision); the
-/// per-bin frequency-domain kernels are materialized at this precision and cast
-/// to the operation's `T` once, at the create edge.
+/// Each bin carries its center frequency and kernel length; it does **not**
+/// carry materialized window coefficients.  The spec is a *recipe* — the
+/// [`Window`](CqtSpec::window) function and these per-bin lengths — and the
+/// per-bin frequency-domain kernels are materialized once at the create edge
+/// (the window evaluated at each bin's own `kernel_len`, accumulated in f64 and
+/// cast to the operation's `T`).
 ///
 /// When produced by [`design`], the kernel length for a bin at frequency
 /// `f` is `ceil(Q · sample_rate / f)` where `Q` is the
 /// [`quality_factor`] for the chosen `bins_per_octave`.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[allow(
     clippy::derive_partial_eq_without_eq,
-    reason = "window coefficients are f64, which is not Eq"
+    reason = "frequency is f64, which is not Eq"
 )]
 pub struct CqtBinSpec {
     /// Center frequency in Hz.
     pub frequency: f64,
-    /// Window coefficients for this bin's kernel (f64 design precision).
-    pub window: Vec<f64>,
+    /// Length of this bin's kernel (the window is evaluated at this length).
+    pub kernel_len: usize,
 }
 
 /// CQT specification — plan-ready description of a Constant-Q Transform.
 ///
 /// Holds everything [`OmniCqt::create_plan`](crate::modules::cqt::OmniCqt)
-/// needs to build frequency-domain kernels.  Construct via [`design`] or
+/// needs to build frequency-domain kernels: the recipe (a single [`Window`]
+/// function plus per-bin center frequencies and kernel lengths), not the
+/// materialized coefficients.  The kernels are built at the create edge — the
+/// window evaluated at each bin's own `kernel_len`.  Construct via [`design`] or
 /// directly via [`CqtSpec::new`].
 ///
 /// - **`sample_rate`** — sampling frequency in Hz, used to build the
 ///   complex exponential kernel for each bin.
 /// - **`fft_length`** — transform size; must be ≥ the longest bin's
-///   `window.len()`.  When produced by [`design`], this is the next
+///   `kernel_len`.  When produced by [`design`], this is the next
 ///   power of two ≥ the longest kernel.
 /// - **`hop_length`** — recommended advance between frames (advisory;
 ///   not used by the plan itself).  When produced by [`design`], this
 ///   is `max(shortest_kernel / 4, 1)`.
-/// - **`bins`** — per-bin center frequencies and window coefficients,
-///   ordered low to high frequency.  Each bin's `window.len()` is
-///   its kernel length.
+/// - **`bins`** — per-bin center frequencies and kernel lengths,
+///   ordered low to high frequency.
+/// - **`window`** — the window function applied to every bin's kernel,
+///   each evaluated at that bin's own `kernel_len`.
 ///
 /// # Examples
 ///
@@ -157,28 +161,33 @@ pub struct CqtBinSpec {
 ///
 /// ```
 /// use omnidsp_core::design::cqt::{CqtSpec, CqtBinSpec};
+/// use omnidsp_core::window::Window;
 ///
 /// let bins = vec![
-///     CqtBinSpec { frequency: 440.0, window: vec![0.0, 0.5, 1.0, 0.5, 0.0] },
+///     CqtBinSpec { frequency: 440.0, kernel_len: 5 },
 /// ];
-/// let spec = CqtSpec::new(44100.0, 8, 2, bins).unwrap();
+/// let spec = CqtSpec::new(44100.0, 8, 2, bins, Window::Hann).unwrap();
 /// assert_eq!(spec.num_bins(), 1);
 /// ```
 #[derive(Debug, Clone, PartialEq)]
 #[allow(
     clippy::derive_partial_eq_without_eq,
-    reason = "per-bin window coefficients are f64, which is not Eq"
+    reason = "per-bin frequencies and window shape parameters are f64, which is not Eq"
 )]
 pub struct CqtSpec {
     sample_rate: f64,
     fft_length: usize,
     hop_length: usize,
     bins: Vec<CqtBinSpec>,
+    window: Window,
     decimator_quality: DecimatorQuality,
 }
 
 impl CqtSpec {
-    /// Construct a CQT spec directly from pre-computed data.
+    /// Construct a CQT spec directly from a bin layout and a window function.
+    ///
+    /// `window` is the recipe applied to every bin's kernel — evaluated at each
+    /// bin's own `kernel_len` when the kernels materialize at the create edge.
     ///
     /// # Errors
     ///
@@ -186,13 +195,14 @@ impl CqtSpec {
     /// - `bins` is empty
     /// - `sample_rate` is not positive
     /// - `fft_length` is zero
-    /// - any bin has an empty window
-    /// - any bin's window is longer than `fft_length`
+    /// - any bin has a zero kernel length
+    /// - any bin's kernel length is longer than `fft_length`
     pub fn new(
         sample_rate: f64,
         fft_length: usize,
         hop_length: usize,
         bins: Vec<CqtBinSpec>,
+        window: Window,
     ) -> Result<Self> {
         if sample_rate <= 0.0 {
             return Err(Error::InvalidSpec("sample rate must be positive".into()));
@@ -204,13 +214,17 @@ impl CqtSpec {
             return Err(Error::InvalidSpec("at least one bin is required".into()));
         }
         for (i, bin) in bins.iter().enumerate() {
-            if bin.window.is_empty() {
-                return Err(Error::InvalidSpec(format!("bin {i} has an empty window")));
-            }
-            if bin.window.len() > fft_length {
+            if bin.kernel_len == 0 {
                 return Err(Error::InvalidSpec(format!(
-                    "bin {i} window length ({}) exceeds FFT length ({fft_length})",
-                    bin.window.len()
+                    "bin {i} has a zero kernel length"
+                )));
+            }
+            // A bin kernel longer than the FFT is incoherent — the analysis
+            // window cannot exceed the transform it lives in.
+            if bin.kernel_len > fft_length {
+                return Err(Error::InvalidSpec(format!(
+                    "bin {i} kernel length ({}) exceeds FFT length ({fft_length})",
+                    bin.kernel_len
                 )));
             }
         }
@@ -219,6 +233,7 @@ impl CqtSpec {
             fft_length,
             hop_length,
             bins,
+            window,
             decimator_quality: DecimatorQuality::HIGH,
         })
     }
@@ -260,6 +275,13 @@ impl CqtSpec {
         &self.bins
     }
 
+    /// The window function applied to every bin's kernel, each evaluated at that
+    /// bin's own [`kernel_len`](CqtBinSpec::kernel_len).
+    #[must_use]
+    pub const fn window(&self) -> &Window {
+        &self.window
+    }
+
     /// Number of frequency bins.
     #[must_use]
     pub const fn num_bins(&self) -> usize {
@@ -292,9 +314,11 @@ pub fn quality_factor(bins_per_octave: u32) -> f64 {
 
 /// Design a Constant-Q Transform from user-friendly parameters.
 ///
-/// Computes per-bin center frequencies, kernel lengths, window
-/// coefficients, FFT size, and hop length, returning a [`CqtSpec`]
-/// ready for [`OmniCqt::create_plan`](crate::modules::cqt::OmniCqt).
+/// Computes per-bin center frequencies, kernel lengths, FFT size, and hop
+/// length, returning a [`CqtSpec`] ready for
+/// [`OmniCqt::create_plan`](crate::modules::cqt::OmniCqt).  The chosen `window`
+/// is recorded as the spec's recipe and evaluated per bin at the create edge;
+/// no coefficients are materialized here.
 ///
 /// **Bin placement:** `f_k = min_freq · 2^(k/B)` for `k = 0, 1, ...`
 /// while `f_k < max_freq` and `f_k < sample_rate / 2`.  The upper
@@ -306,8 +330,9 @@ pub fn quality_factor(bins_per_octave: u32) -> f64 {
 /// frequencies get longer kernels (better frequency resolution);
 /// higher frequencies get shorter kernels (better time resolution).
 ///
-/// **Window:** each bin's kernel is windowed independently at its own
-/// length using `window_fn`.
+/// **Window:** the chosen `window` is applied to every bin's kernel,
+/// each evaluated independently at its own length when the kernels
+/// materialize at the create edge.
 ///
 /// # Errors
 ///
@@ -317,7 +342,6 @@ pub fn quality_factor(bins_per_octave: u32) -> f64 {
 /// - `min_freq >= max_freq`
 /// - `max_freq >= sample_rate / 2` (at or above Nyquist)
 /// - `bins_per_octave` is zero
-/// - window generation fails for any bin
 pub fn design(
     sample_rate: f64,
     min_freq: f64,
@@ -353,7 +377,8 @@ pub fn design(
     let b = f64::from(bins_per_octave);
     let q = quality_factor(bins_per_octave);
 
-    // Build per-bin specs with window coefficients.
+    // Build per-bin specs — center frequency and kernel length only.  The window
+    // is the spec's recipe, evaluated per bin at the create edge.
     let mut bins = Vec::new();
 
     // First bin is always min_freq.
@@ -361,7 +386,7 @@ pub fn design(
     let first_len = first_len.max(1);
     bins.push(CqtBinSpec {
         frequency: min_freq,
-        window: window.coefficients::<f64>(first_len)?,
+        kernel_len: first_len,
     });
 
     // Remaining bins: f_k = min_freq · 2^(k/B) while f_k < max_freq and < Nyquist.
@@ -375,16 +400,16 @@ pub fn design(
         let kernel_len = kernel_len.max(1);
         bins.push(CqtBinSpec {
             frequency: freq,
-            window: window.coefficients::<f64>(kernel_len)?,
+            kernel_len,
         });
         k += 1;
     }
 
     // FFT length: next power of two ≥ longest kernel (first bin = lowest freq).
-    let fft_length = bins[0].window.len().next_power_of_two();
+    let fft_length = bins[0].kernel_len.next_power_of_two();
 
     // Hop length: based on shortest kernel (last bin = highest freq).
-    let min_kernel = bins[bins.len() - 1].window.len();
+    let min_kernel = bins[bins.len() - 1].kernel_len;
     let hop_length = (min_kernel / 4).max(1);
 
     Ok(CqtSpec {
@@ -392,6 +417,7 @@ pub fn design(
         fft_length,
         hop_length,
         bins,
+        window: *window,
         decimator_quality: DecimatorQuality::HIGH,
     })
 }
@@ -560,12 +586,12 @@ mod tests {
         let spec = design(44100.0, 27.5, 4186.0, 24, &Window::Hann).expect("valid design");
         for w in spec.bins.windows(2) {
             assert!(
-                w[0].window.len() >= w[1].window.len(),
+                w[0].kernel_len >= w[1].kernel_len,
                 "lower freq ({} Hz, len {}) should have longer kernel than higher freq ({} Hz, len {})",
                 w[0].frequency,
-                w[0].window.len(),
+                w[0].kernel_len,
                 w[1].frequency,
-                w[1].window.len()
+                w[1].kernel_len
             );
         }
     }
@@ -577,8 +603,7 @@ mod tests {
         for bin in &spec.bins {
             let expected = (q * 44100.0 / bin.frequency).ceil() as usize;
             assert_eq!(
-                bin.window.len(),
-                expected,
+                bin.kernel_len, expected,
                 "kernel length for {} Hz should be ceil(Q * sr / f)",
                 bin.frequency
             );
@@ -600,7 +625,7 @@ mod tests {
     #[test]
     fn fft_length_ge_longest_kernel() {
         let spec = design(44100.0, 27.5, 4186.0, 24, &Window::Hann).expect("valid design");
-        let max_kernel = spec.bins[0].window.len();
+        let max_kernel = spec.bins[0].kernel_len;
         assert!(
             spec.fft_length >= max_kernel,
             "FFT length {} must be >= longest kernel {}",
@@ -634,30 +659,30 @@ mod tests {
 
     #[test]
     fn new_rejects_empty_bins() {
-        let result = CqtSpec::new(44100.0, 256, 64, vec![]);
+        let result = CqtSpec::new(44100.0, 256, 64, vec![], Window::Hann);
         assert!(result.is_err(), "empty bins should be rejected");
     }
 
     #[test]
-    fn new_rejects_empty_window() {
+    fn new_rejects_zero_kernel_len() {
         let bins = vec![CqtBinSpec {
             frequency: 440.0,
-            window: vec![],
+            kernel_len: 0,
         }];
-        let result = CqtSpec::new(44100.0, 256, 64, bins);
-        assert!(result.is_err(), "empty window should be rejected");
+        let result = CqtSpec::new(44100.0, 256, 64, bins, Window::Hann);
+        assert!(result.is_err(), "zero kernel length should be rejected");
     }
 
     #[test]
-    fn new_rejects_window_exceeding_fft() {
+    fn new_rejects_kernel_len_exceeding_fft() {
         let bins = vec![CqtBinSpec {
             frequency: 440.0,
-            window: vec![1.0_f64; 512],
+            kernel_len: 512,
         }];
-        let result = CqtSpec::new(44100.0, 256, 64, bins);
+        let result = CqtSpec::new(44100.0, 256, 64, bins, Window::Hann);
         assert!(
             result.is_err(),
-            "window exceeding FFT length should be rejected"
+            "kernel length exceeding FFT length should be rejected"
         );
     }
 
@@ -665,9 +690,9 @@ mod tests {
     fn new_accepts_valid_spec() {
         let bins = vec![CqtBinSpec {
             frequency: 440.0,
-            window: vec![0.0_f64, 0.5, 1.0, 0.5, 0.0],
+            kernel_len: 5,
         }];
-        let spec = CqtSpec::new(44100.0, 8, 2, bins).expect("valid spec");
+        let spec = CqtSpec::new(44100.0, 8, 2, bins, Window::Hann).expect("valid spec");
         assert_eq!(spec.num_bins(), 1, "should have one bin");
         assert_eq!(spec.fft_length(), 8, "fft_length should be 8");
         assert_eq!(spec.hop_length(), 2, "hop_length should be 2");
@@ -719,11 +744,9 @@ mod tests {
                 bin.frequency
             );
             assert_eq!(
-                bin.window.len(),
-                r.kernel_lengths[i],
+                bin.kernel_len, r.kernel_lengths[i],
                 "bin {i} kernel length mismatch: expected {}, got {}",
-                r.kernel_lengths[i],
-                bin.window.len()
+                r.kernel_lengths[i], bin.kernel_len
             );
         }
         assert_eq!(
