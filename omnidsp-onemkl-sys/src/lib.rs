@@ -106,7 +106,11 @@ pub enum DftiConfigParam {
     /// In-place vs. out-of-place placement (`DFTI_PLACEMENT`).
     Placement = 11,
     /// Conjugate-even storage layout (`DFTI_CONJUGATE_EVEN_STORAGE`).
-    ConjugateEvenStorage = 18,
+    ///
+    /// Value `10` per `mkl_dfti.h` — note `18` is `DFTI_ORDERING`, a different
+    /// parameter; routing the `COMPLEX_COMPLEX` value there yields
+    /// `DFTI_INCONSISTENT_CONFIGURATION` at `DftiSetValue`.
+    ConjugateEvenStorage = 10,
 }
 
 // ---------------------------------------------------------------------------
