@@ -72,7 +72,7 @@ fn scale_complex<T: DspFloat>(output: &mut [Complex<T>], scale: T) {
 /// Apply a real scale to every element of a real buffer in place.
 fn scale_real<T: DspFloat>(output: &mut [T], scale: T) {
     for sample in output.iter_mut() {
-        *sample = *sample * scale;
+        *sample *= scale;
     }
 }
 

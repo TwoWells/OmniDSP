@@ -24,6 +24,14 @@
     clippy::similar_names,
     reason = "DFT tests use the systematic c2c / r2c / c2r short names"
 )]
+#![allow(
+    clippy::cast_sign_loss,
+    reason = "loop indices 0..N are non-negative, so the index->unsigned/float cast cannot lose a sign"
+)]
+#![allow(
+    clippy::suboptimal_flops,
+    reason = "test-signal formulas favor readability over fused multiply-add"
+)]
 
 use num_complex::Complex;
 
@@ -55,7 +63,9 @@ fn c2c_round_trip_f64() {
     let mut recovered = vec![Complex::default(); n];
 
     fwd_plan.execute(&input, &mut freq).expect("fwd execute");
-    inv_plan.execute(&freq, &mut recovered).expect("inv execute");
+    inv_plan
+        .execute(&freq, &mut recovered)
+        .expect("inv execute");
 
     for (i, (got, want)) in recovered.iter().zip(&input).enumerate() {
         assert!(
@@ -103,7 +113,9 @@ fn r2c_c2r_round_trip_f32() {
 #[test]
 fn dot_matches_scalar_f64() {
     let a: Vec<f64> = (0..128).map(|i| f64::from(i as u32) * 0.3 - 5.0).collect();
-    let b: Vec<f64> = (0..128).map(|i| f64::from(i as u32).mul_add(-0.2, 2.0)).collect();
+    let b: Vec<f64> = (0..128)
+        .map(|i| f64::from(i as u32).mul_add(-0.2, 2.0))
+        .collect();
 
     let mkl = OneMklBackend::new();
     let got = VecOps::<f64>::dot(&mkl, &a, &b).expect("mkl dot");

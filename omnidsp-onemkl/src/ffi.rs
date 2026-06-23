@@ -70,7 +70,7 @@ pub fn create_descriptor(
     // SAFETY: `handle` is a valid out-pointer; `precision`/`domain` are valid
     // DFTI config-value enums; dimension is 1 and `len` is a positive length.
     // DFTI writes the new descriptor pointer into `handle` and returns a status.
-    let status = unsafe { sys::DftiCreateDescriptor(&mut handle, precision, domain, 1, len) };
+    let status = unsafe { sys::DftiCreateDescriptor(&raw mut handle, precision, domain, 1, len) };
     check_dfti(status, "DftiCreateDescriptor failed")?;
 
     if handle.is_null() {
@@ -138,7 +138,7 @@ pub fn free_descriptor(mut handle: DftiDescriptorHandle) {
     // SAFETY: `handle` was produced by `create_descriptor` and is freed exactly
     // once (from the owning plan's `Drop`).  `DftiFreeDescriptor` nulls the
     // handle through the out-pointer.
-    let _status = unsafe { sys::DftiFreeDescriptor(&mut handle) };
+    let _status = unsafe { sys::DftiFreeDescriptor(&raw mut handle) };
 }
 
 // ─── DFTI compute ────────────────────────────────────────────────────
@@ -276,8 +276,22 @@ macro_rules! complex_mul {
     };
 }
 
-complex_mul!(cmul_f32, vcMul, f32, cplx32, cplx32_mut, "vcMul length exceeds MKL_INT range");
-complex_mul!(cmul_f64, vzMul, f64, cplx64, cplx64_mut, "vzMul length exceeds MKL_INT range");
+complex_mul!(
+    cmul_f32,
+    vcMul,
+    f32,
+    cplx32,
+    cplx32_mut,
+    "vcMul length exceeds MKL_INT range"
+);
+complex_mul!(
+    cmul_f64,
+    vzMul,
+    f64,
+    cplx64,
+    cplx64_mut,
+    "vzMul length exceeds MKL_INT range"
+);
 
 /// In-place elementwise complex multiply: `data *= other` via `vcMul`.
 ///
@@ -363,8 +377,18 @@ macro_rules! blas_dot {
     };
 }
 
-blas_dot!(dot_f32, cblas_sdot, f32, "cblas_sdot length exceeds MKL_INT range");
-blas_dot!(dot_f64, cblas_ddot, f64, "cblas_ddot length exceeds MKL_INT range");
+blas_dot!(
+    dot_f32,
+    cblas_sdot,
+    f32,
+    "cblas_sdot length exceeds MKL_INT range"
+);
+blas_dot!(
+    dot_f64,
+    cblas_ddot,
+    f64,
+    "cblas_ddot length exceeds MKL_INT range"
+);
 
 macro_rules! complex_dot {
     ($name:ident, $sys_fn:ident, $float:ty, $cast:ident, $ctx:literal $(,)?) => {

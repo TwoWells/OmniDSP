@@ -64,7 +64,7 @@ pub type DftiDescriptorHandle = *mut DftiDescriptor;
 /// Discriminants from oneMKL 2024.2 `mkl_dfti.h`. `Real` domain enables
 /// r2c/c2r transforms; `ComplexComplex` conjugate-even storage stores the
 /// real-transform output as interleaved complex values (layout-compatible
-/// with `Complex<T>`), matching OmniDSP's r2c output convention of
+/// with `Complex<T>`), matching `OmniDSP`'s r2c output convention of
 /// `N/2 + 1` complex bins.
 #[repr(i64)]
 pub enum DftiConfigValue {
@@ -200,9 +200,23 @@ unsafe extern "C" {
     pub fn cblas_dscal(n: MklInt, alpha: f64, x: *mut f64, incx: MklInt);
 
     /// AXPY for `f32`: `y += alpha * x`.
-    pub fn cblas_saxpy(n: MklInt, alpha: f32, x: *const f32, incx: MklInt, y: *mut f32, incy: MklInt);
+    pub fn cblas_saxpy(
+        n: MklInt,
+        alpha: f32,
+        x: *const f32,
+        incx: MklInt,
+        y: *mut f32,
+        incy: MklInt,
+    );
     /// AXPY for `f64`: `y += alpha * x`.
-    pub fn cblas_daxpy(n: MklInt, alpha: f64, x: *const f64, incx: MklInt, y: *mut f64, incy: MklInt);
+    pub fn cblas_daxpy(
+        n: MklInt,
+        alpha: f64,
+        x: *const f64,
+        incx: MklInt,
+        y: *mut f64,
+        incy: MklInt,
+    );
 
     /// Unconjugated complex-`f32` dot product, result via out-pointer.
     pub fn cblas_cdotu_sub(
@@ -402,7 +416,7 @@ mod tests {
         unsafe {
             let mut handle: DftiDescriptorHandle = std::ptr::null_mut();
             let status = DftiCreateDescriptor(
-                &mut handle,
+                &raw mut handle,
                 DftiConfigValue::Double,
                 DftiConfigValue::Complex,
                 1, // dimension
@@ -411,7 +425,7 @@ mod tests {
             assert_eq!(status, DFTI_NO_ERROR, "DftiCreateDescriptor should succeed");
             assert!(!handle.is_null(), "handle should be non-null");
 
-            let status = DftiFreeDescriptor(&mut handle);
+            let status = DftiFreeDescriptor(&raw mut handle);
             assert_eq!(status, DFTI_NO_ERROR, "DftiFreeDescriptor should succeed");
         }
     }
@@ -421,7 +435,7 @@ mod tests {
         unsafe {
             let mut task: VSLConvTaskPtr = std::ptr::null_mut();
             let status = vslsConvNewTask1D(
-                &mut task,
+                &raw mut task,
                 VSL_CONV_MODE_AUTO,
                 4, // xshape
                 3, // yshape
@@ -430,7 +444,7 @@ mod tests {
             assert_eq!(status, VSL_STATUS_OK, "vslsConvNewTask1D should succeed");
             assert!(!task.is_null(), "task should be non-null");
 
-            let status = vslConvDeleteTask(&mut task);
+            let status = vslConvDeleteTask(&raw mut task);
             assert_eq!(status, VSL_STATUS_OK, "vslConvDeleteTask should succeed");
         }
     }
