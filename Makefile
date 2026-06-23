@@ -76,6 +76,10 @@ check: setup-tools
 	@cargo update --quiet
 	@cargo fmt -- -l | sed 's/^/fmt: formatted /'
 	@cargo clippy --tests --quiet -- -D warnings
+	@# The CQT bench is feature-gated (required-features = ["bench"]), so the
+	@# default clippy pass above skips it. Lint it explicitly so it cannot rot
+	@# unnoticed the way it did under the surface-lock landing.
+	@cargo clippy -p omnidsp-core --benches --features bench --quiet -- -D warnings
 	@tries=0; while true; do \
 	   cargo deny --log-level error check; rc=$$?; \
 	   if [ $$rc -eq 0 ]; then break; \
