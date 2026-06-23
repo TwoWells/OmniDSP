@@ -18,7 +18,9 @@ exclude = [
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
-missing_docs = "warn"
+# Public APIs must be documented (the stated project standard); deny so an
+# undocumented public item fails the gate rather than warning silently.
+missing_docs = "deny"
 
 [workspace.lints.clippy]
 # Lint groups

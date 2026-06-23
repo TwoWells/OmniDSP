@@ -22,7 +22,7 @@ pub use omnidsp_core::window::Window;
 pub mod create;
 mod omnidsp;
 
-pub use create::CreatePlan;
+pub use create::{CreatePlan, CreateProc};
 pub use omnidsp::{OmniDSP, RustBackend};
 
 /// The best available backend, selected at compile time.

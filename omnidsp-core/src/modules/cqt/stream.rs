@@ -107,6 +107,15 @@ use crate::window::Window;
 /// crossed.  Output is complex; the magnitude convenience
 /// ([`process_magnitude`](Self::process_magnitude)) is on the trait too,
 /// delegating to the concrete processor's efficient inherent implementation.
+///
+/// # Live retuning
+///
+/// Swapping the analysis window mid-stream is the separate
+/// [`Reconfigure<Window>`] capability, deliberately *not* a method on this trait
+/// — so a `dyn CqtProcessor` cannot reach it.  Hold the concrete processor type
+/// (or add the `Reconfigure<Window>` bound) when you need the live window swap.
+///
+/// [`Reconfigure<Window>`]: crate::traits::reconfigure::Reconfigure
 pub trait CqtProcessor<T> {
     /// Number of frequency bins per column.
     fn num_bins(&self) -> usize;

@@ -89,6 +89,15 @@ impl IirSpec {
 /// (returns `0`) and only marks the stream's end.  Batch is still
 /// `process(everything) + finish`; [`execute`](IirProcessor::execute) is the
 /// one-shot convenience.
+///
+/// # Live retuning
+///
+/// Retuning the cascade coefficients mid-stream is the separate [`Reconfigure`]
+/// capability (`Reconfigure<[BiquadSection<f64>]>`), deliberately *not* a method
+/// on this trait — so a `dyn IirProcessor` cannot reach it.  Hold the concrete
+/// processor type (or add the `Reconfigure` bound) when you need live retuning.
+///
+/// [`Reconfigure`]: crate::traits::reconfigure::Reconfigure
 pub trait IirProcessor<T> {
     /// Filter the streaming `input`, writing the result to `output`; returns the
     /// number of samples written (equal to `input.len()`).

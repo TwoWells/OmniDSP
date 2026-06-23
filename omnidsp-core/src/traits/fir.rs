@@ -268,6 +268,15 @@ impl FirSpec {
 /// `finish` at the true end of the stream.  Batch is just
 /// `process(everything) + finish`; [`execute`](FirProcessor::execute) is the
 /// one-shot convenience for exactly that on a fresh stream.
+///
+/// # Live retuning
+///
+/// Retuning the taps mid-stream is the separate [`Reconfigure<FirFilter>`]
+/// capability, deliberately *not* a method on this trait — so a `dyn
+/// FirProcessor` cannot reach it.  Hold the concrete processor type (or add a
+/// `Reconfigure<FirFilter>` bound) when you need live retuning.
+///
+/// [`Reconfigure<FirFilter>`]: crate::traits::reconfigure::Reconfigure
 pub trait FirProcessor<T> {
     /// Filter the streaming `input`, writing the steady-state output to
     /// `output`; returns the number of samples written.
