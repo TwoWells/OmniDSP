@@ -3,7 +3,7 @@
 
 //! FIR filter module — direct and overlap-save streaming filter.
 //!
-//! [`OmniFir`] builds streaming FIR plans via an inherent `create_plan`,
+//! [`OmniFir`] builds streaming FIR processors via an inherent `create_proc`,
 //! generic over any [`DftR2c`] / [`DftC2r`] and [`VecOps`] implementation.
 //! Supports both time-domain (direct MAC loop) and frequency-domain
 //! (overlap-save) execution, selected via [`FirStrategy`].
@@ -17,8 +17,9 @@
 //! The [`recommend_strategy`] function provides an operation-count heuristic
 //! for the `Auto` case.
 //!
-//! Plans are **mutable** — they hold a delay line that persists across calls
-//! so successive `process` calls form a continuous stream.
+//! Processors are **stateful** — they hold a delay line that persists across
+//! calls so successive `process` calls form a continuous stream, and `finish`
+//! flushes the `num_taps − 1` ring-down tail at end-of-stream.
 
 use std::ops::{AddAssign, MulAssign};
 
@@ -28,7 +29,7 @@ use num_traits::Float;
 use crate::error::{Error, Result};
 use crate::hermitian::{HermitianC2r, HermitianC2rPlan};
 use crate::traits::dft::{DftC2r, DftC2rPlan, DftC2rSpec, DftNorm, DftR2c, DftR2cPlan, DftR2cSpec};
-use crate::traits::fir::{FirPlan, FirSpec, FirStrategy};
+use crate::traits::fir::{FirProcessor, FirSpec, FirStrategy};
 use crate::traits::vecops::VecOps;
 use crate::types::DspFloat;
 
@@ -80,10 +81,10 @@ pub fn recommend_strategy(num_taps: usize) -> FirStrategy {
 /// Generic FIR filter factory backed by [`DftR2c`] / [`DftC2r`] and
 /// [`VecOps`].
 ///
-/// Creates [`OmniFirPlan`]s for specific filter specifications.  The factory
-/// owns the real-DFT factories (`r2c` forward, `c2r` inverse) and the `VecOps`
-/// instance; plans own their sub-plans.  The c2r factory is Hermitian-shaped
-/// internally.
+/// Creates [`OmniFirProcessor`]s for specific filter specifications.  The
+/// factory owns the real-DFT factories (`r2c` forward, `c2r` inverse) and the
+/// `VecOps` instance; processors own their sub-plans.  The c2r factory is
+/// Hermitian-shaped internally.
 #[derive(Debug, Clone)]
 pub struct OmniFir<R, C, V> {
     r2c: R,
@@ -99,12 +100,13 @@ impl<R, C, V> OmniFir<R, C, V> {
     }
 }
 
-/// Execution plan for a streaming FIR filter.
+/// Stateful execution object for a streaming FIR filter — a **Processor**.
 ///
-/// Created by [`OmniFir::create_plan`].  Mutable — holds
-/// a delay line that persists across calls so successive `process` calls
-/// form a continuous stream.  Call [`reset`](FirPlan::reset) to clear the
-/// delay line without recreating the plan.
+/// Created by [`OmniFir::create_proc`].  Holds a delay line that persists across
+/// calls so successive `process` calls form a continuous stream; `finish`
+/// flushes the `num_taps − 1` ring-down tail at end-of-stream.  Call
+/// [`reset`](FirProcessor::reset) to clear the delay line without recreating the
+/// processor.
 ///
 /// **Memory:** the direct path allocates `2 × num_taps` for the doubled
 /// delay buffer.  The overlap-save path allocates two real buffers of
@@ -113,17 +115,17 @@ impl<R, C, V> OmniFir<R, C, V> {
 ///
 /// `RP` is the forward [`DftR2cPlan`]; `CP` is the inverse [`DftC2rPlan`]
 /// (in practice a [`HermitianC2rPlan`]).  Neither is ever named by users.
-pub struct OmniFirPlan<T, RP, CP, V> {
+pub struct OmniFirProcessor<T, RP, CP, V> {
     inner: PlanInner<T, RP, CP, V>,
 }
 
-impl<T, RP, CP, V> std::fmt::Debug for OmniFirPlan<T, RP, CP, V> {
+impl<T, RP, CP, V> std::fmt::Debug for OmniFirProcessor<T, RP, CP, V> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let method = match &self.inner {
             PlanInner::Direct { .. } => "Direct",
             PlanInner::OverlapSave { .. } => "OverlapSave",
         };
-        f.debug_struct("OmniFirPlan")
+        f.debug_struct("OmniFirProcessor")
             .field("method", &method)
             .finish_non_exhaustive()
     }
@@ -186,14 +188,14 @@ struct OverlapSaveState<T, RP, CP, V> {
 
 // ─── Trait implementations ─────────────────────────────────────────────
 
-impl<T, RP, CP, V> FirPlan<T> for OmniFirPlan<T, RP, CP, V>
+impl<T, RP, CP, V> FirProcessor<T> for OmniFirProcessor<T, RP, CP, V>
 where
     T: Float + AddAssign + MulAssign + Send + Sync,
     RP: DftR2cPlan<T>,
     CP: DftC2rPlan<T>,
     V: VecOps<T>,
 {
-    fn process(&mut self, input: &[T], output: &mut [T]) -> Result<()> {
+    fn process(&mut self, input: &[T], output: &mut [T]) -> Result<usize> {
         if input.len() != output.len() {
             return Err(Error::BufferMismatch {
                 expected: input.len(),
@@ -202,9 +204,51 @@ where
         }
 
         match &mut self.inner {
-            PlanInner::Direct { state } => Self::process_direct(state, input, output),
-            PlanInner::OverlapSave { state } => Self::process_overlap_save(state, input, output),
+            PlanInner::Direct { state } => Self::process_direct(state, input, output)?,
+            PlanInner::OverlapSave { state } => Self::process_overlap_save(state, input, output)?,
         }
+        Ok(input.len())
+    }
+
+    fn finish(&mut self, output: &mut [T]) -> Result<usize> {
+        // The ring-down tail is the filter's response to the `num_taps − 1`
+        // delayed samples after the input stops — i.e. feeding that many zeros.
+        // Running them through the steady `process` reproduces the trailing
+        // samples of the finite convolution; `process(all) + finish` then equals
+        // `convolve` for the whole signal.
+        let tail = self.tail_len();
+        if output.len() < tail {
+            return Err(Error::BufferMismatch {
+                expected: tail,
+                actual: output.len(),
+            });
+        }
+        let zeros = vec![T::zero(); tail];
+        match &mut self.inner {
+            PlanInner::Direct { state } => {
+                Self::process_direct(state, &zeros, &mut output[..tail])?;
+            }
+            PlanInner::OverlapSave { state } => {
+                Self::process_overlap_save(state, &zeros, &mut output[..tail])?;
+            }
+        }
+        self.reset();
+        Ok(tail)
+    }
+
+    fn execute(&mut self, input: &[T], output: &mut [T]) -> Result<usize> {
+        self.reset();
+        let tail = self.tail_len();
+        let total = input.len() + tail;
+        if output.len() < total {
+            return Err(Error::BufferMismatch {
+                expected: total,
+                actual: output.len(),
+            });
+        }
+        let n = self.process(input, &mut output[..input.len()])?;
+        let t = self.finish(&mut output[n..total])?;
+        Ok(n + t)
     }
 
     fn reset(&mut self) {
@@ -224,13 +268,24 @@ where
     }
 }
 
-impl<T, RP, CP, V> OmniFirPlan<T, RP, CP, V>
+impl<T, RP, CP, V> OmniFirProcessor<T, RP, CP, V>
 where
     T: Float + AddAssign + MulAssign + Send + Sync,
     RP: DftR2cPlan<T>,
     CP: DftC2rPlan<T>,
     V: VecOps<T>,
 {
+    /// The ring-down tail length `num_taps − 1` — the count [`finish`] emits.
+    ///
+    /// [`finish`]: FirProcessor::finish
+    const fn tail_len(&self) -> usize {
+        let num_taps = match &self.inner {
+            PlanInner::Direct { state } => state.coeffs.len(),
+            PlanInner::OverlapSave { state } => state.num_taps,
+        };
+        num_taps.saturating_sub(1)
+    }
+
     /// Direct (time-domain) FIR: doubled buffer + single dot product.
     fn process_direct(state: &mut DirectState<T, V>, input: &[T], output: &mut [T]) -> Result<()> {
         let num_taps = state.coeffs.len();
@@ -278,7 +333,7 @@ where
             // Forward r2c (block_size real → half-spectrum); buf_time consumed.
             state
                 .fwd
-                .process(&mut state.buf_time, &mut state.buf_freq)?;
+                .execute(&mut state.buf_time, &mut state.buf_freq)?;
 
             // Complex multiply with pre-computed H[k] on the half-spectrum.
             state
@@ -288,7 +343,7 @@ where
             // Inverse c2r (half-spectrum → block_size real); buf_freq consumed.
             state
                 .inv
-                .process(&mut state.buf_freq, &mut state.buf_ifft)?;
+                .execute(&mut state.buf_freq, &mut state.buf_ifft)?;
 
             // Extract valid output (already real): skip first overlap_len.
             let valid_start = overlap_len;
@@ -315,10 +370,12 @@ where
 }
 
 impl<R, C, V> OmniFir<R, C, V> {
-    /// Create a plan for a FIR filter described by `spec`.
+    /// Create a processor for a FIR filter described by `spec`.
     ///
-    /// The overlap-save path wraps the inverse c2r factory in [`HermitianC2r`]
-    /// so the DC/Nyquist boundary is projected before the transform.
+    /// The spec's f64 coefficients are cast to the operation's precision `T` at
+    /// this create edge.  The overlap-save path wraps the inverse c2r factory in
+    /// [`HermitianC2r`] so the DC/Nyquist boundary is projected before the
+    /// transform.
     ///
     /// # Errors
     ///
@@ -328,13 +385,15 @@ impl<R, C, V> OmniFir<R, C, V> {
     /// is not re-checked here.
     #[allow(
         clippy::type_complexity,
-        reason = "composite real-DFT plan type (r2c forward + Hermitian-shaped c2r \
-                  inverse); the dispatch layer names it via `type Plan` aliases"
+        reason = "composite real-DFT processor type (r2c forward + Hermitian-shaped c2r \
+                  inverse); the dispatch layer names it via `type Proc` aliases"
     )]
-    pub fn create_plan<T>(
+    pub fn create_proc<T>(
         &self,
-        spec: &FirSpec<T>,
-    ) -> Result<OmniFirPlan<T, <R as DftR2c<T>>::Plan, HermitianC2rPlan<<C as DftC2r<T>>::Plan>, V>>
+        spec: &FirSpec,
+    ) -> Result<
+        OmniFirProcessor<T, <R as DftR2c<T>>::Plan, HermitianC2rPlan<<C as DftC2r<T>>::Plan>, V>,
+    >
     where
         T: DspFloat + AddAssign + MulAssign,
         R: DftR2c<T>,
@@ -342,6 +401,15 @@ impl<R, C, V> OmniFir<R, C, V> {
         V: VecOps<T>,
     {
         let num_taps = spec.coefficients().len();
+        // Cast the f64 design coefficients to the operation's precision `T`.
+        let coeffs_t: Vec<T> = spec
+            .coefficients()
+            .iter()
+            .map(|&c| {
+                T::from(c)
+                    .ok_or_else(|| Error::Internal("cannot represent FIR coefficient in T".into()))
+            })
+            .collect::<Result<_>>()?;
 
         let strategy = match spec.strategy() {
             FirStrategy::Auto => recommend_strategy(num_taps),
@@ -350,7 +418,7 @@ impl<R, C, V> OmniFir<R, C, V> {
 
         let inner = match strategy {
             FirStrategy::Direct | FirStrategy::Auto => {
-                let mut coeffs = spec.coefficients().to_vec();
+                let mut coeffs = coeffs_t;
                 coeffs.reverse();
 
                 PlanInner::Direct {
@@ -384,8 +452,8 @@ impl<R, C, V> OmniFir<R, C, V> {
                 let mut buf_time = vec![T::zero(); block_size];
                 let mut freq_coeffs = vec![zero; bins];
 
-                buf_time[..num_taps].copy_from_slice(spec.coefficients());
-                fwd.process(&mut buf_time, &mut freq_coeffs)?;
+                buf_time[..num_taps].copy_from_slice(&coeffs_t);
+                fwd.execute(&mut buf_time, &mut freq_coeffs)?;
 
                 PlanInner::OverlapSave {
                     state: OverlapSaveState {
@@ -404,7 +472,7 @@ impl<R, C, V> OmniFir<R, C, V> {
             }
         };
 
-        Ok(OmniFirPlan { inner })
+        Ok(OmniFirProcessor { inner })
     }
 }
 
@@ -425,7 +493,7 @@ mod tests {
 
     /// Build a [`FirSpec`] from bring-your-own coefficients and an explicit
     /// strategy.
-    fn fir_spec(coeffs: Vec<f64>, strategy: FirStrategy) -> FirSpec<f64> {
+    fn fir_spec(coeffs: Vec<f64>, strategy: FirStrategy) -> FirSpec {
         let filter = FirFilter::new(coeffs, FirMeta::unknown()).expect("valid fir filter");
         FirSpec::new(filter, strategy)
     }
@@ -482,7 +550,7 @@ mod tests {
         let factory = make_factory();
         let coeffs = vec![1.0, 2.0, 3.0, 4.0, 5.0];
         let spec = fir_spec(coeffs.clone(), strategy);
-        let mut plan = factory.create_plan(&spec).expect("plan creation");
+        let mut plan = factory.create_proc(&spec).expect("plan creation");
 
         let mut input = vec![0.0; coeffs.len() + 4];
         input[0] = 1.0;
@@ -522,7 +590,7 @@ mod tests {
         let coeffs = vec![0.1, 0.2, 0.4, 0.2, 0.1];
         let expected_gain: f64 = coeffs.iter().sum();
         let spec = fir_spec(coeffs.clone(), strategy);
-        let mut plan = factory.create_plan(&spec).expect("plan creation");
+        let mut plan = factory.create_proc(&spec).expect("plan creation");
 
         let input_val = 3.0;
         let input = vec![input_val; 100];
@@ -557,14 +625,14 @@ mod tests {
         let coeffs = vec![1.0, -0.5, 0.25, -0.125, 0.0625];
         let spec = fir_spec(coeffs, strategy);
 
-        let mut plan_ref = factory.create_plan(&spec).expect("ref plan");
+        let mut plan_ref = factory.create_proc(&spec).expect("ref plan");
         let input: Vec<f64> = (0..20).map(|i| (f64::from(i)) * 0.1).collect();
         let mut output_ref = vec![0.0; 20];
         plan_ref
             .process(&input, &mut output_ref)
             .expect("ref process");
 
-        let mut plan_stream = factory.create_plan(&spec).expect("stream plan");
+        let mut plan_stream = factory.create_proc(&spec).expect("stream plan");
         let split = 7;
         let mut output_stream = vec![0.0; 20];
         plan_stream
@@ -598,7 +666,7 @@ mod tests {
         let factory = make_factory();
         let coeffs = vec![1.0, 0.5, 0.25];
         let spec = fir_spec(coeffs, strategy);
-        let mut plan = factory.create_plan(&spec).expect("plan creation");
+        let mut plan = factory.create_proc(&spec).expect("plan creation");
 
         let input = vec![1.0, 2.0, 3.0, 4.0, 5.0];
         let mut output1 = vec![0.0; 5];
@@ -636,8 +704,8 @@ mod tests {
         let spec_d = fir_spec(coeffs.clone(), FirStrategy::Direct);
         let spec_o = fir_spec(coeffs, FirStrategy::OverlapSave);
 
-        let mut plan_d = factory.create_plan(&spec_d).expect("direct plan");
-        let mut plan_o = factory.create_plan(&spec_o).expect("ols plan");
+        let mut plan_d = factory.create_proc(&spec_d).expect("direct plan");
+        let mut plan_o = factory.create_proc(&spec_o).expect("ols plan");
 
         let input: Vec<f64> = (0..50).map(|i| ((f64::from(i)) * 0.3).sin()).collect();
         let mut out_d = vec![0.0; 50];
@@ -655,7 +723,7 @@ mod tests {
         let factory = make_factory();
         let coeffs = vec![1.0, 0.0, 0.0];
         let spec = fir_spec(coeffs, strategy);
-        let mut plan = factory.create_plan(&spec).expect("plan creation");
+        let mut plan = factory.create_proc(&spec).expect("plan creation");
 
         let input1 = vec![1.0, 2.0, 3.0];
         let mut output1 = vec![0.0; 3];
@@ -696,7 +764,7 @@ mod tests {
         let factory = make_factory();
         let coeffs: Vec<f64> = (0..32).map(|i: i32| 1.0 / (f64::from(i) + 1.0)).collect();
         let spec = fir_spec(coeffs.clone(), FirStrategy::Direct);
-        let mut plan = factory.create_plan(&spec).expect("plan creation");
+        let mut plan = factory.create_proc(&spec).expect("plan creation");
 
         let mut input = vec![0.0; 64];
         input[0] = 1.0;
@@ -717,7 +785,7 @@ mod tests {
         let factory = make_factory();
         let coeffs = vec![1.0, 2.0, 3.0];
         let spec = fir_spec(coeffs.clone(), FirStrategy::OverlapSave);
-        let mut plan = factory.create_plan(&spec).expect("plan creation");
+        let mut plan = factory.create_proc(&spec).expect("plan creation");
 
         let mut input = vec![0.0; 16];
         input[0] = 1.0;
@@ -738,7 +806,7 @@ mod tests {
     #[test]
     fn empty_coefficients_returns_error() {
         assert!(
-            FirFilter::<f64>::new(vec![], FirMeta::unknown()).is_err(),
+            FirFilter::new(vec![], FirMeta::unknown()).is_err(),
             "empty coefficients should be rejected by the filter constructor"
         );
     }
@@ -747,7 +815,7 @@ mod tests {
     fn buffer_length_mismatch_returns_error() {
         let factory = make_factory();
         let spec = fir_spec(vec![1.0, 2.0], FirStrategy::Auto);
-        let mut plan = factory.create_plan(&spec).expect("plan creation");
+        let mut plan = factory.create_proc(&spec).expect("plan creation");
 
         let input = vec![1.0, 2.0, 3.0];
         let mut output = vec![0.0; 2];
@@ -766,8 +834,8 @@ mod tests {
         let spec_d = fir_spec(coeffs.clone(), FirStrategy::Direct);
         let spec_o = fir_spec(coeffs, FirStrategy::OverlapSave);
 
-        let mut plan_d = factory.create_plan(&spec_d).expect("direct plan");
-        let mut plan_o = factory.create_plan(&spec_o).expect("ols plan");
+        let mut plan_d = factory.create_proc(&spec_d).expect("direct plan");
+        let mut plan_o = factory.create_proc(&spec_o).expect("ols plan");
 
         let input: Vec<f64> = (0..200).map(|i| ((f64::from(i)) * 0.07).sin()).collect();
         let mut out_d = vec![0.0; 200];
@@ -787,8 +855,8 @@ mod tests {
         let spec_ref = fir_spec(coeffs.clone(), FirStrategy::Direct);
         let spec_ols = fir_spec(coeffs, FirStrategy::OverlapSave);
 
-        let mut plan_ref = factory.create_plan(&spec_ref).expect("ref plan");
-        let mut plan_ols = factory.create_plan(&spec_ols).expect("ols plan");
+        let mut plan_ref = factory.create_proc(&spec_ref).expect("ref plan");
+        let mut plan_ols = factory.create_proc(&spec_ols).expect("ols plan");
 
         let input: Vec<f64> = (0..100).map(|i| ((f64::from(i)) * 0.13).sin()).collect();
 
@@ -828,7 +896,7 @@ mod tests {
         for &strategy in &[FirStrategy::Direct, FirStrategy::OverlapSave] {
             let factory = make_factory();
             let spec = fir_spec(taps.to_vec(), strategy);
-            let mut plan = factory.create_plan(&spec).expect("plan creation");
+            let mut plan = factory.create_proc(&spec).expect("plan creation");
 
             let mut output = vec![0.0; input.len()];
             plan.process(input, &mut output).expect("process");
@@ -865,7 +933,7 @@ mod tests {
         for &strategy in &[FirStrategy::Direct, FirStrategy::OverlapSave] {
             let factory = make_factory();
             let spec = fir_spec(LFILTER_LP30_HAMMING_TAPS.to_vec(), strategy);
-            let mut plan = factory.create_plan(&spec).expect("plan creation");
+            let mut plan = factory.create_proc(&spec).expect("plan creation");
 
             let mut output = vec![0.0; LFILTER_LONG_INPUT.len()];
 

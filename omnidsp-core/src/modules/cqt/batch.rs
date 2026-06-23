@@ -45,12 +45,13 @@ use std::sync::Mutex;
 
 use num_complex::Complex;
 
-use crate::create::CreatePlan;
+use crate::create::CreateProc;
 use crate::design::cqt::CqtSpec;
 use crate::design::resample::ResampleSpec;
+use crate::dispatch::Backend;
 use crate::error::{Error, Result};
 use crate::modules::cqt::kernel::{self, OctaveBand};
-use crate::modules::resample::ResamplePlan;
+use crate::modules::resample::ResampleProcessor;
 use crate::traits::dft::{DftR2c, DftR2cPlan};
 use crate::traits::vecops::VecOps;
 use crate::types::DspFloat;
@@ -100,12 +101,12 @@ impl<R, V> OmniCqt<R, V> {
 /// Execution plan for an octave-recursive multirate Constant-Q Transform.
 ///
 /// Created by [`OmniCqt::create_plan`].  `Send + Sync`; each call to
-/// [`process`](Self::process) computes the CQT of one frame independently — the
+/// [`execute`](Self::execute) computes the CQT of one frame independently — the
 /// stateful decimator is reset per frame, so no state is carried between calls
 /// (batch v1; cross-frame octave state is the streaming extension).
 ///
 /// Type parameters: `RP` the per-octave [`DftR2cPlan`], `V` the [`VecOps`],
-/// `ResP` the concrete decimator [`ResamplePlan`] (the routed sub-plan).
+/// `ResP` the concrete decimator [`ResampleProcessor`] (the routed sub-processor).
 pub struct OmniCqtPlan<T, RP, V, ResP> {
     /// Per-octave bands, ordered top (octave 0, full rate) → bottom.
     octaves: Vec<OctaveBand<T, RP>>,
@@ -157,7 +158,7 @@ where
     T: DspFloat + AddAssign + MulAssign,
     RP: DftR2cPlan<T>,
     V: VecOps<T>,
-    ResP: ResamplePlan<T>,
+    ResP: ResampleProcessor<T>,
 {
     /// Compute the CQT of one frame.
     ///
@@ -174,7 +175,7 @@ where
         clippy::significant_drop_tightening,
         reason = "MutexGuard must live for the entire octave-recursive pipeline"
     )]
-    pub fn process(&self, input: &[T], output: &mut [Complex<T>]) -> Result<()> {
+    pub fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<()> {
         if input.len() != self.fft_length {
             return Err(Error::BufferMismatch {
                 expected: self.fft_length,
@@ -220,7 +221,7 @@ where
                 // r2c consumes `seg`; correlate the half-spectrum with each
                 // half-kernel (a single complex dot product per bin).
                 band.r2c
-                    .process(&mut seg[..fft_len], &mut half[..half_len])?;
+                    .execute(&mut seg[..fft_len], &mut half[..half_len])?;
                 for (j, kernel) in band.kernels.iter().enumerate() {
                     output[band.out_start + j] = self.vecops.cdot(&half[..half_len], kernel)?;
                 }
@@ -242,7 +243,7 @@ where
 
     /// Compute the CQT magnitude spectrum of one frame.
     ///
-    /// Convenience wrapper around [`process`](Self::process) that writes
+    /// Convenience wrapper around [`execute`](Self::execute) that writes
     /// `|CQT[k]|` to `output`.
     ///
     /// `input` must have length [`fft_length`](Self::fft_length).
@@ -255,7 +256,7 @@ where
     pub fn process_magnitude(&self, input: &[T], output: &mut [T]) -> Result<()> {
         let zero = Complex::new(T::zero(), T::zero());
         let mut coeffs = vec![zero; self.num_bins];
-        self.process(input, &mut coeffs)?;
+        self.execute(input, &mut coeffs)?;
         self.vecops.mag(&coeffs, output)?;
         Ok(())
     }
@@ -309,7 +310,7 @@ where
 /// implement the trait directly.
 pub trait CqtPlan<T>: Send + Sync {
     /// Number of frequency bins per frame — the required `output` length for
-    /// [`process`](Self::process) / [`process_magnitude`](Self::process_magnitude).
+    /// [`execute`](Self::execute) / [`process_magnitude`](Self::process_magnitude).
     fn num_bins(&self) -> usize;
 
     /// Required input frame length (the spec's FFT length).
@@ -327,10 +328,10 @@ pub trait CqtPlan<T>: Send + Sync {
     ///
     /// Returns an error if either buffer length is wrong, or if execution
     /// fails.
-    fn process(&self, input: &[T], output: &mut [Complex<T>]) -> Result<()>;
+    fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<()>;
 
     /// Compute the CQT **magnitude** spectrum of one frame, writing `|CQT[k]|`
-    /// to `output` (same buffer contract as [`process`](Self::process)).
+    /// to `output` (same buffer contract as [`execute`](Self::execute)).
     ///
     /// # Errors
     ///
@@ -344,7 +345,7 @@ where
     T: DspFloat + AddAssign + MulAssign,
     RP: DftR2cPlan<T>,
     V: VecOps<T>,
-    ResP: ResamplePlan<T> + Send,
+    ResP: ResampleProcessor<T> + Send,
 {
     // Each method delegates to the inherent one.  Inherent methods take
     // precedence over trait methods in resolution, so these are not recursive.
@@ -360,8 +361,8 @@ where
         self.bin_frequencies()
     }
 
-    fn process(&self, input: &[T], output: &mut [Complex<T>]) -> Result<()> {
-        self.process(input, output)
+    fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<()> {
+        self.execute(input, output)
     }
 
     fn process_magnitude(&self, input: &[T], output: &mut [T]) -> Result<()> {
@@ -374,9 +375,10 @@ where
 impl<R, V> OmniCqt<R, V> {
     /// Create a multirate CQT plan from a [`CqtSpec`].
     ///
-    /// `resample_factory` is the backend (any `CreatePlan<ResampleSpec>`); it
-    /// builds the per-octave ×2 decimator sub-plan and is then **dropped** —
-    /// the plan stores only the concrete decimator (option A).
+    /// `resample_factory` is the backend (any `CreateProc<ResampleSpec>` that is
+    /// also a [`Backend<T>`](crate::dispatch::Backend)); it builds the per-octave
+    /// ×2 decimator sub-processor and is then **dropped** — the plan stores only
+    /// the concrete decimator (option A).
     ///
     /// The spec provides per-bin center frequencies and window coefficients.
     /// Construct one via [`design`](crate::design::cqt::design) or
@@ -388,20 +390,20 @@ impl<R, V> OmniCqt<R, V> {
     /// invariants are enforced by [`CqtSpec::new`], so they are not re-checked.
     #[allow(
         clippy::type_complexity,
-        reason = "composite plan type names the routed decimator sub-plan; the \
-                  dispatch layer aliases it via `type Plan`"
+        reason = "composite plan type names the routed decimator sub-processor; \
+                  the dispatch layer aliases it via `type Plan`"
     )]
     pub fn create_plan<T, RF>(
         &self,
-        spec: &CqtSpec<T>,
+        spec: &CqtSpec,
         resample_factory: &RF,
-    ) -> Result<OmniCqtPlan<T, R::Plan, V, <RF as CreatePlan<ResampleSpec<T>>>::Plan>>
+    ) -> Result<OmniCqtPlan<T, R::Plan, V, <RF as CreateProc<ResampleSpec>>::Proc<T>>>
     where
         T: DspFloat + AddAssign + MulAssign,
         R: DftR2c<T>,
         V: VecOps<T>,
-        RF: CreatePlan<ResampleSpec<T>>,
-        <RF as CreatePlan<ResampleSpec<T>>>::Plan: ResamplePlan<T>,
+        RF: CreateProc<ResampleSpec> + Backend<T>,
+        <RF as CreateProc<ResampleSpec>>::Proc<T>: ResampleProcessor<T>,
     {
         let layout = kernel::build_octaves::<T, R, RF>(&self.dftr2c, spec, resample_factory)?;
         let zero = Complex::new(T::zero(), T::zero());
@@ -499,7 +501,7 @@ where
         clippy::significant_drop_tightening,
         reason = "MutexGuard must live for the entire FFT + correlation pipeline"
     )]
-    pub fn process(&self, input: &[T], output: &mut [Complex<T>]) -> Result<()> {
+    pub fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<()> {
         if input.len() != self.fft_length {
             return Err(Error::BufferMismatch {
                 expected: self.fft_length,
@@ -523,7 +525,7 @@ where
         } = &mut *guard;
 
         self.vecops.real_to_complex(input, buf_input)?;
-        self.fwd.process(buf_input, buf_spectrum)?;
+        self.fwd.execute(buf_input, buf_spectrum)?;
         for (k, kernel) in self.kernels.iter().enumerate() {
             output[k] = self.vecops.cdot(buf_spectrum, kernel)?;
         }
@@ -558,7 +560,7 @@ impl<D, V> SingleFftCqt<D, V> {
         clippy::type_complexity,
         reason = "the plan names its concrete forward DFT plan type"
     )]
-    pub fn create_plan<T>(&self, spec: &CqtSpec<T>) -> Result<SingleFftCqtPlan<T, D::Plan, V>>
+    pub fn create_plan<T>(&self, spec: &CqtSpec) -> Result<SingleFftCqtPlan<T, D::Plan, V>>
     where
         T: DspFloat + AddAssign + MulAssign,
         D: DftC2c<T>,
@@ -589,10 +591,12 @@ impl<D, V> SingleFftCqt<D, V> {
                     .ok_or_else(|| Error::Internal("cannot convert cos to T".into()))?;
                 let sin_v = T::from(angle.sin())
                     .ok_or_else(|| Error::Internal("cannot convert sin to T".into()))?;
-                let scaled = w * inv_nk;
+                let w_t = T::from(w)
+                    .ok_or_else(|| Error::Internal("cannot convert window sample to T".into()))?;
+                let scaled = w_t * inv_nk;
                 kern_time[n] = Complex::new(scaled * cos_v, scaled * sin_v);
             }
-            fwd.process(&kern_time, &mut kern_freq)?;
+            fwd.execute(&kern_time, &mut kern_freq)?;
             kernels.push(
                 kern_freq
                     .iter()
@@ -627,8 +631,8 @@ mod tests {
 
     use super::{CqtPlan, OmniCqt, OmniCqtPlan, SingleFftCqt};
     use crate::design::cqt::{self, CqtSpec};
-    use crate::modules::resample::{OmniResample, OmniResamplePlan};
-    use crate::test_utils::{TestDftC2c, TestDftR2c, TestVecOps};
+    use crate::modules::resample::OmniResampleProcessor;
+    use crate::test_utils::{TestBackend, TestDftC2c, TestDftR2c, TestVecOps};
     use crate::traits::dft::{DftC2c, DftR2c};
     use crate::window::Window;
 
@@ -638,26 +642,26 @@ mod tests {
         f64,
         <TestDftR2c as DftR2c<f64>>::Plan,
         TestVecOps,
-        OmniResamplePlan<f64, TestVecOps>,
+        OmniResampleProcessor<f64, TestVecOps>,
     >;
 
-    /// Build a multirate CQT plan from a spec, routing the decimator through an
-    /// [`OmniResample`] factory (the floor's `CreatePlan<ResampleSpec>`).
-    fn make_plan(spec: &CqtSpec<f64>) -> TestCqtPlan {
+    /// Build a multirate CQT plan from a spec, routing the decimator through a
+    /// [`TestBackend`] (the foundational `Backend` + `CreateProc<ResampleSpec>`).
+    fn make_plan(spec: &CqtSpec) -> TestCqtPlan {
         let factory = OmniCqt::new(TestDftR2c, TestVecOps);
         factory
-            .create_plan(spec, &OmniResample::new(TestVecOps))
+            .create_plan(spec, &TestBackend)
             .expect("multirate plan creation should succeed")
     }
 
     /// One octave, 12 bins — degenerate (no decimation).
-    fn one_octave_spec() -> CqtSpec<f64> {
+    fn one_octave_spec() -> CqtSpec {
         cqt::design(44100.0, 440.0, 880.0, 12, &Window::Hann).expect("valid design")
     }
 
     /// Three octaves at 16 kHz — exercises the decimation chain.  `f_max` sits
     /// at ~0.06·Nyquist, far below every decimation cutoff.
-    fn multi_octave_spec() -> CqtSpec<f64> {
+    fn multi_octave_spec() -> CqtSpec {
         cqt::design(16000.0, 125.0, 1000.0, 12, &Window::Hann).expect("valid design")
     }
 
@@ -669,17 +673,17 @@ mod tests {
     // each bin as the full-spectrum correlation `Σ X[m]·conj(K[m])`.
 
     fn oracle_plan(
-        spec: &CqtSpec<f64>,
+        spec: &CqtSpec,
     ) -> super::SingleFftCqtPlan<f64, <TestDftC2c as DftC2c<f64>>::Plan, TestVecOps> {
         SingleFftCqt::new(TestDftC2c, TestVecOps)
             .create_plan(spec)
             .expect("oracle plan creation should succeed")
     }
 
-    fn oracle_magnitudes(spec: &CqtSpec<f64>, input: &[f64]) -> Vec<f64> {
+    fn oracle_magnitudes(spec: &CqtSpec, input: &[f64]) -> Vec<f64> {
         let plan = oracle_plan(spec);
         let mut out = vec![Complex::new(0.0, 0.0); plan.num_bins()];
-        plan.process(input, &mut out).expect("oracle process");
+        plan.execute(input, &mut out).expect("oracle process");
         out.iter().map(|c| c.norm()).collect()
     }
 
@@ -727,7 +731,7 @@ mod tests {
         let input = vec![0.0_f64; plan.fft_length() + 1];
         let mut output = vec![Complex::new(0.0, 0.0); plan.num_bins()];
         assert!(
-            plan.process(&input, &mut output).is_err(),
+            plan.execute(&input, &mut output).is_err(),
             "wrong input length should be rejected"
         );
     }
@@ -738,7 +742,7 @@ mod tests {
         let input = vec![0.0_f64; plan.fft_length()];
         let mut output = vec![Complex::new(0.0, 0.0); plan.num_bins() + 1];
         assert!(
-            plan.process(&input, &mut output).is_err(),
+            plan.execute(&input, &mut output).is_err(),
             "wrong output length should be rejected"
         );
     }
@@ -750,7 +754,7 @@ mod tests {
         let plan = make_plan(&multi_octave_spec());
         let input = vec![0.0_f64; plan.fft_length()];
         let mut output = vec![Complex::new(9.0, 9.0); plan.num_bins()];
-        plan.process(&input, &mut output).expect("process");
+        plan.execute(&input, &mut output).expect("process");
         for (k, c) in output.iter().enumerate() {
             assert!(
                 c.norm() < 1e-10,
@@ -787,7 +791,7 @@ mod tests {
             .collect();
 
         let mut output = vec![Complex::new(0.0, 0.0); plan.num_bins()];
-        plan.process(&input, &mut output).expect("process");
+        plan.execute(&input, &mut output).expect("process");
         let got: Vec<f64> = output.iter().map(|c| c.norm()).collect();
         let want = oracle_magnitudes(&spec, &input);
 
@@ -839,7 +843,7 @@ mod tests {
             }
         }
         let mut out = vec![Complex::new(0.0, 0.0); plan.num_bins()];
-        plan.process(&frame, &mut out).expect("process");
+        plan.execute(&frame, &mut out).expect("process");
         let mr: Vec<f64> = out.iter().map(|c| c.norm()).collect();
         let oracle = oracle_magnitudes(&spec, &frame);
         let peak_bin = mr
@@ -895,7 +899,7 @@ mod tests {
                 .map(|i| (TAU * ftone * i as f64 / sr).sin())
                 .collect();
             let mut output = vec![Complex::new(0.0, 0.0); plan.num_bins()];
-            plan.process(&input, &mut output).expect("process");
+            plan.execute(&input, &mut output).expect("process");
             let got: Vec<f64> = output.iter().map(|c| c.norm()).collect();
             let want = oracle_magnitudes(&spec, &input);
             let peak = want.iter().copied().fold(0.0_f64, f64::max).max(1e-12);
@@ -944,7 +948,7 @@ mod tests {
 
             let input: Vec<f64> = (0..n).map(|i| (TAU * freq * i as f64 / sr).sin()).collect();
             let mut output = vec![Complex::new(0.0, 0.0); plan.num_bins()];
-            plan.process(&input, &mut output).expect("process");
+            plan.execute(&input, &mut output).expect("process");
 
             let peak = output
                 .iter()
@@ -985,7 +989,7 @@ mod tests {
         let freq = plan.bin_frequencies()[2];
         let input: Vec<f64> = (0..n).map(|i| (TAU * freq * i as f64 / sr).sin()).collect();
         let mut output = vec![Complex::new(0.0, 0.0); plan.num_bins()];
-        plan.process(&input, &mut output).expect("process");
+        plan.execute(&input, &mut output).expect("process");
 
         assert!(
             output.iter().all(|c| c.re.is_finite() && c.im.is_finite()),
@@ -1011,8 +1015,8 @@ mod tests {
 
         let mut out1 = vec![Complex::new(0.0, 0.0); plan.num_bins()];
         let mut out2 = vec![Complex::new(0.0, 0.0); plan.num_bins()];
-        plan.process(&input, &mut out1).expect("first");
-        plan.process(&input, &mut out2).expect("second");
+        plan.execute(&input, &mut out1).expect("first");
+        plan.execute(&input, &mut out2).expect("second");
 
         for (k, (a, b)) in out1.iter().zip(&out2).enumerate() {
             assert!(
@@ -1032,7 +1036,7 @@ mod tests {
         input[0] = 1.0;
 
         let mut complex_out = vec![Complex::new(0.0, 0.0); plan.num_bins()];
-        plan.process(&input, &mut complex_out).expect("process");
+        plan.execute(&input, &mut complex_out).expect("process");
         let mut mag_out = vec![0.0_f64; plan.num_bins()];
         plan.process_magnitude(&input, &mut mag_out)
             .expect("process_magnitude");
@@ -1067,7 +1071,7 @@ mod tests {
     #[test]
     fn implements_plan_trait() {
         fn check<P: CqtPlan<f64>>(plan: &P, input: &[f64], output: &mut [Complex<f64>]) {
-            plan.process(input, output).expect("trait process");
+            plan.execute(input, output).expect("trait process");
         }
 
         let plan = make_plan(&one_octave_spec());
@@ -1077,7 +1081,7 @@ mod tests {
         check(&plan, &input, &mut via_trait);
 
         let mut direct = vec![Complex::new(0.0, 0.0); plan.num_bins()];
-        plan.process(&input, &mut direct).expect("inherent process");
+        plan.execute(&input, &mut direct).expect("inherent process");
         for (k, (t, d)) in via_trait.iter().zip(&direct).enumerate() {
             assert!(
                 (t - d).norm() < 1e-15,
@@ -1101,7 +1105,7 @@ mod tests {
 
         let input = vec![0.0_f64; 8];
         let mut output = vec![Complex::new(0.0, 0.0); 1];
-        plan.process(&input, &mut output).expect("process");
+        plan.execute(&input, &mut output).expect("process");
         assert!(output[0].norm() < 1e-10, "zero input → zero output");
     }
 
@@ -1119,7 +1123,7 @@ mod tests {
     )]
     use omnidsp_testdata::cqt_process_numpy::*;
 
-    fn numpy_spec() -> CqtSpec<f64> {
+    fn numpy_spec() -> CqtSpec {
         cqt::design(
             CQT_PROC_SAMPLE_RATE,
             CQT_PROC_MIN_FREQ,
@@ -1162,7 +1166,7 @@ mod tests {
 
         let plan = oracle_plan(&spec);
         let mut output = vec![Complex::new(0.0, 0.0); plan.num_bins()];
-        plan.process(CQT_PROC_ALL_TONES_INPUT, &mut output)
+        plan.execute(CQT_PROC_ALL_TONES_INPUT, &mut output)
             .expect("oracle process");
         assert_complex_approx_eq(
             &output,
@@ -1177,7 +1181,7 @@ mod tests {
         let spec = numpy_spec();
         let plan = oracle_plan(&spec);
         let mut output = vec![Complex::new(0.0, 0.0); plan.num_bins()];
-        plan.process(CQT_PROC_TONE_INPUT, &mut output)
+        plan.execute(CQT_PROC_TONE_INPUT, &mut output)
             .expect("oracle process");
         assert_complex_approx_eq(&output, CQT_PROC_TONE_OUTPUT, 1e-10, "oracle pure-tone");
 
@@ -1195,7 +1199,7 @@ mod tests {
         let spec = numpy_spec();
         let plan = oracle_plan(&spec);
         let mut output = vec![Complex::new(0.0, 0.0); plan.num_bins()];
-        plan.process(CQT_PROC_TWO_TONE_INPUT, &mut output)
+        plan.execute(CQT_PROC_TWO_TONE_INPUT, &mut output)
             .expect("oracle process");
         assert_complex_approx_eq(&output, CQT_PROC_TWO_TONE_OUTPUT, 1e-10, "oracle two-tone");
     }

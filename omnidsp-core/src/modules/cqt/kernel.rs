@@ -8,8 +8,9 @@
 //! decomposition: bins are partitioned into octave bands by frequency relative
 //! to the top bin, each band carries a per-octave r2c plan plus conjugated
 //! half-spectrum kernels, and the signal is decimated ×2 between octaves via a
-//! routed [`ResamplePlan`] sub-plan.  This module owns that construction —
-//! `build_octaves` — so neither path duplicates the kernel math.
+//! routed [`ResampleProcessor`]
+//! sub-processor.  This module owns that construction — `build_octaves` — so
+//! neither path duplicates the kernel math.
 //!
 //! # Kernel time-axis convention and anchoring
 //!
@@ -52,12 +53,13 @@ use std::ops::{AddAssign, MulAssign};
 
 use num_complex::Complex;
 
-use crate::create::CreatePlan;
+use crate::create::CreateProc;
 use crate::design::cqt::{CqtSpec, DecimatorQuality};
 use crate::design::fir::{self, FirMethod};
-use crate::design::resample::{ResampleMode, ResampleSpec};
+use crate::design::resample::ResampleSpec;
+use crate::dispatch::Backend;
 use crate::error::{Error, Result};
-use crate::modules::resample::ResamplePlan;
+use crate::modules::resample::ResampleProcessor;
 use crate::traits::dft::{DftNorm, DftR2c, DftR2cSpec};
 use crate::types::{DspFloat, FilterType};
 use crate::window::{self, Window};
@@ -97,7 +99,7 @@ pub(super) struct OctaveBand<T, RP> {
 /// routed decimator sub-plan and the derived geometry both paths need.
 ///
 /// `RP` is the per-octave [`DftR2cPlan`](crate::traits::dft::DftR2cPlan); `ResP`
-/// is the concrete decimator [`ResamplePlan`].
+/// is the concrete decimator [`ResampleProcessor`].
 pub(super) struct OctaveLayout<T, RP, ResP> {
     /// Per-octave bands, ordered top (octave 0, full rate) → bottom.
     pub octaves: Vec<OctaveBand<T, RP>>,
@@ -164,7 +166,7 @@ struct OctaveBands<T, RP> {
     octaves_count: usize,
     /// The derived ×2 half-band decimation spec (shared prototype for every
     /// transition).
-    decimate_spec: ResampleSpec<T>,
+    decimate_spec: ResampleSpec,
 }
 
 /// Build the per-octave bands and the shared decimation spec for a [`CqtSpec`].
@@ -179,11 +181,7 @@ struct OctaveBands<T, RP> {
     reason = "kernel lengths, octave indices, and offsets are small \
               non-negative values exact in f64"
 )]
-fn build_bands<T, R>(
-    dftr2c: &R,
-    spec: &CqtSpec<T>,
-    anchor: Anchor,
-) -> Result<OctaveBands<T, R::Plan>>
+fn build_bands<T, R>(dftr2c: &R, spec: &CqtSpec, anchor: Anchor) -> Result<OctaveBands<T, R::Plan>>
 where
     T: DspFloat + AddAssign + MulAssign,
     R: DftR2c<T>,
@@ -218,24 +216,20 @@ where
     // every ×2 stage.  The prototype's linear-phase group delay is (proto_len-1)/4
     // output samples per ×2 stage.
     let passband_edge = (f_max / (2.0 * sr)) * 1.08;
-    let decimate_spec = derive_decimate_spec::<T>(spec.decimator_quality(), passband_edge)?;
+    let decimate_spec = derive_decimate_spec(spec.decimator_quality(), passband_edge)?;
     let proto_len = decimate_spec.prototype_filter().len();
     let proto_delay = (proto_len.saturating_sub(1)) as f64 / 4.0;
 
-    // Decimator coefficients (in f64) for the per-bin gain compensation: a bin
-    // in octave `o` has passed through `o` cascaded ×2 half-band decimators, so
-    // its cumulative passband gain is the product of the decimator's magnitude
+    // Decimator coefficients (already f64) for the per-bin gain compensation: a
+    // bin in octave `o` has passed through `o` cascaded ×2 half-band decimators,
+    // so its cumulative passband gain is the product of the decimator's magnitude
     // response at the bin's normalized frequency at each stage's input rate.
     // Baking the analytic inverse `1/G_k` into the kernel flattens the octave
     // staircase — the exact inverse of the known
     // filter's known response, no fudge factor.  The half-band's DC gain is ~1
     // and the ×2 decimator applies no L-scaling (up = 1), so `G_k` is the true
     // end-to-end per-octave passband gain.
-    let decim_coeffs: Vec<f64> = decimate_spec
-        .prototype_filter()
-        .iter()
-        .map(|&c| c.to_f64().unwrap_or(0.0))
-        .collect();
+    let decim_coeffs: Vec<f64> = decimate_spec.prototype_filter().to_vec();
 
     let bin_frequencies: Vec<f64> = bins.iter().map(|b| b.frequency).collect();
     // Per-bin newest-anchored analysis-center latency, top-rate samples, written
@@ -362,21 +356,21 @@ where
 )]
 pub(super) fn build_octaves<T, R, RF>(
     dftr2c: &R,
-    spec: &CqtSpec<T>,
+    spec: &CqtSpec,
     resample_factory: &RF,
-) -> Result<OctaveLayout<T, R::Plan, <RF as CreatePlan<ResampleSpec<T>>>::Plan>>
+) -> Result<OctaveLayout<T, R::Plan, <RF as CreateProc<ResampleSpec>>::Proc<T>>>
 where
     T: DspFloat + AddAssign + MulAssign,
     R: DftR2c<T>,
-    RF: CreatePlan<ResampleSpec<T>>,
-    <RF as CreatePlan<ResampleSpec<T>>>::Plan: ResamplePlan<T>,
+    RF: CreateProc<ResampleSpec> + Backend<T>,
+    <RF as CreateProc<ResampleSpec>>::Proc<T>: ResampleProcessor<T>,
 {
     // Batch is oldest-anchored: kernels at the frame start.
     let bands = build_bands::<T, R>(dftr2c, spec, Anchor::Start)?;
 
     // The single per-frame-reset decimator (option A): built through the routed
     // factory, then the factory is dropped.
-    let decimator = resample_factory.create_plan(&bands.decimate_spec)?;
+    let decimator = resample_factory.create_proc::<T>(&bands.decimate_spec)?;
     let next_cap = decimator.max_output_len(bands.fft_length).max(1);
 
     Ok(OctaveLayout {
@@ -409,14 +403,14 @@ where
 )]
 pub(super) fn build_octaves_streaming<T, R, RF>(
     dftr2c: &R,
-    spec: &CqtSpec<T>,
+    spec: &CqtSpec,
     resample_factory: &RF,
-) -> Result<StreamOctaveLayout<T, R::Plan, <RF as CreatePlan<ResampleSpec<T>>>::Plan>>
+) -> Result<StreamOctaveLayout<T, R::Plan, <RF as CreateProc<ResampleSpec>>::Proc<T>>>
 where
     T: DspFloat + AddAssign + MulAssign,
     R: DftR2c<T>,
-    RF: CreatePlan<ResampleSpec<T>>,
-    <RF as CreatePlan<ResampleSpec<T>>>::Plan: ResamplePlan<T>,
+    RF: CreateProc<ResampleSpec> + Backend<T>,
+    <RF as CreateProc<ResampleSpec>>::Proc<T>: ResampleProcessor<T>,
 {
     // Streaming is newest-anchored: kernels at the frame end, so
     // each bin analyses its newest `N_k` samples.  `emit_column` then gathers
@@ -428,7 +422,7 @@ where
     let mut decimators = Vec::with_capacity(n_transitions);
     let mut next_cap = 1usize;
     for _ in 0..n_transitions {
-        let dec = resample_factory.create_plan(&bands.decimate_spec)?;
+        let dec = resample_factory.create_proc::<T>(&bands.decimate_spec)?;
         // A per-call chunk is bounded by one frame's worth of input at this
         // stage's rate; the top stage sees the most (`fft_length`).
         next_cap = next_cap.max(dec.max_output_len(bands.fft_length));
@@ -495,10 +489,7 @@ const DECIMATOR_STOPBAND: f64 = 0.25;
     clippy::cast_sign_loss,
     reason = "the Kaiser order is a small positive integer exact in f64"
 )]
-fn derive_decimate_spec<T: DspFloat>(
-    quality: DecimatorQuality,
-    passband_edge: f64,
-) -> Result<ResampleSpec<T>> {
+fn derive_decimate_spec(quality: DecimatorQuality, passband_edge: f64) -> Result<ResampleSpec> {
     // Asymmetric transition [passband_edge, fs/4]; clamp to keep a sane width.
     let fp = passband_edge.clamp(0.02, DECIMATOR_STOPBAND - 0.02);
     let transition = DECIMATOR_STOPBAND - fp;
@@ -513,21 +504,19 @@ fn derive_decimate_spec<T: DspFloat>(
     // Even order (Type-I linear-phase FIR), clamped to a sane range.
     let order = ((order_est.ceil() as usize).clamp(16, 1024) + 1) & !1;
 
-    let rate: T =
-        T::from(1.0_f64).ok_or_else(|| Error::Internal("cannot represent 1.0 in T".into()))?;
-    let cutoff: T = T::from(cutoff_norm)
-        .ok_or_else(|| Error::Internal("cannot represent cutoff in T".into()))?;
+    // The decimator is designed at nominal rate 1 (f64); its coefficients stay
+    // f64 in the spec and cast to `T` at the resampler's create edge.
     let filter = fir::design(
         FilterType::Lowpass,
         order,
-        rate,
-        cutoff,
+        1.0,
+        cutoff_norm,
         None,
         &FirMethod::Windowed {
             window: Window::Kaiser(window::kaiser::attenuation(atten_db)),
         },
     )?;
-    ResampleSpec::new(filter, 1, 2, ResampleMode::Streaming)
+    ResampleSpec::new(filter, 1, 2)
 }
 
 /// The per-bin gain-compensation factor `1/G_k` for a bin at `freq` Hz in
@@ -606,7 +595,7 @@ fn dtft_magnitude(coeffs: &[f64], omega: f64) -> f64 {
     reason = "kernel and FFT lengths are small enough that usize→f64 is exact"
 )]
 fn build_half_kernel<T: DspFloat>(
-    window: &[T],
+    window: &[f64],
     f_k: f64,
     rate: f64,
     nk: usize,
@@ -643,8 +632,7 @@ fn build_half_kernel<T: DspFloat>(
     Ok(kernel)
 }
 
-/// Resample a window vector to `target` points by linear interpolation,
-/// returning `f64` values for the kernel accumulation.
+/// Resample an f64 window vector to `target` points by linear interpolation.
 ///
 /// `target ≤ window.len()` always holds (a decimated band's kernel is shorter),
 /// so this only ever downsamples a smooth window.
@@ -654,15 +642,14 @@ fn build_half_kernel<T: DspFloat>(
     clippy::cast_sign_loss,
     reason = "window lengths are small and indices stay in bounds"
 )]
-fn resample_window<T: DspFloat>(window: &[T], target: usize) -> Vec<f64> {
+fn resample_window(window: &[f64], target: usize) -> Vec<f64> {
     let src_len = window.len();
-    let to_f64 = |x: T| -> f64 { x.to_f64().unwrap_or(0.0) };
 
     if target == src_len {
-        return window.iter().copied().map(to_f64).collect();
+        return window.to_vec();
     }
     if target <= 1 || src_len <= 1 {
-        return (0..target).map(|_| to_f64(window[0])).collect();
+        return vec![window[0]; target];
     }
 
     let step = (src_len - 1) as f64 / (target - 1) as f64;
@@ -672,8 +659,8 @@ fn resample_window<T: DspFloat>(window: &[T], target: usize) -> Vec<f64> {
             let lo = pos.floor() as usize;
             let hi = (lo + 1).min(src_len - 1);
             let frac = pos - lo as f64;
-            let a = to_f64(window[lo]);
-            let b = to_f64(window[hi]);
+            let a = window[lo];
+            let b = window[hi];
             (b - a).mul_add(frac, a)
         })
         .collect()

@@ -15,17 +15,17 @@ use std::f64::consts::TAU;
 use num_complex::Complex;
 use num_traits::Float;
 
-use omnidsp::create::CreatePlan;
 use omnidsp::{Auto, OmniDSP, RustBackend};
+use omnidsp_core::create::{CreatePlan, CreateProc};
 use omnidsp_core::design::cqt::{self, CqtBinSpec, CqtSpec};
-use omnidsp_core::design::resample::{ResampleMode, ResampleSpec};
-use omnidsp_core::scalar::ScalarVecOps;
+use omnidsp_core::design::resample::ResampleSpec;
+use omnidsp_core::dispatch::Backend;
 use omnidsp_core::traits::conv::{ConvMethod, ConvPlan, ConvSpec};
 use omnidsp_core::traits::dft::{
     DftC2cPlan, DftC2cSpec, DftC2rPlan, DftC2rSpec, DftNorm, DftR2cPlan, DftR2cSpec,
 };
-use omnidsp_core::traits::fir::{FirFilter, FirMeta, FirPlan, FirSpec, FirStrategy};
-use omnidsp_core::traits::iir::{IirPlan, IirSpec};
+use omnidsp_core::traits::fir::{FirFilter, FirMeta, FirProcessor, FirSpec, FirStrategy};
+use omnidsp_core::traits::iir::{IirProcessor, IirSpec};
 use omnidsp_core::types::{BiquadSection, Direction};
 use omnidsp_core::window::Window;
 use omnidsp_rustfft::{RustDftC2c, RustDftC2r, RustDftR2c};
@@ -55,16 +55,21 @@ fn assert_approx<T: Float + std::fmt::Debug>(actual: &[T], expected: &[T], tol: 
 /// Forward-then-inverse round-trip should recover the original signal.
 fn dft_round_trip<T, B>(dsp: &OmniDSP<B>, tol: T)
 where
-    T: Float + Send + Sync + std::fmt::Debug,
-    B: CreatePlan<DftC2cSpec<T>>,
-    B::Plan: DftC2cPlan<T>,
+    T: Float
+        + Send
+        + Sync
+        + std::fmt::Debug
+        + num_traits::FromPrimitive
+        + 'static
+        + std::ops::AddAssign
+        + std::ops::MulAssign,
+    B: CreatePlan<DftC2cSpec> + Backend<T>,
+    B::Plan<T>: DftC2cPlan<T>,
 {
     let n = 8;
-    let fwd_spec =
-        DftC2cSpec::<T>::new(n, Direction::Forward, DftNorm::Inverse).expect("forward spec");
+    let fwd_spec = DftC2cSpec::new(n, Direction::Forward, DftNorm::Inverse).expect("forward spec");
     let fwd = dsp.dft_c2c(&fwd_spec).expect("forward DFT plan");
-    let inv_spec =
-        DftC2cSpec::<T>::new(n, Direction::Inverse, DftNorm::Inverse).expect("inverse spec");
+    let inv_spec = DftC2cSpec::new(n, Direction::Inverse, DftNorm::Inverse).expect("inverse spec");
     let inv = dsp.dft_c2c(&inv_spec).expect("inverse DFT plan");
 
     let zero = Complex::new(T::zero(), T::zero());
@@ -73,10 +78,10 @@ where
         .collect();
 
     let mut spectrum = vec![zero; n];
-    fwd.process(&input, &mut spectrum).expect("forward FFT");
+    fwd.execute(&input, &mut spectrum).expect("forward FFT");
 
     let mut recovered = vec![zero; n];
-    inv.process(&spectrum, &mut recovered).expect("inverse FFT");
+    inv.execute(&spectrum, &mut recovered).expect("inverse FFT");
 
     let actual: Vec<T> = recovered.iter().map(|c| c.re).collect();
     let expected: Vec<T> = input.iter().map(|c| c.re).collect();
@@ -100,11 +105,18 @@ fn rust_dft_f32() {
 /// Convolve [1,2,3] * [1,1] = [1,3,5,3].
 fn conv_verify<T, B>(dsp: &OmniDSP<B>, tol: T)
 where
-    T: Float + Send + Sync + std::fmt::Debug,
-    B: CreatePlan<ConvSpec<T>>,
-    B::Plan: ConvPlan<T>,
+    T: Float
+        + Send
+        + Sync
+        + std::fmt::Debug
+        + num_traits::FromPrimitive
+        + 'static
+        + std::ops::AddAssign
+        + std::ops::MulAssign,
+    B: CreatePlan<ConvSpec> + Backend<T>,
+    B::Plan<T>: ConvPlan<T>,
 {
-    let spec = ConvSpec::<T>::new(3, 2, ConvMethod::Direct).expect("valid conv spec");
+    let spec = ConvSpec::new(3, 2, ConvMethod::Direct).expect("valid conv spec");
     let plan = dsp.conv(&spec).expect("conv plan");
 
     let one = T::one();
@@ -115,7 +127,7 @@ where
     let a = [one, two, three];
     let b = [one, one];
     let mut output = [T::zero(); 4];
-    plan.process(&a, &b, &mut output).expect("convolve");
+    plan.execute(&a, &b, &mut output).expect("convolve");
 
     assert_approx(&output, &[one, three, five, three], tol, "conv");
 }
@@ -137,14 +149,22 @@ fn rust_conv_f32() {
 /// Impulse response of a 3-tap FIR should match the coefficients.
 fn fir_impulse<T, B>(dsp: &OmniDSP<B>, tol: T)
 where
-    T: Float + Send + Sync + std::fmt::Debug,
-    B: CreatePlan<FirSpec<T>>,
-    B::Plan: FirPlan<T>,
+    T: Float
+        + Send
+        + Sync
+        + std::fmt::Debug
+        + num_traits::FromPrimitive
+        + 'static
+        + std::ops::AddAssign
+        + std::ops::MulAssign,
+    B: CreateProc<FirSpec> + Backend<T>,
+    B::Proc<T>: FirProcessor<T>,
 {
     let quarter = T::from(0.25).expect("0.25");
     let half = T::from(0.5).expect("0.5");
-    let coeffs = vec![quarter, half, quarter];
-    let filter = FirFilter::new(coeffs.clone(), FirMeta::unknown()).expect("valid fir filter");
+    let coeffs = [quarter, half, quarter];
+    let filter =
+        FirFilter::new(vec![0.25, 0.5, 0.25], FirMeta::unknown()).expect("valid fir filter");
     let spec = FirSpec::new(filter, FirStrategy::Auto);
     let mut plan = dsp.fir(&spec).expect("FIR plan");
 
@@ -180,16 +200,23 @@ fn rust_fir_f32() {
 /// Unity passthrough biquad: y[n] = x[n].
 fn iir_passthrough<T, B>(dsp: &OmniDSP<B>, tol: T)
 where
-    T: Float + Send + Sync + std::fmt::Debug + num_traits::FromPrimitive + 'static,
-    B: CreatePlan<IirSpec<T>>,
-    B::Plan: IirPlan<T>,
+    T: Float
+        + Send
+        + Sync
+        + std::fmt::Debug
+        + num_traits::FromPrimitive
+        + 'static
+        + std::ops::AddAssign
+        + std::ops::MulAssign,
+    B: CreateProc<IirSpec> + Backend<T>,
+    B::Proc<T>: IirProcessor<T>,
 {
     let spec = IirSpec::new(vec![BiquadSection {
-        b0: T::one(),
-        b1: T::zero(),
-        b2: T::zero(),
-        a1: T::zero(),
-        a2: T::zero(),
+        b0: 1.0,
+        b1: 0.0,
+        b2: 0.0,
+        a1: 0.0,
+        a2: 0.0,
     }])
     .expect("valid iir spec");
     let mut plan = dsp.iir(&spec).expect("IIR plan");
@@ -205,17 +232,24 @@ where
 /// Impulse response: [0.5, 0.5, 0, 0, …].
 fn iir_first_order<T, B>(dsp: &OmniDSP<B>, tol: T)
 where
-    T: Float + Send + Sync + std::fmt::Debug + num_traits::FromPrimitive + 'static,
-    B: CreatePlan<IirSpec<T>>,
-    B::Plan: IirPlan<T>,
+    T: Float
+        + Send
+        + Sync
+        + std::fmt::Debug
+        + num_traits::FromPrimitive
+        + 'static
+        + std::ops::AddAssign
+        + std::ops::MulAssign,
+    B: CreateProc<IirSpec> + Backend<T>,
+    B::Proc<T>: IirProcessor<T>,
 {
     let half = T::from(0.5).expect("0.5");
     let spec = IirSpec::new(vec![BiquadSection {
-        b0: half,
-        b1: half,
-        b2: T::zero(),
-        a1: T::zero(),
-        a2: T::zero(),
+        b0: 0.5,
+        b1: 0.5,
+        b2: 0.0,
+        a1: 0.0,
+        a2: 0.0,
     }])
     .expect("valid iir spec");
     let mut plan = dsp.iir(&spec).expect("IIR plan");
@@ -272,10 +306,9 @@ fn rust_iir_first_order_f32() {
 /// 2× upsample with a simple prototype filter: output count should be
 /// exactly 2× input count (streaming mode).
 fn resample_upsample_f64(dsp: &OmniDSP<RustBackend>) {
-    let filter = FirFilter::<f64>::new(vec![0.5, 1.0, 0.5], FirMeta::unknown())
-        .expect("non-empty prototype");
-    let spec = ResampleSpec::<f64>::new(filter, 2, 1, ResampleMode::Streaming)
-        .expect("valid resample spec");
+    let filter =
+        FirFilter::new(vec![0.5, 1.0, 0.5], FirMeta::unknown()).expect("non-empty prototype");
+    let spec = ResampleSpec::new(filter, 2, 1).expect("valid resample spec");
     let mut plan = dsp.resample(&spec).expect("resample plan");
 
     let input: Vec<f64> = (0..16).map(f64::from).collect();
@@ -289,10 +322,9 @@ fn resample_upsample_f64(dsp: &OmniDSP<RustBackend>) {
     reason = "small test indices fit in f32 mantissa"
 )]
 fn resample_upsample_f32(dsp: &OmniDSP<RustBackend>) {
-    let filter = FirFilter::<f32>::new(vec![0.5, 1.0, 0.5], FirMeta::unknown())
-        .expect("non-empty prototype");
-    let spec = ResampleSpec::<f32>::new(filter, 2, 1, ResampleMode::Streaming)
-        .expect("valid resample spec");
+    let filter =
+        FirFilter::new(vec![0.5, 1.0, 0.5], FirMeta::unknown()).expect("non-empty prototype");
+    let spec = ResampleSpec::new(filter, 2, 1).expect("valid resample spec");
     let mut plan = dsp.resample(&spec).expect("resample plan f32");
 
     let input: Vec<f32> = (0..16).map(|i| i as f32).collect();
@@ -326,7 +358,7 @@ fn cqt_smoke_f64(dsp: &OmniDSP<RustBackend>) {
 
     let input = vec![0.0_f64; 8];
     let mut output = vec![Complex::new(0.0, 0.0); 1];
-    plan.process(&input, &mut output).expect("CQT process");
+    plan.execute(&input, &mut output).expect("CQT process");
 
     assert!(
         output[0].re.abs() < 1e-10,
@@ -338,14 +370,14 @@ fn cqt_smoke_f64(dsp: &OmniDSP<RustBackend>) {
 fn cqt_smoke_f32(dsp: &OmniDSP<RustBackend>) {
     let bins = vec![CqtBinSpec {
         frequency: 440.0,
-        window: vec![0.0_f32, 0.5, 1.0, 0.5, 0.0],
+        window: vec![0.0_f64, 0.5, 1.0, 0.5, 0.0],
     }];
     let spec = CqtSpec::new(44100.0, 8, 2, bins).expect("CQT spec");
     let plan = dsp.cqt(&spec).expect("CQT plan");
 
     let input = vec![0.0_f32; 8];
     let mut output = vec![Complex::new(0.0_f32, 0.0); 1];
-    plan.process(&input, &mut output).expect("CQT process");
+    plan.execute(&input, &mut output).expect("CQT process");
 
     assert!(
         output[0].re.abs() < 1e-4,
@@ -365,7 +397,7 @@ fn cqt_tone_detect_f64(dsp: &OmniDSP<RustBackend>) {
     let sr = 8000.0;
     let freq = 440.0;
     // Design covers one octave around the tone (220–880 Hz).
-    let spec = cqt::design::<f64>(sr, 220.0, 880.0, 12, &Window::Hann).expect("CQT design");
+    let spec = cqt::design(sr, 220.0, 880.0, 12, &Window::Hann).expect("CQT design");
     let plan = dsp.cqt(&spec).expect("CQT plan");
     let fft_len = plan.fft_length();
     let num_bins = plan.num_bins();
@@ -374,7 +406,7 @@ fn cqt_tone_detect_f64(dsp: &OmniDSP<RustBackend>) {
         .map(|n| (TAU * freq * n as f64 / sr).sin())
         .collect();
     let mut output = vec![Complex::new(0.0, 0.0); num_bins];
-    plan.process(&input, &mut output).expect("CQT process");
+    plan.execute(&input, &mut output).expect("CQT process");
 
     // Find the bin with the strongest magnitude.
     let (peak_bin, _) = output
@@ -408,7 +440,7 @@ fn cqt_tone_detect_f64(dsp: &OmniDSP<RustBackend>) {
 fn cqt_tone_detect_f32(dsp: &OmniDSP<RustBackend>) {
     let sr = 8000.0;
     let freq = 440.0;
-    let spec = cqt::design::<f32>(sr, 220.0, 880.0, 12, &Window::Hann).expect("CQT design");
+    let spec = cqt::design(sr, 220.0, 880.0, 12, &Window::Hann).expect("CQT design");
     let plan = dsp.cqt(&spec).expect("CQT plan");
     let fft_len = plan.fft_length();
     let num_bins = plan.num_bins();
@@ -417,7 +449,7 @@ fn cqt_tone_detect_f32(dsp: &OmniDSP<RustBackend>) {
         .map(|n| (TAU * freq * n as f64 / sr).sin() as f32)
         .collect();
     let mut output = vec![Complex::new(0.0_f32, 0.0); num_bins];
-    plan.process(&input, &mut output).expect("CQT process");
+    plan.execute(&input, &mut output).expect("CQT process");
 
     let (peak_bin, _) = output
         .iter()
@@ -542,21 +574,24 @@ fn auto_constructor() {
 /// A test backend that exercises the macro code path.  The macro
 /// generates all `CreatePlan<S>` impls by delegating to `omnidsp-core`
 /// modules.
+#[derive(Clone)]
 struct MacroTestBackend {
     dftc2c: RustDftC2c,
     dftr2c: RustDftR2c,
     dftc2r: RustDftC2r,
-    vecops: ScalarVecOps,
 }
 
+impl omnidsp_core::traits::vecops::VecOps<f32> for MacroTestBackend {}
+impl omnidsp_core::traits::vecops::VecOps<f64> for MacroTestBackend {}
+
 // Omits `iir:` — the macro materializes the `ScalarIir` default inline, with
-// no backing struct field.
+// no backing struct field.  The backend supplies `VecOps` via its own empty
+// impls above.
 omnidsp_macros::impl_generic_backend! {
     backend: MacroTestBackend,
     dftc2c: RustDftC2c,
     dftr2c: RustDftR2c,
     dftc2r: RustDftC2r,
-    vecops: ScalarVecOps,
 }
 
 const fn macro_backend() -> MacroTestBackend {
@@ -564,33 +599,32 @@ const fn macro_backend() -> MacroTestBackend {
         dftc2c: RustDftC2c,
         dftr2c: RustDftR2c,
         dftc2r: RustDftC2r,
-        vecops: ScalarVecOps,
     }
 }
 
 #[test]
 fn macro_create_conv_f64() {
     let b = macro_backend();
-    let spec = ConvSpec::<f64>::new(3, 2, ConvMethod::Direct).expect("valid conv spec");
-    let plan = CreatePlan::create_plan(&b, &spec).expect("macro conv plan");
+    let spec = ConvSpec::new(3, 2, ConvMethod::Direct).expect("valid conv spec");
+    let plan = CreatePlan::create_plan::<f64>(&b, &spec).expect("macro conv plan");
 
     let a = [1.0, 2.0, 3.0];
     let b = [1.0, 1.0];
     let mut output = [0.0; 4];
-    plan.process(&a, &b, &mut output).expect("convolve");
+    plan.execute(&a, &b, &mut output).expect("convolve");
     assert_approx(&output, &[1.0, 3.0, 5.0, 3.0], 1e-12, "macro conv");
 }
 
 #[test]
 fn macro_create_conv_f32() {
     let b = macro_backend();
-    let spec = ConvSpec::<f32>::new(3, 2, ConvMethod::Direct).expect("valid conv spec");
-    let plan = CreatePlan::create_plan(&b, &spec).expect("macro conv plan f32");
+    let spec = ConvSpec::new(3, 2, ConvMethod::Direct).expect("valid conv spec");
+    let plan = CreatePlan::create_plan::<f32>(&b, &spec).expect("macro conv plan f32");
 
     let a = [1.0_f32, 2.0, 3.0];
     let b = [1.0_f32, 1.0];
     let mut output = [0.0_f32; 4];
-    plan.process(&a, &b, &mut output).expect("convolve");
+    plan.execute(&a, &b, &mut output).expect("convolve");
     assert_approx(&output, &[1.0, 3.0, 5.0, 3.0], 1e-5, "macro conv f32");
 }
 
@@ -614,7 +648,7 @@ fn macro_create_fir_f64() {
     let filter =
         FirFilter::new(vec![0.25_f64, 0.5, 0.25], FirMeta::unknown()).expect("valid fir filter");
     let spec = FirSpec::new(filter, FirStrategy::Auto);
-    let mut plan = CreatePlan::create_plan(&b, &spec).expect("macro FIR plan");
+    let mut plan = CreateProc::create_proc::<f64>(&b, &spec).expect("macro FIR plan");
 
     let mut input = vec![0.0; 8];
     input[0] = 1.0;
@@ -627,9 +661,9 @@ fn macro_create_fir_f64() {
 fn macro_create_fir_f32() {
     let b = macro_backend();
     let filter =
-        FirFilter::new(vec![0.25_f32, 0.5, 0.25], FirMeta::unknown()).expect("valid fir filter");
+        FirFilter::new(vec![0.25_f64, 0.5, 0.25], FirMeta::unknown()).expect("valid fir filter");
     let spec = FirSpec::new(filter, FirStrategy::Auto);
-    let mut plan = CreatePlan::create_plan(&b, &spec).expect("macro FIR plan f32");
+    let mut plan = CreateProc::create_proc::<f32>(&b, &spec).expect("macro FIR plan f32");
 
     let mut input = vec![0.0_f32; 8];
     input[0] = 1.0;
@@ -641,7 +675,7 @@ fn macro_create_fir_f32() {
 #[test]
 fn macro_create_iir_f64() {
     let b = macro_backend();
-    let spec = IirSpec::<f64>::new(vec![BiquadSection {
+    let spec = IirSpec::new(vec![BiquadSection {
         b0: 1.0,
         b1: 0.0,
         b2: 0.0,
@@ -649,7 +683,7 @@ fn macro_create_iir_f64() {
         a2: 0.0,
     }])
     .expect("valid iir spec");
-    let mut plan = CreatePlan::create_plan(&b, &spec).expect("macro IIR plan");
+    let mut plan = CreateProc::create_proc::<f64>(&b, &spec).expect("macro IIR plan");
 
     let input: Vec<f64> = (0..8).map(f64::from).collect();
     let mut output = vec![0.0; 8];
@@ -664,7 +698,7 @@ fn macro_create_iir_f64() {
 )]
 fn macro_create_iir_f32() {
     let b = macro_backend();
-    let spec = IirSpec::<f32>::new(vec![BiquadSection {
+    let spec = IirSpec::new(vec![BiquadSection {
         b0: 1.0,
         b1: 0.0,
         b2: 0.0,
@@ -672,7 +706,7 @@ fn macro_create_iir_f32() {
         a2: 0.0,
     }])
     .expect("valid iir spec");
-    let mut plan = CreatePlan::create_plan(&b, &spec).expect("macro IIR plan f32");
+    let mut plan = CreateProc::create_proc::<f32>(&b, &spec).expect("macro IIR plan f32");
 
     let input: Vec<f32> = (0..8).map(|i| i as f32).collect();
     let mut output = vec![0.0_f32; 8];
@@ -683,11 +717,10 @@ fn macro_create_iir_f32() {
 #[test]
 fn macro_create_resample_f64() {
     let b = macro_backend();
-    let filter = FirFilter::<f64>::new(vec![0.5, 1.0, 0.5], FirMeta::unknown())
-        .expect("non-empty prototype");
-    let spec = ResampleSpec::<f64>::new(filter, 2, 1, ResampleMode::Streaming)
-        .expect("valid resample spec");
-    let mut plan = CreatePlan::create_plan(&b, &spec).expect("macro resample plan");
+    let filter =
+        FirFilter::new(vec![0.5, 1.0, 0.5], FirMeta::unknown()).expect("non-empty prototype");
+    let spec = ResampleSpec::new(filter, 2, 1).expect("valid resample spec");
+    let mut plan = CreateProc::create_proc::<f64>(&b, &spec).expect("macro resample plan");
 
     let input: Vec<f64> = (0..16).map(f64::from).collect();
     let mut output = vec![0.0; 64];
@@ -703,11 +736,11 @@ fn macro_create_cqt_f64() {
         window: vec![0.0_f64, 0.5, 1.0, 0.5, 0.0],
     }];
     let spec = CqtSpec::new(44100.0, 8, 2, bins).expect("CQT spec");
-    let plan = CreatePlan::create_plan(&b, &spec).expect("macro CQT plan");
+    let plan = CreatePlan::create_plan::<f64>(&b, &spec).expect("macro CQT plan");
 
     let input = vec![0.0; 8];
     let mut output = vec![Complex::new(0.0, 0.0); 1];
-    plan.process(&input, &mut output).expect("CQT process");
+    plan.execute(&input, &mut output).expect("CQT process");
     assert!(
         output[0].re.abs() < 1e-10,
         "macro CQT of zero input should be ~zero",
@@ -719,21 +752,23 @@ fn macro_create_cqt_f64() {
 // ═══════════════════════════════════════════════════════════════════════
 
 /// A test backend that skips conv, proving the macro's `skip` list works.
-/// The backend can then hand-write `CreatePlan<ConvSpec<T>>` without
+/// The backend can then hand-write `CreatePlan<ConvSpec>` without
 /// conflicting with macro-generated impls.
+#[derive(Clone)]
 struct SkipConvBackend {
     dftc2c: RustDftC2c,
     dftr2c: RustDftR2c,
     dftc2r: RustDftC2r,
-    vecops: ScalarVecOps,
 }
+
+impl omnidsp_core::traits::vecops::VecOps<f32> for SkipConvBackend {}
+impl omnidsp_core::traits::vecops::VecOps<f64> for SkipConvBackend {}
 
 omnidsp_macros::impl_generic_backend! {
     backend: SkipConvBackend,
     dftc2c: RustDftC2c,
     dftr2c: RustDftR2c,
     dftc2r: RustDftC2r,
-    vecops: ScalarVecOps,
     skip: [conv],
 }
 
@@ -742,32 +777,33 @@ omnidsp_macros::impl_generic_backend! {
 /// The `Conv` factory trait was dropped, so the type is spelled out.
 type SkipConvPlan<T> = omnidsp_core::modules::conv::OmniConvPlan<
     T,
-    <RustDftR2c as omnidsp_core::traits::dft::DftR2c<T>>::Plan,
+    <<SkipConvBackend as omnidsp_core::dispatch::RawDft<T>>::R2c
+        as omnidsp_core::traits::dft::DftR2c<T>>::Plan,
     omnidsp_core::hermitian::HermitianC2rPlan<
-        <RustDftC2r as omnidsp_core::traits::dft::DftC2r<T>>::Plan,
+        <<SkipConvBackend as omnidsp_core::dispatch::RawDft<T>>::C2r
+            as omnidsp_core::traits::dft::DftC2r<T>>::Plan,
     >,
-    ScalarVecOps,
+    SkipConvBackend,
 >;
 
-// Hand-written override for ConvSpec<f64> — proves no conflict.
-impl CreatePlan<ConvSpec<f64>> for SkipConvBackend {
-    type Plan = SkipConvPlan<f64>;
+// Hand-written override for ConvSpec — proves no conflict.
+impl CreatePlan<ConvSpec> for SkipConvBackend {
+    type Plan<T>
+        = SkipConvPlan<T>
+    where
+        Self: omnidsp_core::dispatch::Backend<T>;
 
-    fn create_plan(&self, spec: &ConvSpec<f64>) -> omnidsp_core::error::Result<Self::Plan> {
-        let factory =
-            omnidsp_core::modules::conv::OmniConv::new(self.dftr2c, self.dftc2r, self.vecops);
-        factory.create_plan(spec)
-    }
-}
-
-// Hand-written override for ConvSpec<f32> — proves no conflict.
-impl CreatePlan<ConvSpec<f32>> for SkipConvBackend {
-    type Plan = SkipConvPlan<f32>;
-
-    fn create_plan(&self, spec: &ConvSpec<f32>) -> omnidsp_core::error::Result<Self::Plan> {
-        let factory =
-            omnidsp_core::modules::conv::OmniConv::new(self.dftr2c, self.dftc2r, self.vecops);
-        factory.create_plan(spec)
+    fn create_plan<T>(&self, spec: &ConvSpec) -> omnidsp_core::error::Result<Self::Plan<T>>
+    where
+        Self: omnidsp_core::dispatch::Backend<T>,
+        T: omnidsp_core::types::DspFloat + std::ops::AddAssign + std::ops::MulAssign,
+    {
+        let factory = omnidsp_core::modules::conv::OmniConv::new(
+            omnidsp_core::dispatch::RawDft::<T>::raw_dftr2c(self),
+            omnidsp_core::dispatch::RawDft::<T>::raw_dftc2r(self),
+            ::core::clone::Clone::clone(self),
+        );
+        factory.create_plan::<T>(spec)
     }
 }
 
@@ -777,15 +813,14 @@ fn skip_conv_backend_hand_written_conv() {
         dftc2c: RustDftC2c,
         dftr2c: RustDftR2c,
         dftc2r: RustDftC2r,
-        vecops: ScalarVecOps,
     };
-    let spec = ConvSpec::<f64>::new(3, 2, ConvMethod::Direct).expect("valid conv spec");
-    let plan = CreatePlan::create_plan(&b, &spec).expect("skip-conv hand-written plan");
+    let spec = ConvSpec::new(3, 2, ConvMethod::Direct).expect("valid conv spec");
+    let plan = CreatePlan::create_plan::<f64>(&b, &spec).expect("skip-conv hand-written plan");
 
     let a = [1.0, 2.0, 3.0];
     let bv = [1.0, 1.0];
     let mut output = [0.0; 4];
-    plan.process(&a, &bv, &mut output).expect("convolve");
+    plan.execute(&a, &bv, &mut output).expect("convolve");
     assert_approx(&output, &[1.0, 3.0, 5.0, 3.0], 1e-12, "skip-conv override");
 }
 
@@ -795,7 +830,6 @@ fn skip_conv_backend_other_modules_work() {
         dftc2c: RustDftC2c,
         dftr2c: RustDftR2c,
         dftc2r: RustDftC2r,
-        vecops: ScalarVecOps,
     };
     let dsp = OmniDSP::new(b);
     dft_round_trip(&dsp, 1e-12);
@@ -807,13 +841,18 @@ fn skip_conv_backend_other_modules_work() {
 // impl_generic_backend! minimal — only `dftc2c:`, everything else defaulted
 // ═══════════════════════════════════════════════════════════════════════
 
-/// A backend declaring **only** `dftc2c:` — `dftr2c`/`dftc2r`/`vecops`/`iir`
-/// take their realfft/scalar defaults.  It carries a
+/// A backend declaring **only** `dftc2c:` — `dftr2c`/`dftc2r`/`iir`
+/// take their realfft/scalar defaults, and the backend supplies `VecOps`
+/// via its own empty impls below.  It carries a
 /// single field; the macro materializes the omitted floors inline, so no
 /// backing struct field is needed for them.
+#[derive(Clone)]
 struct MinimalBackend {
     dftc2c: RustDftC2c,
 }
+
+impl omnidsp_core::traits::vecops::VecOps<f32> for MinimalBackend {}
+impl omnidsp_core::traits::vecops::VecOps<f64> for MinimalBackend {}
 
 omnidsp_macros::impl_generic_backend! {
     backend: MinimalBackend,
@@ -825,7 +864,7 @@ fn minimal_backend_defaults_materialize() {
     let dsp = OmniDSP::new(MinimalBackend { dftc2c: RustDftC2c });
 
     // c2c via the bare blanket; the rest compose the defaulted
-    // realfft floor / ScalarVecOps / ScalarIir.
+    // realfft floor, the backend's own VecOps impls, and ScalarIir.
     dft_round_trip(&dsp, 1e-12);
     conv_verify(&dsp, 1e-12);
     fir_impulse(&dsp, 1e-12);
@@ -840,16 +879,16 @@ fn minimal_backend_shaped_direct_r2c_c2r() {
     // blanket: shaped plans over the defaulted realfft floor.
     let original = vec![1.0_f64, -2.0, 3.0, 0.5, -1.5, 2.0, 0.0, 4.0];
     let n = original.len();
-    let r2c_spec = DftR2cSpec::<f64>::new(n, DftNorm::Inverse).expect("r2c spec");
-    let r2c = dsp.dft_r2c(&r2c_spec).expect("r2c plan");
-    let c2r_spec = DftC2rSpec::<f64>::new(n, DftNorm::Inverse).expect("c2r spec");
-    let c2r = dsp.dft_c2r(&c2r_spec).expect("c2r plan");
+    let r2c_spec = DftR2cSpec::new(n, DftNorm::Inverse).expect("r2c spec");
+    let r2c = dsp.dft_r2c::<f64>(&r2c_spec).expect("r2c plan");
+    let c2r_spec = DftC2rSpec::new(n, DftNorm::Inverse).expect("c2r spec");
+    let c2r = dsp.dft_c2r::<f64>(&c2r_spec).expect("c2r plan");
 
     let mut time = original.clone();
     let mut spectrum = vec![Complex::new(0.0, 0.0); n / 2 + 1];
-    r2c.process(&mut time, &mut spectrum).expect("r2c process");
+    r2c.execute(&mut time, &mut spectrum).expect("r2c process");
     let mut recovered = vec![0.0_f64; n];
-    c2r.process(&mut spectrum, &mut recovered)
+    c2r.execute(&mut spectrum, &mut recovered)
         .expect("c2r process");
     assert_approx(
         &recovered,

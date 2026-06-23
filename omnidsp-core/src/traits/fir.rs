@@ -3,19 +3,22 @@
 
 //! FIR (Finite Impulse Response) filter primitive types.
 //!
-//! [`FirPlan`] is the execution object configured from a [`FirSpec`].  Plans
-//! are mutable — they maintain state across calls and take `&mut self`.  The
-//! generic [`OmniFir`](crate::modules::fir::OmniFir) module builds plans via an
-//! inherent `create_plan` — the `Fir` factory trait was dropped because
-//! nothing was generic over it.
+//! [`FirProcessor`] is the stateful execution object configured from a
+//! [`FirSpec`] at the create edge.  Processors carry stream state across calls
+//! and take `&mut self`.  The generic
+//! [`OmniFir`](crate::modules::fir::OmniFir) module builds processors via an
+//! inherent `create_proc` — the `Fir` factory trait was dropped because nothing
+//! was generic over it.
 //!
 //! The designed-filter / filtering-operation split:
 //!
 //! - [`FirFilter`] is the **designed artifact** — coefficients plus minimal
 //!   [`FirMeta`] (rate / normalized cutoff), the reusable unit produced by
 //!   [`design::fir::design`](crate::design::fir::design) or constructed directly
-//!   via [`FirFilter::new`] for bring-your-own coefficients.  It carries no
-//!   execution strategy.
+//!   via [`FirFilter::new`] for bring-your-own coefficients.  It is the BYO-able
+//!   coefficient artifact, so it carries its taps in **f64** (the design
+//!   precision); the cast to the operation's `T` happens at the create edge.  It
+//!   carries no execution strategy.
 //! - [`FirSpec`] is the FIR **module's execution spec** — a [`FirFilter`] plus a
 //!   [`FirStrategy`].
 
@@ -94,8 +97,13 @@ impl Default for FirMeta {
 /// directly-constructible struct ([`FirFilter::new`]) for bring-your-own
 /// coefficients (a filter designed in scipy/MATLAB).  It carries no window
 /// (consumed by the windowed method, or never existed for equiripple) and no
-/// execution strategy — those belong to [`FirSpec`].  The same `FirFilter` is
-/// valid for every backend, and is the unit composing specs reuse.
+/// execution strategy — those belong to [`FirSpec`].
+///
+/// Because hand-rolled coefficients are a first-class entry point, the filter
+/// **is** the coefficient artifact — carried in **f64**, the design precision,
+/// and cast to the operation's `T` only at the create edge.  The same
+/// `FirFilter` is valid for every backend and every precision, and is the unit
+/// composing specs reuse.
 ///
 /// # Examples
 ///
@@ -108,19 +116,23 @@ impl Default for FirMeta {
 /// ```
 ///
 /// Fields are private and the filter is valid-by-construction.
-#[derive(Debug, Clone)]
-pub struct FirFilter<T> {
-    coefficients: Vec<T>,
+#[derive(Debug, Clone, PartialEq)]
+#[allow(
+    clippy::derive_partial_eq_without_eq,
+    reason = "coefficients are f64, which is not Eq, so neither is FirFilter"
+)]
+pub struct FirFilter {
+    coefficients: Vec<f64>,
     meta: FirMeta,
 }
 
-impl<T> FirFilter<T> {
-    /// Create a designed filter from coefficients and metadata.
+impl FirFilter {
+    /// Create a designed filter from f64 coefficients and metadata.
     ///
     /// # Errors
     ///
     /// Returns [`Error::InvalidSpec`] if `coefficients` is empty.
-    pub fn new(coefficients: Vec<T>, meta: FirMeta) -> Result<Self> {
+    pub fn new(coefficients: Vec<f64>, meta: FirMeta) -> Result<Self> {
         if coefficients.is_empty() {
             return Err(Error::InvalidSpec(
                 "FIR filter requires at least one coefficient".into(),
@@ -129,13 +141,14 @@ impl<T> FirFilter<T> {
         Ok(Self { coefficients, meta })
     }
 
-    /// Filter tap coefficients in time-domain order: `h[0], h[1], …, h[N-1]`.
+    /// Filter tap coefficients in time-domain order: `h[0], h[1], …, h[N-1]`,
+    /// carried in the f64 design precision.
     ///
     /// The number of taps (`coefficients().len()`) determines the filter order
     /// (`N - 1`), group delay (`(N - 1) / 2` samples for linear phase), and
     /// the direct/overlap-save crossover point.
     #[must_use]
-    pub fn coefficients(&self) -> &[T] {
+    pub fn coefficients(&self) -> &[f64] {
         &self.coefficients
     }
 
@@ -174,7 +187,8 @@ pub enum FirStrategy {
 ///
 /// Construct via [`FirSpec::new`] from a [`FirFilter`] — obtained from
 /// [`design::fir::design`](crate::design::fir::design) or built directly via
-/// [`FirFilter::new`].
+/// [`FirFilter::new`].  The spec is non-generic (it carries the f64 filter
+/// artifact); the operation's precision is chosen at `create_proc::<T>`.
 ///
 /// # Examples
 ///
@@ -189,17 +203,21 @@ pub enum FirStrategy {
 ///
 /// Fields are private and the spec is valid-by-construction — the
 /// non-empty-coefficients invariant is established by [`FirFilter::new`].
-#[derive(Debug, Clone)]
-pub struct FirSpec<T> {
-    filter: FirFilter<T>,
+#[derive(Debug, Clone, PartialEq)]
+#[allow(
+    clippy::derive_partial_eq_without_eq,
+    reason = "the composed FirFilter carries f64 coefficients, which are not Eq"
+)]
+pub struct FirSpec {
+    filter: FirFilter,
     strategy: FirStrategy,
 }
 
-impl<T> FirSpec<T> {
+impl FirSpec {
     /// Create a FIR spec composing a designed `filter` with an execution
     /// `strategy`.
     #[must_use]
-    pub const fn new(filter: FirFilter<T>, strategy: FirStrategy) -> Self {
+    pub const fn new(filter: FirFilter, strategy: FirStrategy) -> Self {
         Self { filter, strategy }
     }
 
@@ -212,17 +230,18 @@ impl<T> FirSpec<T> {
 
     /// The designed filter this spec executes.
     #[must_use]
-    pub const fn filter(&self) -> &FirFilter<T> {
+    pub const fn filter(&self) -> &FirFilter {
         &self.filter
     }
 
-    /// Filter tap coefficients in time-domain order: `h[0], h[1], …, h[N-1]`.
+    /// Filter tap coefficients in time-domain order: `h[0], h[1], …, h[N-1]`
+    /// (in the f64 design precision).
     ///
     /// The number of taps (`coefficients().len()`) determines the filter order
     /// (`N - 1`), group delay (`(N - 1) / 2` samples for linear phase), and
     /// the direct/overlap-save crossover point.
     #[must_use]
-    pub fn coefficients(&self) -> &[T] {
+    pub fn coefficients(&self) -> &[f64] {
         self.filter.coefficients()
     }
 
@@ -236,24 +255,61 @@ impl<T> FirSpec<T> {
 
 // ─── Traits ──────────────────────────────────────────────────────────
 
-/// Execution object for a configured FIR filter.
+/// Stateful execution object for a configured FIR filter — a **Processor**.
 ///
-/// A plan is created by the [`OmniFir`](crate::modules::fir::OmniFir) module
-/// (or a vendor override) and holds the filter coefficients
-/// and internal delay line.  Plans are mutable and take `&mut self` — each
-/// call to [`process`](FirPlan::process) continues from where the previous
-/// call left off.
-pub trait FirPlan<T> {
-    /// Filter `input`, writing the result to `output`.
+/// Created by the [`OmniFir`](crate::modules::fir::OmniFir) module (or a vendor
+/// override) and holds the filter coefficients and internal delay line.
+/// Processors are mutable and take `&mut self` — each call to
+/// [`process`](FirProcessor::process) continues from where the previous call
+/// left off, and [`finish`](FirProcessor::finish) flushes the filter's
+/// ring-down tail once the input ends.
+///
+/// Drive it batch or streaming the same way: `process(chunk)` repeatedly, then
+/// `finish` at the true end of the stream.  Batch is just
+/// `process(everything) + finish`; [`execute`](FirProcessor::execute) is the
+/// one-shot convenience for exactly that on a fresh stream.
+pub trait FirProcessor<T> {
+    /// Filter the streaming `input`, writing the steady-state output to
+    /// `output`; returns the number of samples written.
     ///
-    /// `output` must have the same length as `input`.  Internal state (delay
-    /// line) is updated so successive calls form a continuous stream.
+    /// For a same-rate FIR the steady-state count equals `input.len()`, so
+    /// `output` must have the same length as `input`.  Internal state (the delay
+    /// line) is updated so successive calls form a continuous stream; the
+    /// `num_taps − 1` ring-down tail is emitted by [`finish`](Self::finish), not
+    /// here.
     ///
     /// # Errors
     ///
     /// Returns an error if the buffer lengths do not match.
-    fn process(&mut self, input: &[T], output: &mut [T]) -> Result<()>;
+    fn process(&mut self, input: &[T], output: &mut [T]) -> Result<usize>;
 
-    /// Reset internal state (delay line) to zero without recreating the plan.
+    /// Signal end-of-stream: flush the filter's ring-down tail (the
+    /// `num_taps − 1` trailing samples of the finite convolution) into `output`,
+    /// returning the number written, and leave the delay line cleared.
+    ///
+    /// `process(everything) + finish` reproduces the full finite-convolution
+    /// output (the impulse response runs out to its last tap).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `output` is shorter than the tail length.
+    fn finish(&mut self, output: &mut [T]) -> Result<usize>;
+
+    /// One-shot convenience: filter a complete `input` to a complete `output` on
+    /// a fresh stream — `reset` (so prior state cannot leak), then
+    /// `process(input)` for the steady output, then `finish` for the tail.
+    /// Returns the total number of samples written, and leaves the processor
+    /// clean (as after [`reset`](Self::reset)).
+    ///
+    /// `output` must hold `input.len() + (num_taps − 1)` samples (the finite
+    /// convolution length).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `output` is too short, or if execution fails.
+    fn execute(&mut self, input: &[T], output: &mut [T]) -> Result<usize>;
+
+    /// Reset internal state (delay line) to zero without recreating the
+    /// processor.
     fn reset(&mut self);
 }

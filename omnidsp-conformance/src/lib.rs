@@ -57,20 +57,21 @@ mod modules;
 mod primitives;
 mod support;
 
-use omnidsp_core::create::CreatePlan;
+use omnidsp_core::create::{CreatePlan, CreateProc};
 use omnidsp_core::design::cqt::CqtSpec;
 use omnidsp_core::design::resample::ResampleSpec;
-use omnidsp_core::modules::cqt::{CqtPlan, CqtStreamPlan, CqtStreamSpec};
+use omnidsp_core::dispatch::Backend;
+use omnidsp_core::modules::cqt::{CqtPlan, CqtProcessor};
 use omnidsp_core::modules::hilbert::{HilbertPlan, HilbertSpec};
-use omnidsp_core::modules::resample::ResamplePlan;
+use omnidsp_core::modules::resample::ResampleProcessor;
 use omnidsp_core::modules::xcorr::{CrossCorrPlan, CrossCorrSpec};
 use omnidsp_core::traits::conv::{ConvPlan, ConvSpec};
 use omnidsp_core::traits::dct::{DctPlan, DctSpec};
 use omnidsp_core::traits::dft::{
     DftC2cPlan, DftC2cSpec, DftC2rPlan, DftC2rSpec, DftR2cPlan, DftR2cSpec,
 };
-use omnidsp_core::traits::fir::{FirPlan, FirSpec};
-use omnidsp_core::traits::iir::{IirPlan, IirSpec};
+use omnidsp_core::traits::fir::{FirProcessor, FirSpec};
+use omnidsp_core::traits::iir::{IirProcessor, IirSpec};
 
 pub use modules::{
     check_conv, check_cqt, check_cqt_stream, check_dct, check_fir, check_hilbert, check_iir,
@@ -81,39 +82,48 @@ pub use support::ConformanceFloat;
 
 /// A backend implementing the full `OmniDSP` surface for one float width `T`.
 ///
-/// This aggregates every `CreatePlan<…Spec<T>>` bound (with its plan-trait
-/// requirement) into a single name so [`run_all`] reads cleanly.  A blanket impl
-/// covers every backend that satisfies the parts — including the macro-generated
-/// `RustBackend` — so backends never name this trait themselves.
+/// This aggregates every `CreatePlan` / `CreateProc` bound (with its plan- or
+/// processor-trait requirement at precision `T`, via the GAT associated type)
+/// into a single name so [`run_all`] reads cleanly.  [`Backend<T>`] is a
+/// supertrait — the foundational contract (the real-DFT family plus vector ops)
+/// the GAT dispatch keys on.  A blanket impl covers every backend that satisfies
+/// the parts — including the macro-generated `RustBackend` — so backends never
+/// name this trait themselves.
 pub trait BackendUnderTest<T>:
-    CreatePlan<DftC2cSpec<T>, Plan: DftC2cPlan<T>>
-    + CreatePlan<DftR2cSpec<T>, Plan: DftR2cPlan<T>>
-    + CreatePlan<DftC2rSpec<T>, Plan: DftC2rPlan<T>>
-    + CreatePlan<ConvSpec<T>, Plan: ConvPlan<T>>
-    + CreatePlan<FirSpec<T>, Plan: FirPlan<T>>
-    + CreatePlan<IirSpec<T>, Plan: IirPlan<T>>
-    + CreatePlan<DctSpec<T>, Plan: DctPlan<T>>
-    + CreatePlan<HilbertSpec<T>, Plan: HilbertPlan<T>>
-    + CreatePlan<CrossCorrSpec<T>, Plan: CrossCorrPlan<T>>
-    + CreatePlan<ResampleSpec<T>, Plan: ResamplePlan<T>>
-    + CreatePlan<CqtSpec<T>, Plan: CqtPlan<T>>
-    + CreatePlan<CqtStreamSpec<T>, Plan: CqtStreamPlan<T>>
+    Backend<T>
+    + CreatePlan<DftC2cSpec, Plan<T>: DftC2cPlan<T>>
+    + CreatePlan<DftR2cSpec, Plan<T>: DftR2cPlan<T>>
+    + CreatePlan<DftC2rSpec, Plan<T>: DftC2rPlan<T>>
+    + CreatePlan<ConvSpec, Plan<T>: ConvPlan<T>>
+    + CreateProc<FirSpec, Proc<T>: FirProcessor<T>>
+    + CreateProc<IirSpec, Proc<T>: IirProcessor<T>>
+    + CreatePlan<DctSpec, Plan<T>: DctPlan<T>>
+    + CreatePlan<HilbertSpec, Plan<T>: HilbertPlan<T>>
+    + CreatePlan<CrossCorrSpec, Plan<T>: CrossCorrPlan<T>>
+    + CreateProc<ResampleSpec, Proc<T>: ResampleProcessor<T>>
+    + CreatePlan<CqtSpec, Plan<T>: CqtPlan<T>>
+    + CreateProc<CqtSpec, Proc<T>: CqtProcessor<T>>
+where
+    T: omnidsp_core::types::DspFloat + std::ops::AddAssign + std::ops::MulAssign,
 {
 }
 
-impl<T, B> BackendUnderTest<T> for B where
-    B: CreatePlan<DftC2cSpec<T>, Plan: DftC2cPlan<T>>
-        + CreatePlan<DftR2cSpec<T>, Plan: DftR2cPlan<T>>
-        + CreatePlan<DftC2rSpec<T>, Plan: DftC2rPlan<T>>
-        + CreatePlan<ConvSpec<T>, Plan: ConvPlan<T>>
-        + CreatePlan<FirSpec<T>, Plan: FirPlan<T>>
-        + CreatePlan<IirSpec<T>, Plan: IirPlan<T>>
-        + CreatePlan<DctSpec<T>, Plan: DctPlan<T>>
-        + CreatePlan<HilbertSpec<T>, Plan: HilbertPlan<T>>
-        + CreatePlan<CrossCorrSpec<T>, Plan: CrossCorrPlan<T>>
-        + CreatePlan<ResampleSpec<T>, Plan: ResamplePlan<T>>
-        + CreatePlan<CqtSpec<T>, Plan: CqtPlan<T>>
-        + CreatePlan<CqtStreamSpec<T>, Plan: CqtStreamPlan<T>>
+impl<T, B> BackendUnderTest<T> for B
+where
+    T: omnidsp_core::types::DspFloat + std::ops::AddAssign + std::ops::MulAssign,
+    B: Backend<T>
+        + CreatePlan<DftC2cSpec, Plan<T>: DftC2cPlan<T>>
+        + CreatePlan<DftR2cSpec, Plan<T>: DftR2cPlan<T>>
+        + CreatePlan<DftC2rSpec, Plan<T>: DftC2rPlan<T>>
+        + CreatePlan<ConvSpec, Plan<T>: ConvPlan<T>>
+        + CreateProc<FirSpec, Proc<T>: FirProcessor<T>>
+        + CreateProc<IirSpec, Proc<T>: IirProcessor<T>>
+        + CreatePlan<DctSpec, Plan<T>: DctPlan<T>>
+        + CreatePlan<HilbertSpec, Plan<T>: HilbertPlan<T>>
+        + CreatePlan<CrossCorrSpec, Plan<T>: CrossCorrPlan<T>>
+        + CreateProc<ResampleSpec, Proc<T>: ResampleProcessor<T>>
+        + CreatePlan<CqtSpec, Plan<T>: CqtPlan<T>>
+        + CreateProc<CqtSpec, Proc<T>: CqtProcessor<T>>,
 {
 }
 

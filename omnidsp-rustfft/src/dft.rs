@@ -55,7 +55,7 @@ pub struct RustDftC2cPlan<T> {
 // ─── Trait implementations ───────────────────────────────────────────
 
 impl<T: DspFloat> DftC2cPlan<T> for RustDftC2cPlan<T> {
-    fn process(&self, input: &[Complex<T>], output: &mut [Complex<T>]) -> Result<()> {
+    fn execute(&self, input: &[Complex<T>], output: &mut [Complex<T>]) -> Result<()> {
         if input.len() != self.length {
             return Err(Error::BufferMismatch {
                 expected: self.length,
@@ -133,7 +133,7 @@ macro_rules! impl_dft {
         impl DftC2c<$t> for RustDftC2c {
             type Plan = RustDftC2cPlan<$t>;
 
-            fn create_plan(&self, spec: &DftC2cSpec<$t>) -> Result<Self::Plan> {
+            fn create_plan(&self, spec: &DftC2cSpec) -> Result<Self::Plan> {
                 let length = spec.length();
 
                 let mut planner = FftPlanner::<$t>::new();
@@ -166,11 +166,11 @@ mod tests {
     const EPSILON_F32: f32 = 1e-5;
     const EPSILON_F64: f64 = 1e-12;
 
-    fn fwd<T>(length: usize) -> DftC2cSpec<T> {
+    fn fwd(length: usize) -> DftC2cSpec {
         DftC2cSpec::new(length, Direction::Forward, DftNorm::Inverse).expect("valid forward spec")
     }
 
-    fn inv<T>(length: usize) -> DftC2cSpec<T> {
+    fn inv(length: usize) -> DftC2cSpec {
         DftC2cSpec::new(length, Direction::Inverse, DftNorm::Inverse).expect("valid inverse spec")
     }
 
@@ -204,7 +204,7 @@ mod tests {
 
     #[test]
     fn zero_length_spec_rejected() {
-        let result = DftC2cSpec::<f32>::new(0, Direction::Forward, DftNorm::None);
+        let result = DftC2cSpec::new(0, Direction::Forward, DftNorm::None);
         assert!(
             result.is_err(),
             "zero length should be rejected by the spec constructor"
@@ -217,7 +217,7 @@ mod tests {
         let plan = DftC2c::<f32>::create_plan(&dft, &fwd(4)).expect("plan creation should succeed");
         let input = [Complex::new(1.0_f32, 0.0); 4];
         let mut output = [Complex::default(); 4];
-        plan.process(&input, &mut output)
+        plan.execute(&input, &mut output)
             .expect("process should succeed");
 
         let expected = [
@@ -235,7 +235,7 @@ mod tests {
         let plan = DftC2c::<f64>::create_plan(&dft, &fwd(4)).expect("plan creation should succeed");
         let input = [Complex::new(1.0_f64, 0.0); 4];
         let mut output = [Complex::default(); 4];
-        plan.process(&input, &mut output)
+        plan.execute(&input, &mut output)
             .expect("process should succeed");
 
         let expected = [
@@ -265,10 +265,10 @@ mod tests {
         let mut recovered = [Complex::default(); 4];
 
         fwd_plan
-            .process(&input, &mut freq)
+            .execute(&input, &mut freq)
             .expect("forward should succeed");
         inv_plan
-            .process(&freq, &mut recovered)
+            .execute(&freq, &mut recovered)
             .expect("inverse should succeed");
 
         assert_complex_slice_eq_f32(&recovered, &input, EPSILON_F32);
@@ -289,10 +289,10 @@ mod tests {
         let mut recovered = vec![Complex::default(); 8];
 
         fwd_plan
-            .process(&input, &mut freq)
+            .execute(&input, &mut freq)
             .expect("forward should succeed");
         inv_plan
-            .process(&freq, &mut recovered)
+            .execute(&freq, &mut recovered)
             .expect("inverse should succeed");
 
         assert_complex_slice_eq_f64(&recovered, &input, EPSILON_F64);
@@ -311,10 +311,10 @@ mod tests {
         let mut recovered = vec![Complex::default(); 7];
 
         fwd_plan
-            .process(&input, &mut freq)
+            .execute(&input, &mut freq)
             .expect("forward should succeed");
         inv_plan
-            .process(&freq, &mut recovered)
+            .execute(&freq, &mut recovered)
             .expect("inverse should succeed");
 
         assert_complex_slice_eq_f64(&recovered, &input, EPSILON_F64);
@@ -328,14 +328,14 @@ mod tests {
         let input = [Complex::new(1.0_f32, 0.0); 3];
         let mut output = [Complex::default(); 4];
         assert!(
-            plan.process(&input, &mut output).is_err(),
+            plan.execute(&input, &mut output).is_err(),
             "mismatched input length should return error"
         );
 
         let input = [Complex::new(1.0_f32, 0.0); 4];
         let mut output = [Complex::default(); 3];
         assert!(
-            plan.process(&input, &mut output).is_err(),
+            plan.execute(&input, &mut output).is_err(),
             "mismatched output length should return error"
         );
     }
@@ -355,7 +355,7 @@ mod tests {
             Complex::new(4.0, 0.0),
         ];
         let mut output = [Complex::default(); 4];
-        plan.process(&input, &mut output)
+        plan.execute(&input, &mut output)
             .expect("process should succeed");
 
         // numpy.fft.fft([1,2,3,4]) = [10+0j, -2+2j, -2+0j, -2-2j]
@@ -388,7 +388,7 @@ mod tests {
         let mut recovered = [Complex::default(); 4];
 
         fwd_plan
-            .process(&input, &mut freq)
+            .execute(&input, &mut freq)
             .expect("forward should succeed");
 
         // DC bin should be sum/√N = 10/2 = 5
@@ -399,7 +399,7 @@ mod tests {
         );
 
         inv_plan
-            .process(&freq, &mut recovered)
+            .execute(&freq, &mut recovered)
             .expect("inverse should succeed");
 
         assert_complex_slice_eq_f64(&recovered, &input, EPSILON_F64);
@@ -425,10 +425,10 @@ mod tests {
         let mut recovered = [Complex::default(); 4];
 
         fwd_plan
-            .process(&input, &mut freq)
+            .execute(&input, &mut freq)
             .expect("forward should succeed");
         inv_plan
-            .process(&freq, &mut recovered)
+            .execute(&freq, &mut recovered)
             .expect("inverse should succeed");
 
         // Round-trip should be input * N

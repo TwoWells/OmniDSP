@@ -32,7 +32,6 @@
 use std::f64::consts::PI;
 
 use num_complex::Complex64;
-use num_traits::Float;
 
 use crate::error::{Error, Result};
 use crate::traits::iir::IirSpec;
@@ -53,9 +52,11 @@ pub enum FilterFamily {
 
 /// Design an IIR filter as cascaded biquad sections.
 ///
-/// Returns an [`IirSpec<T>`] with normalized coefficients (`a0 = 1`).
-/// Sections use the same sign convention as scipy's `sosfilt` (see
-/// [`BiquadSection`]).
+/// Returns a (non-generic, f64) [`IirSpec`] with normalized coefficients
+/// (`a0 = 1`); the cast to the operation's `T` happens at the IIR processor's
+/// create edge.  Sections use the same sign convention as scipy's `sosfilt` (see
+/// [`BiquadSection`]).  Frequency arguments are `f64` (the surface-wide "Hz is
+/// f64" rule).
 ///
 /// The number of sections is `⌈order / 2⌉` for lowpass/highpass and
 /// `order` for bandpass/bandstop (frequency transforms double the
@@ -76,32 +77,29 @@ pub enum FilterFamily {
 /// use omnidsp_core::design::iir::{FilterFamily, design};
 /// use omnidsp_core::types::FilterType;
 ///
-/// let spec = design::<f64>(
+/// let spec = design(
 ///     FilterFamily::Butterworth,
 ///     FilterType::Lowpass, 4, 44100.0, 1000.0, None,
 /// ).unwrap();
 /// assert_eq!(spec.sections().len(), 2);
 /// ```
-pub fn design<T: Float>(
+pub fn design(
     family: FilterFamily,
     filter_type: FilterType,
     order: usize,
-    sample_rate: T,
-    cutoff1: T,
-    cutoff2: Option<T>,
-) -> Result<IirSpec<T>> {
-    let sr = to_f64(sample_rate)?;
-    let c1 = to_f64(cutoff1)?;
-    let c2 = cutoff2.map(to_f64).transpose()?;
-
-    let validated = validate(filter_type, order, sr, c1, c2)?;
+    sample_rate: f64,
+    cutoff1: f64,
+    cutoff2: Option<f64>,
+) -> Result<IirSpec> {
+    let validated = validate(filter_type, order, sample_rate, cutoff1, cutoff2)?;
 
     let prototype = match family {
         FilterFamily::Butterworth => AnalogPrototype::butterworth(order),
     };
 
-    let sections = design_from_prototype(prototype, &validated, sr);
-    let sections = sections.iter().map(biquad_to_t).collect::<Result<_>>()?;
+    // The sections stay in the f64 design precision; the cast to the operation's
+    // `T` happens at the IIR processor's create edge.
+    let sections = design_from_prototype(prototype, &validated, sample_rate);
     IirSpec::new(sections)
 }
 
@@ -222,27 +220,6 @@ fn require_cutoff2(c2: Option<f64>, c1: f64, nyquist: f64) -> Result<f64> {
         )));
     }
     Ok(val)
-}
-
-// ─── Conversion helpers ──────────────────────────────────────────────
-
-fn to_f64<T: Float>(val: T) -> Result<f64> {
-    val.to_f64()
-        .ok_or_else(|| Error::Internal("failed to convert to f64".into()))
-}
-
-fn from_f64<T: Float>(val: f64) -> Result<T> {
-    T::from(val).ok_or_else(|| Error::Internal("failed to convert from f64".into()))
-}
-
-fn biquad_to_t<T: Float>(s: &BiquadSection<f64>) -> Result<BiquadSection<T>> {
-    Ok(BiquadSection {
-        b0: from_f64(s.b0)?,
-        b1: from_f64(s.b1)?,
-        b2: from_f64(s.b2)?,
-        a1: from_f64(s.a1)?,
-        a2: from_f64(s.a2)?,
-    })
 }
 
 // ─── Analog prototype ─────────────────────────────────────────────────
@@ -603,18 +580,6 @@ mod tests {
             .to_vec())
     }
 
-    fn butter_f32(
-        ft: FilterType,
-        order: usize,
-        sr: f32,
-        c1: f32,
-        c2: Option<f32>,
-    ) -> Result<Vec<BiquadSection<f32>>> {
-        Ok(design(FilterFamily::Butterworth, ft, order, sr, c1, c2)?
-            .sections()
-            .to_vec())
-    }
-
     /// Evaluate the SOS cascade magnitude at a given frequency in Hz.
     fn gain_at(sections: &[BiquadSection<f64>], freq_hz: f64, fs: f64) -> f64 {
         eval_sos_magnitude(sections, 2.0 * PI * freq_hz / fs)
@@ -886,27 +851,6 @@ mod tests {
         assert!(
             butter(FilterType::Lowpass, 2, 44100.0, 1000.0, Some(5000.0)).is_err(),
             "lowpass with cutoff2 should be rejected"
-        );
-    }
-
-    // ── f32 path ────────────────────────────────────────────────
-
-    #[test]
-    fn f32_lowpass_works() {
-        let s = butter_f32(FilterType::Lowpass, 4, 44100.0_f32, 1000.0_f32, None)
-            .expect("f32 LP order 4");
-        assert_eq!(s.len(), 2, "should have 2 sections");
-        let dc: f64 = s
-            .iter()
-            .map(|sec| {
-                let num = f64::from(sec.b0) + f64::from(sec.b1) + f64::from(sec.b2);
-                let den = 1.0 + f64::from(sec.a1) + f64::from(sec.a2);
-                num / den
-            })
-            .product();
-        assert!(
-            (dc - 1.0).abs() < 1e-5,
-            "f32 LP DC gain should be ~1.0, got {dc}"
         );
     }
 

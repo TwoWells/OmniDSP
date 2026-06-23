@@ -104,7 +104,7 @@ pub struct RustDftR2cPlan<T> {
 }
 
 impl<T: DspFloat> DftR2cPlan<T> for RustDftR2cPlan<T> {
-    fn process(&self, input: &mut [T], output: &mut [Complex<T>]) -> Result<()> {
+    fn execute(&self, input: &mut [T], output: &mut [Complex<T>]) -> Result<()> {
         let bins = self.length / 2 + 1;
         if input.len() != self.length {
             return Err(Error::BufferMismatch {
@@ -173,7 +173,7 @@ pub struct RustDftC2rPlan<T> {
 }
 
 impl<T: DspFloat> DftC2rPlan<T> for RustDftC2rPlan<T> {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [T]) -> Result<()> {
+    fn execute(&self, input: &mut [Complex<T>], output: &mut [T]) -> Result<()> {
         let bins = self.length / 2 + 1;
         if input.len() != bins {
             return Err(Error::BufferMismatch {
@@ -220,7 +220,7 @@ macro_rules! impl_real_dft {
         impl DftR2c<$t> for RustDftR2c {
             type Plan = RustDftR2cPlan<$t>;
 
-            fn create_plan(&self, spec: &DftR2cSpec<$t>) -> Result<Self::Plan> {
+            fn create_plan(&self, spec: &DftR2cSpec) -> Result<Self::Plan> {
                 let length = spec.length();
 
                 let mut planner = RealFftPlanner::<$t>::new();
@@ -239,7 +239,7 @@ macro_rules! impl_real_dft {
         impl DftC2r<$t> for RustDftC2r {
             type Plan = RustDftC2rPlan<$t>;
 
-            fn create_plan(&self, spec: &DftC2rSpec<$t>) -> Result<Self::Plan> {
+            fn create_plan(&self, spec: &DftC2rSpec) -> Result<Self::Plan> {
                 let length = spec.length();
 
                 let mut planner = RealFftPlanner::<$t>::new();
@@ -318,12 +318,12 @@ mod tests {
     where
         RustDftR2c: DftR2c<T>,
     {
-        let spec = DftR2cSpec::<T>::new(n, norm).expect("valid r2c spec");
+        let spec = DftR2cSpec::new(n, norm).expect("valid r2c spec");
         let plan = DftR2c::<T>::create_plan(&RustDftR2c, &spec).expect("r2c plan");
         // r2c consumes its input — hand it a throwaway copy.
         let mut scratch = input.to_vec();
         let mut out = czeros::<T>(n / 2 + 1);
-        plan.process(&mut scratch, &mut out).expect("r2c process");
+        plan.execute(&mut scratch, &mut out).expect("r2c process");
         out
     }
 
@@ -331,12 +331,12 @@ mod tests {
     where
         RustDftC2r: DftC2r<T>,
     {
-        let spec = DftC2rSpec::<T>::new(n, norm).expect("valid c2r spec");
+        let spec = DftC2rSpec::new(n, norm).expect("valid c2r spec");
         let plan = DftC2r::<T>::create_plan(&RustDftC2r, &spec).expect("c2r plan");
         // c2r consumes its input — hand it a throwaway copy.
         let mut scratch = input.to_vec();
         let mut out = vec![T::zero(); n];
-        plan.process(&mut scratch, &mut out).expect("c2r process");
+        plan.execute(&mut scratch, &mut out).expect("c2r process");
         out
     }
 
@@ -377,10 +377,10 @@ mod tests {
 
         let half = run_r2c::<T>(n, DftNorm::None, &real);
 
-        let c_spec = DftC2cSpec::<T>::new(n, Direction::Forward, DftNorm::None).expect("c2c spec");
+        let c_spec = DftC2cSpec::new(n, Direction::Forward, DftNorm::None).expect("c2c spec");
         let c_plan = DftC2c::<T>::create_plan(&RustDftC2c, &c_spec).expect("c2c plan");
         let mut full = czeros::<T>(n);
-        c_plan.process(&embedded, &mut full).expect("c2c process");
+        c_plan.execute(&embedded, &mut full).expect("c2c process");
 
         let bins = n / 2 + 1;
         assert_complex_close(&half, &full[..bins], eps);
@@ -453,40 +453,40 @@ mod tests {
 
     #[test]
     fn r2c_buffer_mismatch() {
-        let spec = DftR2cSpec::<f64>::new(8, DftNorm::None).expect("valid spec");
+        let spec = DftR2cSpec::new(8, DftNorm::None).expect("valid spec");
         let plan = DftR2c::<f64>::create_plan(&RustDftR2c, &spec).expect("plan");
 
         let mut short_input = [0.0_f64; 7];
         let mut out = czeros::<f64>(5);
         assert!(
-            plan.process(&mut short_input, &mut out).is_err(),
+            plan.execute(&mut short_input, &mut out).is_err(),
             "wrong input length should error",
         );
 
         let mut input = [0.0_f64; 8];
         let mut short_out = czeros::<f64>(4);
         assert!(
-            plan.process(&mut input, &mut short_out).is_err(),
+            plan.execute(&mut input, &mut short_out).is_err(),
             "wrong output length should error",
         );
     }
 
     #[test]
     fn c2r_buffer_mismatch() {
-        let spec = DftC2rSpec::<f64>::new(8, DftNorm::None).expect("valid spec");
+        let spec = DftC2rSpec::new(8, DftNorm::None).expect("valid spec");
         let plan = DftC2r::<f64>::create_plan(&RustDftC2r, &spec).expect("plan");
 
         let mut short_input = czeros::<f64>(4);
         let mut out = [0.0_f64; 8];
         assert!(
-            plan.process(&mut short_input, &mut out).is_err(),
+            plan.execute(&mut short_input, &mut out).is_err(),
             "wrong input length should error",
         );
 
         let mut input = czeros::<f64>(5);
         let mut short_out = [0.0_f64; 7];
         assert!(
-            plan.process(&mut input, &mut short_out).is_err(),
+            plan.execute(&mut input, &mut short_out).is_err(),
             "wrong output length should error",
         );
     }

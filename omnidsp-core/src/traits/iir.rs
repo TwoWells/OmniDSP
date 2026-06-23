@@ -3,9 +3,9 @@
 
 //! IIR (Infinite Impulse Response) filter primitive traits.
 //!
-//! The [`Iir`] factory creates [`IirPlan`] execution objects configured from
-//! an [`IirSpec`].  Plans are mutable — they maintain state across calls
-//! and take `&mut self`.
+//! The [`Iir`] factory creates [`IirProcessor`] execution objects configured
+//! from an [`IirSpec`].  Processors are stateful — they maintain biquad delays
+//! across calls and take `&mut self`.
 
 use crate::error::{Error, Result};
 use crate::types::BiquadSection;
@@ -22,6 +22,10 @@ use crate::types::BiquadSection;
 /// automatic coefficient generation, or directly via [`IirSpec::new`] with
 /// pre-computed sections.
 ///
+/// The coefficient cascade is the BYO-able artifact, so the spec carries its
+/// sections in **f64** (the design precision) and is non-generic; the cast to
+/// the operation's `T` happens at `create_proc::<T>`.
+///
 /// # Examples
 ///
 /// ```
@@ -35,18 +39,22 @@ use crate::types::BiquadSection;
 /// ```
 ///
 /// The field is private and the spec is valid-by-construction.
-#[derive(Debug, Clone)]
-pub struct IirSpec<T> {
-    sections: Vec<BiquadSection<T>>,
+#[derive(Debug, Clone, PartialEq)]
+#[allow(
+    clippy::derive_partial_eq_without_eq,
+    reason = "sections are f64, which is not Eq, so neither is IirSpec"
+)]
+pub struct IirSpec {
+    sections: Vec<BiquadSection<f64>>,
 }
 
-impl<T> IirSpec<T> {
-    /// Create a new IIR spec from biquad sections.
+impl IirSpec {
+    /// Create a new IIR spec from f64 biquad sections.
     ///
     /// # Errors
     ///
     /// Returns [`Error::InvalidSpec`] if `sections` is empty.
-    pub fn new(sections: Vec<BiquadSection<T>>) -> Result<Self> {
+    pub fn new(sections: Vec<BiquadSection<f64>>) -> Result<Self> {
         if sections.is_empty() {
             return Err(Error::InvalidSpec(
                 "IIR filter requires at least one biquad section".into(),
@@ -55,27 +63,35 @@ impl<T> IirSpec<T> {
         Ok(Self { sections })
     }
 
-    /// Second-order sections applied in series, first to last.
+    /// Second-order sections applied in series, first to last (in the f64 design
+    /// precision).
     ///
     /// The output of `sections()[0]` feeds `sections()[1]`, and so on.
     /// The total filter order is `2 × sections().len()` (or less if
     /// any section is first-order with `b2 = a2 = 0`).
     #[must_use]
-    pub fn sections(&self) -> &[BiquadSection<T>] {
+    pub fn sections(&self) -> &[BiquadSection<f64>] {
         &self.sections
     }
 }
 
 // ─── Traits ──────────────────────────────────────────────────────────
 
-/// Execution object for a configured IIR filter (biquad cascade).
+/// Stateful execution object for a configured IIR filter — a **Processor**.
 ///
-/// A plan is created by an [`Iir`] factory and holds the biquad coefficients
-/// and internal state.  Plans are mutable and take `&mut self` — each call to
-/// [`process`](IirPlan::process) continues from where the previous call left
-/// off.
-pub trait IirPlan<T> {
-    /// Filter `input`, writing the result to `output`.
+/// Created by an [`Iir`] factory and holds the biquad coefficients and internal
+/// state.  Processors are mutable and take `&mut self` — each call to
+/// [`process`](IirProcessor::process) continues from where the previous call
+/// left off.
+///
+/// An IIR filter has an *infinite* impulse response, so there is no finite
+/// ring-down tail to emit: [`finish`](IirProcessor::finish) writes nothing
+/// (returns `0`) and only marks the stream's end.  Batch is still
+/// `process(everything) + finish`; [`execute`](IirProcessor::execute) is the
+/// one-shot convenience.
+pub trait IirProcessor<T> {
+    /// Filter the streaming `input`, writing the result to `output`; returns the
+    /// number of samples written (equal to `input.len()`).
     ///
     /// `output` must have the same length as `input`.  Internal state (biquad
     /// delays) is updated so successive calls form a continuous stream.
@@ -83,26 +99,47 @@ pub trait IirPlan<T> {
     /// # Errors
     ///
     /// Returns an error if the buffer lengths do not match.
-    fn process(&mut self, input: &[T], output: &mut [T]) -> Result<()>;
+    fn process(&mut self, input: &[T], output: &mut [T]) -> Result<usize>;
 
-    /// Reset internal state (biquad delays) to zero without recreating the plan.
+    /// Signal end-of-stream.  An IIR cascade has no finite tail, so this writes
+    /// nothing, returns `0`, and clears the delay state.
+    ///
+    /// # Errors
+    ///
+    /// Infallible in practice; the `Result` keeps the Processor contract uniform.
+    fn finish(&mut self, output: &mut [T]) -> Result<usize>;
+
+    /// One-shot convenience: filter a complete `input` to a complete `output` on
+    /// a fresh stream — `reset`, then `process(input)`, then `finish` (a no-op
+    /// for IIR).  Returns the number of samples written (`input.len()`) and
+    /// leaves the processor clean.
+    ///
+    /// `output` must have the same length as `input`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the buffer lengths do not match.
+    fn execute(&mut self, input: &[T], output: &mut [T]) -> Result<usize>;
+
+    /// Reset internal state (biquad delays) to zero without recreating the
+    /// processor.
     fn reset(&mut self);
 }
 
-/// Factory for creating [`IirPlan`] execution objects.
+/// Factory for creating [`IirProcessor`] execution objects.
 ///
 /// `T` is a type parameter on the factory trait so that capability is expressed
-/// in the type system.  The associated [`Plan`](Iir::Plan) type lets each
-/// implementor return a concrete plan — no `Box<dyn>`.
+/// in the type system.  The associated [`Proc`](Iir::Proc) type lets each
+/// implementor return a concrete processor — no `Box<dyn>`.
 pub trait Iir<T> {
-    /// The concrete plan type returned by this factory.
-    type Plan: IirPlan<T>;
+    /// The concrete processor type returned by this factory.
+    type Proc: IirProcessor<T>;
 
-    /// Create a plan for an IIR filter described by `spec`.
+    /// Create a processor for an IIR filter described by `spec`.
     ///
     /// # Errors
     ///
     /// Returns an error if the sections are empty or otherwise unsupported by
     /// the implementation.
-    fn create_plan(&self, spec: &IirSpec<T>) -> Result<Self::Plan>;
+    fn create_proc(&self, spec: &IirSpec) -> Result<Self::Proc>;
 }

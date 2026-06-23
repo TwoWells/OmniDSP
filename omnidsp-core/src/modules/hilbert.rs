@@ -28,7 +28,6 @@
 //! `Send + Sync` while taking `&self`.
 
 use std::fmt;
-use std::marker::PhantomData;
 use std::ops::{AddAssign, MulAssign};
 use std::sync::Mutex;
 
@@ -44,34 +43,24 @@ use crate::types::Direction;
 
 /// Hilbert transform specification.
 ///
-/// Describes the signal length for the analytic signal computation.
-/// The type parameter `T` ties the spec to a specific float type for
-/// dispatch-layer integration.  The field is private and the spec is
-/// valid-by-construction.
+/// Describes the signal length for the analytic signal computation.  The spec
+/// is non-generic; precision is chosen at `create_plan::<T>`.  The field is
+/// private and the spec is valid-by-construction.
 ///
 /// # Examples
 ///
 /// ```
 /// use omnidsp_core::modules::hilbert::HilbertSpec;
 ///
-/// let spec = HilbertSpec::<f64>::new(1024).unwrap();
+/// let spec = HilbertSpec::new(1024).unwrap();
 /// assert_eq!(spec.length(), 1024);
 /// ```
-#[derive(Debug, Clone, Copy)]
-pub struct HilbertSpec<T> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HilbertSpec {
     length: usize,
-    _marker: PhantomData<T>,
 }
 
-impl<T> PartialEq for HilbertSpec<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.length == other.length
-    }
-}
-
-impl<T> Eq for HilbertSpec<T> {}
-
-impl<T> HilbertSpec<T> {
+impl HilbertSpec {
     /// Create a new Hilbert transform spec for the given signal length.
     ///
     /// # Errors
@@ -83,10 +72,7 @@ impl<T> HilbertSpec<T> {
                 "Hilbert transform length must be non-zero".into(),
             ));
         }
-        Ok(Self {
-            length,
-            _marker: PhantomData,
-        })
+        Ok(Self { length })
     }
 
     /// Signal length (and FFT length).
@@ -123,7 +109,7 @@ impl<R, C, V> OmniHilbert<R, C, V> {
 /// Execution plan for a Hilbert transform (analytic signal).
 ///
 /// Created by [`OmniHilbert::create_plan`].  Immutable and thread-safe
-/// (`Send + Sync`).  Each call to [`process`](Self::process) computes the
+/// (`Send + Sync`).  Each call to [`execute`](Self::execute) computes the
 /// analytic signal of one input independently — no state between calls.
 ///
 /// **Memory:** one real buffer and one complex buffer, each of `length`.
@@ -181,7 +167,7 @@ where
     ///
     /// Returns an error if `input` or `output` length does not match the
     /// plan length, or if FFT execution fails.
-    pub fn process(&self, input: &[T], output: &mut [Complex<T>]) -> Result<()> {
+    pub fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<()> {
         if input.len() != self.length {
             return Err(Error::BufferMismatch {
                 expected: self.length,
@@ -209,7 +195,7 @@ where
         real.copy_from_slice(input);
 
         // 2. Forward r2c → the lower `bins` of the spectrum buffer.
-        self.fwd.process(real, &mut spectrum[..bins])?;
+        self.fwd.execute(real, &mut spectrum[..bins])?;
 
         // 3. Apply the analytic half-mask in place (DC ×1, positive ×2,
         //    even-N Nyquist ×1).
@@ -222,7 +208,7 @@ where
         }
 
         // 5. Inverse c2c: analytic spectrum → complex analytic signal.
-        self.inv.process(spectrum, output)?;
+        self.inv.execute(spectrum, output)?;
         drop(scratch);
 
         Ok(())
@@ -259,7 +245,7 @@ pub trait HilbertPlan<T>: Send + Sync {
     ///
     /// Returns an error if either buffer length does not match the plan length,
     /// or if FFT execution fails.
-    fn process(&self, input: &[T], output: &mut [Complex<T>]) -> Result<()>;
+    fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<()>;
 }
 
 impl<T, RP, CP, V> HilbertPlan<T> for OmniHilbertPlan<T, RP, CP, V>
@@ -269,10 +255,10 @@ where
     CP: DftC2cPlan<T>,
     V: VecOps<T>,
 {
-    fn process(&self, input: &[T], output: &mut [Complex<T>]) -> Result<()> {
-        // Delegate to the inherent `process`.  Inherent methods take precedence
+    fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<()> {
+        // Delegate to the inherent `execute`.  Inherent methods take precedence
         // over trait methods in resolution, so this is not recursive.
-        self.process(input, output)
+        self.execute(input, output)
     }
 }
 
@@ -287,7 +273,7 @@ impl<R, C, V> OmniHilbert<R, C, V> {
     /// enforced by [`HilbertSpec::new`], so it is not re-checked here.
     pub fn create_plan<T>(
         &self,
-        spec: &HilbertSpec<T>,
+        spec: &HilbertSpec,
     ) -> Result<OmniHilbertPlan<T, R::Plan, C::Plan, V>>
     where
         T: Float + AddAssign + MulAssign + FromPrimitive + Send + Sync + 'static,
@@ -375,9 +361,9 @@ mod tests {
 
     #[test]
     fn spec_equality() {
-        let a = HilbertSpec::<f64>::new(256).expect("valid hilbert spec");
-        let b = HilbertSpec::<f64>::new(256).expect("valid hilbert spec");
-        let c = HilbertSpec::<f64>::new(512).expect("valid hilbert spec");
+        let a = HilbertSpec::new(256).expect("valid hilbert spec");
+        let b = HilbertSpec::new(256).expect("valid hilbert spec");
+        let c = HilbertSpec::new(512).expect("valid hilbert spec");
         assert_eq!(a, b, "same-length specs should be equal");
         assert_ne!(a, c, "different-length specs should differ");
     }
@@ -385,7 +371,7 @@ mod tests {
     #[test]
     fn zero_length_rejected() {
         assert!(
-            HilbertSpec::<f64>::new(0).is_err(),
+            HilbertSpec::new(0).is_err(),
             "zero-length spec should be rejected by the spec constructor"
         );
     }
@@ -393,14 +379,14 @@ mod tests {
     #[test]
     fn length_one() {
         let factory = make_factory();
-        let spec = HilbertSpec::<f64>::new(1).expect("valid hilbert spec");
+        let spec = HilbertSpec::new(1).expect("valid hilbert spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
 
         let input = [1.0];
         let mut output = [Complex::new(0.0, 0.0)];
-        plan.process(&input, &mut output)
+        plan.execute(&input, &mut output)
             .expect("process should succeed");
 
         // Length-1 signal: analytic signal is just the input with zero imaginary.
@@ -418,14 +404,14 @@ mod tests {
     fn dc_signal_has_zero_imaginary() {
         let factory = make_factory();
         let n = 64;
-        let spec = HilbertSpec::<f64>::new(n).expect("valid hilbert spec");
+        let spec = HilbertSpec::new(n).expect("valid hilbert spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
 
         let input: Vec<f64> = vec![3.0; n];
         let mut output = vec![Complex::new(0.0, 0.0); n];
-        plan.process(&input, &mut output)
+        plan.execute(&input, &mut output)
             .expect("process should succeed");
 
         for (i, z) in output.iter().enumerate() {
@@ -446,7 +432,7 @@ mod tests {
         // for a single positive frequency.
         let factory = make_factory();
         let n = 128;
-        let spec = HilbertSpec::<f64>::new(n).expect("valid hilbert spec");
+        let spec = HilbertSpec::new(n).expect("valid hilbert spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -456,7 +442,7 @@ mod tests {
             .map(|i| (TAU * freq * i as f64 / n as f64).cos())
             .collect();
         let mut output = vec![Complex::new(0.0, 0.0); n];
-        plan.process(&input, &mut output)
+        plan.execute(&input, &mut output)
             .expect("process should succeed");
 
         // Verify: real part ≈ cos, imaginary part ≈ sin
@@ -481,7 +467,7 @@ mod tests {
     fn pure_cosine_odd_length() {
         let factory = make_factory();
         let n = 127;
-        let spec = HilbertSpec::<f64>::new(n).expect("valid hilbert spec");
+        let spec = HilbertSpec::new(n).expect("valid hilbert spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -491,7 +477,7 @@ mod tests {
             .map(|i| (TAU * freq * i as f64 / n as f64).cos())
             .collect();
         let mut output = vec![Complex::new(0.0, 0.0); n];
-        plan.process(&input, &mut output)
+        plan.execute(&input, &mut output)
             .expect("process should succeed");
 
         let tol = 1e-10;
@@ -516,7 +502,7 @@ mod tests {
         // |z[n]|² should be constant for a pure cosine.
         let factory = make_factory();
         let n = 256;
-        let spec = HilbertSpec::<f64>::new(n).expect("valid hilbert spec");
+        let spec = HilbertSpec::new(n).expect("valid hilbert spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -526,7 +512,7 @@ mod tests {
             .map(|i| (TAU * freq * i as f64 / n as f64).cos())
             .collect();
         let mut output = vec![Complex::new(0.0, 0.0); n];
-        plan.process(&input, &mut output)
+        plan.execute(&input, &mut output)
             .expect("process should succeed");
 
         // Envelope should be 1.0 everywhere for unit-amplitude cosine.
@@ -544,7 +530,7 @@ mod tests {
     fn linearity() {
         let factory = make_factory();
         let n = 64;
-        let spec = HilbertSpec::<f64>::new(n).expect("valid hilbert spec");
+        let spec = HilbertSpec::new(n).expect("valid hilbert spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -561,15 +547,15 @@ mod tests {
         // H{a*x + b*y}
         let combined: Vec<f64> = x.iter().zip(&y).map(|(&xi, &yi)| a * xi + b * yi).collect();
         let mut out_combined = vec![Complex::new(0.0, 0.0); n];
-        plan.process(&combined, &mut out_combined)
+        plan.execute(&combined, &mut out_combined)
             .expect("process should succeed");
 
         // a*H{x} + b*H{y}
         let mut out_x = vec![Complex::new(0.0, 0.0); n];
         let mut out_y = vec![Complex::new(0.0, 0.0); n];
-        plan.process(&x, &mut out_x)
+        plan.execute(&x, &mut out_x)
             .expect("process should succeed");
-        plan.process(&y, &mut out_y)
+        plan.execute(&y, &mut out_y)
             .expect("process should succeed");
 
         let tol = 1e-10;
@@ -593,7 +579,7 @@ mod tests {
     fn plan_reuse() {
         let factory = make_factory();
         let n = 32;
-        let spec = HilbertSpec::<f64>::new(n).expect("valid hilbert spec");
+        let spec = HilbertSpec::new(n).expect("valid hilbert spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -604,9 +590,9 @@ mod tests {
 
         let mut out1 = vec![Complex::new(0.0, 0.0); n];
         let mut out2 = vec![Complex::new(0.0, 0.0); n];
-        plan.process(&input, &mut out1)
+        plan.execute(&input, &mut out1)
             .expect("first call should succeed");
-        plan.process(&input, &mut out2)
+        plan.execute(&input, &mut out2)
             .expect("second call should succeed");
 
         for i in 0..n {
@@ -624,28 +610,28 @@ mod tests {
     #[test]
     fn buffer_mismatch_input() {
         let factory = make_factory();
-        let spec = HilbertSpec::<f64>::new(16).expect("valid hilbert spec");
+        let spec = HilbertSpec::new(16).expect("valid hilbert spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
 
         let input = vec![0.0; 8]; // wrong length
         let mut output = vec![Complex::new(0.0, 0.0); 16];
-        let result = plan.process(&input, &mut output);
+        let result = plan.execute(&input, &mut output);
         assert!(result.is_err(), "wrong input length should fail");
     }
 
     #[test]
     fn buffer_mismatch_output() {
         let factory = make_factory();
-        let spec = HilbertSpec::<f64>::new(16).expect("valid hilbert spec");
+        let spec = HilbertSpec::new(16).expect("valid hilbert spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
 
         let input = vec![0.0; 16];
         let mut output = vec![Complex::new(0.0, 0.0); 8]; // wrong length
-        let result = plan.process(&input, &mut output);
+        let result = plan.execute(&input, &mut output);
         assert!(result.is_err(), "wrong output length should fail");
     }
 
@@ -655,7 +641,7 @@ mod tests {
         // So analytic signal of sin should have imag = -cos.
         let factory = make_factory();
         let n = 128;
-        let spec = HilbertSpec::<f64>::new(n).expect("valid hilbert spec");
+        let spec = HilbertSpec::new(n).expect("valid hilbert spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -665,7 +651,7 @@ mod tests {
             .map(|i| (TAU * freq * i as f64 / n as f64).sin())
             .collect();
         let mut output = vec![Complex::new(0.0, 0.0); n];
-        plan.process(&input, &mut output)
+        plan.execute(&input, &mut output)
             .expect("process should succeed");
 
         let tol = 1e-10;
@@ -691,7 +677,7 @@ mod tests {
         // unchanged (mask = 1 at Nyquist).
         let factory = make_factory();
         let n = 64;
-        let spec = HilbertSpec::<f64>::new(n).expect("valid hilbert spec");
+        let spec = HilbertSpec::new(n).expect("valid hilbert spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -701,7 +687,7 @@ mod tests {
             .map(|i| if i % 2 == 0 { 1.0 } else { -1.0 })
             .collect();
         let mut output = vec![Complex::new(0.0, 0.0); n];
-        plan.process(&input, &mut output)
+        plan.execute(&input, &mut output)
             .expect("process should succeed");
 
         // The Nyquist signal is real-only in spectrum, mask=1, so analytic
@@ -726,7 +712,7 @@ mod tests {
         // own complex exponential in the analytic signal.
         let factory = make_factory();
         let n = 256;
-        let spec = HilbertSpec::<f64>::new(n).expect("valid hilbert spec");
+        let spec = HilbertSpec::new(n).expect("valid hilbert spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -744,7 +730,7 @@ mod tests {
             })
             .collect();
         let mut output = vec![Complex::new(0.0, 0.0); n];
-        plan.process(&input, &mut output)
+        plan.execute(&input, &mut output)
             .expect("process should succeed");
 
         let tol = 1e-10;
@@ -775,7 +761,7 @@ mod tests {
         // For any input, real part of analytic signal must equal the input.
         let factory = make_factory();
         let n = 64;
-        let spec = HilbertSpec::<f64>::new(n).expect("valid hilbert spec");
+        let spec = HilbertSpec::new(n).expect("valid hilbert spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -788,7 +774,7 @@ mod tests {
             })
             .collect();
         let mut output = vec![Complex::new(0.0, 0.0); n];
-        plan.process(&input, &mut output)
+        plan.execute(&input, &mut output)
             .expect("process should succeed");
 
         let tol = 1e-10;
@@ -805,7 +791,7 @@ mod tests {
     #[test]
     fn accessor_length() {
         let factory = make_factory();
-        let spec = HilbertSpec::<f64>::new(512).expect("valid hilbert spec");
+        let spec = HilbertSpec::new(512).expect("valid hilbert spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -816,12 +802,12 @@ mod tests {
     fn implements_plan_trait() {
         // A generic consumer bound on `HilbertPlan` compiles and runs.
         fn check<P: HilbertPlan<f64>>(plan: &P, input: &[f64], output: &mut [Complex<f64>]) {
-            plan.process(input, output)
+            plan.execute(input, output)
                 .expect("trait process should succeed");
         }
 
         let factory = make_factory();
-        let spec = HilbertSpec::<f64>::new(16).expect("valid hilbert spec");
+        let spec = HilbertSpec::new(16).expect("valid hilbert spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -832,7 +818,7 @@ mod tests {
 
         // The trait method must agree with the inherent `process`.
         let mut direct = vec![Complex::new(0.0, 0.0); 16];
-        plan.process(&input, &mut direct)
+        plan.execute(&input, &mut direct)
             .expect("inherent process should succeed");
         for (i, (t, d)) in via_trait.iter().zip(direct.iter()).enumerate() {
             assert!(
@@ -851,13 +837,13 @@ mod tests {
     #[test]
     fn hand_computed_n4() {
         let factory = make_factory();
-        let spec = HilbertSpec::<f64>::new(HAND_N4_INPUT.len()).expect("valid hilbert spec");
+        let spec = HilbertSpec::new(HAND_N4_INPUT.len()).expect("valid hilbert spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
 
         let mut output = vec![Complex::new(0.0, 0.0); HAND_N4_INPUT.len()];
-        plan.process(HAND_N4_INPUT, &mut output)
+        plan.execute(HAND_N4_INPUT, &mut output)
             .expect("process should succeed");
 
         let tol = 1e-12;
@@ -878,13 +864,13 @@ mod tests {
     #[test]
     fn hand_computed_n8_cos2() {
         let factory = make_factory();
-        let spec = HilbertSpec::<f64>::new(HAND_N8_COS2_INPUT.len()).expect("valid hilbert spec");
+        let spec = HilbertSpec::new(HAND_N8_COS2_INPUT.len()).expect("valid hilbert spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
 
         let mut output = vec![Complex::new(0.0, 0.0); HAND_N8_COS2_INPUT.len()];
-        plan.process(HAND_N8_COS2_INPUT, &mut output)
+        plan.execute(HAND_N8_COS2_INPUT, &mut output)
             .expect("process should succeed");
 
         let tol = 1e-12;

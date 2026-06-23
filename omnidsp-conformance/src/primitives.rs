@@ -12,6 +12,7 @@
 use num_complex::Complex;
 
 use omnidsp_core::create::CreatePlan;
+use omnidsp_core::dispatch::Backend;
 use omnidsp_core::traits::dft::{
     DftC2cPlan, DftC2cSpec, DftC2rPlan, DftC2rSpec, DftNorm, DftR2cPlan, DftR2cSpec,
 };
@@ -40,9 +41,9 @@ const NORMS: [DftNorm; 3] = [DftNorm::None, DftNorm::Inverse, DftNorm::Ortho];
 /// [`ConformanceFloat::DFT_TOL`], or if an invalid call fails to error.
 pub fn check_dft_c2c<B, T>(b: &B)
 where
-    T: ConformanceFloat,
-    B: CreatePlan<DftC2cSpec<T>>,
-    B::Plan: DftC2cPlan<T>,
+    T: ConformanceFloat + std::ops::MulAssign,
+    B: CreatePlan<DftC2cSpec> + Backend<T>,
+    B::Plan<T>: DftC2cPlan<T>,
 {
     let zero = Complex::new(T::zero(), T::zero());
 
@@ -57,17 +58,17 @@ where
 
         for &norm in &NORMS {
             let fwd_spec =
-                DftC2cSpec::<T>::new(n, Direction::Forward, norm).expect("valid c2c forward spec");
+                DftC2cSpec::new(n, Direction::Forward, norm).expect("valid c2c forward spec");
             let inv_spec =
-                DftC2cSpec::<T>::new(n, Direction::Inverse, norm).expect("valid c2c inverse spec");
-            let fwd = b.create_plan(&fwd_spec).expect("c2c forward plan");
-            let inv = b.create_plan(&inv_spec).expect("c2c inverse plan");
+                DftC2cSpec::new(n, Direction::Inverse, norm).expect("valid c2c inverse spec");
+            let fwd = b.create_plan::<T>(&fwd_spec).expect("c2c forward plan");
+            let inv = b.create_plan::<T>(&inv_spec).expect("c2c inverse plan");
 
             let mut spectrum = vec![zero; n];
-            fwd.process(&input, &mut spectrum)
+            fwd.execute(&input, &mut spectrum)
                 .expect("c2c forward process");
             let mut recovered = vec![zero; n];
-            inv.process(&spectrum, &mut recovered)
+            inv.execute(&spectrum, &mut recovered)
                 .expect("c2c inverse process");
 
             let scale = round_trip_scale(norm, n);
@@ -90,10 +91,10 @@ where
     let n = 8;
     let c = 2.0;
     let constant = vec![Complex::new(T::lit(c), T::zero()); n];
-    let spec = DftC2cSpec::<T>::new(n, Direction::Forward, DftNorm::None).expect("valid spec");
-    let plan = b.create_plan(&spec).expect("c2c plan");
+    let spec = DftC2cSpec::new(n, Direction::Forward, DftNorm::None).expect("valid spec");
+    let plan = b.create_plan::<T>(&spec).expect("c2c plan");
     let mut spectrum = vec![zero; n];
-    plan.process(&constant, &mut spectrum)
+    plan.execute(&constant, &mut spectrum)
         .expect("c2c forward process");
     let mut expected = vec![(0.0, 0.0); n];
     expected[0] = (n as f64 * c, 0.0);
@@ -102,7 +103,7 @@ where
     // Error case: output length must match the plan length.
     let mut wrong = vec![zero; n - 1];
     assert!(
-        plan.process(&constant, &mut wrong).is_err(),
+        plan.execute(&constant, &mut wrong).is_err(),
         "c2c [{}]: output-length mismatch must error",
         T::WIDTH,
     );
@@ -121,9 +122,9 @@ where
 /// error.
 pub fn check_dft_r2c<B, T>(b: &B)
 where
-    T: ConformanceFloat,
-    B: CreatePlan<DftR2cSpec<T>>,
-    B::Plan: DftR2cPlan<T>,
+    T: ConformanceFloat + std::ops::MulAssign,
+    B: CreatePlan<DftR2cSpec> + Backend<T>,
+    B::Plan<T>: DftR2cPlan<T>,
 {
     let zero = Complex::new(T::zero(), T::zero());
 
@@ -132,11 +133,11 @@ where
 
         // Known: constant input → DC bin = N·c, all other bins zero.
         let c = 1.5;
-        let spec = DftR2cSpec::<T>::new(n, DftNorm::None).expect("valid r2c spec");
-        let plan = b.create_plan(&spec).expect("r2c plan");
+        let spec = DftR2cSpec::new(n, DftNorm::None).expect("valid r2c spec");
+        let plan = b.create_plan::<T>(&spec).expect("r2c plan");
         let mut constant = vec![T::lit(c); n];
         let mut spectrum = vec![zero; bins];
-        plan.process(&mut constant, &mut spectrum)
+        plan.execute(&mut constant, &mut spectrum)
             .expect("r2c process");
         let mut expected = vec![(0.0, 0.0); bins];
         expected[0] = (n as f64 * c, 0.0);
@@ -155,7 +156,7 @@ where
                 .collect::<Vec<_>>(),
         );
         let mut spectrum = vec![zero; bins];
-        plan.process(&mut signal, &mut spectrum)
+        plan.execute(&mut signal, &mut spectrum)
             .expect("r2c process");
         assert!(
             spectrum[0].im.is_zero(),
@@ -174,7 +175,7 @@ where
         let mut wrong = vec![zero; bins - 1];
         let mut input = vec![T::lit(c); n];
         assert!(
-            plan.process(&mut input, &mut wrong).is_err(),
+            plan.execute(&mut input, &mut wrong).is_err(),
             "r2c [{}]: output-length mismatch must error",
             T::WIDTH,
         );
@@ -195,14 +196,14 @@ where
 /// the drifted input errors, or if an invalid call fails to error.
 pub fn check_dft_c2r<B, T>(b: &B)
 where
-    T: ConformanceFloat,
-    B: CreatePlan<DftC2rSpec<T>>,
-    B::Plan: DftC2rPlan<T>,
+    T: ConformanceFloat + std::ops::MulAssign,
+    B: CreatePlan<DftC2rSpec> + Backend<T>,
+    B::Plan<T>: DftC2rPlan<T>,
 {
     let n = 8;
     let bins = n / 2 + 1;
-    let spec = DftC2rSpec::<T>::new(n, DftNorm::Inverse).expect("valid c2r spec");
-    let plan = b.create_plan(&spec).expect("c2r plan");
+    let spec = DftC2rSpec::new(n, DftNorm::Inverse).expect("valid c2r spec");
+    let plan = b.create_plan::<T>(&spec).expect("c2r plan");
 
     // A clean Hermitian half-spectrum: real DC and (even N) Nyquist.
     let clean: Vec<Complex<T>> = [
@@ -219,7 +220,7 @@ where
 
     let mut clean_in = clean.clone();
     let mut out_clean = vec![T::zero(); n];
-    plan.process(&mut clean_in, &mut out_clean)
+    plan.execute(&mut clean_in, &mut out_clean)
         .expect("c2r clean process");
 
     // Inject the ~1e-15 DC/Nyquist imaginary drift the convolution chain leaks.
@@ -227,7 +228,7 @@ where
     drift[0].im += T::lit(1e-15);
     drift[bins - 1].im += T::lit(1e-15);
     let mut out_drift = vec![T::zero(); n];
-    let result = plan.process(&mut drift, &mut out_drift);
+    let result = plan.execute(&mut drift, &mut out_drift);
     assert!(
         result.is_ok(),
         "c2r [{}]: near-zero DC/Nyquist imaginary drift must not error",
@@ -244,7 +245,7 @@ where
     let mut wrong = vec![Complex::new(T::zero(), T::zero()); bins + 1];
     let mut out = vec![T::zero(); n];
     assert!(
-        plan.process(&mut wrong, &mut out).is_err(),
+        plan.execute(&mut wrong, &mut out).is_err(),
         "c2r [{}]: input-length mismatch must error",
         T::WIDTH,
     );
@@ -263,10 +264,10 @@ where
 /// [`ConformanceFloat::DFT_TOL`].
 pub fn check_dft_real_round_trip<B, T>(b: &B)
 where
-    T: ConformanceFloat,
-    B: CreatePlan<DftR2cSpec<T>> + CreatePlan<DftC2rSpec<T>>,
-    <B as CreatePlan<DftR2cSpec<T>>>::Plan: DftR2cPlan<T>,
-    <B as CreatePlan<DftC2rSpec<T>>>::Plan: DftC2rPlan<T>,
+    T: ConformanceFloat + std::ops::MulAssign,
+    B: CreatePlan<DftR2cSpec> + CreatePlan<DftC2rSpec> + Backend<T>,
+    <B as CreatePlan<DftR2cSpec>>::Plan<T>: DftR2cPlan<T>,
+    <B as CreatePlan<DftC2rSpec>>::Plan<T>: DftC2rPlan<T>,
 {
     let zero = Complex::new(T::zero(), T::zero());
 
@@ -276,17 +277,17 @@ where
 
         for &norm in &NORMS {
             let fwd = b
-                .create_plan(&DftR2cSpec::<T>::new(n, norm).expect("r2c spec"))
+                .create_plan(&DftR2cSpec::new(n, norm).expect("r2c spec"))
                 .expect("r2c plan");
             let inv = b
-                .create_plan(&DftC2rSpec::<T>::new(n, norm).expect("c2r spec"))
+                .create_plan(&DftC2rSpec::new(n, norm).expect("c2r spec"))
                 .expect("c2r plan");
 
             let mut time = to_vec::<T>(&signal);
             let mut spectrum = vec![zero; bins];
-            fwd.process(&mut time, &mut spectrum).expect("r2c process");
+            fwd.execute(&mut time, &mut spectrum).expect("r2c process");
             let mut recovered = vec![T::zero(); n];
-            inv.process(&mut spectrum, &mut recovered)
+            inv.execute(&mut spectrum, &mut recovered)
                 .expect("c2r process");
 
             let scale = round_trip_scale(norm, n);

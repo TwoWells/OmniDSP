@@ -84,7 +84,7 @@ where
     T: DspFloat,
     P: DftC2rPlan<T>,
 {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [T]) -> Result<()> {
+    fn execute(&self, input: &mut [Complex<T>], output: &mut [T]) -> Result<()> {
         let bins = self.length / 2 + 1;
         // Project in place onto the nearest valid Hermitian spectrum.
         // Skip on a length mismatch — the inner plan owns that error so it
@@ -95,7 +95,7 @@ where
                 input[bins - 1].im = T::zero();
             }
         }
-        self.inner.process(input, output)
+        self.inner.execute(input, output)
     }
 }
 
@@ -106,7 +106,7 @@ where
 {
     type Plan = HermitianC2rPlan<C::Plan>;
 
-    fn create_plan(&self, spec: &DftC2rSpec<T>) -> Result<Self::Plan> {
+    fn create_plan(&self, spec: &DftC2rSpec) -> Result<Self::Plan> {
         Ok(HermitianC2rPlan {
             inner: self.inner.create_plan(spec)?,
             length: spec.length(),
@@ -165,8 +165,8 @@ where
     T: DspFloat,
     P: DftR2cPlan<T>,
 {
-    fn process(&self, input: &mut [T], output: &mut [Complex<T>]) -> Result<()> {
-        self.inner.process(input, output)?;
+    fn execute(&self, input: &mut [T], output: &mut [Complex<T>]) -> Result<()> {
+        self.inner.execute(input, output)?;
         let bins = self.length / 2 + 1;
         // After a successful transform `output.len() == bins`; the guard keeps
         // the indexing panic-free regardless of the inner plan's behavior.
@@ -187,7 +187,7 @@ where
 {
     type Plan = HermitianR2cPlan<R::Plan>;
 
-    fn create_plan(&self, spec: &DftR2cSpec<T>) -> Result<Self::Plan> {
+    fn create_plan(&self, spec: &DftR2cSpec) -> Result<Self::Plan> {
         Ok(HermitianR2cPlan {
             inner: self.inner.create_plan(spec)?,
             length: spec.length(),
@@ -221,21 +221,21 @@ mod tests {
 
     /// Run the bare [`TestDftR2c`] (no shaping) — the clean reference spectrum.
     fn bare_r2c(n: usize, input: &[f64]) -> Vec<Complex<f64>> {
-        let spec = DftR2cSpec::<f64>::new(n, DftNorm::None).expect("valid r2c spec");
+        let spec = DftR2cSpec::new(n, DftNorm::None).expect("valid r2c spec");
         let plan = DftR2c::<f64>::create_plan(&TestDftR2c, &spec).expect("r2c plan");
         let mut scratch = input.to_vec();
         let mut out = vec![Complex::new(0.0, 0.0); n / 2 + 1];
-        plan.process(&mut scratch, &mut out).expect("r2c process");
+        plan.execute(&mut scratch, &mut out).expect("r2c process");
         out
     }
 
     /// Run [`HermitianC2r`] over [`TestDftC2r`] on the given half-spectrum.
     fn shaped_c2r(n: usize, input: &mut [Complex<f64>]) -> Vec<f64> {
         let factory = HermitianC2r::new(TestDftC2r);
-        let spec = DftC2rSpec::<f64>::new(n, DftNorm::Inverse).expect("valid c2r spec");
+        let spec = DftC2rSpec::new(n, DftNorm::Inverse).expect("valid c2r spec");
         let plan = DftC2r::<f64>::create_plan(&factory, &spec).expect("c2r plan");
         let mut out = vec![0.0_f64; n];
-        plan.process(input, &mut out).expect("c2r process");
+        plan.execute(input, &mut out).expect("c2r process");
         out
     }
 
@@ -297,11 +297,11 @@ mod tests {
             let bare = bare_r2c(n, &x);
 
             let factory = HermitianR2c::new(TestDftR2c);
-            let spec = DftR2cSpec::<f64>::new(n, DftNorm::None).expect("valid r2c spec");
+            let spec = DftR2cSpec::new(n, DftNorm::None).expect("valid r2c spec");
             let plan = DftR2c::<f64>::create_plan(&factory, &spec).expect("r2c plan");
             let mut scratch = x.clone();
             let mut shaped = vec![Complex::new(0.0, 0.0); n / 2 + 1];
-            plan.process(&mut scratch, &mut shaped)
+            plan.execute(&mut scratch, &mut shaped)
                 .expect("r2c process");
 
             assert_eq!(
@@ -347,12 +347,12 @@ mod tests {
             let x = ramp(n);
 
             let r2c = HermitianR2c::new(TestDftR2c);
-            let r_spec = DftR2cSpec::<f64>::new(n, DftNorm::Inverse).expect("valid r2c spec");
+            let r_spec = DftR2cSpec::new(n, DftNorm::Inverse).expect("valid r2c spec");
             let r_plan = DftR2c::<f64>::create_plan(&r2c, &r_spec).expect("r2c plan");
             let mut scratch = x.clone();
             let mut spectrum = vec![Complex::new(0.0, 0.0); n / 2 + 1];
             r_plan
-                .process(&mut scratch, &mut spectrum)
+                .execute(&mut scratch, &mut spectrum)
                 .expect("r2c process");
 
             let recovered = shaped_c2r(n, &mut spectrum);

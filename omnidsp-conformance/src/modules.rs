@@ -5,28 +5,29 @@
 //! Hilbert, cross-correlation, resampling, and the multirate CQT.
 //!
 //! Each check exercises its spec's output-affecting fields (`ConvMethod`,
-//! `FirStrategy`, `DctType` × `DctNorm`, `ResampleMode`, `CrossCorrNorm`) and
-//! compares against the committed scipy/numpy golden vectors in
-//! [`omnidsp_testdata`], at the documented per-width tolerances.
+//! `FirStrategy`, `DctType` × `DctNorm`, `CrossCorrNorm`) and compares against
+//! the committed scipy/numpy golden vectors in [`omnidsp_testdata`], at the
+//! documented per-width tolerances.
 
 use num_complex::Complex;
 
-use omnidsp_core::create::CreatePlan;
+use omnidsp_core::create::{CreatePlan, CreateProc};
 use omnidsp_core::design::cqt::{self, CqtSpec, DecimatorQuality};
-use omnidsp_core::design::resample::{ResampleMode, ResampleSpec};
+use omnidsp_core::design::resample::ResampleSpec;
+use omnidsp_core::dispatch::Backend;
 use omnidsp_core::error::Result;
-use omnidsp_core::modules::cqt::{CqtPlan, CqtStreamPlan, CqtStreamSpec, OmniCqt};
+use omnidsp_core::modules::cqt::{CqtPlan, CqtProcessor, OmniCqt};
 use omnidsp_core::modules::hilbert::{HilbertPlan, HilbertSpec};
-use omnidsp_core::modules::resample::ResamplePlan;
+use omnidsp_core::modules::resample::ResampleProcessor;
 use omnidsp_core::modules::xcorr::{CrossCorrPlan, CrossCorrSpec};
 use omnidsp_core::scalar::ScalarVecOps;
 use omnidsp_core::traits::conv::{ConvMethod, ConvPlan, ConvSpec};
 use omnidsp_core::traits::dct::{DctNorm, DctPlan, DctSpec, DctType};
 use omnidsp_core::traits::dft::{DftNorm, DftR2c, DftR2cPlan, DftR2cSpec};
-use omnidsp_core::traits::fir::{FirFilter, FirMeta, FirPlan, FirSpec, FirStrategy};
-use omnidsp_core::traits::iir::{IirPlan, IirSpec};
+use omnidsp_core::traits::fir::{FirFilter, FirMeta, FirProcessor, FirSpec, FirStrategy};
+use omnidsp_core::traits::iir::{IirProcessor, IirSpec};
 use omnidsp_core::traits::vecops::VecOps;
-use omnidsp_core::types::BiquadSection;
+use omnidsp_core::types::{BiquadSection, DspFloat};
 use omnidsp_core::window::Window;
 
 use omnidsp_testdata::{
@@ -47,18 +48,18 @@ use crate::support::{ConformanceFloat, assert_complex, assert_magnitude, assert_
 /// [`ConformanceFloat::CONV_TOL`], or if an invalid call fails to error.
 pub fn check_conv<B, T>(b: &B)
 where
-    T: ConformanceFloat,
-    B: CreatePlan<ConvSpec<T>>,
-    B::Plan: ConvPlan<T>,
+    T: ConformanceFloat + std::ops::MulAssign,
+    B: CreatePlan<ConvSpec> + Backend<T>,
+    B::Plan<T>: ConvPlan<T>,
 {
     let a = to_vec::<T>(&[1.0, 2.0, 3.0]);
     let k = to_vec::<T>(&[1.0, 1.0]);
 
     for &method in &[ConvMethod::Auto, ConvMethod::Direct, ConvMethod::Fft] {
-        let spec = ConvSpec::<T>::new(a.len(), k.len(), method).expect("valid conv spec");
-        let plan = b.create_plan(&spec).expect("conv plan");
+        let spec = ConvSpec::new(a.len(), k.len(), method).expect("valid conv spec");
+        let plan = b.create_plan::<T>(&spec).expect("conv plan");
         let mut out = vec![T::zero(); a.len() + k.len() - 1];
-        plan.process(&a, &k, &mut out).expect("conv process");
+        plan.execute(&a, &k, &mut out).expect("conv execute");
         assert_real(
             &out,
             &[1.0, 3.0, 5.0, 3.0],
@@ -68,10 +69,10 @@ where
 
         // Impulse identity: x ∗ [1] = x.
         let one = to_vec::<T>(&[1.0]);
-        let ispec = ConvSpec::<T>::new(a.len(), 1, method).expect("valid conv spec");
-        let iplan = b.create_plan(&ispec).expect("conv plan");
+        let ispec = ConvSpec::new(a.len(), 1, method).expect("valid conv spec");
+        let iplan = b.create_plan::<T>(&ispec).expect("conv plan");
         let mut iout = vec![T::zero(); a.len()];
-        iplan.process(&a, &one, &mut iout).expect("conv process");
+        iplan.execute(&a, &one, &mut iout).expect("conv execute");
         assert_real(
             &iout,
             &[1.0, 2.0, 3.0],
@@ -80,11 +81,11 @@ where
         );
     }
 
-    let spec = ConvSpec::<T>::new(3, 2, ConvMethod::Direct).expect("valid conv spec");
-    let plan = b.create_plan(&spec).expect("conv plan");
+    let spec = ConvSpec::new(3, 2, ConvMethod::Direct).expect("valid conv spec");
+    let plan = b.create_plan::<T>(&spec).expect("conv plan");
     let mut wrong = vec![T::zero(); 3];
     assert!(
-        plan.process(&a, &k, &mut wrong).is_err(),
+        plan.execute(&a, &k, &mut wrong).is_err(),
         "conv [{}]: output-length mismatch must error",
         T::WIDTH,
     );
@@ -101,20 +102,21 @@ where
 /// [`ConformanceFloat::FIR_TOL`], or if an invalid call fails to error.
 pub fn check_fir<B, T>(b: &B)
 where
-    T: ConformanceFloat,
-    B: CreatePlan<FirSpec<T>>,
-    B::Plan: FirPlan<T>,
+    T: ConformanceFloat + std::ops::MulAssign,
+    B: CreateProc<FirSpec> + Backend<T>,
+    B::Proc<T>: FirProcessor<T>,
 {
-    // Build a FIR spec from bring-your-own taps and a strategy.
-    let fir_spec = |taps: Vec<T>, strategy: FirStrategy| -> FirSpec<T> {
+    // Build a (non-generic, f64) FIR spec from bring-your-own taps and a
+    // strategy; the cast to `T` happens at the create edge.
+    let fir_spec = |taps: Vec<f64>, strategy: FirStrategy| -> FirSpec {
         let filter = FirFilter::new(taps, FirMeta::unknown()).expect("valid fir filter");
         FirSpec::new(filter, strategy)
     };
 
     // Impulse response equals the coefficients.
     let coeffs = [0.25, 0.5, 0.25];
-    let spec = fir_spec(to_vec::<T>(&coeffs), FirStrategy::Auto);
-    let mut plan = b.create_plan(&spec).expect("fir plan");
+    let spec = fir_spec(coeffs.to_vec(), FirStrategy::Auto);
+    let mut plan = b.create_proc::<T>(&spec).expect("fir processor");
     let mut impulse = vec![T::zero(); 8];
     impulse[0] = T::one();
     let mut out = vec![T::zero(); 8];
@@ -136,8 +138,8 @@ where
     let input = to_vec::<T>(firl::LFILTER_INPUT);
     for &(label, taps, expected) in golden {
         for &strategy in &[FirStrategy::Direct, FirStrategy::OverlapSave] {
-            let spec = fir_spec(to_vec::<T>(taps), strategy);
-            let mut plan = b.create_plan(&spec).expect("fir plan");
+            let spec = fir_spec(taps.to_vec(), strategy);
+            let mut plan = b.create_proc::<T>(&spec).expect("fir processor");
             let mut out = vec![T::zero(); input.len()];
             plan.process(&input, &mut out).expect("fir process");
             assert_real(
@@ -150,8 +152,8 @@ where
     }
 
     let mut plan = b
-        .create_plan(&fir_spec(to_vec::<T>(&coeffs), FirStrategy::Auto))
-        .expect("fir plan");
+        .create_proc::<T>(&fir_spec(coeffs.to_vec(), FirStrategy::Auto))
+        .expect("fir processor");
     let small = vec![T::zero(); 4];
     let mut wrong = vec![T::zero(); 3];
     assert!(
@@ -161,16 +163,10 @@ where
     );
 }
 
-/// Build biquad sections from scipy's `(b0, b1, b2, a1, a2)` SOS tuples.
-fn sections<T: ConformanceFloat>(data: &[(f64, f64, f64, f64, f64)]) -> Vec<BiquadSection<T>> {
+/// Build (f64) biquad sections from scipy's `(b0, b1, b2, a1, a2)` SOS tuples.
+fn sections(data: &[(f64, f64, f64, f64, f64)]) -> Vec<BiquadSection<f64>> {
     data.iter()
-        .map(|&(b0, b1, b2, a1, a2)| BiquadSection {
-            b0: T::lit(b0),
-            b1: T::lit(b1),
-            b2: T::lit(b2),
-            a1: T::lit(a1),
-            a2: T::lit(a2),
-        })
+        .map(|&(b0, b1, b2, a1, a2)| BiquadSection { b0, b1, b2, a1, a2 })
         .collect()
 }
 
@@ -185,20 +181,20 @@ fn sections<T: ConformanceFloat>(data: &[(f64, f64, f64, f64, f64)]) -> Vec<Biqu
 /// [`ConformanceFloat::IIR_TOL`], or if an invalid call fails to error.
 pub fn check_iir<B, T>(b: &B)
 where
-    T: ConformanceFloat,
-    B: CreatePlan<IirSpec<T>>,
-    B::Plan: IirPlan<T>,
+    T: ConformanceFloat + std::ops::MulAssign,
+    B: CreateProc<IirSpec> + Backend<T>,
+    B::Proc<T>: IirProcessor<T>,
 {
-    // Unity passthrough: y[n] = x[n].
+    // Unity passthrough: y[n] = x[n].  Sections are f64 (cast to `T` at create).
     let spec = IirSpec::new(vec![BiquadSection {
-        b0: T::one(),
-        b1: T::zero(),
-        b2: T::zero(),
-        a1: T::zero(),
-        a2: T::zero(),
+        b0: 1.0,
+        b1: 0.0,
+        b2: 0.0,
+        a1: 0.0,
+        a2: 0.0,
     }])
     .expect("valid iir spec");
-    let mut plan = b.create_plan(&spec).expect("iir plan");
+    let mut plan = b.create_proc::<T>(&spec).expect("iir processor");
     let signal: Vec<f64> = (0..8).map(|i| i as f64).collect();
     let mut out = vec![T::zero(); signal.len()];
     plan.process(&to_vec::<T>(&signal), &mut out)
@@ -212,14 +208,14 @@ where
     ];
     let input = to_vec::<T>(sos::SOSFILT_INPUT);
     for &(label, sos_data, expected) in golden {
-        let spec = IirSpec::new(sections::<T>(sos_data)).expect("valid iir spec");
-        let mut plan = b.create_plan(&spec).expect("iir plan");
+        let spec = IirSpec::new(sections(sos_data)).expect("valid iir spec");
+        let mut plan = b.create_proc::<T>(&spec).expect("iir processor");
         let mut out = vec![T::zero(); input.len()];
         plan.process(&input, &mut out).expect("iir process");
         assert_real(&out, expected, T::IIR_TOL, &format!("iir sosfilt {label}"));
     }
 
-    let mut plan = b.create_plan(&spec).expect("iir plan");
+    let mut plan = b.create_proc::<T>(&spec).expect("iir processor");
     let small = vec![T::zero(); 4];
     let mut wrong = vec![T::zero(); 3];
     assert!(
@@ -244,9 +240,9 @@ where
 )]
 pub fn check_dct<B, T>(b: &B)
 where
-    T: ConformanceFloat,
-    B: CreatePlan<DctSpec<T>>,
-    B::Plan: DctPlan<T>,
+    T: ConformanceFloat + std::ops::MulAssign,
+    B: CreatePlan<DctSpec> + Backend<T>,
+    B::Plan<T>: DctPlan<T>,
 {
     let cases: &[(&str, &[f64], &[f64], DctType, DctNorm)] = &[
         (
@@ -365,20 +361,20 @@ where
 
     for &(label, input, expected, dct_type, norm) in cases {
         let n = input.len();
-        let spec = DctSpec::<T>::new(n, dct_type, norm).expect("valid dct spec");
-        let plan = b.create_plan(&spec).expect("dct plan");
+        let spec = DctSpec::new(n, dct_type, norm).expect("valid dct spec");
+        let plan = b.create_plan::<T>(&spec).expect("dct plan");
         let mut out = vec![T::zero(); n];
-        plan.process(&to_vec::<T>(input), &mut out)
-            .expect("dct process");
+        plan.execute(&to_vec::<T>(input), &mut out)
+            .expect("dct execute");
         assert_real(&out, expected, T::DCT_TOL, label);
     }
 
-    let spec = DctSpec::<T>::new(4, DctType::II, DctNorm::None).expect("valid dct spec");
-    let plan = b.create_plan(&spec).expect("dct plan");
+    let spec = DctSpec::new(4, DctType::II, DctNorm::None).expect("valid dct spec");
+    let plan = b.create_plan::<T>(&spec).expect("dct plan");
     let input = to_vec::<T>(&[1.0, 2.0, 3.0, 4.0]);
     let mut wrong = vec![T::zero(); 3];
     assert!(
-        plan.process(&input, &mut wrong).is_err(),
+        plan.execute(&input, &mut wrong).is_err(),
         "dct [{}]: output-length mismatch must error",
         T::WIDTH,
     );
@@ -395,9 +391,9 @@ where
 /// [`ConformanceFloat::HILBERT_TOL`], or if an invalid call fails to error.
 pub fn check_hilbert<B, T>(b: &B)
 where
-    T: ConformanceFloat,
-    B: CreatePlan<HilbertSpec<T>>,
-    B::Plan: HilbertPlan<T>,
+    T: ConformanceFloat + std::ops::MulAssign,
+    B: CreatePlan<HilbertSpec> + Backend<T>,
+    B::Plan<T>: HilbertPlan<T>,
 {
     let cases: &[(&str, &[f64], &[(f64, f64)])] = &[
         ("N4", hil::HAND_N4_INPUT, hil::HAND_N4_EXPECTED),
@@ -408,20 +404,20 @@ where
         ),
     ];
     for &(label, input, expected) in cases {
-        let spec = HilbertSpec::<T>::new(input.len()).expect("valid hilbert spec");
-        let plan = b.create_plan(&spec).expect("hilbert plan");
+        let spec = HilbertSpec::new(input.len()).expect("valid hilbert spec");
+        let plan = b.create_plan::<T>(&spec).expect("hilbert plan");
         let mut out = vec![Complex::new(T::zero(), T::zero()); input.len()];
-        plan.process(&to_vec::<T>(input), &mut out)
-            .expect("hilbert process");
+        plan.execute(&to_vec::<T>(input), &mut out)
+            .expect("hilbert execute");
         assert_complex(&out, expected, T::HILBERT_TOL, &format!("hilbert {label}"));
     }
 
-    let spec = HilbertSpec::<T>::new(4).expect("valid hilbert spec");
-    let plan = b.create_plan(&spec).expect("hilbert plan");
+    let spec = HilbertSpec::new(4).expect("valid hilbert spec");
+    let plan = b.create_plan::<T>(&spec).expect("hilbert plan");
     let input = to_vec::<T>(&[1.0, 2.0, 3.0, 4.0]);
     let mut wrong = vec![Complex::new(T::zero(), T::zero()); 3];
     assert!(
-        plan.process(&input, &mut wrong).is_err(),
+        plan.execute(&input, &mut wrong).is_err(),
         "hilbert [{}]: output-length mismatch must error",
         T::WIDTH,
     );
@@ -442,9 +438,9 @@ where
 /// [`ConformanceFloat::XCORR_TOL`], or if an invalid call fails to error.
 pub fn check_xcorr<B, T>(b: &B)
 where
-    T: ConformanceFloat,
-    B: CreatePlan<CrossCorrSpec<T>>,
-    B::Plan: CrossCorrPlan<T>,
+    T: ConformanceFloat + std::ops::MulAssign,
+    B: CreatePlan<CrossCorrSpec> + Backend<T>,
+    B::Plan<T>: CrossCorrPlan<T>,
 {
     let cases: &[(&str, &[f64], &[f64], &[f64])] = &[
         (
@@ -467,21 +463,21 @@ where
         ),
     ];
     for &(label, a_ref, b_ref, expected) in cases {
-        let spec = CrossCorrSpec::<T>::new(a_ref.len(), b_ref.len()).expect("valid xcorr spec");
-        let plan = b.create_plan(&spec).expect("xcorr plan");
+        let spec = CrossCorrSpec::new(a_ref.len(), b_ref.len()).expect("valid xcorr spec");
+        let plan = b.create_plan::<T>(&spec).expect("xcorr plan");
         let mut out = vec![T::zero(); spec.output_len()];
-        plan.process(&to_vec::<T>(a_ref), &to_vec::<T>(b_ref), &mut out)
-            .expect("xcorr process");
+        plan.execute(&to_vec::<T>(a_ref), &to_vec::<T>(b_ref), &mut out)
+            .expect("xcorr execute");
         assert_real(&out, expected, T::XCORR_TOL, &format!("xcorr {label}"));
     }
 
-    let spec = CrossCorrSpec::<T>::new(4, 2).expect("valid xcorr spec");
-    let plan = b.create_plan(&spec).expect("xcorr plan");
+    let spec = CrossCorrSpec::new(4, 2).expect("valid xcorr spec");
+    let plan = b.create_plan::<T>(&spec).expect("xcorr plan");
     let a = to_vec::<T>(&[1.0, 2.0, 3.0, 4.0]);
     let bv = to_vec::<T>(&[1.0, 1.0]);
     let mut wrong = vec![T::zero(); 3];
     assert!(
-        plan.process(&a, &bv, &mut wrong).is_err(),
+        plan.execute(&a, &bv, &mut wrong).is_err(),
         "xcorr [{}]: output-length mismatch must error",
         T::WIDTH,
     );
@@ -490,8 +486,8 @@ where
 /// Conformance for the polyphase resampler
 /// ([`OmniResample`](omnidsp_core::modules::resample::OmniResample)).
 ///
-/// Compares against `scipy.signal.upfirdn` golden vectors for 2× up- and
-/// down-sampling, exercises both [`ResampleMode`]s, and checks an
+/// Compares against the scipy resampling golden vectors for 2× up- and
+/// down-sampling (driving the processor as a stream), and checks an
 /// undersized-output error case.
 ///
 /// # Panics
@@ -501,9 +497,9 @@ where
 /// invalid call fails to error.
 pub fn check_resample<B, T>(b: &B)
 where
-    T: ConformanceFloat,
-    B: CreatePlan<ResampleSpec<T>>,
-    B::Plan: ResamplePlan<T>,
+    T: ConformanceFloat + std::ops::MulAssign,
+    B: CreateProc<ResampleSpec> + Backend<T>,
+    B::Proc<T>: ResampleProcessor<T>,
 {
     let cases: &[(&str, usize, usize, &[f64], &[f64], &[f64])] = &[
         (
@@ -524,49 +520,48 @@ where
         ),
     ];
     for &(label, up, down, proto, input, expected) in cases {
-        let filter = FirFilter::<T>::new(to_vec::<T>(proto), FirMeta::unknown())
-            .expect("non-empty prototype");
-        let spec = ResampleSpec::<T>::new(filter, up, down, ResampleMode::Streaming)
-            .expect("valid resample spec");
-        let mut plan = b.create_plan(&spec).expect("resample plan");
+        // The golden vectors are the scipy reference truncated to the streaming
+        // output length, so drive the processor as a stream (`process` only).
+        let filter =
+            FirFilter::new(proto.to_vec(), FirMeta::unknown()).expect("non-empty prototype");
+        let spec = ResampleSpec::new(filter, up, down).expect("valid resample spec");
+        let mut plan = b.create_proc::<T>(&spec).expect("resample processor");
         let signal = to_vec::<T>(input);
         let mut out = vec![T::zero(); plan.max_output_len(signal.len())];
-        let produced = plan.process(&signal, &mut out).expect("resample process");
-        assert!(
-            produced >= expected.len(),
-            "resample {label} [{}]: produced {produced} < reference {}",
+        let n = plan.process(&signal, &mut out).expect("resample process");
+        let compare_len = n.min(expected.len());
+        assert_eq!(
+            compare_len,
+            expected.len(),
+            "resample {label} [{}]: produced only {n} samples (reference has {})",
             T::WIDTH,
             expected.len(),
         );
         assert_real(
-            &out[..expected.len()],
+            &out[..compare_len],
             expected,
             T::RESAMPLE_TOL,
             &format!("resample {label}"),
         );
     }
 
-    // Both modes produce output; streaming 2× upsample yields 2× the count.
-    let proto = to_vec::<T>(&[0.5, 1.0, 0.5]);
+    // Streaming 2× upsample yields ~2× the count from `process` alone.
+    let proto = to_vec::<f64>(&[0.5, 1.0, 0.5]);
     let signal = to_vec::<T>(&(0..16).map(|i| i as f64).collect::<Vec<_>>());
-    for &mode in &[ResampleMode::Streaming, ResampleMode::Batch] {
-        let filter =
-            FirFilter::<T>::new(proto.clone(), FirMeta::unknown()).expect("non-empty prototype");
-        let spec = ResampleSpec::<T>::new(filter, 2, 1, mode).expect("valid resample spec");
-        let mut plan = b.create_plan(&spec).expect("resample plan");
-        let mut out = vec![T::zero(); plan.max_output_len(signal.len())];
-        let produced = plan.process(&signal, &mut out).expect("resample process");
-        assert!(
-            produced > 0,
-            "resample [{}] {mode:?}: must produce output",
-            T::WIDTH,
-        );
-    }
+    let filter = FirFilter::new(proto.clone(), FirMeta::unknown()).expect("non-empty prototype");
+    let spec = ResampleSpec::new(filter, 2, 1).expect("valid resample spec");
+    let mut plan = b.create_proc::<T>(&spec).expect("resample processor");
+    let mut out = vec![T::zero(); plan.max_output_len(signal.len())];
+    let produced = plan.process(&signal, &mut out).expect("resample process");
+    assert!(
+        produced > 0,
+        "resample [{}]: streaming must produce output",
+        T::WIDTH,
+    );
 
-    let filter = FirFilter::<T>::new(proto, FirMeta::unknown()).expect("non-empty prototype");
-    let spec =
-        ResampleSpec::<T>::new(filter, 2, 1, ResampleMode::Streaming).expect("valid resample spec");
-    let mut plan = b.create_plan(&spec).expect("resample plan");
+    let filter = FirFilter::new(proto, FirMeta::unknown()).expect("non-empty prototype");
+    let spec = ResampleSpec::new(filter, 2, 1).expect("valid resample spec");
+    let mut plan = b.create_proc::<T>(&spec).expect("resample processor");
     let input = vec![T::zero(); 8];
     let mut tiny = vec![T::zero(); 1];
     assert!(
@@ -590,11 +585,11 @@ where
 /// if the peak bin is wrong, or if an invalid call fails to error.
 pub fn check_cqt<B, T>(b: &B)
 where
-    T: ConformanceFloat,
-    B: CreatePlan<CqtSpec<T>>,
-    B::Plan: CqtPlan<T>,
+    T: ConformanceFloat + std::ops::MulAssign,
+    B: CreatePlan<CqtSpec> + Backend<T>,
+    B::Plan<T>: CqtPlan<T>,
 {
-    let spec = cqt::design::<T>(
+    let spec = cqt::design(
         cqtp::CQT_PROC_SAMPLE_RATE,
         cqtp::CQT_PROC_MIN_FREQ,
         cqtp::CQT_PROC_MAX_FREQ,
@@ -609,7 +604,7 @@ where
     );
     assert_eq!(spec.num_bins(), cqtp::CQT_PROC_NUM_BINS, "cqt bin count");
 
-    let plan = b.create_plan(&spec).expect("cqt plan");
+    let plan = b.create_plan::<T>(&spec).expect("cqt plan");
     let zero = Complex::new(T::zero(), T::zero());
 
     let cases: &[(&str, &[f64], &[(f64, f64)])] = &[
@@ -631,15 +626,15 @@ where
     ];
     for &(label, input, expected) in cases {
         let mut out = vec![zero; spec.num_bins()];
-        plan.process(&to_vec::<T>(input), &mut out)
-            .expect("cqt process");
+        plan.execute(&to_vec::<T>(input), &mut out)
+            .expect("cqt execute");
         assert_magnitude(&out, expected, T::CQT_TOL, &format!("cqt {label}"));
     }
 
     // The pure tone peaks in its designed bin.
     let mut out = vec![zero; spec.num_bins()];
-    plan.process(&to_vec::<T>(cqtp::CQT_PROC_TONE_INPUT), &mut out)
-        .expect("cqt process");
+    plan.execute(&to_vec::<T>(cqtp::CQT_PROC_TONE_INPUT), &mut out)
+        .expect("cqt execute");
     let peak = out
         .iter()
         .enumerate()
@@ -651,7 +646,7 @@ where
     let bad = vec![T::zero(); spec.fft_length() - 1];
     let mut out = vec![zero; spec.num_bins()];
     assert!(
-        plan.process(&bad, &mut out).is_err(),
+        plan.execute(&bad, &mut out).is_err(),
         "cqt [{}]: input-length mismatch must error",
         T::WIDTH,
     );
@@ -659,23 +654,23 @@ where
 
 /// Adapts a backend's `CreatePlan<DftR2cSpec>` into a [`DftR2c`] factory.
 ///
-/// The streaming CQT factory [`OmniCqt`] is generic over a [`DftR2c`] factory,
-/// not over the dispatch trait `CreatePlan<DftR2cSpec>` — and 22a deliberately
-/// does **not** wire `CreatePlan<CqtStreamSpec>` (that is 22c).  Their
-/// `create_plan` signatures are identical, so this borrowing newtype lets
-/// [`check_cqt_stream`] build the streaming plan over the backend under test's
-/// own real-DFT primitive without a dispatch route.
+/// The streaming CQT reference factory [`OmniCqt`] is generic over a [`DftR2c`]
+/// factory, not over the dispatch trait `CreatePlan<DftR2cSpec>`.  This borrowing
+/// newtype adapts the backend's dispatched r2c into a `DftR2c<T>` so the
+/// reference oracles in [`check_cqt_stream`] build over the backend under test's
+/// own real-DFT primitive.
 struct R2cFactory<'b, B>(&'b B);
 
 impl<B, T> DftR2c<T> for R2cFactory<'_, B>
 where
-    B: CreatePlan<DftR2cSpec<T>>,
-    B::Plan: omnidsp_core::traits::dft::DftR2cPlan<T>,
+    T: DspFloat + std::ops::AddAssign + std::ops::MulAssign,
+    B: CreatePlan<DftR2cSpec> + Backend<T>,
+    B::Plan<T>: omnidsp_core::traits::dft::DftR2cPlan<T>,
 {
-    type Plan = B::Plan;
+    type Plan = B::Plan<T>;
 
-    fn create_plan(&self, spec: &DftR2cSpec<T>) -> Result<Self::Plan> {
-        self.0.create_plan(spec)
+    fn create_plan(&self, spec: &DftR2cSpec) -> Result<Self::Plan> {
+        self.0.create_plan::<T>(spec)
     }
 }
 
@@ -707,15 +702,15 @@ where
         clippy::cast_precision_loss,
         reason = "kernel and FFT lengths are small enough for f64"
     )]
-    fn new<B>(b: &B, spec: &CqtSpec<T>) -> Self
+    fn new<B>(b: &B, spec: &CqtSpec) -> Self
     where
-        B: CreatePlan<DftR2cSpec<T>, Plan = P>,
+        B: CreatePlan<DftR2cSpec, Plan<T> = P> + Backend<T>,
     {
         let fft_length = spec.fft_length();
         let sr = spec.sample_rate();
         let half_len = fft_length / 2 + 1;
         let r2c_spec = DftR2cSpec::new(fft_length, DftNorm::None).expect("valid reference spec");
-        let plan = b.create_plan(&r2c_spec).expect("reference r2c plan");
+        let plan = b.create_plan::<T>(&r2c_spec).expect("reference r2c plan");
 
         let inv_n = 1.0 / fft_length as f64;
         let tau = std::f64::consts::TAU;
@@ -728,11 +723,11 @@ where
             for (m, slot) in k.iter_mut().enumerate() {
                 let mut acc_re = 0.0_f64;
                 let mut acc_im = 0.0_f64;
-                for (n, wn) in bin.window.iter().enumerate() {
+                for (n, &wn) in bin.window.iter().enumerate() {
                     let p = (kernel_start + n) as f64;
                     let angle =
                         tau * (bin.frequency * n as f64 / sr - (m as f64 * p) / fft_length as f64);
-                    let amp = wn.to_f64().unwrap_or(0.0) * inv_nk;
+                    let amp = wn * inv_nk;
                     acc_re += amp * angle.cos();
                     acc_im += amp * angle.sin();
                 }
@@ -756,7 +751,7 @@ where
         let mut seg = window.to_vec();
         let mut half = vec![Complex::new(T::zero(), T::zero()); half_len];
         self.plan
-            .process(&mut seg, &mut half)
+            .execute(&mut seg, &mut half)
             .expect("reference r2c process");
         let ops = ScalarVecOps;
         self.kernels
@@ -767,7 +762,7 @@ where
 }
 
 /// Conformance for the streaming, newest-anchored CQT
-/// ([`OmniCqtStreamPlan`](omnidsp_core::modules::cqt::OmniCqtStreamPlan)).
+/// ([`OmniCqtProcessor`](omnidsp_core::modules::cqt::OmniCqtProcessor)).
 ///
 /// Drives the stateful `&mut self` plan the way [`check_resample`] drives the
 /// resampler — variable-count `process`, `max_output_columns` sizing, `reset` —
@@ -829,18 +824,16 @@ pub fn check_cqt_stream<B, T>(b: &B)
 where
     T: ConformanceFloat + std::ops::MulAssign,
     ScalarVecOps: omnidsp_core::traits::vecops::VecOps<T>,
-    B: CreatePlan<DftR2cSpec<T>> + CreatePlan<ResampleSpec<T>> + CreatePlan<CqtStreamSpec<T>>,
-    <B as CreatePlan<DftR2cSpec<T>>>::Plan: omnidsp_core::traits::dft::DftR2cPlan<T>,
-    <B as CreatePlan<ResampleSpec<T>>>::Plan: ResamplePlan<T>,
-    <B as CreatePlan<CqtStreamSpec<T>>>::Plan: CqtStreamPlan<T>,
+    B: CreatePlan<DftR2cSpec> + CreateProc<ResampleSpec> + CreateProc<CqtSpec> + Backend<T>,
+    <B as CreatePlan<DftR2cSpec>>::Plan<T>: omnidsp_core::traits::dft::DftR2cPlan<T>,
+    <B as CreateProc<ResampleSpec>>::Proc<T>: ResampleProcessor<T>,
+    <B as CreateProc<CqtSpec>>::Proc<T>: CqtProcessor<T>,
 {
-    let spec =
-        cqt::design::<T>(16000.0, 125.0, 1000.0, 12, &Window::Hann).expect("valid cqt design");
-    // The plan under test is built **through dispatch** (`CreatePlan<CqtStreamSpec>`,
-    // wired by `gen_cqt` in 22c), so `run_all<B>` drives the streaming plan the
-    // same way a consumer reaches it via `OmniDSP::cqt_stream`.
-    let stream_spec = CqtStreamSpec::new(spec.clone());
-    let mut plan = b.create_plan(&stream_spec).expect("cqt stream plan");
+    let spec = cqt::design(16000.0, 125.0, 1000.0, 12, &Window::Hann).expect("valid cqt design");
+    // The processor under test is built **through dispatch**
+    // (`CreateProc<CqtSpec>`), so `run_all<B>` drives the streaming processor the
+    // same way a consumer reaches it via `OmniDSP::cqt_proc`.
+    let mut plan = b.create_proc::<T>(&spec).expect("cqt stream processor");
     // The references are **not** the plan under test, so they keep building
     // `OmniCqt` directly: the independent newest-anchored reference (decimation-
     // free, end-placed kernels via `NewestRef`) and the oldest-anchored batch
@@ -855,7 +848,7 @@ where
     let nb = plan.num_bins();
     assert_eq!(nb, spec.num_bins(), "cqt stream [{}]: bin count", T::WIDTH);
     let fft = batch.fft_length();
-    // `hop_length` is inherent on `OmniCqtStreamPlan`, not on the `CqtStreamPlan`
+    // `hop_length` is inherent on `OmniCqtProcessor`, not on the `CqtProcessor`
     // trait the dispatched plan is bounded by; the plan derives it as
     // `spec.hop_length().max(1)`, so take it from the spec the same way.
     let hop = spec.hop_length().max(1);
@@ -1005,8 +998,10 @@ where
         DecimatorQuality::new(0).expect("valid quality"),
         spec.decimator_quality(),
     ] {
-        let q_spec = CqtStreamSpec::new(spec.clone().with_decimator_quality(q));
-        let mut q_plan = b.create_plan(&q_spec).expect("cqt stream plan at quality");
+        let q_spec = spec.clone().with_decimator_quality(q);
+        let mut q_plan = b
+            .create_proc::<T>(&q_spec)
+            .expect("cqt stream processor at quality");
         let mut q_out = vec![zero; q_plan.max_output_columns(total) * nb];
         let q_cols = q_plan
             .process(&signal, &mut q_out)
@@ -1076,7 +1071,7 @@ where
         let window = &tone[now - fft..now];
         let mut batch_col = vec![zero; nb];
         batch
-            .process(window, &mut batch_col)
+            .execute(window, &mut batch_col)
             .expect("batch cross-check");
         let col = &tone_out[c * nb..(c + 1) * nb];
         for (k, (s, bcol)) in col.iter().zip(&batch_col).enumerate() {
@@ -1106,8 +1101,8 @@ where
     plan.reset();
 
     // ── reset returns to the initial state: a fresh feed reproduces the run. ──
-    // Also built through dispatch, matching the plan under test.
-    let mut fresh = b.create_plan(&stream_spec).expect("cqt stream plan");
+    // Also built through dispatch, matching the processor under test.
+    let mut fresh = b.create_proc::<T>(&spec).expect("cqt stream processor");
     plan.reset();
     let mut out_reset = vec![zero; plan.max_output_columns(total) * nb];
     let mut out_fresh = vec![zero; fresh.max_output_columns(total) * nb];

@@ -12,11 +12,15 @@
 //!   the streaming path's primary oracle is an independent newest-anchored
 //!   reference (see [`stream`]).
 //! - [`stream`] — the **newest-anchored** streaming CQT.
-//!   [`OmniCqtStreamPlan`] is a stateful `&mut self` analyzer mirroring
-//!   [`ResamplePlan`](crate::modules::resample::ResamplePlan): feed any chunk of
-//!   samples, get the hop-boundary feature columns it crossed, each referenced
-//!   to the most recent sample so per-bin latency collapses to the Gabor floor
-//!   `Q/f` rather than the whole window length.
+//!   [`OmniCqtProcessor`] is a stateful `&mut self`
+//!   analyzer mirroring
+//!   [`ResampleProcessor`](crate::modules::resample::ResampleProcessor): feed
+//!   any chunk of samples, get the hop-boundary feature columns it crossed, each
+//!   referenced to the most recent sample so per-bin latency collapses to the
+//!   Gabor floor `Q/f` rather than the whole window length.  Batch and stream
+//!   are reached over the **same** [`CqtSpec`](crate::design::cqt::CqtSpec) via
+//!   `create_plan` (the parallel batch [`OmniCqtPlan`]) and `create_proc` (this
+//!   stateful processor).
 //!
 //! Both paths reuse the per-octave half-spectrum kernel design and octave
 //! partitioning in the [`kernel`] submodule, so the kernel math lives in exactly
@@ -49,4 +53,4 @@ pub mod stream;
 pub use batch::{CqtPlan, OmniCqt, OmniCqtPlan};
 #[cfg(any(test, feature = "bench"))]
 pub use batch::{SingleFftCqt, SingleFftCqtPlan};
-pub use stream::{CqtStreamPlan, CqtStreamSpec, OmniCqtStreamPlan};
+pub use stream::{CqtProcessor, OmniCqtProcessor};

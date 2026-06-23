@@ -33,7 +33,7 @@
 
 use omnidsp::OmniDSP;
 use omnidsp_core::design::cqt::{self, CqtSpec};
-use omnidsp_core::modules::cqt::CqtStreamPlan;
+use omnidsp_core::modules::cqt::CqtProcessor;
 use omnidsp_core::window::{self, Window};
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -60,12 +60,12 @@ const KERNEL_SIDELOBE_DB: f64 = 70.0;
 /// arrived since the previous frame, never more than this.
 const INPUT_CAPACITY: usize = 8192;
 
-/// The streaming multirate CQT plan, behind the backend-agnostic
-/// [`CqtStreamPlan`] trait.  The trait carries the full surface the engine uses
+/// The streaming multirate CQT processor, behind the backend-agnostic
+/// [`CqtProcessor`] trait.  The trait carries the full surface the engine uses
 /// — metadata, `process_magnitude`, `reset` — so the engine stores it as a
-/// trait object and never names the concrete (unnameable-by-hand) routed plan
-/// type, nor commits to a specific backend.
-type StreamPlan = Box<dyn CqtStreamPlan<f32>>;
+/// trait object and never names the concrete (unnameable-by-hand) routed
+/// processor type, nor commits to a specific backend.
+type StreamPlan = Box<dyn CqtProcessor<f32>>;
 
 /// Real-time streaming Constant-Q Transform engine for the browser visualiser.
 ///
@@ -129,7 +129,7 @@ impl CqtEngine {
             // kernel; matches any unrecognised id.
             _ => Window::Kaiser(window::kaiser::attenuation(KERNEL_SIDELOBE_DB)),
         };
-        let spec: CqtSpec<f32> = cqt::design(
+        let spec: CqtSpec = cqt::design(
             f64::from(sample_rate),
             f64::from(min_freq),
             MAX_FREQ,
@@ -140,7 +140,7 @@ impl CqtEngine {
 
         let dsp = OmniDSP::rust();
         let plan: StreamPlan = Box::new(
-            dsp.cqt_stream(&spec.into_streaming())
+            dsp.cqt_proc::<f32>(&spec)
                 .map_err(|e| format!("CQT stream plan creation failed: {e}"))?,
         );
 

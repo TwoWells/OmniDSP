@@ -122,7 +122,7 @@ where
     CP: DftC2rPlan<T>,
     V: VecOps<T>,
 {
-    fn process(&self, input: &[T], output: &mut [T]) -> Result<()> {
+    fn execute(&self, input: &[T], output: &mut [T]) -> Result<()> {
         if input.len() != self.length {
             return Err(Error::BufferMismatch {
                 expected: self.length,
@@ -185,7 +185,7 @@ where
         }
 
         // 2. Forward r2c (2N real → N+1 half-spectrum; real is consumed)
-        fwd.process(real, half)?;
+        fwd.execute(real, half)?;
 
         // 3. Twiddle multiply the first N bins, then extract real parts.
         self.vecops.cmul(&half[..n], &self.twiddles, twiddle_prod)?;
@@ -249,7 +249,7 @@ where
         half[n] = Complex::new(T::zero(), T::zero());
 
         // 2. Inverse c2r (N+1 half-spectrum → 2N real; half is consumed).
-        inv.process(half, real)?;
+        inv.execute(half, real)?;
 
         // 3. Extract the first N real samples.
         output.copy_from_slice(&real[..n]);
@@ -287,7 +287,7 @@ impl<R, C, V> OmniDct<R, C, V> {
     )]
     pub fn create_plan<T>(
         &self,
-        spec: &DctSpec<T>,
+        spec: &DctSpec,
     ) -> Result<OmniDctPlan<T, <R as DftR2c<T>>::Plan, HermitianC2rPlan<<C as DftC2r<T>>::Plan>, V>>
     where
         T: DspFloat + AddAssign + MulAssign,
@@ -385,7 +385,7 @@ mod tests {
     #[test]
     fn rejects_zero_length() {
         assert!(
-            DctSpec::<f64>::new(0, DctType::II, DctNorm::None).is_err(),
+            DctSpec::new(0, DctType::II, DctNorm::None).is_err(),
             "zero length should be rejected by the spec constructor"
         );
     }
@@ -393,14 +393,14 @@ mod tests {
     #[test]
     fn rejects_input_length_mismatch() {
         let factory = make_factory();
-        let spec = DctSpec::<f64>::new(4, DctType::II, DctNorm::None).expect("valid dct spec");
+        let spec = DctSpec::new(4, DctType::II, DctNorm::None).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
         let input = [1.0, 2.0, 3.0]; // length 3, expects 4
         let mut output = [0.0; 4];
         assert!(
-            plan.process(&input, &mut output).is_err(),
+            plan.execute(&input, &mut output).is_err(),
             "mismatched input length should error"
         );
     }
@@ -408,14 +408,14 @@ mod tests {
     #[test]
     fn rejects_output_length_mismatch() {
         let factory = make_factory();
-        let spec = DctSpec::<f64>::new(4, DctType::II, DctNorm::None).expect("valid dct spec");
+        let spec = DctSpec::new(4, DctType::II, DctNorm::None).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
         let input = [1.0, 2.0, 3.0, 4.0];
         let mut output = [0.0; 3]; // length 3, expects 4
         assert!(
-            plan.process(&input, &mut output).is_err(),
+            plan.execute(&input, &mut output).is_err(),
             "mismatched output length should error"
         );
     }
@@ -425,13 +425,13 @@ mod tests {
     #[test]
     fn dct2_length_1() {
         let factory = make_factory();
-        let spec = DctSpec::<f64>::new(1, DctType::II, DctNorm::None).expect("valid dct spec");
+        let spec = DctSpec::new(1, DctType::II, DctNorm::None).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
         let input = [3.0];
         let mut output = [0.0];
-        plan.process(&input, &mut output)
+        plan.execute(&input, &mut output)
             .expect("process should succeed");
         // DCT-II of [c] = 2*c*cos(0) = 2*c
         assert_approx_eq(&output, &[6.0], EPSILON);
@@ -442,13 +442,13 @@ mod tests {
         // DCT-II of constant signal concentrates energy at bin 0
         let factory = make_factory();
         let n = 8;
-        let spec = DctSpec::<f64>::new(n, DctType::II, DctNorm::None).expect("valid dct spec");
+        let spec = DctSpec::new(n, DctType::II, DctNorm::None).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
         let input = [5.0; 8];
         let mut output = [0.0; 8];
-        plan.process(&input, &mut output)
+        plan.execute(&input, &mut output)
             .expect("process should succeed");
 
         // Bin 0 = 2 * N * c = 2 * 8 * 5 = 80
@@ -470,13 +470,13 @@ mod tests {
     fn dct2_impulse() {
         // DCT-II of [1, 0, 0, 0]: X[k] = 2 * cos(πk/(2N))
         let factory = make_factory();
-        let spec = DctSpec::<f64>::new(4, DctType::II, DctNorm::None).expect("valid dct spec");
+        let spec = DctSpec::new(4, DctType::II, DctNorm::None).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
         let input = [1.0, 0.0, 0.0, 0.0];
         let mut output = [0.0; 4];
-        plan.process(&input, &mut output)
+        plan.execute(&input, &mut output)
             .expect("process should succeed");
 
         let expected: Vec<f64> = (0..4)
@@ -490,13 +490,13 @@ mod tests {
     #[test]
     fn dct3_length_1() {
         let factory = make_factory();
-        let spec = DctSpec::<f64>::new(1, DctType::III, DctNorm::None).expect("valid dct spec");
+        let spec = DctSpec::new(1, DctType::III, DctNorm::None).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
         let input = [3.0];
         let mut output = [0.0];
-        plan.process(&input, &mut output)
+        plan.execute(&input, &mut output)
             .expect("process should succeed");
         // DCT-III of [c] = c
         assert_approx_eq(&output, &[3.0], EPSILON);
@@ -511,8 +511,8 @@ mod tests {
         let n = 8;
         let input = [1.0, -2.0, 3.0, -4.0, 5.0, -6.0, 7.0, -8.0];
 
-        let spec_ii = DctSpec::<f64>::new(n, DctType::II, DctNorm::None).expect("valid dct spec");
-        let spec_iii = DctSpec::<f64>::new(n, DctType::III, DctNorm::None).expect("valid dct spec");
+        let spec_ii = DctSpec::new(n, DctType::II, DctNorm::None).expect("valid dct spec");
+        let spec_iii = DctSpec::new(n, DctType::III, DctNorm::None).expect("valid dct spec");
         let plan_ii = factory
             .create_plan(&spec_ii)
             .expect("DCT-II plan creation should succeed");
@@ -522,12 +522,12 @@ mod tests {
 
         let mut freq = [0.0; 8];
         plan_ii
-            .process(&input, &mut freq)
+            .execute(&input, &mut freq)
             .expect("DCT-II should succeed");
 
         let mut recovered = [0.0; 8];
         plan_iii
-            .process(&freq, &mut recovered)
+            .execute(&freq, &mut recovered)
             .expect("DCT-III should succeed");
 
         // recovered = 2N * input
@@ -542,9 +542,8 @@ mod tests {
         let n = 16;
         let input = DCT_INPUT_SINE16;
 
-        let spec_ii = DctSpec::<f64>::new(n, DctType::II, DctNorm::Ortho).expect("valid dct spec");
-        let spec_iii =
-            DctSpec::<f64>::new(n, DctType::III, DctNorm::Ortho).expect("valid dct spec");
+        let spec_ii = DctSpec::new(n, DctType::II, DctNorm::Ortho).expect("valid dct spec");
+        let spec_iii = DctSpec::new(n, DctType::III, DctNorm::Ortho).expect("valid dct spec");
         let plan_ii = factory
             .create_plan(&spec_ii)
             .expect("DCT-II ortho plan creation should succeed");
@@ -554,12 +553,12 @@ mod tests {
 
         let mut freq = vec![0.0; n];
         plan_ii
-            .process(input, &mut freq)
+            .execute(input, &mut freq)
             .expect("DCT-II ortho should succeed");
 
         let mut recovered = vec![0.0; n];
         plan_iii
-            .process(&freq, &mut recovered)
+            .execute(&freq, &mut recovered)
             .expect("DCT-III ortho should succeed");
 
         assert_approx_eq(&recovered, input, 1e-10);
@@ -572,9 +571,8 @@ mod tests {
         let n = 17;
         let input = DCT_INPUT_COS17;
 
-        let spec_ii = DctSpec::<f64>::new(n, DctType::II, DctNorm::Ortho).expect("valid dct spec");
-        let spec_iii =
-            DctSpec::<f64>::new(n, DctType::III, DctNorm::Ortho).expect("valid dct spec");
+        let spec_ii = DctSpec::new(n, DctType::II, DctNorm::Ortho).expect("valid dct spec");
+        let spec_iii = DctSpec::new(n, DctType::III, DctNorm::Ortho).expect("valid dct spec");
         let plan_ii = factory
             .create_plan(&spec_ii)
             .expect("plan creation should succeed");
@@ -584,12 +582,12 @@ mod tests {
 
         let mut freq = vec![0.0; n];
         plan_ii
-            .process(input, &mut freq)
+            .execute(input, &mut freq)
             .expect("DCT-II should succeed");
 
         let mut recovered = vec![0.0; n];
         plan_iii
-            .process(&freq, &mut recovered)
+            .execute(&freq, &mut recovered)
             .expect("DCT-III should succeed");
 
         assert_approx_eq(&recovered, input, 1e-9);
@@ -601,12 +599,12 @@ mod tests {
     fn dct2_scipy_ramp8() {
         let factory = make_factory();
         let n = DCT_INPUT_RAMP8.len();
-        let spec = DctSpec::<f64>::new(n, DctType::II, DctNorm::None).expect("valid dct spec");
+        let spec = DctSpec::new(n, DctType::II, DctNorm::None).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
         let mut output = vec![0.0; n];
-        plan.process(DCT_INPUT_RAMP8, &mut output)
+        plan.execute(DCT_INPUT_RAMP8, &mut output)
             .expect("process should succeed");
         assert_approx_eq(&output, DCT2_RAMP8, 1e-10);
     }
@@ -615,12 +613,12 @@ mod tests {
     fn dct2_ortho_scipy_ramp8() {
         let factory = make_factory();
         let n = DCT_INPUT_RAMP8.len();
-        let spec = DctSpec::<f64>::new(n, DctType::II, DctNorm::Ortho).expect("valid dct spec");
+        let spec = DctSpec::new(n, DctType::II, DctNorm::Ortho).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
         let mut output = vec![0.0; n];
-        plan.process(DCT_INPUT_RAMP8, &mut output)
+        plan.execute(DCT_INPUT_RAMP8, &mut output)
             .expect("process should succeed");
         assert_approx_eq(&output, DCT2_ORTHO_RAMP8, 1e-10);
     }
@@ -629,12 +627,12 @@ mod tests {
     fn dct3_scipy_ramp8() {
         let factory = make_factory();
         let n = DCT_INPUT_RAMP8.len();
-        let spec = DctSpec::<f64>::new(n, DctType::III, DctNorm::None).expect("valid dct spec");
+        let spec = DctSpec::new(n, DctType::III, DctNorm::None).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
         let mut output = vec![0.0; n];
-        plan.process(DCT_INPUT_RAMP8, &mut output)
+        plan.execute(DCT_INPUT_RAMP8, &mut output)
             .expect("process should succeed");
         assert_approx_eq(&output, DCT3_RAMP8, 1e-10);
     }
@@ -643,12 +641,12 @@ mod tests {
     fn dct3_ortho_scipy_ramp8() {
         let factory = make_factory();
         let n = DCT_INPUT_RAMP8.len();
-        let spec = DctSpec::<f64>::new(n, DctType::III, DctNorm::Ortho).expect("valid dct spec");
+        let spec = DctSpec::new(n, DctType::III, DctNorm::Ortho).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
         let mut output = vec![0.0; n];
-        plan.process(DCT_INPUT_RAMP8, &mut output)
+        plan.execute(DCT_INPUT_RAMP8, &mut output)
             .expect("process should succeed");
         assert_approx_eq(&output, DCT3_ORTHO_RAMP8, 1e-10);
     }
@@ -657,12 +655,12 @@ mod tests {
     fn dct2_scipy_sine16() {
         let factory = make_factory();
         let n = DCT_INPUT_SINE16.len();
-        let spec = DctSpec::<f64>::new(n, DctType::II, DctNorm::None).expect("valid dct spec");
+        let spec = DctSpec::new(n, DctType::II, DctNorm::None).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
         let mut output = vec![0.0; n];
-        plan.process(DCT_INPUT_SINE16, &mut output)
+        plan.execute(DCT_INPUT_SINE16, &mut output)
             .expect("process should succeed");
         assert_approx_eq(&output, DCT2_SINE16, 1e-10);
     }
@@ -671,12 +669,12 @@ mod tests {
     fn dct2_ortho_scipy_sine16() {
         let factory = make_factory();
         let n = DCT_INPUT_SINE16.len();
-        let spec = DctSpec::<f64>::new(n, DctType::II, DctNorm::Ortho).expect("valid dct spec");
+        let spec = DctSpec::new(n, DctType::II, DctNorm::Ortho).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
         let mut output = vec![0.0; n];
-        plan.process(DCT_INPUT_SINE16, &mut output)
+        plan.execute(DCT_INPUT_SINE16, &mut output)
             .expect("process should succeed");
         assert_approx_eq(&output, DCT2_ORTHO_SINE16, 1e-10);
     }
@@ -685,12 +683,12 @@ mod tests {
     fn dct3_scipy_sine16() {
         let factory = make_factory();
         let n = DCT_INPUT_SINE16.len();
-        let spec = DctSpec::<f64>::new(n, DctType::III, DctNorm::None).expect("valid dct spec");
+        let spec = DctSpec::new(n, DctType::III, DctNorm::None).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
         let mut output = vec![0.0; n];
-        plan.process(DCT_INPUT_SINE16, &mut output)
+        plan.execute(DCT_INPUT_SINE16, &mut output)
             .expect("process should succeed");
         assert_approx_eq(&output, DCT3_SINE16, 1e-10);
     }
@@ -699,12 +697,12 @@ mod tests {
     fn dct3_ortho_scipy_sine16() {
         let factory = make_factory();
         let n = DCT_INPUT_SINE16.len();
-        let spec = DctSpec::<f64>::new(n, DctType::III, DctNorm::Ortho).expect("valid dct spec");
+        let spec = DctSpec::new(n, DctType::III, DctNorm::Ortho).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
         let mut output = vec![0.0; n];
-        plan.process(DCT_INPUT_SINE16, &mut output)
+        plan.execute(DCT_INPUT_SINE16, &mut output)
             .expect("process should succeed");
         assert_approx_eq(&output, DCT3_ORTHO_SINE16, 1e-10);
     }
@@ -713,12 +711,12 @@ mod tests {
     fn dct2_scipy_cos17_non_power_of_two() {
         let factory = make_factory();
         let n = DCT_INPUT_COS17.len();
-        let spec = DctSpec::<f64>::new(n, DctType::II, DctNorm::None).expect("valid dct spec");
+        let spec = DctSpec::new(n, DctType::II, DctNorm::None).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
         let mut output = vec![0.0; n];
-        plan.process(DCT_INPUT_COS17, &mut output)
+        plan.execute(DCT_INPUT_COS17, &mut output)
             .expect("process should succeed");
         assert_approx_eq(&output, DCT2_COS17, 1e-9);
     }
@@ -727,12 +725,12 @@ mod tests {
     fn dct2_ortho_scipy_cos17() {
         let factory = make_factory();
         let n = DCT_INPUT_COS17.len();
-        let spec = DctSpec::<f64>::new(n, DctType::II, DctNorm::Ortho).expect("valid dct spec");
+        let spec = DctSpec::new(n, DctType::II, DctNorm::Ortho).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
         let mut output = vec![0.0; n];
-        plan.process(DCT_INPUT_COS17, &mut output)
+        plan.execute(DCT_INPUT_COS17, &mut output)
             .expect("process should succeed");
         assert_approx_eq(&output, DCT2_ORTHO_COS17, 1e-9);
     }
@@ -741,12 +739,12 @@ mod tests {
     fn dct3_scipy_cos17_non_power_of_two() {
         let factory = make_factory();
         let n = DCT_INPUT_COS17.len();
-        let spec = DctSpec::<f64>::new(n, DctType::III, DctNorm::None).expect("valid dct spec");
+        let spec = DctSpec::new(n, DctType::III, DctNorm::None).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
         let mut output = vec![0.0; n];
-        plan.process(DCT_INPUT_COS17, &mut output)
+        plan.execute(DCT_INPUT_COS17, &mut output)
             .expect("process should succeed");
         assert_approx_eq(&output, DCT3_COS17, 1e-9);
     }
@@ -755,12 +753,12 @@ mod tests {
     fn dct3_ortho_scipy_cos17() {
         let factory = make_factory();
         let n = DCT_INPUT_COS17.len();
-        let spec = DctSpec::<f64>::new(n, DctType::III, DctNorm::Ortho).expect("valid dct spec");
+        let spec = DctSpec::new(n, DctType::III, DctNorm::Ortho).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
         let mut output = vec![0.0; n];
-        plan.process(DCT_INPUT_COS17, &mut output)
+        plan.execute(DCT_INPUT_COS17, &mut output)
             .expect("process should succeed");
         assert_approx_eq(&output, DCT3_ORTHO_COS17, 1e-9);
     }
@@ -769,12 +767,12 @@ mod tests {
     fn dct2_scipy_random64() {
         let factory = make_factory();
         let n = DCT_INPUT_RANDOM64.len();
-        let spec = DctSpec::<f64>::new(n, DctType::II, DctNorm::None).expect("valid dct spec");
+        let spec = DctSpec::new(n, DctType::II, DctNorm::None).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
         let mut output = vec![0.0; n];
-        plan.process(DCT_INPUT_RANDOM64, &mut output)
+        plan.execute(DCT_INPUT_RANDOM64, &mut output)
             .expect("process should succeed");
         assert_approx_eq(&output, DCT2_RANDOM64, 1e-8);
     }
@@ -783,12 +781,12 @@ mod tests {
     fn dct2_ortho_scipy_random64() {
         let factory = make_factory();
         let n = DCT_INPUT_RANDOM64.len();
-        let spec = DctSpec::<f64>::new(n, DctType::II, DctNorm::Ortho).expect("valid dct spec");
+        let spec = DctSpec::new(n, DctType::II, DctNorm::Ortho).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
         let mut output = vec![0.0; n];
-        plan.process(DCT_INPUT_RANDOM64, &mut output)
+        plan.execute(DCT_INPUT_RANDOM64, &mut output)
             .expect("process should succeed");
         assert_approx_eq(&output, DCT2_ORTHO_RANDOM64, 1e-8);
     }
@@ -797,12 +795,12 @@ mod tests {
     fn dct3_scipy_random64() {
         let factory = make_factory();
         let n = DCT_INPUT_RANDOM64.len();
-        let spec = DctSpec::<f64>::new(n, DctType::III, DctNorm::None).expect("valid dct spec");
+        let spec = DctSpec::new(n, DctType::III, DctNorm::None).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
         let mut output = vec![0.0; n];
-        plan.process(DCT_INPUT_RANDOM64, &mut output)
+        plan.execute(DCT_INPUT_RANDOM64, &mut output)
             .expect("process should succeed");
         assert_approx_eq(&output, DCT3_RANDOM64, 1e-8);
     }
@@ -811,12 +809,12 @@ mod tests {
     fn dct3_ortho_scipy_random64() {
         let factory = make_factory();
         let n = DCT_INPUT_RANDOM64.len();
-        let spec = DctSpec::<f64>::new(n, DctType::III, DctNorm::Ortho).expect("valid dct spec");
+        let spec = DctSpec::new(n, DctType::III, DctNorm::Ortho).expect("valid dct spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
         let mut output = vec![0.0; n];
-        plan.process(DCT_INPUT_RANDOM64, &mut output)
+        plan.execute(DCT_INPUT_RANDOM64, &mut output)
             .expect("process should succeed");
         assert_approx_eq(&output, DCT3_ORTHO_RANDOM64, 1e-8);
     }

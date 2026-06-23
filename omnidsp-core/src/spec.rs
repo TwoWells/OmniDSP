@@ -75,37 +75,55 @@
 //!   argument or variant (growable under `#[non_exhaustive]`), not a fan of
 //!   methods.  Never `x_for_a` / `x_from_b`.
 //!
-//! ## Plan traits
+//! ## Plan and Processor — the two execution kinds
 //!
-//! A plan trait is the backend-agnostic, `dyn`-usable surface.  It exposes:
-//! 1. the **buffer-sizing facts a generic `process` caller needs** to allocate
-//!    its in/out slices (`num_bins`, `fft_length`, `max_output_columns`, …) —
-//!    these are part of the `process` contract, not optional inherent extras;
-//! 2. **descriptive metadata**, kept parallel across a batch/streaming pair
+//! The execution layer has exactly two kinds, split by whether a call depends on
+//! the calls before it:
+//!
+//! - A **Plan** is stateless.  `execute(&self, in, out)` maps one complete input
+//!   to one complete output; per-call scratch is not state, so a Plan is
+//!   `Send + Sync`, shareable, parallelizable, and changed only by rebuilding.
+//!   The DFT family, DCT, convolution, Hilbert, cross-correlation, and the batch
+//!   CQT are Plans — reached via `create_plan`.
+//! - A **Processor** is stateful.  `process(&mut self, in, out) -> usize` feeds
+//!   any amount and returns how many samples it produced; `finish(&mut self,
+//!   out) -> usize` signals end-of-stream and flushes the tail; `reset` clears
+//!   the state without rebuilding.  A Processor takes `&mut self` and is **not**
+//!   `Send + Sync`.  Resampling, FIR, IIR, and the streaming CQT are Processors —
+//!   reached via `create_proc`.
+//!
+//! **Batch vs streaming is how you *drive* a Processor, not a separate mode or
+//! spec.**  Batch is `process(everything)` then `finish`; streaming is
+//! `process(chunk)` repeated with `finish` at the true end (or never).  The mode
+//! lives in the driving, so no spec carries an execution flag.
+//!
+//! A module exposes **both** a Plan and a Processor only when its batch and
+//! stream forms need **different state** — the CQT's stateless, embarrassingly
+//! parallel `&self` batch analyzer vs its stateful newest-anchored `&mut self`
+//! stream analyzer.  Then it is **two construction verbs over one spec**
+//! (`create_plan` / `create_proc` from a single `CqtSpec`); the verb selects the
+//! type, so there is no second spec and exactly one `design` entry per module.
+//! When the two forms share state (resampling, FIR, IIR) there is a single
+//! Processor, driven either way.
+//!
+//! ## The trait is the complete contract
+//!
+//! A Plan or Processor trait is the backend-agnostic, `dyn`-usable surface, and
+//! it is the **complete** behavioral contract: whatever the trait exposes, every
+//! backend provides; whatever it omits, nobody relies on.  Backends differ in
+//! *performance*, never in *contract* (an optional or floor-only method would be
+//! a leaky abstraction that breaks on a backend swap).  So the surface exposes:
+//! 1. the **buffer-sizing facts a generic caller needs** to allocate its in/out
+//!    slices (`num_bins`, `fft_length`, `max_output_columns`, …) — part of the
+//!    contract, not optional inherent extras;
+//! 2. **descriptive metadata**, kept parallel across a Plan/Processor pair
 //!    (`bin_frequencies`, …); and
 //! 3. the dominant **reduction convenience** (`process_magnitude` for the CQT),
 //!    so a `dyn` consumer is feature-complete.
 //!
-//! Each trait method is implemented by **delegating to the concrete plan's
-//! inherent method** (inherent resolution takes precedence, so the delegation
-//! is not recursive); a convenience **delegates to `process`, it never
-//! re-implements it**.  Stateless `&self` transform plans are `Send + Sync`;
-//! stateful streaming plans take `&mut self`, carry a `reset`, a `max_output_*`
-//! sizing method and a count-returning `process`, and are **not** `Send + Sync`.
-//!
-//! ## Execution-mode variants (batch vs streaming)
-//!
-//! When two modes produce **differently-shaped plans** — the CQT batch `&self`
-//! analyzer vs the streaming `&mut self` newest-anchored analyzer — they get
-//! **distinct spec types** so dispatch stays compile-time via `CreatePlan<S>`
-//! (the spec *type* selects the route; no runtime match).  The
-//! streaming spec is a **newtype wrapping the batch spec** (`CqtStreamSpec` over
-//! `CqtSpec`), reached by **spec conversion** (`CqtSpec::into_streaming`), never
-//! a second designer — there is exactly one `design` entry per module, flavored
-//! by an enum argument.  A mode that leaves the plan **shape unchanged** (same
-//! plan, only a different output-count accounting) may instead remain a field
-//! on one spec (`ResampleSpec`'s `ResampleMode`); that is the deliberate
-//! exception, not a competing pattern.
+//! Each trait method **delegates to the concrete type's inherent method**
+//! (inherent resolution takes precedence, so the delegation is not recursive),
+//! and a convenience **delegates to the steady action, never re-implementing it**.
 //!
 //! # Examples
 //!
@@ -114,8 +132,8 @@
 //! use omnidsp_core::traits::conv::ConvMethod;
 //! use omnidsp_core::traits::dct::{DctNorm, DctType};
 //!
-//! let conv = ConvSpec::<f64>::new(1024, 64, ConvMethod::Auto).unwrap();
-//! let dct = DctSpec::<f64>::new(512, DctType::II, DctNorm::Ortho).unwrap();
+//! let conv = ConvSpec::new(1024, 64, ConvMethod::Auto).unwrap();
+//! let dct = DctSpec::new(512, DctType::II, DctNorm::Ortho).unwrap();
 //! assert_eq!(conv.a_len(), 1024);
 //! assert_eq!(dct.length(), 512);
 //! ```

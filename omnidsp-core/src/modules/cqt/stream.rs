@@ -3,11 +3,12 @@
 
 //! Streaming, newest-anchored multirate CQT.
 //!
-//! [`OmniCqtStreamPlan`] is the streaming analogue of the batch
-//! [`OmniCqtPlan`](super::batch::OmniCqtPlan): a stateful `&mut self` plan that
-//! mirrors [`ResamplePlan`] exactly —
-//! no `Send + Sync`, a [`reset`](CqtStreamPlan::reset), and a variable-count
-//! [`process`](CqtStreamPlan::process) that returns how many feature columns it
+//! [`OmniCqtProcessor`] is the streaming analogue of the batch
+//! [`OmniCqtPlan`](super::batch::OmniCqtPlan): a stateful `&mut self` processor
+//! that mirrors
+//! [`ResampleProcessor`] — no
+//! `Send + Sync`, a [`reset`](CqtProcessor::reset), and a variable-count
+//! [`process`](CqtProcessor::process) that returns how many feature columns it
 //! emitted (the column analogue of the resampler's sample count).  Feed any
 //! chunk of samples; get back the `0..=max_output_columns` hop-boundary columns
 //! the input crossed.
@@ -35,7 +36,7 @@
 //!
 //! # State: persistent continuous decimation
 //!
-//! 1. **Continuous decimators.**  One [`ResamplePlan`] per octave transition
+//! 1. **Continuous decimators.**  One [`ResampleProcessor`] per octave transition
 //!    (`o−1 → o`), advanced as samples arrive and **never reset per frame**.
 //!    Each octave's decimated stream is produced once and flows continuously.
 //! 2. **Per-octave rings.**  Each octave's decimated stream is kept in a ring so
@@ -72,76 +73,39 @@ use std::ops::{AddAssign, MulAssign};
 
 use num_complex::Complex;
 
-use crate::create::CreatePlan;
+use crate::create::CreateProc;
 use crate::design::cqt::CqtSpec;
 use crate::design::resample::ResampleSpec;
+use crate::dispatch::Backend;
 use crate::error::{Error, Result};
 use crate::modules::cqt::batch::OmniCqt;
 use crate::modules::cqt::kernel::{self, OctaveBand};
-use crate::modules::resample::ResamplePlan;
+use crate::modules::resample::ResampleProcessor;
 use crate::traits::dft::{DftR2c, DftR2cPlan};
 use crate::traits::vecops::VecOps;
 use crate::types::DspFloat;
 
-// ─── Spec ──────────────────────────────────────────────────────────────
+// ─── Processor trait ──────────────────────────────────────────────────
 
-/// Streaming CQT specification.
+/// Execution object for a configured **streaming** Constant-Q Transform — a
+/// stateful **Processor**.
 ///
-/// Thin newtype wrapper over a batch [`CqtSpec`]: the streaming and batch paths
-/// describe the **same** transform (same bins, windows, sample rate, FFT
-/// length) and differ only in *state*, not math.  Wrapping rather than aliasing
-/// keeps `CreatePlan<CqtStreamSpec>` a distinct dispatch route from
-/// `CreatePlan<CqtSpec>`, so a backend can build either
-/// plan from the same configuration.
-///
-/// The top-octave hop length ([`CqtSpec::hop_length`]) is the streaming
-/// column-emission clock: [`process`](CqtStreamPlan::process) emits one column
-/// each time the input crosses a hop boundary.
-#[derive(Debug, Clone)]
-pub struct CqtStreamSpec<T> {
-    spec: CqtSpec<T>,
-}
-
-impl<T> CqtStreamSpec<T> {
-    /// Wrap a batch [`CqtSpec`] as a streaming spec.
-    #[must_use]
-    pub const fn new(spec: CqtSpec<T>) -> Self {
-        Self { spec }
-    }
-
-    /// The underlying batch [`CqtSpec`].
-    #[must_use]
-    pub const fn spec(&self) -> &CqtSpec<T> {
-        &self.spec
-    }
-
-    /// Consume the wrapper, returning the underlying [`CqtSpec`].
-    #[must_use]
-    pub fn into_spec(self) -> CqtSpec<T> {
-        self.spec
-    }
-}
-
-// ─── Plan trait ───────────────────────────────────────────────────────
-
-/// Execution object for a configured **streaming** Constant-Q Transform.
-///
-/// The named, stateful plan trait for the streaming CQT, mirroring
-/// [`ResamplePlan`] exactly (the locked
-/// `&mut self` streaming-plan category): it is
+/// The named processor trait for the streaming CQT, mirroring
+/// [`ResampleProcessor`]: it is
 /// mutable, carries **no** `Send + Sync` supertrait, exposes a
 /// [`reset`](Self::reset), and has a variable-count [`process`](Self::process)
-/// paired with a [`max_output_columns`](Self::max_output_columns) sizing method.
+/// paired with a [`max_output_columns`](Self::max_output_columns) sizing method
+/// and a [`finish`](Self::finish) end-of-stream flush.
 ///
-/// Where `ResamplePlan` is a stream→stream *filter* (`T → T`), this is a
+/// Where a resample processor is a stream→stream *filter* (`T → T`), this is a
 /// stream→feature-frame *analyzer* (`T → Complex<T>` column) emitted on the
 /// top-octave hop clock — a different cadence than the input.
 /// `max_output_columns` resolves that mismatch the way the resampler's
 /// `max_output_len` does: feed any chunk, get the hop-boundary columns it
 /// crossed.  Output is complex; the magnitude convenience
 /// ([`process_magnitude`](Self::process_magnitude)) is on the trait too,
-/// delegating to the concrete plan's efficient inherent implementation.
-pub trait CqtStreamPlan<T> {
+/// delegating to the concrete processor's efficient inherent implementation.
+pub trait CqtProcessor<T> {
     /// Number of frequency bins per column.
     fn num_bins(&self) -> usize;
 
@@ -158,8 +122,7 @@ pub trait CqtStreamPlan<T> {
 
     /// Upper bound on columns [`process`](Self::process) may emit for
     /// `input_len` new samples — size `out` to
-    /// `max_output_columns(input_len) * num_bins`.  The
-    /// [`ResamplePlan::max_output_len`] analogue.
+    /// `max_output_columns(input_len) * num_bins`.
     fn max_output_columns(&self, input_len: usize) -> usize;
 
     /// Feed new samples; write the newest-anchored columns whose hop boundaries
@@ -175,6 +138,15 @@ pub trait CqtStreamPlan<T> {
     /// Returns an error if `out` is too short, or if execution fails.
     fn process(&mut self, input: &[T], out: &mut [Complex<T>]) -> Result<usize>;
 
+    /// Signal end-of-stream.  A column fires only on a full hop boundary, so a
+    /// residual partial hop produces no column: `finish` writes nothing, returns
+    /// `0`, and resets the processor.
+    ///
+    /// # Errors
+    ///
+    /// Infallible in practice; the `Result` keeps the Processor contract uniform.
+    fn finish(&mut self, out: &mut [Complex<T>]) -> Result<usize>;
+
     /// Feed new samples and write the newest-anchored **magnitude** columns
     /// (`|CQT[k]|` per bin) whose hop boundaries the input crossed; returns the
     /// column count.  Same buffer contract as [`process`](Self::process): `out`
@@ -189,7 +161,7 @@ pub trait CqtStreamPlan<T> {
     fn process_magnitude(&mut self, input: &[T], out: &mut [T]) -> Result<usize>;
 
     /// Reset all state (decimator delay lines, per-octave rings) without
-    /// recreating the plan — the [`ResamplePlan::reset`] analogue.
+    /// recreating the processor.
     fn reset(&mut self);
 }
 
@@ -279,11 +251,11 @@ where
         .collect()
 }
 
-// ─── Plan ──────────────────────────────────────────────────────────────
+// ─── Processor ─────────────────────────────────────────────────────────
 
-/// Streaming, newest-anchored multirate CQT plan.
+/// Streaming, newest-anchored multirate CQT processor.
 ///
-/// Created by [`OmniCqt::create_stream_plan`].  Mutable — it runs one continuous
+/// Created by [`OmniCqt::create_proc`].  Stateful — it runs one continuous
 /// ×2 decimator per octave transition, rings each octave's decimated stream, and
 /// tracks the hop phase across calls so successive [`process`](Self::process)
 /// calls form a continuous stream.  On each hop boundary it analyses the frame
@@ -292,8 +264,8 @@ where
 ///
 /// Type parameters mirror [`OmniCqtPlan`](super::batch::OmniCqtPlan): `RP` the
 /// per-octave [`DftR2cPlan`], `V` the [`VecOps`], `ResP` the routed decimator
-/// [`ResamplePlan`].
-pub struct OmniCqtStreamPlan<T, RP, V, ResP> {
+/// [`ResampleProcessor`].
+pub struct OmniCqtProcessor<T, RP, V, ResP> {
     /// Per-octave bands (kernels, r2c plan, group-delay offset), top → bottom.
     octaves: Vec<OctaveBand<T, RP>>,
     /// Continuous ×2 decimators, one per octave transition (`o−1 → o`); element
@@ -339,9 +311,9 @@ pub struct OmniCqtStreamPlan<T, RP, V, ResP> {
     dec_out: Vec<T>,
 }
 
-impl<T, RP, V, ResP> std::fmt::Debug for OmniCqtStreamPlan<T, RP, V, ResP> {
+impl<T, RP, V, ResP> std::fmt::Debug for OmniCqtProcessor<T, RP, V, ResP> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("OmniCqtStreamPlan")
+        f.debug_struct("OmniCqtProcessor")
             .field("num_bins", &self.num_bins)
             .field("fft_length", &self.fft_length)
             .field("hop_length", &self.hop_length)
@@ -349,16 +321,16 @@ impl<T, RP, V, ResP> std::fmt::Debug for OmniCqtStreamPlan<T, RP, V, ResP> {
     }
 }
 
-impl<T, RP, V, ResP> OmniCqtStreamPlan<T, RP, V, ResP>
+impl<T, RP, V, ResP> OmniCqtProcessor<T, RP, V, ResP>
 where
     T: DspFloat + AddAssign + MulAssign,
     RP: DftR2cPlan<T>,
     V: VecOps<T>,
-    ResP: ResamplePlan<T>,
+    ResP: ResampleProcessor<T>,
 {
     /// Feed new samples; write the newest-anchored columns whose hop boundaries
     /// the input crossed and return the column count.  See
-    /// [`CqtStreamPlan::process`].
+    /// [`CqtProcessor::process`].
     ///
     /// # Errors
     ///
@@ -438,6 +410,35 @@ where
             }
         }
         Ok(columns)
+    }
+
+    /// Signal end-of-stream.  A column fires only when the input crosses a full
+    /// hop boundary, so any residual `pending < hop_length` samples cannot
+    /// complete one: `finish` writes nothing, returns `0`, and resets the
+    /// processor.
+    ///
+    /// # Errors
+    ///
+    /// Infallible in practice; the `Result` keeps the Processor contract uniform.
+    pub fn finish(&mut self, _out: &mut [Complex<T>]) -> Result<usize> {
+        self.reset();
+        Ok(0)
+    }
+
+    /// One-shot convenience: feed a complete `input` on a fresh stream —
+    /// `reset`, then `process(input)`, then `finish` (which adds no column).
+    /// Returns the column count and leaves the processor clean.  `out` must hold
+    /// at least [`max_output_columns(input.len())`](Self::max_output_columns)
+    /// columns, each [`num_bins`](Self::num_bins) wide.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `out` is too short, or if execution fails.
+    pub fn execute(&mut self, input: &[T], out: &mut [Complex<T>]) -> Result<usize> {
+        self.reset();
+        let n = self.process(input, out)?;
+        let extra = self.finish(&mut out[n * self.num_bins..])?;
+        Ok(n + extra)
     }
 
     /// Reset all state: decimator delay lines, per-octave rings, sample count,
@@ -632,7 +633,7 @@ where
 
             if !band.kernels.is_empty() {
                 band.r2c
-                    .process(&mut self.seg[..fft_len], &mut self.half[..half_len])?;
+                    .execute(&mut self.seg[..fft_len], &mut self.half[..half_len])?;
                 // Re-reference each bin to "now": the frame ends `lag` decimated
                 // samples (at rate `sr/2^o`) before "now", so a tone at `f_k`
                 // accrues a phase lag `2π·f_k·lag/rate_o`; advance it back.
@@ -659,12 +660,12 @@ where
 
 // ─── Trait impl ───────────────────────────────────────────────────────
 
-impl<T, RP, V, ResP> CqtStreamPlan<T> for OmniCqtStreamPlan<T, RP, V, ResP>
+impl<T, RP, V, ResP> CqtProcessor<T> for OmniCqtProcessor<T, RP, V, ResP>
 where
     T: DspFloat + AddAssign + MulAssign,
     RP: DftR2cPlan<T>,
     V: VecOps<T>,
-    ResP: ResamplePlan<T>,
+    ResP: ResampleProcessor<T>,
 {
     // Each method delegates to the inherent one.  Inherent methods take
     // precedence over trait methods in resolution, so these are not recursive.
@@ -688,6 +689,10 @@ where
         self.process(input, out)
     }
 
+    fn finish(&mut self, out: &mut [Complex<T>]) -> Result<usize> {
+        self.finish(out)
+    }
+
     fn process_magnitude(&mut self, input: &[T], out: &mut [T]) -> Result<usize> {
         self.process_magnitude(input, out)
     }
@@ -700,34 +705,35 @@ where
 // ─── Factory ──────────────────────────────────────────────────────────
 
 impl<R, V> OmniCqt<R, V> {
-    /// Create a streaming, newest-anchored CQT plan from a [`CqtStreamSpec`].
+    /// Create a streaming, newest-anchored CQT processor from a [`CqtSpec`].
     ///
-    /// Mirrors [`create_plan`](OmniCqt::create_plan): `resample_factory` (any
-    /// `CreatePlan<ResampleSpec>`) builds one continuous decimator sub-plan per
-    /// octave transition and is then dropped — the plan stores only the concrete
-    /// decimators (option A).
+    /// The streaming peer of [`create_plan`](OmniCqt::create_plan) over the
+    /// **same** spec: `resample_factory` (any `CreateProc<ResampleSpec>` that is
+    /// also a [`Backend<T>`](crate::dispatch::Backend)) builds one continuous
+    /// decimator sub-processor per octave transition and is then dropped — the
+    /// processor stores only the concrete decimators (option A).
     ///
     /// # Errors
     ///
     /// Returns an error if DFT / decimator sub-plan creation fails.
     #[allow(
         clippy::type_complexity,
-        reason = "composite plan type names the routed decimator sub-plan; the \
-                  dispatch layer aliases it via `type Plan`"
+        reason = "composite processor type names the routed decimator sub-processor; \
+                  the dispatch layer aliases it via `type Proc`"
     )]
-    pub fn create_stream_plan<T, RF>(
+    pub fn create_proc<T, RF>(
         &self,
-        spec: &CqtStreamSpec<T>,
+        spec: &CqtSpec,
         resample_factory: &RF,
-    ) -> Result<OmniCqtStreamPlan<T, R::Plan, V, <RF as CreatePlan<ResampleSpec<T>>>::Plan>>
+    ) -> Result<OmniCqtProcessor<T, R::Plan, V, <RF as CreateProc<ResampleSpec>>::Proc<T>>>
     where
         T: DspFloat + AddAssign + MulAssign,
         R: DftR2c<T>,
         V: VecOps<T>,
-        RF: CreatePlan<ResampleSpec<T>>,
-        <RF as CreatePlan<ResampleSpec<T>>>::Plan: ResamplePlan<T>,
+        RF: CreateProc<ResampleSpec> + Backend<T>,
+        <RF as CreateProc<ResampleSpec>>::Proc<T>: ResampleProcessor<T>,
     {
-        let cqt_spec = spec.spec();
+        let cqt_spec = spec;
         let layout =
             kernel::build_octaves_streaming::<T, R, RF>(self.dftr2c(), cqt_spec, resample_factory)?;
 
@@ -752,7 +758,7 @@ impl<R, V> OmniCqt<R, V> {
         let align = 1usize << n_octaves.saturating_sub(1);
 
         let zero = Complex::new(T::zero(), T::zero());
-        Ok(OmniCqtStreamPlan {
+        Ok(OmniCqtProcessor {
             octaves: layout.octaves,
             decimators: layout.decimators,
             rings,
@@ -781,49 +787,46 @@ mod tests {
 
     use num_complex::Complex;
 
-    use super::{CqtStreamPlan, CqtStreamSpec, OmniCqtStreamPlan};
+    use super::{CqtProcessor, OmniCqtProcessor};
     use crate::design::cqt::{self, CqtSpec};
     use crate::modules::cqt::batch::{OmniCqt, OmniCqtPlan};
-    use crate::modules::resample::{OmniResample, OmniResamplePlan};
-    use crate::test_utils::{TestDftR2c, TestVecOps};
+    use crate::modules::resample::OmniResampleProcessor;
+    use crate::test_utils::{TestBackend, TestDftR2c, TestVecOps};
     use crate::traits::dft::{DftNorm, DftR2c, DftR2cPlan, DftR2cSpec};
     use crate::traits::vecops::VecOps;
     use crate::window::Window;
 
-    type TestStreamPlan = OmniCqtStreamPlan<
+    type TestStreamPlan = OmniCqtProcessor<
         f64,
         <TestDftR2c as DftR2c<f64>>::Plan,
         TestVecOps,
-        OmniResamplePlan<f64, TestVecOps>,
+        OmniResampleProcessor<f64, TestVecOps>,
     >;
     type TestBatchPlan = OmniCqtPlan<
         f64,
         <TestDftR2c as DftR2c<f64>>::Plan,
         TestVecOps,
-        OmniResamplePlan<f64, TestVecOps>,
+        OmniResampleProcessor<f64, TestVecOps>,
     >;
 
     fn factory() -> OmniCqt<TestDftR2c, TestVecOps> {
         OmniCqt::new(TestDftR2c, TestVecOps)
     }
 
-    fn make_stream(spec: &CqtSpec<f64>) -> TestStreamPlan {
+    fn make_stream(spec: &CqtSpec) -> TestStreamPlan {
         factory()
-            .create_stream_plan(
-                &CqtStreamSpec::new(spec.clone()),
-                &OmniResample::new(TestVecOps),
-            )
-            .expect("stream plan creation should succeed")
+            .create_proc(spec, &TestBackend)
+            .expect("stream processor creation should succeed")
     }
 
-    fn make_batch(spec: &CqtSpec<f64>) -> TestBatchPlan {
+    fn make_batch(spec: &CqtSpec) -> TestBatchPlan {
         factory()
-            .create_plan(spec, &OmniResample::new(TestVecOps))
+            .create_plan(spec, &TestBackend)
             .expect("batch plan creation should succeed")
     }
 
     /// Three octaves at 16 kHz — exercises the continuous decimation chain.
-    fn multi_octave_spec() -> CqtSpec<f64> {
+    fn multi_octave_spec() -> CqtSpec {
         cqt::design(16000.0, 125.0, 1000.0, 12, &Window::Hann).expect("valid design")
     }
 
@@ -851,7 +854,7 @@ mod tests {
             clippy::cast_precision_loss,
             reason = "kernel and FFT lengths are small enough for f64"
         )]
-        fn new(spec: &CqtSpec<f64>) -> Self {
+        fn new(spec: &CqtSpec) -> Self {
             let fft_length = spec.fft_length();
             let sr = spec.sample_rate();
             let half_len = fft_length / 2 + 1;
@@ -901,7 +904,7 @@ mod tests {
             let mut seg = window.to_vec();
             let mut half = vec![Complex::new(0.0, 0.0); half_len];
             self.plan
-                .process(&mut seg, &mut half)
+                .execute(&mut seg, &mut half)
                 .expect("reference r2c process");
             let ops = TestVecOps;
             self.kernels
@@ -1680,7 +1683,7 @@ mod tests {
             }
             let window = &signal[now - fft..now];
             let mut batch_col = vec![Complex::new(0.0, 0.0); nb];
-            batch.process(window, &mut batch_col).expect("batch");
+            batch.execute(window, &mut batch_col).expect("batch");
             let col = &out[c * nb..(c + 1) * nb];
 
             for (k, (s, b)) in col.iter().zip(&batch_col).enumerate() {
@@ -1898,7 +1901,7 @@ mod tests {
 
     #[test]
     fn implements_stream_plan_trait() {
-        fn drive<P: CqtStreamPlan<f64>>(plan: &mut P, input: &[f64]) -> usize {
+        fn drive<P: CqtProcessor<f64>>(plan: &mut P, input: &[f64]) -> usize {
             let need = plan.max_output_columns(input.len()) * plan.num_bins();
             let mut out = vec![Complex::new(0.0, 0.0); need];
             plan.process(input, &mut out).expect("trait process")
@@ -1919,7 +1922,7 @@ mod tests {
         let plan = make_stream(&multi_octave_spec());
         let debug = format!("{plan:?}");
         assert!(
-            debug.contains("OmniCqtStreamPlan"),
+            debug.contains("OmniCqtProcessor"),
             "debug should contain the type name"
         );
     }

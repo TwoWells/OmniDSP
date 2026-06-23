@@ -10,13 +10,19 @@ use std::f64::consts::TAU;
 
 use num_complex::Complex;
 
+use std::ops::{AddAssign, MulAssign};
+
+use crate::create::CreateProc;
+use crate::design::resample::ResampleSpec;
+use crate::dispatch::RawDft;
 use crate::error::{Error, Result};
+use crate::modules::resample::{OmniResample, OmniResampleProcessor};
 use crate::traits::dft::{
     DftC2c, DftC2cPlan, DftC2cSpec, DftC2r, DftC2rPlan, DftC2rSpec, DftNorm, DftR2c, DftR2cPlan,
     DftR2cSpec,
 };
 use crate::traits::vecops::VecOps;
-use crate::types::Direction;
+use crate::types::{Direction, DspFloat};
 
 /// DFT factory for tests.
 ///
@@ -42,7 +48,7 @@ pub struct TestDftC2cPlan {
     reason = "test DFT operates on small sizes where usize→f64 is exact"
 )]
 impl DftC2cPlan<f64> for TestDftC2cPlan {
-    fn process(&self, input: &[Complex<f64>], output: &mut [Complex<f64>]) -> Result<()> {
+    fn execute(&self, input: &[Complex<f64>], output: &mut [Complex<f64>]) -> Result<()> {
         if input.len() != self.length {
             return Err(Error::BufferMismatch {
                 expected: self.length,
@@ -101,7 +107,7 @@ impl TestDftC2cPlan {
 impl DftC2c<f64> for TestDftC2c {
     type Plan = TestDftC2cPlan;
 
-    fn create_plan(&self, spec: &DftC2cSpec<f64>) -> Result<Self::Plan> {
+    fn create_plan(&self, spec: &DftC2cSpec) -> Result<Self::Plan> {
         Ok(TestDftC2cPlan {
             length: spec.length(),
             direction: spec.direction(),
@@ -155,7 +161,7 @@ pub struct TestDftR2cPlan {
 }
 
 impl DftR2cPlan<f64> for TestDftR2cPlan {
-    fn process(&self, input: &mut [f64], output: &mut [Complex<f64>]) -> Result<()> {
+    fn execute(&self, input: &mut [f64], output: &mut [Complex<f64>]) -> Result<()> {
         let bins = self.length / 2 + 1;
         if input.len() != self.length {
             return Err(Error::BufferMismatch {
@@ -197,7 +203,7 @@ impl DftR2cPlan<f64> for TestDftR2cPlan {
 impl DftR2c<f64> for TestDftR2c {
     type Plan = TestDftR2cPlan;
 
-    fn create_plan(&self, spec: &DftR2cSpec<f64>) -> Result<Self::Plan> {
+    fn create_plan(&self, spec: &DftR2cSpec) -> Result<Self::Plan> {
         Ok(TestDftR2cPlan {
             length: spec.length(),
             norm: spec.norm(),
@@ -228,7 +234,7 @@ pub struct TestDftC2rPlan {
 }
 
 impl DftC2rPlan<f64> for TestDftC2rPlan {
-    fn process(&self, input: &mut [Complex<f64>], output: &mut [f64]) -> Result<()> {
+    fn execute(&self, input: &mut [Complex<f64>], output: &mut [f64]) -> Result<()> {
         let n = self.length;
         let bins = n / 2 + 1;
         if input.len() != bins {
@@ -280,7 +286,7 @@ impl DftC2rPlan<f64> for TestDftC2rPlan {
 impl DftC2r<f64> for TestDftC2r {
     type Plan = TestDftC2rPlan;
 
-    fn create_plan(&self, spec: &DftC2rSpec<f64>) -> Result<Self::Plan> {
+    fn create_plan(&self, spec: &DftC2rSpec) -> Result<Self::Plan> {
         Ok(TestDftC2rPlan {
             length: spec.length(),
             norm: spec.norm(),
@@ -359,6 +365,53 @@ pub struct TestVecOps;
 
 impl VecOps<f64> for TestVecOps {}
 
+/// Minimal foundational backend for tests.
+///
+/// Bundles the test DFT doubles ([`TestDftC2c`] / [`TestDftR2c`] /
+/// [`TestDftC2r`]) and the scalar [`VecOps`] so it satisfies the foundational
+/// [`Backend<f64>`](crate::dispatch::Backend) contract, and routes resampling
+/// through [`OmniResample`].  This is what the CQT octave decimator dispatches
+/// against: under the dispatch model only a `Backend` routes sub-processors, and
+/// `OmniResample` alone is not a backend (it has no DFT family).
+#[derive(Debug, Clone)]
+pub struct TestBackend;
+
+impl RawDft<f64> for TestBackend {
+    type C2c = TestDftC2c;
+    type R2c = TestDftR2c;
+    type C2r = TestDftC2r;
+
+    fn raw_dftc2c(&self) -> Self::C2c {
+        TestDftC2c
+    }
+    fn raw_dftr2c(&self) -> Self::R2c {
+        TestDftR2c
+    }
+    fn raw_dftc2r(&self) -> Self::C2r {
+        TestDftC2r
+    }
+}
+
+// The test backend is its own (scalar-default) `VecOps` provider — the empty
+// impl inherits the same defaults `TestVecOps` uses, so its decimator math
+// matches the standalone `OmniResample<TestVecOps>` it routes through.
+impl VecOps<f64> for TestBackend {}
+
+impl CreateProc<ResampleSpec> for TestBackend {
+    type Proc<T>
+        = OmniResampleProcessor<T, TestVecOps>
+    where
+        Self: crate::dispatch::Backend<T>;
+
+    fn create_proc<T>(&self, spec: &ResampleSpec) -> Result<Self::Proc<T>>
+    where
+        Self: crate::dispatch::Backend<T>,
+        T: DspFloat + AddAssign + MulAssign,
+    {
+        OmniResample::new(TestVecOps).create_proc::<T>(spec)
+    }
+}
+
 #[cfg(test)]
 #[allow(
     clippy::expect_used,
@@ -383,22 +436,22 @@ mod tests {
     }
 
     fn r2c(n: usize, norm: DftNorm, input: &[f64]) -> Vec<Complex<f64>> {
-        let spec = DftR2cSpec::<f64>::new(n, norm).expect("valid r2c spec");
+        let spec = DftR2cSpec::new(n, norm).expect("valid r2c spec");
         let plan = DftR2c::<f64>::create_plan(&TestDftR2c, &spec).expect("r2c plan");
         // r2c consumes its input — hand it a throwaway copy.
         let mut scratch = input.to_vec();
         let mut out = vec![Complex::new(0.0, 0.0); n / 2 + 1];
-        plan.process(&mut scratch, &mut out).expect("r2c process");
+        plan.execute(&mut scratch, &mut out).expect("r2c process");
         out
     }
 
     fn c2r(n: usize, norm: DftNorm, input: &[Complex<f64>]) -> Vec<f64> {
-        let spec = DftC2rSpec::<f64>::new(n, norm).expect("valid c2r spec");
+        let spec = DftC2rSpec::new(n, norm).expect("valid c2r spec");
         let plan = DftC2r::<f64>::create_plan(&TestDftC2r, &spec).expect("c2r plan");
         // c2r consumes its input — hand it a throwaway copy.
         let mut scratch = input.to_vec();
         let mut out = vec![0.0_f64; n];
-        plan.process(&mut scratch, &mut out).expect("c2r process");
+        plan.execute(&mut scratch, &mut out).expect("c2r process");
         out
     }
 
@@ -406,10 +459,10 @@ mod tests {
     /// — the in-crate oracle the r2c double is validated against.
     fn c2c_forward(n: usize, input: &[f64]) -> Vec<Complex<f64>> {
         let embedded: Vec<Complex<f64>> = input.iter().map(|&v| Complex::new(v, 0.0)).collect();
-        let spec = DftC2cSpec::<f64>::new(n, Direction::Forward, DftNorm::None).expect("c2c spec");
+        let spec = DftC2cSpec::new(n, Direction::Forward, DftNorm::None).expect("c2c spec");
         let plan = DftC2c::<f64>::create_plan(&TestDftC2c, &spec).expect("c2c plan");
         let mut out = vec![Complex::new(0.0, 0.0); n];
-        plan.process(&embedded, &mut out).expect("c2c process");
+        plan.execute(&embedded, &mut out).expect("c2c process");
         out
     }
 
@@ -503,31 +556,31 @@ mod tests {
 
     #[test]
     fn buffer_mismatch_errors() {
-        let r_spec = DftR2cSpec::<f64>::new(8, DftNorm::None).expect("valid r2c spec");
+        let r_spec = DftR2cSpec::new(8, DftNorm::None).expect("valid r2c spec");
         let r_plan = DftR2c::<f64>::create_plan(&TestDftR2c, &r_spec).expect("r2c plan");
         let mut half = vec![Complex::new(0.0, 0.0); 5];
         assert!(
-            r_plan.process(&mut [0.0_f64; 7], &mut half).is_err(),
+            r_plan.execute(&mut [0.0_f64; 7], &mut half).is_err(),
             "wrong r2c input length must error",
         );
         let mut short_half = vec![Complex::new(0.0, 0.0); 4];
         assert!(
-            r_plan.process(&mut [0.0_f64; 8], &mut short_half).is_err(),
+            r_plan.execute(&mut [0.0_f64; 8], &mut short_half).is_err(),
             "wrong r2c output length must error",
         );
 
-        let c_spec = DftC2rSpec::<f64>::new(8, DftNorm::None).expect("valid c2r spec");
+        let c_spec = DftC2rSpec::new(8, DftNorm::None).expect("valid c2r spec");
         let c_plan = DftC2r::<f64>::create_plan(&TestDftC2r, &c_spec).expect("c2r plan");
         let mut short_in = vec![Complex::new(0.0, 0.0); 4];
         let mut real_out = [0.0_f64; 8];
         assert!(
-            c_plan.process(&mut short_in, &mut real_out).is_err(),
+            c_plan.execute(&mut short_in, &mut real_out).is_err(),
             "wrong c2r input length must error",
         );
         let mut good_in = vec![Complex::new(0.0, 0.0); 5];
         let mut short_out = [0.0_f64; 7];
         assert!(
-            c_plan.process(&mut good_in, &mut short_out).is_err(),
+            c_plan.execute(&mut good_in, &mut short_out).is_err(),
             "wrong c2r output length must error",
         );
     }

@@ -13,8 +13,9 @@
 //!    frequency: DC for lowpass/bandstop, Nyquist for highpass, band center
 //!    for bandpass.
 //!
-//! All arithmetic is performed in `f64` internally; the output coefficients
-//! are converted to the target type `T`.
+//! All arithmetic is performed in `f64`, and the designed coefficients stay in
+//! `f64` (the reusable design precision); the cast to the operation's `T`
+//! happens later at the FIR processor's create edge.
 //!
 //! The design method is selected via [`FirMethod`]; the windowed-sinc method
 //! lives in its [`FirMethod::Windowed`] variant.  The returned
@@ -33,8 +34,6 @@
 )]
 
 use std::f64::consts::PI;
-
-use num_traits::Float;
 
 use crate::design::remez;
 use crate::error::{Error, Result};
@@ -59,10 +58,10 @@ use crate::window::Window;
 #[derive(Debug, Clone, PartialEq)]
 #[allow(
     clippy::derive_partial_eq_without_eq,
-    reason = "the Equiripple payload holds floats (f32/f64) which are not Eq"
+    reason = "the Equiripple payload holds f64 design scalars, which are not Eq"
 )]
 #[non_exhaustive]
-pub enum FirMethod<T> {
+pub enum FirMethod {
     /// Windowed-sinc design: truncate the ideal impulse response to the
     /// requested order and apply `window` to reduce spectral leakage.
     Windowed {
@@ -96,9 +95,9 @@ pub enum FirMethod<T> {
     /// uses with `scipy.signal.remez(..., weight=[1/δ_p, 1/δ_s])`.
     Equiripple {
         /// Peak passband ripple `Ap` in dB (e.g. `0.1`).
-        pass_ripple: T,
+        pass_ripple: f64,
         /// Stopband attenuation `As` in positive dB (e.g. `60.0`).
-        stop_atten: T,
+        stop_atten: f64,
     },
 }
 
@@ -106,11 +105,13 @@ pub enum FirMethod<T> {
 
 /// Design a FIR filter, dispatching over the [`FirMethod`].
 ///
-/// Returns a [`FirFilter`] containing `order + 1` tap coefficients plus
-/// [`FirMeta`] recording the sample rate and primary normalized cutoff.  The
-/// taps are gain-normalized: lowpass filters have unity DC gain, highpass
-/// filters have unity gain at Nyquist, and bandpass/bandstop filters have unity
-/// gain at the band center or at DC respectively.
+/// Returns a (non-generic, f64) [`FirFilter`] containing `order + 1` tap
+/// coefficients plus [`FirMeta`] recording the sample rate and primary
+/// normalized cutoff.  The taps are gain-normalized: lowpass filters have unity
+/// DC gain, highpass filters have unity gain at Nyquist, and bandpass/bandstop
+/// filters have unity gain at the band center or at DC respectively.  Frequency
+/// arguments are `f64` (the surface-wide "Hz is f64" rule); precision is chosen
+/// later at the FIR processor's create edge.
 ///
 /// The returned filter carries no execution strategy; compose it into a
 /// [`FirSpec`](crate::traits::fir::FirSpec) via
@@ -143,47 +144,37 @@ pub enum FirMethod<T> {
 /// use omnidsp_core::window::Window;
 ///
 /// let filter = design(
-///     FilterType::Lowpass, 30, 44100.0_f64, 1000.0, None,
+///     FilterType::Lowpass, 30, 44100.0, 1000.0, None,
 ///     &FirMethod::Windowed { window: Window::Hamming },
 /// ).unwrap();
 /// assert_eq!(filter.coefficients().len(), 31);
 /// ```
-pub fn design<T: Float>(
+pub fn design(
     filter_type: FilterType,
     order: usize,
-    sample_rate: T,
-    cutoff1: T,
-    cutoff2: Option<T>,
-    method: &FirMethod<T>,
-) -> Result<FirFilter<T>> {
-    let sr = to_f64(sample_rate)?;
-    let c1 = to_f64(cutoff1)?;
-    let c2 = cutoff2.map(to_f64).transpose()?;
-
-    let validated = validate(filter_type, order, sr, c1, c2)?;
+    sample_rate: f64,
+    cutoff1: f64,
+    cutoff2: Option<f64>,
+    method: &FirMethod,
+) -> Result<FirFilter> {
+    let validated = validate(filter_type, order, sample_rate, cutoff1, cutoff2)?;
 
     // Dispatch over the design method; each produces f64 taps.
-    let normalized: Vec<f64> = match method {
+    let coefficients: Vec<f64> = match method {
         FirMethod::Windowed { window } => design_windowed(filter_type, &validated, window)?,
         FirMethod::Equiripple {
             pass_ripple,
             stop_atten,
-        } => design_equiripple(
-            filter_type,
-            &validated,
-            to_f64(*pass_ripple)?,
-            to_f64(*stop_atten)?,
-        )?,
+        } => design_equiripple(filter_type, &validated, *pass_ripple, *stop_atten)?,
     };
 
-    // Convert to target type
-    let coefficients: Result<Vec<T>> = normalized.iter().map(|&v| from_f64(v)).collect();
-
-    // Record the design context (Hz is f64, surface-wide): the design sample
-    // rate and the primary normalized cutoff (cutoff1 / fs).
+    // The taps stay in the f64 design precision; the cast to the operation's `T`
+    // happens at the FIR processor's create edge.  Record the design context (Hz
+    // is f64, surface-wide): the design sample rate and the primary normalized
+    // cutoff (cutoff1 / fs).
     FirFilter::new(
-        coefficients?,
-        FirMeta::new(to_f64(sample_rate)?, validated.primary_cutoff),
+        coefficients,
+        FirMeta::new(sample_rate, validated.primary_cutoff),
     )
 }
 
@@ -527,17 +518,6 @@ fn validate(
     })
 }
 
-// ─── Conversion helpers ───────────────────────────────────────────────
-
-fn to_f64<T: Float>(val: T) -> Result<f64> {
-    val.to_f64()
-        .ok_or_else(|| Error::Internal("failed to convert to f64".into()))
-}
-
-fn from_f64<T: Float>(val: f64) -> Result<T> {
-    T::from(val).ok_or_else(|| Error::Internal("failed to convert from f64".into()))
-}
-
 // ─── Ideal impulse responses ──────────────────────────────────────────
 
 /// Lowpass sinc: `h[n] = sin(2π·fc·m) / (π·m)` where `m = n - (N-1)/2`.
@@ -643,7 +623,7 @@ mod tests {
 
     const TOL: f64 = 1e-8;
 
-    fn windowed(window: Window) -> FirMethod<f64> {
+    fn windowed(window: Window) -> FirMethod {
         FirMethod::Windowed { window }
     }
 
@@ -852,7 +832,7 @@ mod tests {
     #[test]
     fn order_zero_is_error() {
         assert!(
-            design::<f64>(
+            design(
                 FilterType::Lowpass,
                 0,
                 44100.0,
@@ -868,7 +848,7 @@ mod tests {
     #[test]
     fn negative_sample_rate_is_error() {
         assert!(
-            design::<f64>(
+            design(
                 FilterType::Lowpass,
                 10,
                 -1.0,
@@ -884,7 +864,7 @@ mod tests {
     #[test]
     fn cutoff_at_nyquist_is_error() {
         assert!(
-            design::<f64>(
+            design(
                 FilterType::Lowpass,
                 10,
                 44100.0,
@@ -900,7 +880,7 @@ mod tests {
     #[test]
     fn cutoff_above_nyquist_is_error() {
         assert!(
-            design::<f64>(
+            design(
                 FilterType::Lowpass,
                 10,
                 44100.0,
@@ -916,7 +896,7 @@ mod tests {
     #[test]
     fn bandpass_missing_cutoff2_is_error() {
         assert!(
-            design::<f64>(
+            design(
                 FilterType::Bandpass,
                 10,
                 44100.0,
@@ -932,7 +912,7 @@ mod tests {
     #[test]
     fn bandpass_cutoff2_le_cutoff1_is_error() {
         assert!(
-            design::<f64>(
+            design(
                 FilterType::Bandpass,
                 10,
                 44100.0,
@@ -948,7 +928,7 @@ mod tests {
     #[test]
     fn lowpass_with_cutoff2_is_error() {
         assert!(
-            design::<f64>(
+            design(
                 FilterType::Lowpass,
                 10,
                 44100.0,
@@ -994,29 +974,6 @@ mod tests {
                 );
             }
         }
-    }
-
-    // ── f32 path ─────────────────────────────────────────────────
-
-    #[test]
-    fn f32_lowpass_works() {
-        let filter = design(
-            FilterType::Lowpass,
-            30,
-            44100.0_f32,
-            1000.0_f32,
-            None,
-            &FirMethod::Windowed {
-                window: Window::Hamming,
-            },
-        )
-        .expect("f32 lowpass");
-        assert_eq!(filter.coefficients().len(), 31, "should have 31 taps");
-        let dc: f32 = filter.coefficients().iter().sum();
-        assert!(
-            (dc - 1.0).abs() < 1e-5,
-            "f32 lowpass DC gain should be ≈1.0, got {dc}"
-        );
     }
 
     // ── Scipy reference comparison ──────────────────────────────
@@ -1257,7 +1214,7 @@ mod tests {
 
     // ── Equiripple realized-spec assertions (the FirMethod API path) ──
 
-    fn equiripple(pass_ripple: f64, stop_atten: f64) -> FirMethod<f64> {
+    fn equiripple(pass_ripple: f64, stop_atten: f64) -> FirMethod {
         FirMethod::Equiripple {
             pass_ripple,
             stop_atten,

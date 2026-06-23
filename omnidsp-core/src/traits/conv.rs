@@ -10,8 +10,6 @@
 //! nothing was generic over it.  For streaming convolution, see the FIR
 //! filter primitive.
 
-use std::marker::PhantomData;
-
 use crate::error::{Error, Result};
 
 // ─── Spec ────────────────────────────────────────────────────────────
@@ -33,14 +31,12 @@ pub enum ConvMethod {
 ///
 /// Describes the input sizes and preferred implementation method.  Any
 /// backend can consume this spec.  The plan validates that
-/// [`process`](ConvPlan::process) inputs match these lengths.
+/// [`execute`](ConvPlan::execute) inputs match these lengths.
 ///
 /// Output length is always `a_len + b_len - 1` (full linear convolution).
 ///
-/// The type parameter `T` ties the spec to a specific float type, making
-/// specs fully self-describing for the dispatch layer's `CreatePlan<S>` trait.
-/// `T` is carried via [`PhantomData`] and hidden behind the constructor.
-/// Fields are private and the spec is valid-by-construction.
+/// The spec is non-generic; precision is chosen at `create_plan::<T>`.  Fields
+/// are private and the spec is valid-by-construction.
 ///
 /// # Examples
 ///
@@ -48,26 +44,17 @@ pub enum ConvMethod {
 /// use omnidsp_core::traits::conv::{ConvSpec, ConvMethod};
 ///
 /// // Let the backend pick direct vs. FFT
-/// let spec = ConvSpec::<f64>::new(1024, 64, ConvMethod::Auto).unwrap();
+/// let spec = ConvSpec::new(1024, 64, ConvMethod::Auto).unwrap();
 /// assert_eq!(spec.a_len(), 1024);
 /// ```
-#[derive(Debug, Clone, Copy)]
-pub struct ConvSpec<T> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConvSpec {
     a_len: usize,
     b_len: usize,
     method: ConvMethod,
-    _marker: PhantomData<T>,
 }
 
-impl<T> PartialEq for ConvSpec<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.a_len == other.a_len && self.b_len == other.b_len && self.method == other.method
-    }
-}
-
-impl<T> Eq for ConvSpec<T> {}
-
-impl<T> ConvSpec<T> {
+impl ConvSpec {
     /// Create a new convolution spec with the given input lengths and method.
     ///
     /// # Errors
@@ -83,7 +70,6 @@ impl<T> ConvSpec<T> {
             a_len,
             b_len,
             method,
-            _marker: PhantomData,
         })
     }
 
@@ -124,5 +110,5 @@ pub trait ConvPlan<T>: Send + Sync {
     /// # Errors
     ///
     /// Returns an error if any buffer length does not match the expected size.
-    fn process(&self, a: &[T], b: &[T], output: &mut [T]) -> Result<()>;
+    fn execute(&self, a: &[T], b: &[T], output: &mut [T]) -> Result<()>;
 }

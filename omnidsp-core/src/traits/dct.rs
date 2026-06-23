@@ -10,8 +10,6 @@
 //! inherent `create_plan` — the `Dct` factory trait was dropped because
 //! nothing was generic over it.
 
-use std::marker::PhantomData;
-
 use crate::error::{Error, Result};
 
 // ─── Types ──────────────────────────────────────────────────────────
@@ -49,10 +47,8 @@ pub enum DctNorm {
 /// Describes the length, DCT type, and normalization convention for a
 /// DCT plan.  Any backend can consume this spec.
 ///
-/// The type parameter `T` ties the spec to a specific float type, making
-/// specs fully self-describing for the dispatch layer's `CreatePlan<S>` trait.
-/// `T` is carried via [`PhantomData`] and hidden behind the constructor.
-/// Fields are private and the spec is valid-by-construction.
+/// The spec is non-generic; precision is chosen at `create_plan::<T>`.  Fields
+/// are private and the spec is valid-by-construction.
 ///
 /// # Examples
 ///
@@ -60,26 +56,17 @@ pub enum DctNorm {
 /// use omnidsp_core::traits::dct::{DctSpec, DctType, DctNorm};
 ///
 /// // 1024-point DCT-II with orthonormal normalization
-/// let spec = DctSpec::<f64>::new(1024, DctType::II, DctNorm::Ortho).unwrap();
+/// let spec = DctSpec::new(1024, DctType::II, DctNorm::Ortho).unwrap();
 /// assert_eq!(spec.length(), 1024);
 /// ```
-#[derive(Debug, Clone, Copy)]
-pub struct DctSpec<T> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DctSpec {
     length: usize,
     dct_type: DctType,
     norm: DctNorm,
-    _marker: PhantomData<T>,
 }
 
-impl<T> PartialEq for DctSpec<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.length == other.length && self.dct_type == other.dct_type && self.norm == other.norm
-    }
-}
-
-impl<T> Eq for DctSpec<T> {}
-
-impl<T> DctSpec<T> {
+impl DctSpec {
     /// Create a new DCT spec with the given length, type, and normalization.
     ///
     /// # Errors
@@ -93,7 +80,6 @@ impl<T> DctSpec<T> {
             length,
             dct_type,
             norm,
-            _marker: PhantomData,
         })
     }
 
@@ -132,5 +118,5 @@ pub trait DctPlan<T>: Send + Sync {
     /// # Errors
     ///
     /// Returns an error if the buffer lengths do not match the plan length.
-    fn process(&self, input: &[T], output: &mut [T]) -> Result<()>;
+    fn execute(&self, input: &[T], output: &mut [T]) -> Result<()>;
 }

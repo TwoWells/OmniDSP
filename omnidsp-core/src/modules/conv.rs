@@ -166,7 +166,7 @@ where
     CP: DftC2rPlan<T>,
     V: VecOps<T>,
 {
-    fn process(&self, a: &[T], b: &[T], output: &mut [T]) -> Result<()> {
+    fn execute(&self, a: &[T], b: &[T], output: &mut [T]) -> Result<()> {
         if a.len() != self.a_len {
             return Err(Error::BufferMismatch {
                 expected: self.a_len,
@@ -243,17 +243,17 @@ where
 
         // 1. Zero-pad a → real, then forward r2c → half_a (real is consumed).
         pad_real(a, real);
-        state.fwd.process(real, half_a)?;
+        state.fwd.execute(real, half_a)?;
 
         // 2. Zero-pad b → real (reuse), then forward r2c → half_b.
         pad_real(b, real);
-        state.fwd.process(real, half_b)?;
+        state.fwd.execute(real, half_b)?;
 
         // 3. Half-spectrum element-wise multiply: half_a *= half_b.
         state.vecops.cmul_inplace(half_a, half_b)?;
 
         // 4. Inverse c2r: half_a → real (HermitianC2r projects DC/Nyquist).
-        state.inv.process(half_a, real)?;
+        state.inv.execute(half_a, real)?;
 
         // 5. The c2r output is already real — copy the first output_len samples.
         let out_len = output.len();
@@ -283,7 +283,7 @@ impl<R, C, V> OmniConv<R, C, V> {
     )]
     pub fn create_plan<T>(
         &self,
-        spec: &ConvSpec<T>,
+        spec: &ConvSpec,
     ) -> Result<OmniConvPlan<T, <R as DftR2c<T>>::Plan, HermitianC2rPlan<<C as DftC2r<T>>::Plan>, V>>
     where
         T: DspFloat + AddAssign + MulAssign,
@@ -368,15 +368,15 @@ mod tests {
 
     const EPSILON: f64 = 1e-8;
 
-    fn spec(a_len: usize, b_len: usize) -> ConvSpec<f64> {
+    fn spec(a_len: usize, b_len: usize) -> ConvSpec {
         ConvSpec::new(a_len, b_len, ConvMethod::Auto).expect("valid conv spec")
     }
 
-    fn spec_direct(a_len: usize, b_len: usize) -> ConvSpec<f64> {
+    fn spec_direct(a_len: usize, b_len: usize) -> ConvSpec {
         ConvSpec::new(a_len, b_len, ConvMethod::Direct).expect("valid conv spec")
     }
 
-    fn spec_fft(a_len: usize, b_len: usize) -> ConvSpec<f64> {
+    fn spec_fft(a_len: usize, b_len: usize) -> ConvSpec {
         ConvSpec::new(a_len, b_len, ConvMethod::Fft).expect("valid conv spec")
     }
 
@@ -436,7 +436,7 @@ mod tests {
             .create_plan(&spec(3, 2))
             .expect("plan creation should succeed");
         let mut output = [0.0_f64; 4];
-        plan.process(&[1.0, 2.0, 3.0], &[4.0, 5.0], &mut output)
+        plan.execute(&[1.0, 2.0, 3.0], &[4.0, 5.0], &mut output)
             .expect("process should succeed");
         assert_approx_eq(&output, &[4.0, 13.0, 22.0, 15.0], EPSILON);
     }
@@ -449,7 +449,7 @@ mod tests {
             .create_plan(&spec(1, 3))
             .expect("plan creation should succeed");
         let mut output = [0.0_f64; 3];
-        plan.process(&[1.0], &[2.0, 3.0, 4.0], &mut output)
+        plan.execute(&[1.0], &[2.0, 3.0, 4.0], &mut output)
             .expect("process should succeed");
         assert_approx_eq(&output, &[2.0, 3.0, 4.0], EPSILON);
     }
@@ -462,7 +462,7 @@ mod tests {
             .create_plan(&spec(3, 3))
             .expect("plan creation should succeed");
         let mut output = [0.0_f64; 5];
-        plan.process(&[1.0, 1.0, 1.0], &[1.0, 1.0, 1.0], &mut output)
+        plan.execute(&[1.0, 1.0, 1.0], &[1.0, 1.0, 1.0], &mut output)
             .expect("process should succeed");
         assert_approx_eq(&output, &[1.0, 2.0, 3.0, 2.0, 1.0], EPSILON);
     }
@@ -475,7 +475,7 @@ mod tests {
             .create_plan(&spec(1, 1))
             .expect("plan creation should succeed");
         let mut output = [0.0_f64; 1];
-        plan.process(&[3.0], &[7.0], &mut output)
+        plan.execute(&[3.0], &[7.0], &mut output)
             .expect("process should succeed");
         assert_approx_eq(&output, &[21.0], EPSILON);
     }
@@ -488,7 +488,7 @@ mod tests {
             .create_plan(&spec(3, 3))
             .expect("plan creation should succeed");
         let mut output = [0.0_f64; 5];
-        plan.process(&[0.0, 1.0, 0.0], &[2.0, 3.0, 4.0], &mut output)
+        plan.execute(&[0.0, 1.0, 0.0], &[2.0, 3.0, 4.0], &mut output)
             .expect("process should succeed");
         assert_approx_eq(&output, &[0.0, 2.0, 3.0, 4.0, 0.0], EPSILON);
     }
@@ -508,10 +508,10 @@ mod tests {
         let mut out_ba = [0.0_f64; 4];
 
         plan_ab
-            .process(&[1.0, 2.0, 3.0], &[4.0, 5.0], &mut out_ab)
+            .execute(&[1.0, 2.0, 3.0], &[4.0, 5.0], &mut out_ab)
             .expect("ab should succeed");
         plan_ba
-            .process(&[4.0, 5.0], &[1.0, 2.0, 3.0], &mut out_ba)
+            .execute(&[4.0, 5.0], &[1.0, 2.0, 3.0], &mut out_ba)
             .expect("ba should succeed");
 
         assert_approx_eq(&out_ab, &out_ba, EPSILON);
@@ -528,9 +528,9 @@ mod tests {
         let mut out1 = [0.0_f64; 3];
         let mut out2 = [0.0_f64; 3];
 
-        plan.process(&[1.0, 2.0], &[3.0, 4.0], &mut out1)
+        plan.execute(&[1.0, 2.0], &[3.0, 4.0], &mut out1)
             .expect("first call should succeed");
-        plan.process(&[5.0, 6.0], &[7.0, 8.0], &mut out2)
+        plan.execute(&[5.0, 6.0], &[7.0, 8.0], &mut out2)
             .expect("second call should succeed");
 
         // [1,2]*[3,4] = [3, 10, 8]
@@ -549,7 +549,7 @@ mod tests {
             .create_plan(&spec_direct(3, 2))
             .expect("plan creation should succeed");
         let mut output = [0.0_f64; 4];
-        plan.process(&[1.0, 2.0, 3.0], &[4.0, 5.0], &mut output)
+        plan.execute(&[1.0, 2.0, 3.0], &[4.0, 5.0], &mut output)
             .expect("process should succeed");
         assert_approx_eq(&output, &[4.0, 13.0, 22.0, 15.0], EPSILON);
     }
@@ -562,7 +562,7 @@ mod tests {
             .create_plan(&spec_fft(3, 2))
             .expect("plan creation should succeed");
         let mut output = [0.0_f64; 4];
-        plan.process(&[1.0, 2.0, 3.0], &[4.0, 5.0], &mut output)
+        plan.execute(&[1.0, 2.0, 3.0], &[4.0, 5.0], &mut output)
             .expect("process should succeed");
         assert_approx_eq(&output, &[4.0, 13.0, 22.0, 15.0], EPSILON);
     }
@@ -584,10 +584,10 @@ mod tests {
         let mut out_f = [0.0_f64; 6];
 
         plan_d
-            .process(&a, &b, &mut out_d)
+            .execute(&a, &b, &mut out_d)
             .expect("direct should succeed");
         plan_f
-            .process(&a, &b, &mut out_f)
+            .execute(&a, &b, &mut out_f)
             .expect("fft should succeed");
 
         assert_approx_eq(&out_d, &out_f, EPSILON);
@@ -598,7 +598,7 @@ mod tests {
     #[test]
     fn zero_a_len_returns_error() {
         assert!(
-            ConvSpec::<f64>::new(0, 3, ConvMethod::Auto).is_err(),
+            ConvSpec::new(0, 3, ConvMethod::Auto).is_err(),
             "zero a_len should be rejected by the spec constructor"
         );
     }
@@ -606,7 +606,7 @@ mod tests {
     #[test]
     fn zero_b_len_returns_error() {
         assert!(
-            ConvSpec::<f64>::new(3, 0, ConvMethod::Auto).is_err(),
+            ConvSpec::new(3, 0, ConvMethod::Auto).is_err(),
             "zero b_len should be rejected by the spec constructor"
         );
     }
@@ -619,7 +619,7 @@ mod tests {
             .expect("plan creation should succeed");
         let mut output = [0.0_f64; 4];
         assert!(
-            plan.process(&[1.0, 2.0], &[4.0, 5.0], &mut output).is_err(),
+            plan.execute(&[1.0, 2.0], &[4.0, 5.0], &mut output).is_err(),
             "wrong a length should return error"
         );
     }
@@ -632,7 +632,7 @@ mod tests {
             .expect("plan creation should succeed");
         let mut output = [0.0_f64; 4];
         assert!(
-            plan.process(&[1.0, 2.0, 3.0], &[4.0], &mut output).is_err(),
+            plan.execute(&[1.0, 2.0, 3.0], &[4.0], &mut output).is_err(),
             "wrong b length should return error"
         );
     }
@@ -645,7 +645,7 @@ mod tests {
             .expect("plan creation should succeed");
         let mut output = [0.0_f64; 3];
         assert!(
-            plan.process(&[1.0, 2.0, 3.0], &[4.0, 5.0], &mut output)
+            plan.execute(&[1.0, 2.0, 3.0], &[4.0, 5.0], &mut output)
                 .is_err(),
             "wrong output length should return error"
         );

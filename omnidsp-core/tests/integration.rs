@@ -18,20 +18,70 @@ use std::f64::consts::TAU;
 
 use num_complex::Complex;
 
+use omnidsp_core::create::CreateProc;
 use omnidsp_core::design::fir::FirMethod;
+use omnidsp_core::design::resample::ResampleSpec;
 use omnidsp_core::design::{cqt, fir, iir, resample};
+use omnidsp_core::dispatch::RawDft;
+use omnidsp_core::error::Result;
 use omnidsp_core::modules::cqt::{OmniCqt, OmniCqtPlan};
 use omnidsp_core::modules::fir::OmniFir;
-use omnidsp_core::modules::resample::{OmniResample, OmniResamplePlan};
+use omnidsp_core::modules::resample::{OmniResample, OmniResampleProcessor};
 use omnidsp_core::modules::xcorr::{CrossCorrSpec, OmniCrossCorr};
 use omnidsp_core::scalar::{ScalarIir, ScalarVecOps};
 use omnidsp_core::traits::dft::{DftC2c, DftC2cPlan, DftC2cSpec, DftNorm, DftR2c};
-use omnidsp_core::traits::fir::{FirPlan, FirSpec, FirStrategy};
-use omnidsp_core::traits::iir::{Iir, IirPlan};
+use omnidsp_core::traits::fir::{FirProcessor, FirSpec, FirStrategy};
+use omnidsp_core::traits::iir::{Iir, IirProcessor};
 use omnidsp_core::traits::vecops::VecOps;
-use omnidsp_core::types::{Direction, FilterType};
+use omnidsp_core::types::{Direction, DspFloat, FilterType};
 use omnidsp_core::window::Window;
 use omnidsp_rustfft::{RustDftC2c, RustDftC2r, RustDftR2c};
+
+// ─── Minimal foundational backend for the multirate CQT routing ────────
+//
+// The CQT octave decimator dispatches through a `Backend<T> +
+// CreateProc<ResampleSpec>` (only a backend routes sub-processors).  This
+// bundles the rustfft real-DFT family with the scalar `VecOps` so it satisfies
+// the `Backend` contract, and routes resampling through `OmniResample`.
+
+/// Foundational backend over the rustfft real-DFT family and scalar `VecOps`.
+#[derive(Debug, Clone)]
+struct IntegrationBackend;
+
+impl RawDft<f64> for IntegrationBackend {
+    type C2c = RustDftC2c;
+    type R2c = RustDftR2c;
+    type C2r = RustDftC2r;
+
+    fn raw_dftc2c(&self) -> Self::C2c {
+        RustDftC2c
+    }
+    fn raw_dftr2c(&self) -> Self::R2c {
+        RustDftR2c
+    }
+    fn raw_dftc2r(&self) -> Self::C2r {
+        RustDftC2r
+    }
+}
+
+// Empty scalar-default `VecOps`: the routed decimator carries its own
+// `ScalarVecOps`, so this only satisfies the `Backend` bound.
+impl VecOps<f64> for IntegrationBackend {}
+
+impl CreateProc<ResampleSpec> for IntegrationBackend {
+    type Proc<T>
+        = OmniResampleProcessor<T, ScalarVecOps>
+    where
+        Self: omnidsp_core::dispatch::Backend<T>;
+
+    fn create_proc<T>(&self, spec: &ResampleSpec) -> Result<Self::Proc<T>>
+    where
+        Self: omnidsp_core::dispatch::Backend<T>,
+        T: DspFloat + std::ops::AddAssign + std::ops::MulAssign,
+    {
+        OmniResample::new(ScalarVecOps).create_proc::<T>(spec)
+    }
+}
 
 // ─── Helpers ───────────────────────────────────────────────────────────
 
@@ -96,7 +146,7 @@ mod fir_integration {
 
         for &strategy in &[FirStrategy::Direct, FirStrategy::OverlapSave] {
             let plan_spec = FirSpec::new(filter.clone(), strategy);
-            let mut plan = factory.create_plan(&plan_spec).expect("FIR plan creation");
+            let mut plan = factory.create_proc(&plan_spec).expect("FIR plan creation");
 
             let mut output = vec![0.0; LFILTER_INPUT.len()];
             plan.process(LFILTER_INPUT, &mut output)
@@ -138,7 +188,7 @@ mod fir_integration {
 
         for &strategy in &[FirStrategy::Direct, FirStrategy::OverlapSave] {
             let plan_spec = FirSpec::new(filter.clone(), strategy);
-            let mut plan = factory.create_plan(&plan_spec).expect("FIR plan creation");
+            let mut plan = factory.create_proc(&plan_spec).expect("FIR plan creation");
 
             // Input: 400 Hz (below cutoff, should be rejected) + 15 kHz (above cutoff, should pass).
             let n = 512;
@@ -189,7 +239,7 @@ mod fir_integration {
 
         for &strategy in &[FirStrategy::Direct, FirStrategy::OverlapSave] {
             let plan_spec = FirSpec::new(filter.clone(), strategy);
-            let mut plan = factory.create_plan(&plan_spec).expect("FIR plan creation");
+            let mut plan = factory.create_proc(&plan_spec).expect("FIR plan creation");
 
             let mut output = vec![0.0; LFILTER_LONG_INPUT.len()];
 
@@ -238,7 +288,7 @@ mod iir_integration {
     #[test]
     fn design_and_apply_lowpass() {
         // Design: Butterworth LP, order 4, fc=1000 Hz, fs=44100
-        let spec = iir::design::<f64>(
+        let spec = iir::design(
             iir::FilterFamily::Butterworth,
             FilterType::Lowpass,
             4,
@@ -257,7 +307,7 @@ mod iir_integration {
 
         // Create plan and process — compare output against scipy's sosfilt.
         let iir_factory = ScalarIir::new();
-        let mut plan = Iir::<f64>::create_plan(&iir_factory, &spec).expect("IIR plan creation");
+        let mut plan = Iir::<f64>::create_proc(&iir_factory, &spec).expect("IIR plan creation");
 
         let mut output = vec![0.0; SOSFILT_INPUT.len()];
         plan.process(SOSFILT_INPUT, &mut output)
@@ -269,7 +319,7 @@ mod iir_integration {
     /// End-to-end: design HP Butterworth → `ScalarIir` → process → compare scipy.
     #[test]
     fn design_and_apply_highpass() {
-        let spec = iir::design::<f64>(
+        let spec = iir::design(
             iir::FilterFamily::Butterworth,
             FilterType::Highpass,
             4,
@@ -286,7 +336,7 @@ mod iir_integration {
         );
 
         let iir_factory = ScalarIir::new();
-        let mut plan = Iir::<f64>::create_plan(&iir_factory, &spec).expect("IIR plan creation");
+        let mut plan = Iir::<f64>::create_proc(&iir_factory, &spec).expect("IIR plan creation");
 
         let mut output = vec![0.0; SOSFILT_INPUT.len()];
         plan.process(SOSFILT_INPUT, &mut output)
@@ -298,7 +348,7 @@ mod iir_integration {
     /// End-to-end: design BP Butterworth → `ScalarIir` → process → compare scipy.
     #[test]
     fn design_and_apply_bandpass() {
-        let spec = iir::design::<f64>(
+        let spec = iir::design(
             iir::FilterFamily::Butterworth,
             FilterType::Bandpass,
             4,
@@ -315,7 +365,7 @@ mod iir_integration {
         );
 
         let iir_factory = ScalarIir::new();
-        let mut plan = Iir::<f64>::create_plan(&iir_factory, &spec).expect("IIR plan creation");
+        let mut plan = Iir::<f64>::create_proc(&iir_factory, &spec).expect("IIR plan creation");
 
         let mut output = vec![0.0; SOSFILT_INPUT.len()];
         plan.process(SOSFILT_INPUT, &mut output)
@@ -327,7 +377,7 @@ mod iir_integration {
     /// End-to-end: design LP IIR → process long signal in chunks → compare scipy.
     #[test]
     fn design_and_stream_long_signal() {
-        let spec = iir::design::<f64>(
+        let spec = iir::design(
             iir::FilterFamily::Butterworth,
             FilterType::Lowpass,
             4,
@@ -338,7 +388,7 @@ mod iir_integration {
         .expect("IIR design");
 
         let iir_factory = ScalarIir::new();
-        let mut plan = Iir::<f64>::create_plan(&iir_factory, &spec).expect("IIR plan creation");
+        let mut plan = Iir::<f64>::create_proc(&iir_factory, &spec).expect("IIR plan creation");
 
         let mut output = vec![0.0; SOSFILT_LONG_INPUT.len()];
 
@@ -365,7 +415,7 @@ mod iir_integration {
 
 mod resample_integration {
     use super::*;
-    use omnidsp_core::design::resample::{DEFAULT_MAX_PHASES, ResampleMode, ResampleQuality};
+    use omnidsp_core::design::resample::{DEFAULT_MAX_PHASES, ResampleQuality};
 
     /// End-to-end: design 44100→48000 resampler → process → verify properties.
     ///
@@ -385,7 +435,6 @@ mod resample_integration {
             ResampleQuality::new(5).expect("valid quality"),
             &Window::Hamming,
             DEFAULT_MAX_PHASES,
-            ResampleMode::Streaming,
         )
         .expect("resample design");
 
@@ -393,7 +442,7 @@ mod resample_integration {
         assert_eq!(spec.down_factor(), 147, "M should be 147");
 
         let factory = OmniResample::new(ScalarVecOps);
-        let mut plan = factory.create_plan(&spec).expect("resample plan");
+        let mut plan = factory.create_proc(&spec).expect("resample plan");
 
         // Generate a 400 Hz sine at 44100 Hz.
         let n_in = 1000;
@@ -429,12 +478,11 @@ mod resample_integration {
             ResampleQuality::new(5).expect("valid quality"),
             &Window::Hamming,
             DEFAULT_MAX_PHASES,
-            ResampleMode::Streaming,
         )
         .expect("resample design");
 
         let factory = OmniResample::new(ScalarVecOps);
-        let mut plan = factory.create_plan(&spec).expect("resample plan");
+        let mut plan = factory.create_proc(&spec).expect("resample plan");
 
         let input = vec![1.0_f64; 500];
         let max = plan.max_output_len(input.len());
@@ -459,7 +507,7 @@ mod resample_integration {
 
 mod streaming_equivalence {
     use super::*;
-    use omnidsp_core::design::resample::{DEFAULT_MAX_PHASES, ResampleMode, ResampleQuality};
+    use omnidsp_core::design::resample::{DEFAULT_MAX_PHASES, ResampleQuality};
 
     /// FIR: single-shot vs chunked processing must produce identical output.
     #[test]
@@ -484,14 +532,14 @@ mod streaming_equivalence {
         for &strategy in &[FirStrategy::Direct, FirStrategy::OverlapSave] {
             // Single-shot.
             let plan_spec = FirSpec::new(filter.clone(), strategy);
-            let mut plan_single = factory.create_plan(&plan_spec).expect("single plan");
+            let mut plan_single = factory.create_proc(&plan_spec).expect("single plan");
             let mut single_out = vec![0.0; input.len()];
             plan_single
                 .process(&input, &mut single_out)
                 .expect("single process");
 
             // Chunked with varied sizes.
-            let mut plan_chunks = factory.create_plan(&plan_spec).expect("chunks plan");
+            let mut plan_chunks = factory.create_proc(&plan_spec).expect("chunks plan");
             let mut chunks_out = vec![0.0; input.len()];
             let chunk_sizes = [37, 100, 63, 200, 11, 256, 357];
             let mut pos = 0;
@@ -518,7 +566,7 @@ mod streaming_equivalence {
     /// IIR: single-shot vs chunked processing must produce identical output.
     #[test]
     fn iir_streaming_equivalence() {
-        let spec = iir::design::<f64>(
+        let spec = iir::design(
             iir::FilterFamily::Butterworth,
             FilterType::Lowpass,
             4,
@@ -534,14 +582,14 @@ mod streaming_equivalence {
             .collect();
 
         // Single-shot.
-        let mut plan_single = Iir::<f64>::create_plan(&iir_factory, &spec).expect("single plan");
+        let mut plan_single = Iir::<f64>::create_proc(&iir_factory, &spec).expect("single plan");
         let mut single_out = vec![0.0; input.len()];
         plan_single
             .process(&input, &mut single_out)
             .expect("single process");
 
         // Chunked with varied sizes.
-        let mut plan_chunks = Iir::<f64>::create_plan(&iir_factory, &spec).expect("chunks plan");
+        let mut plan_chunks = Iir::<f64>::create_proc(&iir_factory, &spec).expect("chunks plan");
         let mut chunks_out = vec![0.0; input.len()];
         let chunk_sizes = [37, 100, 63, 200, 11, 256, 357];
         let mut pos = 0;
@@ -568,7 +616,6 @@ mod streaming_equivalence {
             ResampleQuality::new(5).expect("valid quality"),
             &Window::Hamming,
             DEFAULT_MAX_PHASES,
-            ResampleMode::Streaming,
         )
         .expect("resample design");
 
@@ -578,7 +625,7 @@ mod streaming_equivalence {
             .collect();
 
         // Single-shot.
-        let mut plan_single = factory.create_plan(&spec).expect("single plan");
+        let mut plan_single = factory.create_proc(&spec).expect("single plan");
         let max_single = plan_single.max_output_len(input.len());
         let mut single_out = vec![0.0; max_single];
         let n_single = plan_single
@@ -586,7 +633,7 @@ mod streaming_equivalence {
             .expect("single process");
 
         // Chunked.
-        let mut plan_chunks = factory.create_plan(&spec).expect("chunks plan");
+        let mut plan_chunks = factory.create_proc(&spec).expect("chunks plan");
         let mut chunks_out = Vec::new();
         let chunk_sizes = [37, 100, 63, 200, 112];
         let mut pos = 0;
@@ -624,7 +671,7 @@ mod streaming_equivalence {
 
 mod pipeline {
     use super::*;
-    use omnidsp_core::design::resample::{DEFAULT_MAX_PHASES, ResampleMode, ResampleQuality};
+    use omnidsp_core::design::resample::{DEFAULT_MAX_PHASES, ResampleQuality};
 
     /// Resample 44100→48000 then lowpass FIR at 8000 Hz.
     ///
@@ -642,13 +689,12 @@ mod pipeline {
             ResampleQuality::new(3).expect("valid quality"),
             &Window::Hamming,
             DEFAULT_MAX_PHASES,
-            ResampleMode::Streaming,
         )
         .expect("resample design");
 
         let resample_factory = OmniResample::new(ScalarVecOps);
         let mut resample_plan = resample_factory
-            .create_plan(&resample_spec)
+            .create_proc(&resample_spec)
             .expect("resample plan");
 
         let n_in = 512;
@@ -678,7 +724,7 @@ mod pipeline {
         let fir_spec = FirSpec::new(fir_filter, FirStrategy::Auto);
 
         let fir_factory = OmniFir::new(RustDftR2c, RustDftC2r, ScalarVecOps);
-        let mut fir_plan = fir_factory.create_plan(&fir_spec).expect("FIR plan");
+        let mut fir_plan = fir_factory.create_proc(&fir_spec).expect("FIR plan");
 
         let mut filtered = vec![0.0; resampled.len()];
         fir_plan
@@ -710,7 +756,7 @@ mod pipeline {
         let iir_factory = ScalarIir::new();
 
         // Stage 1: highpass at 100 Hz.
-        let hp_spec = iir::design::<f64>(
+        let hp_spec = iir::design(
             iir::FilterFamily::Butterworth,
             FilterType::Highpass,
             4,
@@ -720,10 +766,10 @@ mod pipeline {
         )
         .expect("IIR HP design");
 
-        let mut hp_plan = Iir::<f64>::create_plan(&iir_factory, &hp_spec).expect("IIR HP plan");
+        let mut hp_plan = Iir::<f64>::create_proc(&iir_factory, &hp_spec).expect("IIR HP plan");
 
         // Stage 2: lowpass at 8000 Hz.
-        let lp_spec = iir::design::<f64>(
+        let lp_spec = iir::design(
             iir::FilterFamily::Butterworth,
             FilterType::Lowpass,
             4,
@@ -733,7 +779,7 @@ mod pipeline {
         )
         .expect("IIR LP design");
 
-        let mut lp_plan = Iir::<f64>::create_plan(&iir_factory, &lp_spec).expect("IIR LP plan");
+        let mut lp_plan = Iir::<f64>::create_proc(&iir_factory, &lp_spec).expect("IIR LP plan");
 
         // Signal: sum of 50 Hz (below HP), 1000 Hz (in passband), 15000 Hz (above LP).
         let n: usize = 4096;
@@ -795,7 +841,7 @@ mod pipeline {
 
         let input_c: Vec<Complex<f64>> = windowed.iter().map(|&r| Complex::new(r, 0.0)).collect();
         let mut spectrum = vec![Complex::new(0.0, 0.0); n];
-        plan.process(&input_c, &mut spectrum).expect("FFT process");
+        plan.execute(&input_c, &mut spectrum).expect("FFT process");
 
         // Parseval's theorem with ortho normalization:
         // sum(|x[n]|²) == sum(|X[k]|²)
@@ -832,22 +878,23 @@ mod cqt_integration {
     const CQT_LIB_TOL: f64 = 2e-4;
 
     /// Helper: create a multirate CQT plan with real primitives, routing the
-    /// octave decimator through an [`OmniResample`] sub-plan factory (option A).
+    /// octave decimator through an [`IntegrationBackend`] (the foundational
+    /// `Backend` + `CreateProc<ResampleSpec>`); option A.
     type LibrosaPlan = OmniCqtPlan<
         f64,
         <RustDftR2c as DftR2c<f64>>::Plan,
         ScalarVecOps,
-        OmniResamplePlan<f64, ScalarVecOps>,
+        OmniResampleProcessor<f64, ScalarVecOps>,
     >;
 
-    fn make_plan(spec: &omnidsp_core::design::cqt::CqtSpec<f64>) -> LibrosaPlan {
+    fn make_plan(spec: &omnidsp_core::design::cqt::CqtSpec) -> LibrosaPlan {
         let factory = OmniCqt::new(RustDftR2c, ScalarVecOps);
         factory
-            .create_plan(spec, &OmniResample::new(ScalarVecOps))
+            .create_plan(spec, &IntegrationBackend)
             .expect("CQT plan creation")
     }
 
-    fn librosa_spec() -> omnidsp_core::design::cqt::CqtSpec<f64> {
+    fn librosa_spec() -> omnidsp_core::design::cqt::CqtSpec {
         cqt::design(
             CQT_LIB_SAMPLE_RATE,
             CQT_LIB_MIN_FREQ,
@@ -995,12 +1042,12 @@ mod xcorr_integration {
     #[test]
     fn scipy_short_asymmetric() {
         let factory = make_factory();
-        let spec = CrossCorrSpec::<f64>::new(XCORR_SHORT_A.len(), XCORR_SHORT_B.len())
-            .expect("valid xcorr spec");
+        let spec =
+            CrossCorrSpec::new(XCORR_SHORT_A.len(), XCORR_SHORT_B.len()).expect("valid xcorr spec");
         let plan = factory.create_plan(&spec).expect("plan creation");
 
         let mut output = vec![0.0; spec.output_len()];
-        plan.process(XCORR_SHORT_A, XCORR_SHORT_B, &mut output)
+        plan.execute(XCORR_SHORT_A, XCORR_SHORT_B, &mut output)
             .expect("xcorr process");
 
         assert_approx_eq(
@@ -1015,12 +1062,12 @@ mod xcorr_integration {
     #[test]
     fn scipy_equal_length() {
         let factory = make_factory();
-        let spec = CrossCorrSpec::<f64>::new(XCORR_EQUAL_A.len(), XCORR_EQUAL_B.len())
-            .expect("valid xcorr spec");
+        let spec =
+            CrossCorrSpec::new(XCORR_EQUAL_A.len(), XCORR_EQUAL_B.len()).expect("valid xcorr spec");
         let plan = factory.create_plan(&spec).expect("plan creation");
 
         let mut output = vec![0.0; spec.output_len()];
-        plan.process(XCORR_EQUAL_A, XCORR_EQUAL_B, &mut output)
+        plan.execute(XCORR_EQUAL_A, XCORR_EQUAL_B, &mut output)
             .expect("xcorr process");
 
         assert_approx_eq(
@@ -1035,12 +1082,12 @@ mod xcorr_integration {
     #[test]
     fn scipy_delay_sinusoids() {
         let factory = make_factory();
-        let spec = CrossCorrSpec::<f64>::new(XCORR_DELAY_A.len(), XCORR_DELAY_B.len())
-            .expect("valid xcorr spec");
+        let spec =
+            CrossCorrSpec::new(XCORR_DELAY_A.len(), XCORR_DELAY_B.len()).expect("valid xcorr spec");
         let plan = factory.create_plan(&spec).expect("plan creation");
 
         let mut output = vec![0.0; spec.output_len()];
-        plan.process(XCORR_DELAY_A, XCORR_DELAY_B, &mut output)
+        plan.execute(XCORR_DELAY_A, XCORR_DELAY_B, &mut output)
             .expect("xcorr process");
 
         assert_approx_eq(

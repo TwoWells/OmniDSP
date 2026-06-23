@@ -24,8 +24,6 @@
     reason = "2^(k/B) formulas are clearer with powf than exp2"
 )]
 
-use num_traits::Float;
-
 use crate::error::{Error, Result};
 use crate::window::Window;
 
@@ -105,15 +103,23 @@ impl Default for DecimatorQuality {
 /// Each bin carries its center frequency and pre-computed window
 /// coefficients.  The kernel length is `window.len()`.
 ///
+/// The window coefficients are carried in **f64** (the design precision); the
+/// per-bin frequency-domain kernels are materialized at this precision and cast
+/// to the operation's `T` once, at the create edge.
+///
 /// When produced by [`design`], the kernel length for a bin at frequency
 /// `f` is `ceil(Q · sample_rate / f)` where `Q` is the
 /// [`quality_factor`] for the chosen `bins_per_octave`.
-#[derive(Debug, Clone)]
-pub struct CqtBinSpec<T> {
+#[derive(Debug, Clone, PartialEq)]
+#[allow(
+    clippy::derive_partial_eq_without_eq,
+    reason = "window coefficients are f64, which is not Eq"
+)]
+pub struct CqtBinSpec {
     /// Center frequency in Hz.
     pub frequency: f64,
-    /// Window coefficients for this bin's kernel.
-    pub window: Vec<T>,
+    /// Window coefficients for this bin's kernel (f64 design precision).
+    pub window: Vec<f64>,
 }
 
 /// CQT specification — plan-ready description of a Constant-Q Transform.
@@ -142,7 +148,7 @@ pub struct CqtBinSpec<T> {
 /// use omnidsp_core::design::cqt;
 /// use omnidsp_core::window::Window;
 ///
-/// let spec = cqt::design::<f64>(44100.0, 27.5, 4186.0, 24, &Window::Hann).unwrap();
+/// let spec = cqt::design(44100.0, 27.5, 4186.0, 24, &Window::Hann).unwrap();
 /// assert!(!spec.bins().is_empty());
 /// assert!(spec.fft_length().is_power_of_two());
 /// ```
@@ -153,21 +159,25 @@ pub struct CqtBinSpec<T> {
 /// use omnidsp_core::design::cqt::{CqtSpec, CqtBinSpec};
 ///
 /// let bins = vec![
-///     CqtBinSpec { frequency: 440.0, window: vec![0.0_f64, 0.5, 1.0, 0.5, 0.0] },
+///     CqtBinSpec { frequency: 440.0, window: vec![0.0, 0.5, 1.0, 0.5, 0.0] },
 /// ];
 /// let spec = CqtSpec::new(44100.0, 8, 2, bins).unwrap();
 /// assert_eq!(spec.num_bins(), 1);
 /// ```
-#[derive(Debug, Clone)]
-pub struct CqtSpec<T> {
+#[derive(Debug, Clone, PartialEq)]
+#[allow(
+    clippy::derive_partial_eq_without_eq,
+    reason = "per-bin window coefficients are f64, which is not Eq"
+)]
+pub struct CqtSpec {
     sample_rate: f64,
     fft_length: usize,
     hop_length: usize,
-    bins: Vec<CqtBinSpec<T>>,
+    bins: Vec<CqtBinSpec>,
     decimator_quality: DecimatorQuality,
 }
 
-impl<T> CqtSpec<T> {
+impl CqtSpec {
     /// Construct a CQT spec directly from pre-computed data.
     ///
     /// # Errors
@@ -182,7 +192,7 @@ impl<T> CqtSpec<T> {
         sample_rate: f64,
         fft_length: usize,
         hop_length: usize,
-        bins: Vec<CqtBinSpec<T>>,
+        bins: Vec<CqtBinSpec>,
     ) -> Result<Self> {
         if sample_rate <= 0.0 {
             return Err(Error::InvalidSpec("sample rate must be positive".into()));
@@ -226,19 +236,6 @@ impl<T> CqtSpec<T> {
         self
     }
 
-    /// Wrap this batch spec as a streaming spec for the newest-anchored CQT.
-    ///
-    /// The fluent inverse of
-    /// [`CqtStreamSpec::into_spec`](crate::modules::cqt::CqtStreamSpec::into_spec):
-    /// the streaming and batch paths describe the same transform and differ only
-    /// in execution state, so `design(...)?.into_streaming()` is the canonical
-    /// way to build a streaming spec — no second designer (see the
-    /// `spec`-module surface conventions).
-    #[must_use]
-    pub const fn into_streaming(self) -> crate::modules::cqt::CqtStreamSpec<T> {
-        crate::modules::cqt::CqtStreamSpec::new(self)
-    }
-
     /// Sample rate in Hz.
     #[must_use]
     pub const fn sample_rate(&self) -> f64 {
@@ -259,7 +256,7 @@ impl<T> CqtSpec<T> {
 
     /// Per-bin specifications, ordered low to high frequency.
     #[must_use]
-    pub fn bins(&self) -> &[CqtBinSpec<T>] {
+    pub fn bins(&self) -> &[CqtBinSpec] {
         &self.bins
     }
 
@@ -321,13 +318,13 @@ pub fn quality_factor(bins_per_octave: u32) -> f64 {
 /// - `max_freq >= sample_rate / 2` (at or above Nyquist)
 /// - `bins_per_octave` is zero
 /// - window generation fails for any bin
-pub fn design<T: Float>(
+pub fn design(
     sample_rate: f64,
     min_freq: f64,
     max_freq: f64,
     bins_per_octave: u32,
     window: &Window,
-) -> Result<CqtSpec<T>> {
+) -> Result<CqtSpec> {
     if sample_rate <= 0.0 {
         return Err(Error::InvalidSpec("sample rate must be positive".into()));
     }
@@ -364,7 +361,7 @@ pub fn design<T: Float>(
     let first_len = first_len.max(1);
     bins.push(CqtBinSpec {
         frequency: min_freq,
-        window: window.coefficients::<T>(first_len)?,
+        window: window.coefficients::<f64>(first_len)?,
     });
 
     // Remaining bins: f_k = min_freq · 2^(k/B) while f_k < max_freq and < Nyquist.
@@ -378,7 +375,7 @@ pub fn design<T: Float>(
         let kernel_len = kernel_len.max(1);
         bins.push(CqtBinSpec {
             frequency: freq,
-            window: window.coefficients::<T>(kernel_len)?,
+            window: window.coefficients::<f64>(kernel_len)?,
         });
         k += 1;
     }
@@ -416,55 +413,55 @@ mod tests {
 
     #[test]
     fn rejects_zero_sample_rate() {
-        let err = design::<f64>(0.0, 27.5, 4186.0, 24, &Window::Hann);
+        let err = design(0.0, 27.5, 4186.0, 24, &Window::Hann);
         assert!(err.is_err(), "sample rate 0 should be rejected");
     }
 
     #[test]
     fn rejects_negative_sample_rate() {
-        let err = design::<f64>(-44100.0, 27.5, 4186.0, 24, &Window::Hann);
+        let err = design(-44100.0, 27.5, 4186.0, 24, &Window::Hann);
         assert!(err.is_err(), "negative sample rate should be rejected");
     }
 
     #[test]
     fn rejects_zero_min_freq() {
-        let err = design::<f64>(44100.0, 0.0, 4186.0, 24, &Window::Hann);
+        let err = design(44100.0, 0.0, 4186.0, 24, &Window::Hann);
         assert!(err.is_err(), "min_freq 0 should be rejected");
     }
 
     #[test]
     fn rejects_negative_min_freq() {
-        let err = design::<f64>(44100.0, -10.0, 4186.0, 24, &Window::Hann);
+        let err = design(44100.0, -10.0, 4186.0, 24, &Window::Hann);
         assert!(err.is_err(), "negative min_freq should be rejected");
     }
 
     #[test]
     fn rejects_min_ge_max() {
-        let err = design::<f64>(44100.0, 5000.0, 1000.0, 24, &Window::Hann);
+        let err = design(44100.0, 5000.0, 1000.0, 24, &Window::Hann);
         assert!(err.is_err(), "min_freq >= max_freq should be rejected");
     }
 
     #[test]
     fn rejects_min_eq_max() {
-        let err = design::<f64>(44100.0, 1000.0, 1000.0, 24, &Window::Hann);
+        let err = design(44100.0, 1000.0, 1000.0, 24, &Window::Hann);
         assert!(err.is_err(), "min_freq == max_freq should be rejected");
     }
 
     #[test]
     fn rejects_max_at_nyquist() {
-        let err = design::<f64>(44100.0, 27.5, 22050.0, 24, &Window::Hann);
+        let err = design(44100.0, 27.5, 22050.0, 24, &Window::Hann);
         assert!(err.is_err(), "max_freq at Nyquist should be rejected");
     }
 
     #[test]
     fn rejects_max_above_nyquist() {
-        let err = design::<f64>(44100.0, 27.5, 30000.0, 24, &Window::Hann);
+        let err = design(44100.0, 27.5, 30000.0, 24, &Window::Hann);
         assert!(err.is_err(), "max_freq above Nyquist should be rejected");
     }
 
     #[test]
     fn rejects_zero_bins_per_octave() {
-        let err = design::<f64>(44100.0, 27.5, 4186.0, 0, &Window::Hann);
+        let err = design(44100.0, 27.5, 4186.0, 0, &Window::Hann);
         assert!(err.is_err(), "bins_per_octave 0 should be rejected");
     }
 
@@ -495,7 +492,7 @@ mod tests {
     #[test]
     fn piano_range_bin_count() {
         // 27.5 Hz to 4186 Hz ≈ 7.25 octaves, 24 bins/octave → ~174 bins
-        let spec = design::<f64>(44100.0, 27.5, 4186.0, 24, &Window::Hann).expect("valid design");
+        let spec = design(44100.0, 27.5, 4186.0, 24, &Window::Hann).expect("valid design");
         assert!(
             spec.bins.len() > 150 && spec.bins.len() < 200,
             "piano range 24 bins/oct should produce ~174 bins, got {}",
@@ -505,14 +502,14 @@ mod tests {
 
     #[test]
     fn one_octave_12_bins() {
-        let spec = design::<f64>(44100.0, 440.0, 880.0, 12, &Window::Hann).expect("valid design");
+        let spec = design(44100.0, 440.0, 880.0, 12, &Window::Hann).expect("valid design");
         // 1 octave, 12 bins/octave, exclusive upper bound → exactly 12 bins
         assert_eq!(spec.bins.len(), 12, "one octave, 12 bins/oct → 12 bins");
     }
 
     #[test]
     fn bins_are_ascending() {
-        let spec = design::<f64>(44100.0, 27.5, 4186.0, 24, &Window::Hann).expect("valid design");
+        let spec = design(44100.0, 27.5, 4186.0, 24, &Window::Hann).expect("valid design");
         for w in spec.bins.windows(2) {
             assert!(
                 w[1].frequency > w[0].frequency,
@@ -525,7 +522,7 @@ mod tests {
 
     #[test]
     fn first_bin_is_min_freq() {
-        let spec = design::<f64>(44100.0, 27.5, 4186.0, 24, &Window::Hann).expect("valid design");
+        let spec = design(44100.0, 27.5, 4186.0, 24, &Window::Hann).expect("valid design");
         assert!(
             (spec.bins[0].frequency - 27.5).abs() < 1e-10,
             "first bin should be min_freq"
@@ -534,7 +531,7 @@ mod tests {
 
     #[test]
     fn last_bin_below_max_freq() {
-        let spec = design::<f64>(44100.0, 27.5, 4186.0, 24, &Window::Hann).expect("valid design");
+        let spec = design(44100.0, 27.5, 4186.0, 24, &Window::Hann).expect("valid design");
         let last_freq = spec.bins[spec.bins.len() - 1].frequency;
         assert!(
             last_freq < 4186.0,
@@ -545,8 +542,7 @@ mod tests {
     #[test]
     fn bins_excluded_above_nyquist() {
         // max_freq near Nyquist — bins should stop below sr/2
-        let spec =
-            design::<f64>(44100.0, 10000.0, 22000.0, 12, &Window::Hann).expect("valid design");
+        let spec = design(44100.0, 10000.0, 22000.0, 12, &Window::Hann).expect("valid design");
         let nyquist = 44100.0 / 2.0;
         for bin in &spec.bins {
             assert!(
@@ -561,7 +557,7 @@ mod tests {
 
     #[test]
     fn kernel_lengths_decrease_with_frequency() {
-        let spec = design::<f64>(44100.0, 27.5, 4186.0, 24, &Window::Hann).expect("valid design");
+        let spec = design(44100.0, 27.5, 4186.0, 24, &Window::Hann).expect("valid design");
         for w in spec.bins.windows(2) {
             assert!(
                 w[0].window.len() >= w[1].window.len(),
@@ -576,7 +572,7 @@ mod tests {
 
     #[test]
     fn kernel_length_formula() {
-        let spec = design::<f64>(44100.0, 440.0, 880.0, 12, &Window::Hann).expect("valid design");
+        let spec = design(44100.0, 440.0, 880.0, 12, &Window::Hann).expect("valid design");
         let q = quality_factor(12);
         for bin in &spec.bins {
             let expected = (q * 44100.0 / bin.frequency).ceil() as usize;
@@ -593,7 +589,7 @@ mod tests {
 
     #[test]
     fn fft_length_is_power_of_two() {
-        let spec = design::<f64>(44100.0, 27.5, 4186.0, 24, &Window::Hann).expect("valid design");
+        let spec = design(44100.0, 27.5, 4186.0, 24, &Window::Hann).expect("valid design");
         assert!(
             spec.fft_length.is_power_of_two(),
             "FFT length {} must be a power of two",
@@ -603,7 +599,7 @@ mod tests {
 
     #[test]
     fn fft_length_ge_longest_kernel() {
-        let spec = design::<f64>(44100.0, 27.5, 4186.0, 24, &Window::Hann).expect("valid design");
+        let spec = design(44100.0, 27.5, 4186.0, 24, &Window::Hann).expect("valid design");
         let max_kernel = spec.bins[0].window.len();
         assert!(
             spec.fft_length >= max_kernel,
@@ -617,7 +613,7 @@ mod tests {
 
     #[test]
     fn hop_length_positive() {
-        let spec = design::<f64>(44100.0, 27.5, 4186.0, 24, &Window::Hann).expect("valid design");
+        let spec = design(44100.0, 27.5, 4186.0, 24, &Window::Hann).expect("valid design");
         assert!(spec.hop_length >= 1, "hop length must be at least 1");
     }
 
@@ -625,7 +621,7 @@ mod tests {
 
     #[test]
     fn single_bin_per_octave() {
-        let spec = design::<f64>(44100.0, 100.0, 1000.0, 1, &Window::Hann).expect("valid design");
+        let spec = design(44100.0, 100.0, 1000.0, 1, &Window::Hann).expect("valid design");
         // ~3.32 octaves, 1 bin/octave, exclusive → bins at 100, 200, 400, 800
         assert_eq!(
             spec.bins.len(),
@@ -638,13 +634,13 @@ mod tests {
 
     #[test]
     fn new_rejects_empty_bins() {
-        let result = CqtSpec::<f64>::new(44100.0, 256, 64, vec![]);
+        let result = CqtSpec::new(44100.0, 256, 64, vec![]);
         assert!(result.is_err(), "empty bins should be rejected");
     }
 
     #[test]
     fn new_rejects_empty_window() {
-        let bins = vec![CqtBinSpec::<f64> {
+        let bins = vec![CqtBinSpec {
             frequency: 440.0,
             window: vec![],
         }];
@@ -692,7 +688,7 @@ mod tests {
     }
 
     fn assert_design_matches(r: &CqtRef) {
-        let spec = design::<f64>(
+        let spec = design(
             r.sample_rate,
             r.min_freq,
             r.max_freq,

@@ -26,8 +26,6 @@
 //! enforces its invariants once, and exposes its data through accessors so a
 //! constructed spec can never be mutated into an invalid state.
 
-use std::marker::PhantomData;
-
 use num_complex::Complex;
 
 use crate::error::{Error, Result};
@@ -86,10 +84,9 @@ pub enum DftNorm {
 /// [`DftC2c`] plan.  Direction is a runtime field because forward and inverse
 /// share the `Complex → Complex` signature.
 ///
-/// The type parameter `T` ties the spec to a specific float type, making
-/// specs fully self-describing for the dispatch layer's `CreatePlan<S>` trait.
-/// `T` is carried via [`PhantomData`] and hidden behind the constructor.
-/// Fields are private and the spec is valid-by-construction.
+/// The spec is non-generic: precision is a realization-edge concern, chosen at
+/// `dsp.create_plan::<T>(&spec)`, not pinned by the description.  Fields are
+/// private and the spec is valid-by-construction.
 ///
 /// # Examples
 ///
@@ -98,27 +95,18 @@ pub enum DftNorm {
 /// use omnidsp_core::types::Direction;
 ///
 /// // 1024-point forward FFT with inverse normalization (round-trip = identity)
-/// let spec = DftC2cSpec::<f64>::new(1024, Direction::Forward, DftNorm::Inverse).unwrap();
+/// let spec = DftC2cSpec::new(1024, Direction::Forward, DftNorm::Inverse).unwrap();
 /// assert_eq!(spec.length(), 1024);
 /// assert_eq!(spec.direction(), Direction::Forward);
 /// ```
-#[derive(Debug, Clone, Copy)]
-pub struct DftC2cSpec<T> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DftC2cSpec {
     length: usize,
     direction: Direction,
     norm: DftNorm,
-    _marker: PhantomData<T>,
 }
 
-impl<T> PartialEq for DftC2cSpec<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.length == other.length && self.direction == other.direction && self.norm == other.norm
-    }
-}
-
-impl<T> Eq for DftC2cSpec<T> {}
-
-impl<T> DftC2cSpec<T> {
+impl DftC2cSpec {
     /// Create a complex-to-complex DFT spec.
     ///
     /// # Errors
@@ -132,7 +120,6 @@ impl<T> DftC2cSpec<T> {
             length,
             direction,
             norm,
-            _marker: PhantomData,
         })
     }
 
@@ -172,7 +159,7 @@ pub trait DftC2cPlan<T>: Send + Sync {
     ///
     /// Returns [`Error::BufferMismatch`] if either buffer length does not
     /// match the plan length.
-    fn process(&self, input: &[Complex<T>], output: &mut [Complex<T>]) -> Result<()>;
+    fn execute(&self, input: &[Complex<T>], output: &mut [Complex<T>]) -> Result<()>;
 }
 
 /// Factory for creating [`DftC2cPlan`] execution objects.
@@ -190,7 +177,7 @@ pub trait DftC2c<T> {
     /// # Errors
     ///
     /// Returns an error if the length is unsupported by the implementation.
-    fn create_plan(&self, spec: &DftC2cSpec<T>) -> Result<Self::Plan>;
+    fn create_plan(&self, spec: &DftC2cSpec) -> Result<Self::Plan>;
 }
 
 // ─── r2c: real → complex half-spectrum ───────────────────────────────
@@ -202,33 +189,24 @@ pub trait DftC2c<T> {
 /// mirror of the lower and is not stored).  There is no direction field — r2c
 /// is inherently forward.
 ///
-/// `T` is carried via [`PhantomData`].  Fields are private and the spec is
-/// valid-by-construction.
+/// The spec is non-generic; precision is chosen at `create_plan::<T>`.  Fields
+/// are private and the spec is valid-by-construction.
 ///
 /// # Examples
 ///
 /// ```
 /// use omnidsp_core::traits::dft::{DftR2cSpec, DftNorm};
 ///
-/// let spec = DftR2cSpec::<f64>::new(1024, DftNorm::Inverse).unwrap();
+/// let spec = DftR2cSpec::new(1024, DftNorm::Inverse).unwrap();
 /// assert_eq!(spec.length(), 1024);
 /// ```
-#[derive(Debug, Clone, Copy)]
-pub struct DftR2cSpec<T> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DftR2cSpec {
     length: usize,
     norm: DftNorm,
-    _marker: PhantomData<T>,
 }
 
-impl<T> PartialEq for DftR2cSpec<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.length == other.length && self.norm == other.norm
-    }
-}
-
-impl<T> Eq for DftR2cSpec<T> {}
-
-impl<T> DftR2cSpec<T> {
+impl DftR2cSpec {
     /// Create a real-to-complex DFT spec.
     ///
     /// # Errors
@@ -238,11 +216,7 @@ impl<T> DftR2cSpec<T> {
         if length == 0 {
             return Err(Error::InvalidSpec("DFT length must be non-zero".into()));
         }
-        Ok(Self {
-            length,
-            norm,
-            _marker: PhantomData,
-        })
+        Ok(Self { length, norm })
     }
 
     /// Number of real input samples.
@@ -278,7 +252,7 @@ pub trait DftR2cPlan<T>: Send + Sync {
     ///
     /// Returns [`Error::BufferMismatch`] if either buffer length does not
     /// match the plan's contract.
-    fn process(&self, input: &mut [T], output: &mut [Complex<T>]) -> Result<()>;
+    fn execute(&self, input: &mut [T], output: &mut [Complex<T>]) -> Result<()>;
 }
 
 /// Factory for creating [`DftR2cPlan`] execution objects.
@@ -294,7 +268,7 @@ pub trait DftR2c<T> {
     /// # Errors
     ///
     /// Returns an error if the length is unsupported by the implementation.
-    fn create_plan(&self, spec: &DftR2cSpec<T>) -> Result<Self::Plan>;
+    fn create_plan(&self, spec: &DftR2cSpec) -> Result<Self::Plan>;
 }
 
 // ─── c2r: complex half-spectrum → real ───────────────────────────────
@@ -309,33 +283,24 @@ pub trait DftR2c<T> {
 /// `N / 2 + 1` complex input alone (both `N = 2k` and `N = 2k - 1` produce a
 /// `k`-bin half-spectrum), so it must be carried explicitly.
 ///
-/// `T` is carried via [`PhantomData`].  Fields are private and the spec is
-/// valid-by-construction.
+/// The spec is non-generic; precision is chosen at `create_plan::<T>`.  Fields
+/// are private and the spec is valid-by-construction.
 ///
 /// # Examples
 ///
 /// ```
 /// use omnidsp_core::traits::dft::{DftC2rSpec, DftNorm};
 ///
-/// let spec = DftC2rSpec::<f64>::new(1024, DftNorm::Inverse).unwrap();
+/// let spec = DftC2rSpec::new(1024, DftNorm::Inverse).unwrap();
 /// assert_eq!(spec.length(), 1024);
 /// ```
-#[derive(Debug, Clone, Copy)]
-pub struct DftC2rSpec<T> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DftC2rSpec {
     length: usize,
     norm: DftNorm,
-    _marker: PhantomData<T>,
 }
 
-impl<T> PartialEq for DftC2rSpec<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.length == other.length && self.norm == other.norm
-    }
-}
-
-impl<T> Eq for DftC2rSpec<T> {}
-
-impl<T> DftC2rSpec<T> {
+impl DftC2rSpec {
     /// Create a complex-to-real DFT spec.
     ///
     /// `length` is the real output length `N`.
@@ -347,11 +312,7 @@ impl<T> DftC2rSpec<T> {
         if length == 0 {
             return Err(Error::InvalidSpec("DFT length must be non-zero".into()));
         }
-        Ok(Self {
-            length,
-            norm,
-            _marker: PhantomData,
-        })
+        Ok(Self { length, norm })
     }
 
     /// Real output length `N`.
@@ -393,7 +354,7 @@ pub trait DftC2rPlan<T>: Send + Sync {
     ///
     /// Returns [`Error::BufferMismatch`] if either buffer length does not
     /// match the plan's contract.
-    fn process(&self, input: &mut [Complex<T>], output: &mut [T]) -> Result<()>;
+    fn execute(&self, input: &mut [Complex<T>], output: &mut [T]) -> Result<()>;
 }
 
 /// Factory for creating [`DftC2rPlan`] execution objects.
@@ -409,7 +370,7 @@ pub trait DftC2r<T> {
     /// # Errors
     ///
     /// Returns an error if the length is unsupported by the implementation.
-    fn create_plan(&self, spec: &DftC2rSpec<T>) -> Result<Self::Plan>;
+    fn create_plan(&self, spec: &DftC2rSpec) -> Result<Self::Plan>;
 }
 
 #[cfg(test)]
@@ -420,7 +381,7 @@ mod tests {
 
     #[test]
     fn c2c_spec_rejects_zero_length() {
-        let result = DftC2cSpec::<f64>::new(0, Direction::Forward, DftNorm::None);
+        let result = DftC2cSpec::new(0, Direction::Forward, DftNorm::None);
         assert!(
             matches!(result, Err(Error::InvalidSpec(_))),
             "zero length must be rejected with InvalidSpec"
@@ -429,7 +390,7 @@ mod tests {
 
     #[test]
     fn c2c_spec_accessors_round_trip() {
-        let spec = DftC2cSpec::<f64>::new(1024, Direction::Inverse, DftNorm::Ortho)
+        let spec = DftC2cSpec::new(1024, Direction::Inverse, DftNorm::Ortho)
             .expect("non-zero length should be accepted");
         assert_eq!(
             spec.length(),
@@ -450,7 +411,7 @@ mod tests {
 
     #[test]
     fn r2c_spec_rejects_zero_length() {
-        let result = DftR2cSpec::<f32>::new(0, DftNorm::None);
+        let result = DftR2cSpec::new(0, DftNorm::None);
         assert!(
             matches!(result, Err(Error::InvalidSpec(_))),
             "zero length must be rejected with InvalidSpec"
@@ -459,7 +420,7 @@ mod tests {
 
     #[test]
     fn r2c_spec_accessors_round_trip() {
-        let spec = DftR2cSpec::<f32>::new(512, DftNorm::Inverse).expect("non-zero length accepted");
+        let spec = DftR2cSpec::new(512, DftNorm::Inverse).expect("non-zero length accepted");
         assert_eq!(
             spec.length(),
             512,
@@ -474,7 +435,7 @@ mod tests {
 
     #[test]
     fn c2r_spec_rejects_zero_length() {
-        let result = DftC2rSpec::<f64>::new(0, DftNorm::None);
+        let result = DftC2rSpec::new(0, DftNorm::None);
         assert!(
             matches!(result, Err(Error::InvalidSpec(_))),
             "zero length must be rejected with InvalidSpec"
@@ -483,7 +444,7 @@ mod tests {
 
     #[test]
     fn c2r_spec_accessors_round_trip() {
-        let spec = DftC2rSpec::<f64>::new(768, DftNorm::Ortho).expect("non-zero length accepted");
+        let spec = DftC2rSpec::new(768, DftNorm::Ortho).expect("non-zero length accepted");
         assert_eq!(
             spec.length(),
             768,

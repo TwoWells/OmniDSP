@@ -16,7 +16,6 @@
 //! `Send + Sync` while taking `&self`.
 
 use std::fmt;
-use std::marker::PhantomData;
 use std::ops::{AddAssign, MulAssign};
 use std::sync::Mutex;
 
@@ -51,36 +50,26 @@ pub enum CrossCorrNorm {
 /// Describes the input signal lengths.  The output length is always
 /// `a_len + b_len - 1` (full linear cross-correlation).
 ///
-/// The type parameter `T` ties the spec to a specific float type, making
-/// specs fully self-describing for the dispatch layer's `CreatePlan<S>` trait.
-/// Fields are private and the spec is valid-by-construction.
+/// The spec is non-generic; precision is chosen at `create_plan::<T>`.  Fields
+/// are private and the spec is valid-by-construction.
 ///
 /// # Examples
 ///
 /// ```
 /// use omnidsp_core::modules::xcorr::CrossCorrSpec;
 ///
-/// let spec = CrossCorrSpec::<f64>::new(1024, 256).unwrap();
+/// let spec = CrossCorrSpec::new(1024, 256).unwrap();
 /// assert_eq!(spec.a_len(), 1024);
 /// assert_eq!(spec.b_len(), 256);
 /// ```
-#[derive(Debug, Clone, Copy)]
-pub struct CrossCorrSpec<T> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CrossCorrSpec {
     a_len: usize,
     b_len: usize,
     norm: CrossCorrNorm,
-    _marker: PhantomData<T>,
 }
 
-impl<T> PartialEq for CrossCorrSpec<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.a_len == other.a_len && self.b_len == other.b_len && self.norm == other.norm
-    }
-}
-
-impl<T> Eq for CrossCorrSpec<T> {}
-
-impl<T> CrossCorrSpec<T> {
+impl CrossCorrSpec {
     /// Create a new cross-correlation spec with the given input lengths.
     ///
     /// The [`norm`](CrossCorrSpec::norm) defaults to [`CrossCorrNorm::None`]
@@ -99,7 +88,6 @@ impl<T> CrossCorrSpec<T> {
             a_len,
             b_len,
             norm: CrossCorrNorm::None,
-            _marker: PhantomData,
         })
     }
 
@@ -224,7 +212,7 @@ where
         clippy::significant_drop_tightening,
         reason = "MutexGuard must live for the entire FFT pipeline"
     )]
-    pub fn process(&self, a: &[T], b: &[T], output: &mut [T]) -> Result<()> {
+    pub fn execute(&self, a: &[T], b: &[T], output: &mut [T]) -> Result<()> {
         if a.len() != self.a_len {
             return Err(Error::BufferMismatch {
                 expected: self.a_len,
@@ -257,11 +245,11 @@ where
 
         // 1. Zero-pad a → real, then forward r2c → half_a (real is consumed).
         pad_real(a, real);
-        self.fwd.process(real, half_a)?;
+        self.fwd.execute(real, half_a)?;
 
         // 2. Zero-pad b → real (reuse), then forward r2c → half_b.
         pad_real(b, real);
-        self.fwd.process(real, half_b)?;
+        self.fwd.execute(real, half_b)?;
 
         // 3. Conjugate the half-spectrum of b in place: conj(r2c(b)).
         self.vecops.conj_inplace(half_b);
@@ -270,7 +258,7 @@ where
         self.vecops.cmul_inplace(half_a, half_b)?;
 
         // 5. Inverse c2r: half_a → real (HermitianC2r projects DC/Nyquist).
-        self.inv.process(half_a, real)?;
+        self.inv.execute(half_a, real)?;
 
         // 6. Extract real output in full cross-correlation order.
         //    The IFFT produces circular correlation in wrap-around order:
@@ -324,7 +312,7 @@ pub trait CrossCorrPlan<T>: Send + Sync {
     /// # Errors
     ///
     /// Returns an error if any buffer length does not match the expected size.
-    fn process(&self, a: &[T], b: &[T], output: &mut [T]) -> Result<()>;
+    fn execute(&self, a: &[T], b: &[T], output: &mut [T]) -> Result<()>;
 }
 
 impl<T, RP, CP, V> CrossCorrPlan<T> for OmniCrossCorrPlan<T, RP, CP, V>
@@ -334,10 +322,10 @@ where
     CP: DftC2rPlan<T>,
     V: VecOps<T>,
 {
-    fn process(&self, a: &[T], b: &[T], output: &mut [T]) -> Result<()> {
-        // Delegate to the inherent `process`.  Inherent methods take precedence
+    fn execute(&self, a: &[T], b: &[T], output: &mut [T]) -> Result<()> {
+        // Delegate to the inherent `execute`.  Inherent methods take precedence
         // over trait methods in resolution, so this is not recursive.
-        self.process(a, b, output)
+        self.execute(a, b, output)
     }
 }
 
@@ -359,7 +347,7 @@ impl<R, C, V> OmniCrossCorr<R, C, V> {
     /// Returns an error if the FFT length overflows or DFT plan creation
     /// fails.  The length invariants are enforced by [`CrossCorrSpec::new`],
     /// so they are not re-checked here.
-    pub fn create_plan<T>(&self, spec: &CrossCorrSpec<T>) -> Result<ShapedCrossCorrPlan<T, R, C, V>>
+    pub fn create_plan<T>(&self, spec: &CrossCorrSpec) -> Result<ShapedCrossCorrPlan<T, R, C, V>>
     where
         T: DspFloat + AddAssign + MulAssign,
         R: DftR2c<T>,
@@ -426,7 +414,7 @@ mod tests {
 
     #[test]
     fn spec_output_len() {
-        let spec = CrossCorrSpec::<f64>::new(5, 3).expect("valid xcorr spec");
+        let spec = CrossCorrSpec::new(5, 3).expect("valid xcorr spec");
         assert_eq!(
             spec.output_len(),
             7,
@@ -436,9 +424,9 @@ mod tests {
 
     #[test]
     fn spec_equality() {
-        let a = CrossCorrSpec::<f64>::new(10, 5).expect("valid xcorr spec");
-        let b = CrossCorrSpec::<f64>::new(10, 5).expect("valid xcorr spec");
-        let c = CrossCorrSpec::<f64>::new(10, 6).expect("valid xcorr spec");
+        let a = CrossCorrSpec::new(10, 5).expect("valid xcorr spec");
+        let b = CrossCorrSpec::new(10, 5).expect("valid xcorr spec");
+        let c = CrossCorrSpec::new(10, 6).expect("valid xcorr spec");
         assert_eq!(a, b, "equal specs should compare equal");
         assert_ne!(a, c, "different specs should not compare equal");
     }
@@ -446,7 +434,7 @@ mod tests {
     #[test]
     fn zero_a_len_rejected() {
         assert!(
-            CrossCorrSpec::<f64>::new(0, 5).is_err(),
+            CrossCorrSpec::new(0, 5).is_err(),
             "zero a_len should be rejected by the spec constructor"
         );
     }
@@ -454,7 +442,7 @@ mod tests {
     #[test]
     fn zero_b_len_rejected() {
         assert!(
-            CrossCorrSpec::<f64>::new(5, 0).is_err(),
+            CrossCorrSpec::new(5, 0).is_err(),
             "zero b_len should be rejected by the spec constructor"
         );
     }
@@ -462,42 +450,42 @@ mod tests {
     #[test]
     fn buffer_mismatch_a() {
         let factory = make_factory();
-        let spec = CrossCorrSpec::<f64>::new(4, 3).expect("valid xcorr spec");
+        let spec = CrossCorrSpec::new(4, 3).expect("valid xcorr spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
         let a = [1.0; 5]; // wrong length
         let b = [1.0; 3];
         let mut out = vec![0.0; 6];
-        let result = plan.process(&a, &b, &mut out);
+        let result = plan.execute(&a, &b, &mut out);
         assert!(result.is_err(), "wrong a length should fail");
     }
 
     #[test]
     fn buffer_mismatch_b() {
         let factory = make_factory();
-        let spec = CrossCorrSpec::<f64>::new(4, 3).expect("valid xcorr spec");
+        let spec = CrossCorrSpec::new(4, 3).expect("valid xcorr spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
         let a = [1.0; 4];
         let b = [1.0; 2]; // wrong length
         let mut out = vec![0.0; 6];
-        let result = plan.process(&a, &b, &mut out);
+        let result = plan.execute(&a, &b, &mut out);
         assert!(result.is_err(), "wrong b length should fail");
     }
 
     #[test]
     fn buffer_mismatch_output() {
         let factory = make_factory();
-        let spec = CrossCorrSpec::<f64>::new(4, 3).expect("valid xcorr spec");
+        let spec = CrossCorrSpec::new(4, 3).expect("valid xcorr spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
         let a = [1.0; 4];
         let b = [1.0; 3];
         let mut out = vec![0.0; 5]; // wrong length (should be 6)
-        let result = plan.process(&a, &b, &mut out);
+        let result = plan.execute(&a, &b, &mut out);
         assert!(result.is_err(), "wrong output length should fail");
     }
 
@@ -507,13 +495,13 @@ mod tests {
     fn autocorrelation_peak() {
         let factory = make_factory();
         let a = [1.0, 2.0, 3.0, 4.0];
-        let spec = CrossCorrSpec::<f64>::new(a.len(), a.len()).expect("valid xcorr spec");
+        let spec = CrossCorrSpec::new(a.len(), a.len()).expect("valid xcorr spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
 
         let mut output = vec![0.0; spec.output_len()];
-        plan.process(&a, &a, &mut output)
+        plan.execute(&a, &a, &mut output)
             .expect("process should succeed");
 
         // Zero-lag is at index b_len - 1 = 3.
@@ -540,13 +528,13 @@ mod tests {
         let factory = make_factory();
         let a = [1.0, 2.0, 3.0];
         let b = [0.5, 1.0];
-        let spec = CrossCorrSpec::<f64>::new(a.len(), b.len()).expect("valid xcorr spec");
+        let spec = CrossCorrSpec::new(a.len(), b.len()).expect("valid xcorr spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
 
         let mut output = vec![0.0; spec.output_len()];
-        plan.process(&a, &b, &mut output)
+        plan.execute(&a, &b, &mut output)
             .expect("process should succeed");
 
         // Manual computation of full cross-correlation:
@@ -571,13 +559,13 @@ mod tests {
         let factory = make_factory();
         let a = [1.0, 2.0, 3.0, 4.0];
         let b = [1.0, 0.0, 0.0, 0.0];
-        let spec = CrossCorrSpec::<f64>::new(a.len(), b.len()).expect("valid xcorr spec");
+        let spec = CrossCorrSpec::new(a.len(), b.len()).expect("valid xcorr spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
 
         let mut output = vec![0.0; spec.output_len()];
-        plan.process(&a, &b, &mut output)
+        plan.execute(&a, &b, &mut output)
             .expect("process should succeed");
 
         // xcorr(a, delta_0) → a appears starting at index b_len-1.
@@ -597,22 +585,22 @@ mod tests {
         let a = [1.0, 2.0, 3.0];
         let b = [4.0, 5.0];
 
-        let spec_ab = CrossCorrSpec::<f64>::new(a.len(), b.len()).expect("valid xcorr spec");
+        let spec_ab = CrossCorrSpec::new(a.len(), b.len()).expect("valid xcorr spec");
         let plan_ab = factory
             .create_plan(&spec_ab)
             .expect("plan creation should succeed");
         let mut out_ab = vec![0.0; spec_ab.output_len()];
         plan_ab
-            .process(&a, &b, &mut out_ab)
+            .execute(&a, &b, &mut out_ab)
             .expect("process should succeed");
 
-        let spec_ba = CrossCorrSpec::<f64>::new(b.len(), a.len()).expect("valid xcorr spec");
+        let spec_ba = CrossCorrSpec::new(b.len(), a.len()).expect("valid xcorr spec");
         let plan_ba = factory
             .create_plan(&spec_ba)
             .expect("plan creation should succeed");
         let mut out_ba = vec![0.0; spec_ba.output_len()];
         plan_ba
-            .process(&b, &a, &mut out_ba)
+            .execute(&b, &a, &mut out_ba)
             .expect("process should succeed");
 
         // xcorr(a,b) reversed should equal xcorr(b,a).
@@ -631,7 +619,7 @@ mod tests {
         let factory = make_factory();
         let a = [1.0, -1.0, 2.0, -2.0];
         let b = [0.5, 1.5];
-        let spec = CrossCorrSpec::<f64>::new(a.len(), b.len()).expect("valid xcorr spec");
+        let spec = CrossCorrSpec::new(a.len(), b.len()).expect("valid xcorr spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -639,9 +627,9 @@ mod tests {
         let mut out1 = vec![0.0; spec.output_len()];
         let mut out2 = vec![0.0; spec.output_len()];
 
-        plan.process(&a, &b, &mut out1)
+        plan.execute(&a, &b, &mut out1)
             .expect("first process should succeed");
-        plan.process(&a, &b, &mut out2)
+        plan.execute(&a, &b, &mut out2)
             .expect("second process should succeed");
 
         for (i, (&v1, &v2)) in out1.iter().zip(out2.iter()).enumerate() {
@@ -656,7 +644,7 @@ mod tests {
     #[test]
     fn accessor_methods() {
         let factory = make_factory();
-        let spec = CrossCorrSpec::<f64>::new(8, 4).expect("valid xcorr spec");
+        let spec = CrossCorrSpec::new(8, 4).expect("valid xcorr spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -669,12 +657,12 @@ mod tests {
     #[test]
     fn implements_plan_trait() {
         fn check<P: CrossCorrPlan<f64>>(plan: &P, a: &[f64], b: &[f64], out: &mut [f64]) {
-            plan.process(a, b, out)
+            plan.execute(a, b, out)
                 .expect("trait process should succeed");
         }
 
         let factory = make_factory();
-        let spec = CrossCorrSpec::<f64>::new(4, 3).expect("valid xcorr spec");
+        let spec = CrossCorrSpec::new(4, 3).expect("valid xcorr spec");
         let plan = factory
             .create_plan(&spec)
             .expect("plan creation should succeed");
@@ -686,7 +674,7 @@ mod tests {
 
         // The trait method must agree with the inherent `process`.
         let mut direct = vec![0.0; spec.output_len()];
-        plan.process(&a, &b, &mut direct)
+        plan.execute(&a, &b, &mut direct)
             .expect("inherent process should succeed");
         for (i, (t, d)) in out.iter().zip(direct.iter()).enumerate() {
             assert!(

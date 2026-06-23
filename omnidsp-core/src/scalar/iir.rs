@@ -6,19 +6,19 @@
 //! The inner loop is a sequential recurrence that cannot be vectorized, so this
 //! implementation is scalar.  It is the baseline for all platforms.
 //!
-//! Plans are **mutable** — they hold biquad delay states that persist across
-//! calls so successive `process` calls form a continuous stream.
+//! Processors are **stateful** — they hold biquad delay states that persist
+//! across calls so successive `process` calls form a continuous stream.
 
 use crate::error::{Error, Result};
-use crate::traits::iir::{Iir, IirPlan, IirSpec};
+use crate::traits::iir::{Iir, IirProcessor, IirSpec};
 use crate::types::{BiquadSection, DspFloat};
 
 // ─── Public types ──────────────────────────────────────────────────────
 
 /// Scalar IIR filter factory (DF2T biquad cascade).
 ///
-/// Creates [`ScalarIirPlan`]s for biquad cascade specifications.  This is a
-/// zero-sized type — all state lives in the plan.
+/// Creates [`ScalarIirProcessor`]s for biquad cascade specifications.  This is a
+/// zero-sized type — all state lives in the processor.
 #[derive(Debug, Clone, Copy)]
 pub struct ScalarIir;
 
@@ -36,19 +36,20 @@ impl Default for ScalarIir {
     }
 }
 
-/// Execution plan for a streaming IIR filter (biquad cascade).
+/// Stateful execution object for a streaming IIR filter (biquad cascade).
 ///
-/// Created by [`ScalarIir::create_plan`](Iir::create_plan).  Mutable — holds
-/// biquad delay states that persist across calls.
-pub struct ScalarIirPlan<T> {
+/// Created by [`ScalarIir::create_proc`](Iir::create_proc).  Holds biquad delay
+/// states that persist across calls.  The biquad coefficients are cast from the
+/// spec's f64 sections to the operation's `T` at construction.
+pub struct ScalarIirProcessor<T> {
     sections: Vec<BiquadSection<T>>,
     /// Delay state per section: `[s1, s2]` for DF2T.
     state: Vec<[T; 2]>,
 }
 
-impl<T: std::fmt::Debug> std::fmt::Debug for ScalarIirPlan<T> {
+impl<T: std::fmt::Debug> std::fmt::Debug for ScalarIirProcessor<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ScalarIirPlan")
+        f.debug_struct("ScalarIirProcessor")
             .field("num_sections", &self.sections.len())
             .field("state", &self.state)
             .finish_non_exhaustive()
@@ -57,8 +58,8 @@ impl<T: std::fmt::Debug> std::fmt::Debug for ScalarIirPlan<T> {
 
 // ─── Trait implementations ────────────────────────────────────────────
 
-impl<T: DspFloat> IirPlan<T> for ScalarIirPlan<T> {
-    fn process(&mut self, input: &[T], output: &mut [T]) -> Result<()> {
+impl<T: DspFloat> IirProcessor<T> for ScalarIirProcessor<T> {
+    fn process(&mut self, input: &[T], output: &mut [T]) -> Result<usize> {
         if input.len() != output.len() {
             return Err(Error::BufferMismatch {
                 expected: input.len(),
@@ -80,7 +81,21 @@ impl<T: DspFloat> IirPlan<T> for ScalarIirPlan<T> {
             *out = y;
         }
 
-        Ok(())
+        Ok(input.len())
+    }
+
+    fn finish(&mut self, _output: &mut [T]) -> Result<usize> {
+        // An IIR cascade has an infinite impulse response — no finite ring-down
+        // tail to flush.  Clear the delay state and report nothing written.
+        self.reset();
+        Ok(0)
+    }
+
+    fn execute(&mut self, input: &[T], output: &mut [T]) -> Result<usize> {
+        self.reset();
+        let n = self.process(input, &mut output[..input.len()])?;
+        let tail = self.finish(&mut output[n..])?;
+        Ok(n + tail)
     }
 
     fn reset(&mut self) {
@@ -91,18 +106,34 @@ impl<T: DspFloat> IirPlan<T> for ScalarIirPlan<T> {
 }
 
 impl<T: DspFloat> Iir<T> for ScalarIir {
-    type Plan = ScalarIirPlan<T>;
+    type Proc = ScalarIirProcessor<T>;
 
-    fn create_plan(&self, spec: &IirSpec<T>) -> Result<Self::Plan> {
+    fn create_proc(&self, spec: &IirSpec) -> Result<Self::Proc> {
         // The non-empty-sections invariant is enforced by `IirSpec::new`,
-        // so it is not re-checked here.
-        let state = vec![[T::zero(); 2]; spec.sections().len()];
+        // so it is not re-checked here.  The f64 sections are cast to `T` at
+        // this create edge.
+        let sections = spec
+            .sections()
+            .iter()
+            .map(|s| {
+                Ok(BiquadSection {
+                    b0: cast(s.b0)?,
+                    b1: cast(s.b1)?,
+                    b2: cast(s.b2)?,
+                    a1: cast(s.a1)?,
+                    a2: cast(s.a2)?,
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let state = vec![[T::zero(); 2]; sections.len()];
 
-        Ok(ScalarIirPlan {
-            sections: spec.sections().to_vec(),
-            state,
-        })
+        Ok(ScalarIirProcessor { sections, state })
     }
+}
+
+/// Cast an f64 coefficient to the operation's precision `T`.
+fn cast<T: DspFloat>(v: f64) -> Result<T> {
+    T::from(v).ok_or_else(|| Error::Internal("cannot represent biquad coefficient in T".into()))
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────
@@ -111,7 +142,7 @@ impl<T: DspFloat> Iir<T> for ScalarIir {
 #[allow(clippy::expect_used, reason = "tests use expect for clarity")]
 mod tests {
     use super::*;
-    use crate::traits::iir::{Iir, IirPlan, IirSpec};
+    use crate::traits::iir::{Iir, IirProcessor, IirSpec};
 
     const EPSILON: f64 = 1e-12;
 
@@ -119,7 +150,7 @@ mod tests {
         ScalarIir::new()
     }
 
-    fn spec(sections: Vec<BiquadSection<f64>>) -> IirSpec<f64> {
+    fn spec(sections: Vec<BiquadSection<f64>>) -> IirSpec {
         IirSpec::new(sections).expect("valid iir spec")
     }
 
@@ -165,7 +196,7 @@ mod tests {
     #[test]
     fn passthrough() {
         let factory = make_factory();
-        let mut plan = Iir::<f64>::create_plan(&factory, &spec(vec![passthrough_section()]))
+        let mut plan = Iir::<f64>::create_proc(&factory, &spec(vec![passthrough_section()]))
             .expect("plan creation");
 
         let input = [1.0, 2.0, 3.0, 4.0, 5.0];
@@ -180,7 +211,7 @@ mod tests {
     #[test]
     fn gain() {
         let factory = make_factory();
-        let mut plan = Iir::<f64>::create_plan(&factory, &spec(vec![gain_section(2.0)]))
+        let mut plan = Iir::<f64>::create_proc(&factory, &spec(vec![gain_section(2.0)]))
             .expect("plan creation");
 
         let input = [1.0, 2.0, 3.0, 4.0, 5.0];
@@ -205,7 +236,7 @@ mod tests {
             a1: -0.3,
             a2: 0.0,
         };
-        let mut plan = Iir::<f64>::create_plan(&factory, &spec(vec![sec])).expect("plan creation");
+        let mut plan = Iir::<f64>::create_proc(&factory, &spec(vec![sec])).expect("plan creation");
 
         let input = [1.0, 0.0, 0.0, 0.0, 0.0];
         let mut output = [0.0; 5];
@@ -243,11 +274,11 @@ mod tests {
 
         // Two-section cascade.
         let mut plan_cascade =
-            Iir::<f64>::create_plan(&factory, &spec(vec![sec0, sec1])).expect("cascade plan");
+            Iir::<f64>::create_proc(&factory, &spec(vec![sec0, sec1])).expect("cascade plan");
 
         // Serial application: section 0 then section 1.
-        let mut plan0 = Iir::<f64>::create_plan(&factory, &spec(vec![sec0])).expect("plan0");
-        let mut plan1 = Iir::<f64>::create_plan(&factory, &spec(vec![sec1])).expect("plan1");
+        let mut plan0 = Iir::<f64>::create_proc(&factory, &spec(vec![sec0])).expect("plan0");
+        let mut plan1 = Iir::<f64>::create_proc(&factory, &spec(vec![sec1])).expect("plan1");
 
         let input = [1.0, 0.5, -0.3, 0.7, 0.0, 0.0, 0.0, 0.0];
         let mut out_cascade = [0.0; 8];
@@ -281,14 +312,14 @@ mod tests {
         };
 
         // Reference: single-shot.
-        let mut plan_ref = Iir::<f64>::create_plan(&factory, &spec(vec![sec])).expect("ref plan");
+        let mut plan_ref = Iir::<f64>::create_proc(&factory, &spec(vec![sec])).expect("ref plan");
         let input: Vec<f64> = (0..20).map(|i| (f64::from(i) * 0.3).sin()).collect();
         let mut out_ref = vec![0.0; 20];
         plan_ref.process(&input, &mut out_ref).expect("ref process");
 
         // Streaming: two chunks.
         let mut plan_stream =
-            Iir::<f64>::create_plan(&factory, &spec(vec![sec])).expect("stream plan");
+            Iir::<f64>::create_proc(&factory, &spec(vec![sec])).expect("stream plan");
         let split = 7;
         let mut out_stream = vec![0.0; 20];
         plan_stream
@@ -313,7 +344,7 @@ mod tests {
             a1: -0.5,
             a2: -0.1,
         };
-        let mut plan = Iir::<f64>::create_plan(&factory, &spec(vec![sec])).expect("plan creation");
+        let mut plan = Iir::<f64>::create_proc(&factory, &spec(vec![sec])).expect("plan creation");
 
         let input = [1.0, 2.0, 3.0, 4.0, 5.0];
         let mut output1 = [0.0; 5];
@@ -331,7 +362,7 @@ mod tests {
     #[test]
     fn plan_reuse() {
         let factory = make_factory();
-        let mut plan = Iir::<f64>::create_plan(&factory, &spec(vec![passthrough_section()]))
+        let mut plan = Iir::<f64>::create_proc(&factory, &spec(vec![passthrough_section()]))
             .expect("plan creation");
 
         let input1 = [1.0, 2.0, 3.0];
@@ -354,7 +385,7 @@ mod tests {
         use crate::types::FilterType;
 
         let factory = make_factory();
-        let iir_spec = design::<f64>(
+        let iir_spec = design(
             FilterFamily::Butterworth,
             FilterType::Lowpass,
             4,
@@ -364,7 +395,7 @@ mod tests {
         )
         .expect("design LP4");
 
-        let mut plan = Iir::<f64>::create_plan(&factory, &iir_spec).expect("plan creation");
+        let mut plan = Iir::<f64>::create_proc(&factory, &iir_spec).expect("plan creation");
 
         // Feed DC=1.0 for a long time — output should converge to 1.0.
         let input = vec![1.0; 4096];
@@ -388,7 +419,7 @@ mod tests {
         use crate::types::FilterType;
 
         let factory = make_factory();
-        let iir_spec = design::<f64>(
+        let iir_spec = design(
             FilterFamily::Butterworth,
             FilterType::Highpass,
             4,
@@ -398,7 +429,7 @@ mod tests {
         )
         .expect("design HP4");
 
-        let mut plan = Iir::<f64>::create_plan(&factory, &iir_spec).expect("plan creation");
+        let mut plan = Iir::<f64>::create_proc(&factory, &iir_spec).expect("plan creation");
 
         let input = vec![1.0; 4096];
         let mut output = vec![0.0; 4096];
@@ -420,7 +451,7 @@ mod tests {
     #[test]
     fn empty_sections_returns_error() {
         assert!(
-            IirSpec::<f64>::new(vec![]).is_err(),
+            IirSpec::new(vec![]).is_err(),
             "empty sections should be rejected by the spec constructor"
         );
     }
@@ -428,7 +459,7 @@ mod tests {
     #[test]
     fn buffer_length_mismatch_returns_error() {
         let factory = make_factory();
-        let mut plan = Iir::<f64>::create_plan(&factory, &spec(vec![passthrough_section()]))
+        let mut plan = Iir::<f64>::create_proc(&factory, &spec(vec![passthrough_section()]))
             .expect("plan creation");
 
         let input = [1.0, 2.0, 3.0];
@@ -465,7 +496,7 @@ mod tests {
         label: &str,
     ) {
         let factory = make_factory();
-        let mut plan = Iir::<f64>::create_plan(&factory, &spec(scipy_to_sections(sos)))
+        let mut plan = Iir::<f64>::create_proc(&factory, &spec(scipy_to_sections(sos)))
             .expect("plan creation");
 
         let mut output = vec![0.0; input.len()];
@@ -511,7 +542,7 @@ mod tests {
     fn scipy_sosfilt_streaming() {
         // Process the long signal in chunks, compare against single-shot scipy.
         let factory = make_factory();
-        let mut plan = Iir::<f64>::create_plan(&factory, &spec(scipy_to_sections(SOSFILT_LP4_SOS)))
+        let mut plan = Iir::<f64>::create_proc(&factory, &spec(scipy_to_sections(SOSFILT_LP4_SOS)))
             .expect("plan creation");
 
         let mut output = vec![0.0; SOSFILT_LONG_INPUT.len()];

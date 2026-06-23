@@ -11,5 +11,5 @@
 mod iir;
 mod vecops;
 
-pub use iir::{ScalarIir, ScalarIirPlan};
+pub use iir::{ScalarIir, ScalarIirProcessor};
 pub use vecops::ScalarVecOps;

@@ -11,8 +11,9 @@
 //! 2. **Prototype filter:** a lowpass FIR with cutoff `1 / (2 · max(L, M))`
 //!    (normalized to the upsampled rate) prevents aliasing.  Filter length
 //!    is estimated from the quality parameter via Kaiser's formula.
-//! 3. **Output:** a [`ResampleSpec`] composing `L`, `M`, the prototype as a
-//!    [`FirFilter`], and the processing mode.
+//! 3. **Output:** a [`ResampleSpec`] composing `L`, `M`, and the prototype as a
+//!    [`FirFilter`].  It is pure design — batch vs streaming is how the resample
+//!    processor is *driven*, not a field on the spec.
 //!
 //! [`design`] takes plain parameters (rates, quality, window) and returns
 //! the spec.  Users with pre-computed coefficients can wrap them in a
@@ -29,51 +30,11 @@
     reason = "filter order estimate is a small positive value"
 )]
 
-use num_traits::Float;
-
 use crate::error::{Error, Result};
 use crate::traits::fir::{FirFilter, FirMeta};
 use crate::window::Window;
 
 // ─── Spec (backend-agnostic) ─────────────────────────────────────────
-
-/// Processing mode for resampling — controls output length semantics.
-///
-/// The two modes produce identical sample values for the overlapping
-/// range; they differ only in how many output samples are emitted.  Because
-/// the *plan shape is unchanged* (same `&mut self` plan, only a different
-/// output-count accounting), this is a field on one `ResampleSpec` rather than
-/// a distinct newtype dispatch key — the deliberate exception to the
-/// batch/streaming convention in the `spec` module (the CQT's batch and
-/// streaming analyzers, which are genuinely different plan types, do get
-/// separate specs).
-///
-/// Which mode produces more output depends on the filter length `H`
-/// relative to the upsampling factor `L`:
-/// - `H < L` (typical for high L): **Streaming** produces more
-///   (the phase accumulator emits outputs beyond the filter's support).
-/// - `H > L` (long filter, small L): **Batch** produces more
-///   (includes the filter's ring-down tail past the last input).
-/// - `H = L`: both produce the same count.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ResampleMode {
-    /// Streaming: `⌈N × L / M⌉` outputs per call.
-    ///
-    /// The phase accumulator drives output count, independent of the
-    /// filter length.  Internal state carries across calls for continuous
-    /// block-by-block processing.  This is the right choice for real-time
-    /// audio and any pipeline where data arrives in chunks.
-    Streaming,
-
-    /// Batch: `⌈((N − 1) × L + filter_len) / M⌉` outputs.
-    ///
-    /// Matches scipy's `upfirdn` / finite convolution model.  The output
-    /// length accounts for the prototype filter's support, so a single
-    /// call produces the complete resampled signal including the filter's
-    /// group delay transient.  Use this for one-shot processing of
-    /// complete signals.
-    Batch,
-}
 
 /// Validated resampling quality parameter.
 ///
@@ -110,44 +71,53 @@ impl ResampleQuality {
 
 /// Resampling specification — plan-ready data for a polyphase resampler.
 ///
-/// Composes a designed anti-aliasing [`FirFilter`] (replacing
-/// the bare `prototype_filter: Vec<T>`) with the rational conversion factors
-/// and processing mode.  Construct via [`design`] for automatic filter
-/// generation, or via [`ResampleSpec::new`] from a [`FirFilter`] built directly
-/// via [`FirFilter::new`] for pre-computed coefficients.
+/// Composes a designed anti-aliasing [`FirFilter`] with the rational conversion
+/// factors.  Construct via [`design`] for automatic filter generation, or via
+/// [`ResampleSpec::new`] from a [`FirFilter`] built directly via
+/// [`FirFilter::new`] for pre-computed coefficients.
+///
+/// This is **pure design** — there is no execution-mode flag.  Batch vs
+/// streaming is how you *drive* the resample [`Processor`], not a property of
+/// the spec: `process(everything) + finish` reproduces scipy's `upfirdn`, while
+/// `process(chunk)` … streams.  The spec is non-generic (it carries the f64
+/// filter artifact); precision is chosen at `create_proc::<T>`.
+///
+/// [`Processor`]: crate::modules::resample::ResampleProcessor
 ///
 /// # Examples
 ///
 /// ```
 /// use omnidsp_core::design::resample::{
-///     self, ResampleSpec, ResampleMode, ResampleQuality, DEFAULT_MAX_PHASES,
+///     self, ResampleSpec, ResampleQuality, DEFAULT_MAX_PHASES,
 /// };
 /// use omnidsp_core::traits::fir::{FirFilter, FirMeta};
 /// use omnidsp_core::window::Window;
 ///
 /// // Via design():
 /// let spec = resample::design(
-///     44100.0_f64, 48000.0,
+///     44100.0, 48000.0,
 ///     ResampleQuality::new(5).unwrap(),
 ///     &Window::Hamming,
 ///     DEFAULT_MAX_PHASES,
-///     ResampleMode::Streaming,
 /// ).unwrap();
 /// assert_eq!(spec.up_factor(), 160);
 /// assert_eq!(spec.down_factor(), 147);
 ///
 /// // Or directly from pre-computed data (bring-your-own coefficients, no
 /// // recorded cutoff → the cross-spec cutoff check is skipped):
-/// let filter = FirFilter::new(vec![0.5_f64, 1.0, 0.5], FirMeta::unknown()).unwrap();
-/// let spec = ResampleSpec::new(filter, 2, 1, ResampleMode::Streaming).unwrap();
+/// let filter = FirFilter::new(vec![0.5, 1.0, 0.5], FirMeta::unknown()).unwrap();
+/// let spec = ResampleSpec::new(filter, 2, 1).unwrap();
 /// assert_eq!(spec.up_factor(), 2);
 /// ```
-#[derive(Debug, Clone)]
-pub struct ResampleSpec<T> {
+#[derive(Debug, Clone, PartialEq)]
+#[allow(
+    clippy::derive_partial_eq_without_eq,
+    reason = "the composed FirFilter carries f64 coefficients, which are not Eq"
+)]
+pub struct ResampleSpec {
     up_factor: usize,
     down_factor: usize,
-    filter: FirFilter<T>,
-    mode: ResampleMode,
+    filter: FirFilter,
 }
 
 /// Default maximum number of polyphase phases.
@@ -164,9 +134,9 @@ pub const MAX_PHASES_LIMIT: usize = 1024;
 /// admit equality (and small float drift) — this slack does so.
 const CUTOFF_TOLERANCE: f64 = 1e-9;
 
-impl<T: Float> ResampleSpec<T> {
+impl ResampleSpec {
     /// Create a spec composing a designed anti-aliasing `filter` with the
-    /// rational conversion factors and processing mode.
+    /// rational conversion factors.
     ///
     /// # Cross-spec invariant
     ///
@@ -187,12 +157,7 @@ impl<T: Float> ResampleSpec<T> {
     ///
     /// Returns [`Error::InvalidSpec`] if `up_factor` or `down_factor` is zero,
     /// or if the filter's known normalized cutoff exceeds the polyphase bound.
-    pub fn new(
-        filter: FirFilter<T>,
-        up_factor: usize,
-        down_factor: usize,
-        mode: ResampleMode,
-    ) -> Result<Self> {
+    pub fn new(filter: FirFilter, up_factor: usize, down_factor: usize) -> Result<Self> {
         if up_factor == 0 || down_factor == 0 {
             return Err(Error::InvalidSpec(
                 "resample up_factor and down_factor must be positive".into(),
@@ -213,12 +178,9 @@ impl<T: Float> ResampleSpec<T> {
             up_factor,
             down_factor,
             filter,
-            mode,
         })
     }
-}
 
-impl<T> ResampleSpec<T> {
     /// Upsampling factor L (number of polyphase phases).
     #[must_use]
     pub const fn up_factor(&self) -> usize {
@@ -233,28 +195,16 @@ impl<T> ResampleSpec<T> {
 
     /// The composed anti-aliasing filter (the reused artifact).
     #[must_use]
-    pub const fn filter(&self) -> &FirFilter<T> {
+    pub const fn filter(&self) -> &FirFilter {
         &self.filter
     }
 
-    /// Prototype FIR filter coefficients — delegates to the composed
-    /// [`FirFilter`]'s [`coefficients`](FirFilter::coefficients).
+    /// Prototype FIR filter coefficients (in the f64 design precision) —
+    /// delegates to the composed [`FirFilter`]'s
+    /// [`coefficients`](FirFilter::coefficients).
     #[must_use]
-    pub fn prototype_filter(&self) -> &[T] {
+    pub fn prototype_filter(&self) -> &[f64] {
         self.filter.coefficients()
-    }
-
-    /// Processing mode.
-    #[must_use]
-    pub const fn mode(&self) -> ResampleMode {
-        self.mode
-    }
-
-    /// Override the processing mode.
-    #[must_use]
-    pub const fn with_mode(mut self, mode: ResampleMode) -> Self {
-        self.mode = mode;
-        self
     }
 }
 
@@ -272,16 +222,15 @@ impl<T> ResampleSpec<T> {
 /// # Errors
 ///
 /// Returns [`Error::InvalidSpec`] if either rate is not positive.
-pub fn design<T: Float>(
-    input_rate: T,
-    output_rate: T,
+pub fn design(
+    input_rate: f64,
+    output_rate: f64,
     quality: ResampleQuality,
     window: &Window,
     max_phases: usize,
-    mode: ResampleMode,
-) -> Result<ResampleSpec<T>> {
-    let sr_in = to_f64(input_rate)?;
-    let sr_out = to_f64(output_rate)?;
+) -> Result<ResampleSpec> {
+    let sr_in = input_rate;
+    let sr_out = output_rate;
 
     if sr_in <= 0.0 {
         return Err(Error::InvalidSpec(
@@ -329,8 +278,8 @@ pub fn design<T: Float>(
     let fir_result = super::fir::design(
         crate::types::FilterType::Lowpass,
         order,
-        from_f64(upsampled_rate)?,
-        from_f64(cutoff_hz)?,
+        upsampled_rate,
+        cutoff_hz,
         None,
         &super::fir::FirMethod::Windowed { window: *window },
     )?;
@@ -341,7 +290,7 @@ pub fn design<T: Float>(
     let meta = FirMeta::new(upsampled_rate, cutoff_normalized);
     let filter = FirFilter::new(fir_result.coefficients().to_vec(), meta)?;
 
-    ResampleSpec::new(filter, up as usize, down as usize, mode)
+    ResampleSpec::new(filter, up as usize, down as usize)
 }
 
 // ─── Internals ───────────────────────────────────────────────────────
@@ -430,15 +379,6 @@ fn quality_params(quality: ResampleQuality) -> (f64, f64) {
     (attenuation_db, transition_fraction)
 }
 
-fn to_f64<T: Float>(val: T) -> Result<f64> {
-    val.to_f64()
-        .ok_or_else(|| Error::Internal("failed to convert to f64".into()))
-}
-
-fn from_f64<T: Float>(val: f64) -> Result<T> {
-    T::from(val).ok_or_else(|| Error::Internal("failed to convert from f64".into()))
-}
-
 // ─── Tests ───────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -450,14 +390,13 @@ mod tests {
         ResampleQuality::new(val).expect("valid quality")
     }
 
-    fn designed(sr_in: f64, sr_out: f64, quality: u8) -> ResampleSpec<f64> {
+    fn designed(sr_in: f64, sr_out: f64, quality: u8) -> ResampleSpec {
         design(
             sr_in,
             sr_out,
             q(quality),
             &Window::Hamming,
             DEFAULT_MAX_PHASES,
-            ResampleMode::Streaming,
         )
         .expect("valid design")
     }
@@ -467,16 +406,8 @@ mod tests {
         sr_out: f64,
         quality: u8,
         max_phases: usize,
-    ) -> ResampleSpec<f64> {
-        design(
-            sr_in,
-            sr_out,
-            q(quality),
-            &Window::Hamming,
-            max_phases,
-            ResampleMode::Streaming,
-        )
-        .expect("valid design")
+    ) -> ResampleSpec {
+        design(sr_in, sr_out, q(quality), &Window::Hamming, max_phases).expect("valid design")
     }
 
     // ── ResampleQuality ──────────────────────────────────────────
@@ -508,15 +439,7 @@ mod tests {
     #[test]
     fn design_zero_input_rate_is_error() {
         assert!(
-            design(
-                0.0,
-                48000.0,
-                q(5),
-                &Window::Hamming,
-                DEFAULT_MAX_PHASES,
-                ResampleMode::Streaming
-            )
-            .is_err(),
+            design(0.0, 48000.0, q(5), &Window::Hamming, DEFAULT_MAX_PHASES,).is_err(),
             "zero input rate should be rejected"
         );
     }
@@ -530,7 +453,6 @@ mod tests {
                 q(5),
                 &Window::Hamming,
                 DEFAULT_MAX_PHASES,
-                ResampleMode::Streaming
             )
             .is_err(),
             "negative input rate should be rejected"
@@ -540,15 +462,7 @@ mod tests {
     #[test]
     fn design_zero_output_rate_is_error() {
         assert!(
-            design(
-                44100.0,
-                0.0,
-                q(5),
-                &Window::Hamming,
-                DEFAULT_MAX_PHASES,
-                ResampleMode::Streaming
-            )
-            .is_err(),
+            design(44100.0, 0.0, q(5), &Window::Hamming, DEFAULT_MAX_PHASES,).is_err(),
             "zero output rate should be rejected"
         );
     }
@@ -562,7 +476,6 @@ mod tests {
                 q(5),
                 &Window::Hamming,
                 DEFAULT_MAX_PHASES,
-                ResampleMode::Streaming
             )
             .is_err(),
             "negative output rate should be rejected"
@@ -573,42 +486,24 @@ mod tests {
 
     /// Build a `FirFilter` with no recorded cutoff (bring-your-own coefficients
     /// → the cross-spec cutoff check is skipped).
-    fn byo(coeffs: Vec<f64>) -> FirFilter<f64> {
+    fn byo(coeffs: Vec<f64>) -> FirFilter {
         FirFilter::new(coeffs, FirMeta::unknown()).expect("non-empty coefficients")
     }
 
     #[test]
     fn spec_accessors() {
-        let spec = ResampleSpec::new(
-            byo(vec![0.25, 0.5, 1.0, 0.5, 0.25]),
-            3,
-            2,
-            ResampleMode::Streaming,
-        )
-        .expect("valid resample spec");
+        let spec = ResampleSpec::new(byo(vec![0.25, 0.5, 1.0, 0.5, 0.25]), 3, 2)
+            .expect("valid resample spec");
         assert_eq!(spec.up_factor(), 3, "up_factor");
         assert_eq!(spec.down_factor(), 2, "down_factor");
         assert_eq!(spec.prototype_filter().len(), 5, "prototype length");
         assert_eq!(spec.filter().coefficients().len(), 5, "filter coeff length");
-        assert_eq!(spec.mode(), ResampleMode::Streaming, "mode");
-    }
-
-    #[test]
-    fn spec_with_mode() {
-        let spec = ResampleSpec::new(byo(vec![1.0_f64]), 2, 1, ResampleMode::Streaming)
-            .expect("valid resample spec")
-            .with_mode(ResampleMode::Batch);
-        assert_eq!(
-            spec.mode(),
-            ResampleMode::Batch,
-            "mode should be overridden"
-        );
     }
 
     #[test]
     fn spec_rejects_zero_up_factor() {
         assert!(
-            ResampleSpec::new(byo(vec![1.0_f64]), 0, 1, ResampleMode::Streaming).is_err(),
+            ResampleSpec::new(byo(vec![1.0]), 0, 1).is_err(),
             "zero up_factor should be rejected"
         );
     }
@@ -616,7 +511,7 @@ mod tests {
     #[test]
     fn spec_rejects_zero_down_factor() {
         assert!(
-            ResampleSpec::new(byo(vec![1.0_f64]), 1, 0, ResampleMode::Streaming).is_err(),
+            ResampleSpec::new(byo(vec![1.0]), 1, 0).is_err(),
             "zero down_factor should be rejected"
         );
     }
@@ -625,7 +520,7 @@ mod tests {
     fn spec_rejects_empty_prototype() {
         // Emptiness is now caught one rung earlier — at `FirFilter::new`.
         assert!(
-            FirFilter::<f64>::new(vec![], FirMeta::unknown()).is_err(),
+            FirFilter::new(vec![], FirMeta::unknown()).is_err(),
             "empty prototype filter should be rejected at FirFilter::new"
         );
     }
@@ -635,10 +530,10 @@ mod tests {
         // A filter with a known normalized cutoff of 0.3 is incompatible with a
         // ×2 decimator: the anti-alias bound is 1/(2·max(1,2)) = 0.25, so the
         // cross-spec invariant must reject it.
-        let meta = FirMeta::new(44100.0_f64, 0.3);
+        let meta = FirMeta::new(44100.0, 0.3);
         let filter = FirFilter::new(vec![0.25, 0.5, 0.25], meta).expect("non-empty");
         assert!(
-            ResampleSpec::new(filter, 1, 2, ResampleMode::Streaming).is_err(),
+            ResampleSpec::new(filter, 1, 2).is_err(),
             "cutoff above the polyphase anti-alias bound should be rejected"
         );
     }
@@ -647,10 +542,10 @@ mod tests {
     fn spec_accepts_cutoff_at_factorization_bound() {
         // The bound holds with equality for the ×2 decimator: cutoff = 0.25 =
         // 1/(2·max(1,2)).  The tolerance must admit equality.
-        let meta = FirMeta::new(44100.0_f64, 0.25);
+        let meta = FirMeta::new(44100.0, 0.25);
         let filter = FirFilter::new(vec![0.25, 0.5, 0.25], meta).expect("non-empty");
         assert!(
-            ResampleSpec::new(filter, 1, 2, ResampleMode::Streaming).is_ok(),
+            ResampleSpec::new(filter, 1, 2).is_ok(),
             "cutoff exactly at the polyphase bound should be accepted"
         );
     }
@@ -826,22 +721,15 @@ mod tests {
     // ── f32 path ─────────────────────────────────────────────────
 
     #[test]
-    fn f32_design_works() {
-        let result = design(
-            44100.0_f32,
-            48000.0_f32,
-            q(5),
-            &Window::Hamming,
-            DEFAULT_MAX_PHASES,
-            ResampleMode::Streaming,
-        )
-        .expect("f32 design");
+    fn design_prototype_dc_gain_is_unity() {
+        let result =
+            design(44100.0, 48000.0, q(5), &Window::Hamming, DEFAULT_MAX_PHASES).expect("design");
         assert_eq!(result.up_factor(), 160, "L=160");
         assert_eq!(result.down_factor(), 147, "M=147");
-        let dc_gain: f32 = result.prototype_filter().iter().sum();
+        let dc_gain: f64 = result.prototype_filter().iter().sum();
         assert!(
             (dc_gain - 1.0).abs() < 1e-4,
-            "f32 prototype DC gain should be ~1.0, got {dc_gain}"
+            "prototype DC gain should be ~1.0, got {dc_gain}"
         );
     }
 
@@ -884,7 +772,7 @@ mod tests {
     }
 
     /// Helper: design with `max_phases` high enough for exact integer-rate results.
-    fn design_exact(sr_in: f64, sr_out: f64, quality: u8) -> ResampleSpec<f64> {
+    fn design_exact(sr_in: f64, sr_out: f64, quality: u8) -> ResampleSpec {
         designed_with_phases(sr_in, sr_out, quality, MAX_PHASES_LIMIT)
     }
 
