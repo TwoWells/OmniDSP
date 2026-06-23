@@ -12,10 +12,10 @@
 # workflow with `on: pull_request` pinned to `runs-on: ubuntu-latest`
 # (GitHub-hosted, free on public repos, fork-safe).
 #
-# The Intel vendor backends (IPP / oneMKL) build on this same pool but in the
-# `ghcr.io/twowells/omnidsp-ci` image (rust-ci + oneMKL + IPP devel); Apple
-# Accelerate builds on the macOS runner. Those land as separate jobs when each
-# vendor crate is built (workstream 7).
+# The Intel vendor backends (oneMKL today, IPP later) build on this same pool
+# but in the `ghcr.io/twowells/omnidsp-ci` image (rust-ci + oneMKL + IPP devel) —
+# see the `vendor-intel` job below. Apple Accelerate builds on the macOS runner
+# and lands as its own job when that crate exists.
 name: CI
 
 on:
@@ -65,3 +65,53 @@ jobs:
       # doc, and the nextest suite over f32 + f64. See the Makefile.
       - name: make check
         run: make check
+
+  # Intel oneMKL vendor backend. The floor `check` job above cannot link MKL, so
+  # the oneMKL crates are workspace-excluded and gated HERE instead: same
+  # self-hosted pool, but in the `omnidsp-ci` image that bakes in oneMKL + IPP
+  # devel (MKLROOT / IPPROOT / MKL_THREADING_LAYER=SEQUENTIAL / LD_LIBRARY_PATH
+  # all preset). `make onemkl-check` builds, lints, and holds OneMklBackend to
+  # the shared conformance golden vectors — the same suite the floor passes — so
+  # the vendor cannot silently drift. This is the CI-driven validation loop:
+  # these crates cannot be built on a dev box without Intel oneMKL installed.
+  vendor-intel:
+    runs-on: homeserver-pool
+    container: ghcr.io/twowells/omnidsp-ci:latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Materialize pinned Rust toolchain
+        run: |
+          rustup show
+          rustc --version && cargo --version
+
+      # Confirm the image's MKL is link-ready before the heavier build (fast fail
+      # with a clear message if the env regressed).
+      - name: Verify oneMKL environment
+        run: |
+          echo "MKLROOT=$MKLROOT"
+          test -n "$MKLROOT" || { echo "MKLROOT unset — wrong image?"; exit 1; }
+          ls "$MKLROOT/lib/intel64/libmkl_rt.so" 2>/dev/null \
+            || ls "$MKLROOT/lib/libmkl_rt.so" 2>/dev/null \
+            || { echo "libmkl_rt.so not found under MKLROOT"; exit 1; }
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # The excluded vendor crates carry their own Cargo.lock; key the cache
+          # on them so the floor cache and this one don't thrash each other.
+          workspaces: |
+            omnidsp-onemkl-sys
+            omnidsp-onemkl
+
+      - name: Install cargo tools
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      # Build + lint + conformance-test the oneMKL vendor crates by manifest path
+      # (they are workspace-excluded). Links libmkl_rt from the image.
+      - name: make onemkl-check
+        run: make onemkl-check
