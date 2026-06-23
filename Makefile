@@ -122,6 +122,13 @@ onemkl-check:
 	@cargo test --manifest-path omnidsp-onemkl/Cargo.toml --doc
 	@echo "onemkl-check: oneMKL vendor crates build, lint, and pass conformance"
 
+# DFT throughput: Intel oneMKL DFTI vs the rustfft/realfft floor, per transform
+# length (c2c + r2c). Like `onemkl-check`, requires Intel oneMKL at link time, so
+# it runs in the `omnidsp-ci` image (or a host with oneMKL). Coarse wall-clock
+# (warmup + median) — the same-machine same-run ratio is the figure of merit.
+onemkl-bench:
+	@cargo bench --manifest-path omnidsp-onemkl/Cargo.toml
+
 # --- WASM floor (demo prerequisite) ---
 
 # Smoke-build the RustBackend floor for the browser target the CQT visualiser

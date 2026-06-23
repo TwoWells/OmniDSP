@@ -1,0 +1,37 @@
+# On-demand DFT throughput benchmark: Intel oneMKL DFTI vs the rustfft / realfft
+# floor, per transform length (c2c + r2c).
+#
+# Manual only (workflow_dispatch) — a benchmark is slow and the numbers drift on
+# a shared ephemeral runner, so it is NOT a per-push gate (that is `ci.yml`).
+# Runs on the self-hosted `homeserver-pool` in the `omnidsp-ci` image, the only
+# place `libmkl_rt` links. Read the table from the `make onemkl-bench` step log.
+name: bench-onemkl
+
+on:
+  workflow_dispatch:
+
+jobs:
+  bench:
+    runs-on: homeserver-pool
+    container: ghcr.io/twowells/omnidsp-ci:latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Materialize pinned Rust toolchain
+        run: |
+          rustup show
+          rustc --version && cargo --version
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            omnidsp-onemkl-sys
+            omnidsp-onemkl
+
+      # Builds the bench (bench profile: opt-level 3 + LTO) and runs it, linking
+      # libmkl_rt from the image. The comparison table prints to stdout.
+      - name: make onemkl-bench
+        run: make onemkl-bench

@@ -40,3 +40,15 @@ num-complex = "0.4"
 [dev-dependencies]
 omnidsp-rustfft = { path = "../omnidsp-rustfft" }
 omnidsp-conformance = { path = "../omnidsp-conformance" }
+
+[[bench]]
+name = "dft"
+harness = false
+
+# Give the rustfft/realfft floor its fair showing in the head-to-head (MKL ships
+# as a precompiled, runtime-dispatched .so; the Rust side is compiled from source
+# here). opt-level 3 + LTO matches the workspace release intent. Not built with
+# target-cpu=native, so this is the out-of-box rustfft vs MKL's AVX dispatch.
+[profile.bench]
+lto = true
+codegen-units = 1
