@@ -18,6 +18,7 @@
 )]
 
 use std::os::raw::c_void;
+use std::sync::Once;
 
 use num_complex::Complex;
 use omnidsp_onemkl_sys as sys;
@@ -206,11 +207,41 @@ pub const fn complex_ptr_mut<T>(slice: &mut [Complex<T>]) -> *mut c_void {
     slice.as_mut_ptr().cast::<c_void>()
 }
 
+// ─── VM accuracy-mode configuration ──────────────────────────────────
+
+/// Process-global guard for the one-time VM accuracy-mode configuration.
+static VML_MODE_INIT: Once = Once::new();
+
+/// Select oneMKL's enhanced-performance VM mode (`VML_EP`) once per process.
+///
+/// Every VM op the backend uses (`vsMul` / `vcMul` / `vcConj` / …) is exact:
+/// there are no transcendentals whose accuracy `EP` would trade away, so `EP`
+/// loses nothing while shedding the default mode's per-element special-value
+/// checks (which otherwise roughly double the `cmul` cost).  This is a documented
+/// configuration knob, not per-size tuning.
+///
+/// `vmlSetMode` is process-global and thread-safe; the [`Once`] makes the
+/// configuration idempotent and lazy — the backend's `new` is `const` and cannot
+/// run FFI, so the mode is set on first VM use instead.
+fn ensure_vml_ep() {
+    VML_MODE_INIT.call_once(|| {
+        // SAFETY: `vmlSetMode` is a thread-safe oneMKL entry point; it takes a
+        // mode constant and returns the previous mode, which we discard.
+        unsafe {
+            sys::vmlSetMode(sys::VML_EP);
+        }
+    });
+}
+
 // ─── VM / BLAS vector-op wrappers ────────────────────────────────────
 //
 // Each wrapper validates the `usize → MKL_INT` conversion and casts complex
 // slices to the layout-compatible `[T; 2]` pointers MKL expects.  Real-only
 // callers (mul/add/scale/dot/axpy) pass plain `*const`/`*mut` pointers.
+//
+// Every VM wrapper (the `vsMul` / `vcMul` / `vcConj` family) calls
+// `ensure_vml_ep` first so the enhanced-performance mode is configured before
+// any VM work; the BLAS wrappers (dot / scal / axpy) are unaffected by VM mode.
 
 /// Cast a complex slice to MKL's `*const [f32; 2]` (`MKL_Complex8`) layout.
 ///
@@ -239,6 +270,7 @@ macro_rules! real_binop {
     ($name:ident, $sys_fn:ident, $float:ty, $ctx:literal $(,)?) => {
         #[doc = concat!("Elementwise `", stringify!($sys_fn), "`: `out = a OP b` for `", stringify!($float), "`.")]
         pub fn $name(a: &[$float], b: &[$float], out: &mut [$float]) -> Result<()> {
+            ensure_vml_ep();
             let n = to_mkl_int(out.len(), $ctx)?;
             // SAFETY: `a`, `b`, `out` all have `out.len()` elements (length
             // equality validated by the caller); `n` is that length as MKL_INT.
@@ -263,6 +295,7 @@ macro_rules! complex_mul {
             b: &[Complex<$float>],
             out: &mut [Complex<$float>],
         ) -> Result<()> {
+            ensure_vml_ep();
             let n = to_mkl_int(out.len(), $ctx)?;
             // SAFETY: `a`, `b`, `out` have `out.len()` complex elements (length
             // equality validated by the caller); the `[<$float>; 2]` casts are
@@ -297,6 +330,7 @@ complex_mul!(
 ///
 /// MKL's VM permits the result pointer to alias an input pointer.
 pub fn cmul_inplace_f32(data: &mut [Complex<f32>], other: &[Complex<f32>]) -> Result<()> {
+    ensure_vml_ep();
     let n = to_mkl_int(data.len(), "vcMul length exceeds MKL_INT range")?;
     let out = cplx32_mut(data);
     // SAFETY: `out` aliases `data`'s storage; `other` has `data.len()` elements
@@ -309,6 +343,7 @@ pub fn cmul_inplace_f32(data: &mut [Complex<f32>], other: &[Complex<f32>]) -> Re
 
 /// In-place elementwise complex multiply: `data *= other` via `vzMul`.
 pub fn cmul_inplace_f64(data: &mut [Complex<f64>], other: &[Complex<f64>]) -> Result<()> {
+    ensure_vml_ep();
     let n = to_mkl_int(data.len(), "vzMul length exceeds MKL_INT range")?;
     let out = cplx64_mut(data);
     // SAFETY: `out` aliases `data`'s storage; `other` has `data.len()` elements
@@ -321,6 +356,7 @@ pub fn cmul_inplace_f64(data: &mut [Complex<f64>], other: &[Complex<f64>]) -> Re
 
 /// In-place elementwise real multiply: `data *= other` via `vsMul`.
 pub fn mul_inplace_f32(data: &mut [f32], other: &[f32]) -> Result<()> {
+    ensure_vml_ep();
     let n = to_mkl_int(data.len(), "vsMul length exceeds MKL_INT range")?;
     let ptr = data.as_mut_ptr();
     // SAFETY: `ptr` aliases `data`; `other` has `data.len()` elements
@@ -333,6 +369,7 @@ pub fn mul_inplace_f32(data: &mut [f32], other: &[f32]) -> Result<()> {
 
 /// In-place elementwise real multiply: `data *= other` via `vdMul`.
 pub fn mul_inplace_f64(data: &mut [f64], other: &[f64]) -> Result<()> {
+    ensure_vml_ep();
     let n = to_mkl_int(data.len(), "vdMul length exceeds MKL_INT range")?;
     let ptr = data.as_mut_ptr();
     // SAFETY: `ptr` aliases `data`; `other` has `data.len()` elements
@@ -345,6 +382,7 @@ pub fn mul_inplace_f64(data: &mut [f64], other: &[f64]) -> Result<()> {
 
 /// Conjugate a complex slice in place via `vcConj`.
 pub fn conj_inplace_f32(data: &mut [Complex<f32>]) -> Result<()> {
+    ensure_vml_ep();
     let n = to_mkl_int(data.len(), "vcConj length exceeds MKL_INT range")?;
     let ptr = cplx32_mut(data);
     // SAFETY: `ptr` aliases `data`; `vcConj` allows the in-place alias.
@@ -356,6 +394,7 @@ pub fn conj_inplace_f32(data: &mut [Complex<f32>]) -> Result<()> {
 
 /// Conjugate a complex slice in place via `vzConj`.
 pub fn conj_inplace_f64(data: &mut [Complex<f64>]) -> Result<()> {
+    ensure_vml_ep();
     let n = to_mkl_int(data.len(), "vzConj length exceeds MKL_INT range")?;
     let ptr = cplx64_mut(data);
     // SAFETY: `ptr` aliases `data`; `vzConj` allows the in-place alias.
