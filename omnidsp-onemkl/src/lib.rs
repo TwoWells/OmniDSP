@@ -11,10 +11,16 @@
 //! module's vector-ops handle, so every module (convolution, FIR, CQT, …) is
 //! accelerated transitively without any per-module override.
 //!
-//! Convolution and cross-correlation ride *free* over the accelerated DFT in
-//! this build (no `skip`): they are the generic FFT-domain compositions from
-//! `omnidsp-core`, now running over DFTI FFTs and VM complex multiplies.  Native
-//! VS convolution / correlation overrides are a deliberate follow-up.
+//! Convolution and cross-correlation are **native VS overrides** in this build
+//! (`skip: [conv, xcorr]`): rather than riding the generic FFT-domain
+//! compositions, the backend hand-writes
+//! [`CreatePlan`](omnidsp_core::create::CreatePlan) impls that wrap oneMKL's VS
+//! task API.  The user's chosen method
+//! ([`ConvMethod`](omnidsp_core::traits::conv::ConvMethod) /
+//! [`CorrMethod`](omnidsp_core::modules::xcorr::CorrMethod)) maps directly onto
+//! the VS direct/FFT/auto mode, so a `Direct` request runs an MKL kernel
+//! end-to-end instead of resolving to the scalar floor.  Every other module
+//! still rides *free* over the accelerated DFT + VM compositions.
 //!
 //! # Safety isolation
 //!
@@ -30,13 +36,17 @@
 //! Library) through `omnidsp-onemkl-sys`.  If the crate is compiled, MKL must be
 //! available at link and run time.
 
+mod conv;
 mod dft;
 mod ffi;
 mod vecops;
+mod xcorr;
 
+pub use conv::OneMklConvPlan;
 pub use dft::{
     OneMklDftC2c, OneMklDftC2cPlan, OneMklDftC2r, OneMklDftC2rPlan, OneMklDftR2c, OneMklDftR2cPlan,
 };
+pub use xcorr::OneMklCrossCorrPlan;
 
 /// Intel oneMKL backend.
 ///
@@ -74,4 +84,5 @@ omnidsp_macros::impl_generic_backend! {
     dftc2c: OneMklDftC2c,
     dftr2c: OneMklDftR2c,
     dftc2r: OneMklDftC2r,
+    skip: [conv, xcorr],
 }

@@ -17,6 +17,7 @@
     reason = "FFI calls to omnidsp-onemkl-sys: this is the single isolated unsafe module"
 )]
 
+use std::any::TypeId;
 use std::os::raw::c_void;
 use std::sync::Once;
 
@@ -24,11 +25,15 @@ use num_complex::Complex;
 use omnidsp_onemkl_sys as sys;
 use omnidsp_onemkl_sys::{
     DFTI_NO_ERROR, DftiConfigParam, DftiConfigValue, DftiDescriptorHandle, MklInt, MklLong,
+    VSL_STATUS_OK, VSLConvTaskPtr, VSLCorrTaskPtr,
 };
 
 use omnidsp_core::error::{Error, Result};
+use omnidsp_core::types::DspFloat;
 
+use crate::conv::OneMklConvPlan;
 use crate::dft::{OneMklDftC2cPlan, OneMklDftC2rPlan, OneMklDftR2cPlan};
+use crate::xcorr::OneMklCrossCorrPlan;
 
 // ─── Status helpers ──────────────────────────────────────────────────
 
@@ -512,6 +517,321 @@ pub fn try_mkl_int(len: usize) -> Option<MklInt> {
     MklInt::try_from(len).ok()
 }
 
+// ─── VS convolution task wrappers ────────────────────────────────────
+//
+// These wrap oneMKL's native VS *convolution* task API: build a task
+// (`vsl{s,d}ConvNewTask1D`), execute it (`vsl{s,d}ConvExec1D`, stride 1), and
+// destroy it (`vslConvDeleteTask`).  Cross-correlation has its own peer wrappers
+// below over the VS *correlation* API, so these are convolution-only.
+//
+// f32/f64 flavor selection (`vsls*` vs `vsld*`) happens here, inside the
+// generic dispatch, because the `create_plan::<T>` signature cannot carry a
+// `T: f32 | f64` bound.  Dispatch keys on `TypeId::of::<T>()`; once the concrete
+// width is known, the `&[T]` execution slices are reinterpreted as `&[f32]` /
+// `&[f64]` via a layout-identity transmute (sound because `DspFloat: 'static`
+// and `T` is only ever `f32` or `f64` — the same identity the rest of the crate
+// relies on for its complex-layout casts).  A non-`f32`/`f64` `T` returns a
+// backend error; it is unreachable in practice.  The correlation wrappers reuse
+// the same `as_f{32,64}_slice*` reinterpret helpers.
+
+/// Map a VS status code to a [`Result`].
+///
+/// VS returns `VSL_STATUS_OK` (0) on success and a non-zero `int` otherwise.
+fn check_vsl(status: i32, context: &'static str) -> Result<()> {
+    if status == VSL_STATUS_OK {
+        Ok(())
+    } else {
+        Err(Error::backend(status, context))
+    }
+}
+
+/// Construct a 1-D single-precision VS **convolution** task.
+///
+/// `mode` is one of `VSL_CONV_MODE_{AUTO,FFT,DIRECT}`; the three shapes are the
+/// input lengths and `xshape + yshape - 1` for the full-convolution output.
+fn conv_new_task_f32(
+    mode: MklInt,
+    xshape: usize,
+    yshape: usize,
+    zshape: usize,
+) -> Result<VSLConvTaskPtr> {
+    let x = to_mkl_int(xshape, "vslsConvNewTask1D xshape exceeds MKL_INT range")?;
+    let y = to_mkl_int(yshape, "vslsConvNewTask1D yshape exceeds MKL_INT range")?;
+    let z = to_mkl_int(zshape, "vslsConvNewTask1D zshape exceeds MKL_INT range")?;
+    let mut task: VSLConvTaskPtr = std::ptr::null_mut();
+    // SAFETY: `task` is a valid out-pointer; `mode` is a valid VS conv-mode
+    // constant; the shapes are positive lengths as MKL_INT.  VS writes the new
+    // task pointer into `task` and returns a status.
+    let status = unsafe { sys::vslsConvNewTask1D(&raw mut task, mode, x, y, z) };
+    check_vsl(status, "vslsConvNewTask1D failed")?;
+    if task.is_null() {
+        return Err(Error::backend(-1, "vslsConvNewTask1D returned a null task"));
+    }
+    Ok(task)
+}
+
+/// Construct a 1-D double-precision VS **convolution** task.
+///
+/// Double-precision peer of [`conv_new_task_f32`].
+fn conv_new_task_f64(
+    mode: MklInt,
+    xshape: usize,
+    yshape: usize,
+    zshape: usize,
+) -> Result<VSLConvTaskPtr> {
+    let x = to_mkl_int(xshape, "vsldConvNewTask1D xshape exceeds MKL_INT range")?;
+    let y = to_mkl_int(yshape, "vsldConvNewTask1D yshape exceeds MKL_INT range")?;
+    let z = to_mkl_int(zshape, "vsldConvNewTask1D zshape exceeds MKL_INT range")?;
+    let mut task: VSLConvTaskPtr = std::ptr::null_mut();
+    // SAFETY: `task` is a valid out-pointer; `mode` is a valid VS conv-mode
+    // constant; the shapes are positive lengths as MKL_INT.  VS writes the new
+    // task pointer into `task` and returns a status.
+    let status = unsafe { sys::vsldConvNewTask1D(&raw mut task, mode, x, y, z) };
+    check_vsl(status, "vsldConvNewTask1D failed")?;
+    if task.is_null() {
+        return Err(Error::backend(-1, "vsldConvNewTask1D returned a null task"));
+    }
+    Ok(task)
+}
+
+/// Build a VS convolution task for precision `T`, dispatching on the concrete
+/// float width.
+///
+/// `T` is `f32` or `f64` in practice; any other type returns a backend error.
+pub fn conv_new_task<T: DspFloat>(
+    mode: MklInt,
+    xshape: usize,
+    yshape: usize,
+    zshape: usize,
+) -> Result<VSLConvTaskPtr> {
+    if TypeId::of::<T>() == TypeId::of::<f32>() {
+        conv_new_task_f32(mode, xshape, yshape, zshape)
+    } else if TypeId::of::<T>() == TypeId::of::<f64>() {
+        conv_new_task_f64(mode, xshape, yshape, zshape)
+    } else {
+        Err(Error::backend(-1, "VS convolution task requires f32 or f64 precision"))
+    }
+}
+
+/// Reinterpret a `&[T]` as `&[f32]` once `T` is known to be `f32`.
+///
+/// SAFETY contract is the caller's: this is only reached after a
+/// `TypeId::of::<T>() == TypeId::of::<f32>()` guard, so `T` and `f32` are the
+/// same type and the reinterpretation is a layout identity.
+fn as_f32_slice<T: DspFloat>(slice: &[T]) -> &[f32] {
+    // SAFETY: reached only when `T` is `f32` (caller checks `TypeId`), so `T`
+    // and `f32` have identical layout; the element count is preserved, so the
+    // resulting slice has the same length.  `DspFloat: 'static` makes the
+    // `TypeId` comparison meaningful.
+    unsafe { std::slice::from_raw_parts(slice.as_ptr().cast::<f32>(), slice.len()) }
+}
+
+/// Reinterpret a `&mut [T]` as `&mut [f32]` once `T` is known to be `f32`.
+fn as_f32_slice_mut<T: DspFloat>(slice: &mut [T]) -> &mut [f32] {
+    let len = slice.len();
+    // SAFETY: reached only when `T` is `f32` (caller checks `TypeId`), so `T`
+    // and `f32` have identical layout and the element count is preserved.
+    unsafe { std::slice::from_raw_parts_mut(slice.as_mut_ptr().cast::<f32>(), len) }
+}
+
+/// Reinterpret a `&[T]` as `&[f64]` once `T` is known to be `f64`.
+fn as_f64_slice<T: DspFloat>(slice: &[T]) -> &[f64] {
+    // SAFETY: reached only when `T` is `f64` (caller checks `TypeId`), so `T`
+    // and `f64` have identical layout and the element count is preserved.
+    unsafe { std::slice::from_raw_parts(slice.as_ptr().cast::<f64>(), slice.len()) }
+}
+
+/// Reinterpret a `&mut [T]` as `&mut [f64]` once `T` is known to be `f64`.
+fn as_f64_slice_mut<T: DspFloat>(slice: &mut [T]) -> &mut [f64] {
+    let len = slice.len();
+    // SAFETY: reached only when `T` is `f64` (caller checks `TypeId`), so `T`
+    // and `f64` have identical layout and the element count is preserved.
+    unsafe { std::slice::from_raw_parts_mut(slice.as_mut_ptr().cast::<f64>(), len) }
+}
+
+/// Execute a single-precision VS convolution task with stride 1.
+fn conv_exec_f32(task: VSLConvTaskPtr, x: &[f32], y: &[f32], z: &mut [f32]) -> Result<()> {
+    // SAFETY: `task` is a live conv task; `x`/`y`/`z` are caller-owned buffers
+    // sized to the task's `xshape`/`yshape`/`zshape` (validated by the caller);
+    // the stride-1 access stays within each slice.
+    let status =
+        unsafe { sys::vslsConvExec1D(task, x.as_ptr(), 1, y.as_ptr(), 1, z.as_mut_ptr(), 1) };
+    check_vsl(status, "vslsConvExec1D failed")
+}
+
+/// Execute a double-precision VS convolution task with stride 1.
+fn conv_exec_f64(task: VSLConvTaskPtr, x: &[f64], y: &[f64], z: &mut [f64]) -> Result<()> {
+    // SAFETY: `task` is a live conv task; `x`/`y`/`z` are caller-owned buffers
+    // sized to the task's `xshape`/`yshape`/`zshape` (validated by the caller);
+    // the stride-1 access stays within each slice.
+    let status =
+        unsafe { sys::vsldConvExec1D(task, x.as_ptr(), 1, y.as_ptr(), 1, z.as_mut_ptr(), 1) };
+    check_vsl(status, "vsldConvExec1D failed")
+}
+
+/// Execute a VS convolution task for precision `T`, dispatching on the concrete
+/// float width.
+///
+/// The buffers are reinterpreted to the concrete `f32`/`f64` slice the matching
+/// executor takes (a layout-identity transmute guarded by the same `TypeId`
+/// check the task constructor used).  `x`, `y`, and `z` must already match the
+/// task's `xshape`, `yshape`, and `zshape`.  A non-`f32`/`f64` `T` returns a
+/// backend error; it is unreachable in practice.
+pub fn conv_exec<T: DspFloat>(
+    task: VSLConvTaskPtr,
+    x: &[T],
+    y: &[T],
+    z: &mut [T],
+) -> Result<()> {
+    if TypeId::of::<T>() == TypeId::of::<f32>() {
+        conv_exec_f32(task, as_f32_slice(x), as_f32_slice(y), as_f32_slice_mut(z))
+    } else if TypeId::of::<T>() == TypeId::of::<f64>() {
+        conv_exec_f64(task, as_f64_slice(x), as_f64_slice(y), as_f64_slice_mut(z))
+    } else {
+        Err(Error::backend(-1, "VS convolution exec requires f32 or f64 precision"))
+    }
+}
+
+/// Destroy a VS convolution task and free its resources.
+///
+/// Called from the plans' `Drop`; the status is checked but a failed free is
+/// non-recoverable at drop time, so the returned status is discarded.
+pub fn conv_delete_task(mut task: VSLConvTaskPtr) {
+    // SAFETY: `task` was produced by `conv_new_task*` and is freed exactly once
+    // (from the owning plan's `Drop`).  `vslConvDeleteTask` takes the task by
+    // out-pointer.
+    let _status = unsafe { sys::vslConvDeleteTask(&raw mut task) };
+}
+
+// ─── VS correlation task wrappers ────────────────────────────────────
+//
+// Cross-correlation wraps oneMKL's native VS *correlation* task API
+// (`vsl{s,d}CorrNewTask1D` / `vsl{s,d}CorrExec1D` / `vslCorrDeleteTask`), the
+// literal vendor kernel — not a convolution of a reversed input.  The same
+// `TypeId` dispatch and layout-identity slice reinterpretation the conv
+// wrappers use carry the f32/f64 selection (see the conv-wrapper module note).
+//
+// The full linear correlation is built with `xshape = a_len`, `yshape = b_len`,
+// `zshape = a_len + b_len - 1`, default `start`/`decimation` — see the
+// lag/order note in `crate::xcorr`.
+
+/// Construct a 1-D single-precision VS **correlation** task.
+///
+/// `mode` is one of `VSL_CORR_MODE_{AUTO,FFT,DIRECT}`; the three shapes are the
+/// input lengths and `xshape + yshape - 1` for the full-correlation output.
+fn corr_new_task_f32(
+    mode: MklInt,
+    xshape: usize,
+    yshape: usize,
+    zshape: usize,
+) -> Result<VSLCorrTaskPtr> {
+    let x = to_mkl_int(xshape, "vslsCorrNewTask1D xshape exceeds MKL_INT range")?;
+    let y = to_mkl_int(yshape, "vslsCorrNewTask1D yshape exceeds MKL_INT range")?;
+    let z = to_mkl_int(zshape, "vslsCorrNewTask1D zshape exceeds MKL_INT range")?;
+    let mut task: VSLCorrTaskPtr = std::ptr::null_mut();
+    // SAFETY: `task` is a valid out-pointer; `mode` is a valid VS corr-mode
+    // constant; the shapes are positive lengths as MKL_INT.  VS writes the new
+    // task pointer into `task` and returns a status.
+    let status = unsafe { sys::vslsCorrNewTask1D(&raw mut task, mode, x, y, z) };
+    check_vsl(status, "vslsCorrNewTask1D failed")?;
+    if task.is_null() {
+        return Err(Error::backend(-1, "vslsCorrNewTask1D returned a null task"));
+    }
+    Ok(task)
+}
+
+/// Construct a 1-D double-precision VS **correlation** task.
+///
+/// Double-precision peer of [`corr_new_task_f32`].
+fn corr_new_task_f64(
+    mode: MklInt,
+    xshape: usize,
+    yshape: usize,
+    zshape: usize,
+) -> Result<VSLCorrTaskPtr> {
+    let x = to_mkl_int(xshape, "vsldCorrNewTask1D xshape exceeds MKL_INT range")?;
+    let y = to_mkl_int(yshape, "vsldCorrNewTask1D yshape exceeds MKL_INT range")?;
+    let z = to_mkl_int(zshape, "vsldCorrNewTask1D zshape exceeds MKL_INT range")?;
+    let mut task: VSLCorrTaskPtr = std::ptr::null_mut();
+    // SAFETY: `task` is a valid out-pointer; `mode` is a valid VS corr-mode
+    // constant; the shapes are positive lengths as MKL_INT.  VS writes the new
+    // task pointer into `task` and returns a status.
+    let status = unsafe { sys::vsldCorrNewTask1D(&raw mut task, mode, x, y, z) };
+    check_vsl(status, "vsldCorrNewTask1D failed")?;
+    if task.is_null() {
+        return Err(Error::backend(-1, "vsldCorrNewTask1D returned a null task"));
+    }
+    Ok(task)
+}
+
+/// Build a VS correlation task for precision `T`, dispatching on the concrete
+/// float width.
+///
+/// `T` is `f32` or `f64` in practice; any other type returns a backend error.
+pub fn corr_new_task<T: DspFloat>(
+    mode: MklInt,
+    xshape: usize,
+    yshape: usize,
+    zshape: usize,
+) -> Result<VSLCorrTaskPtr> {
+    if TypeId::of::<T>() == TypeId::of::<f32>() {
+        corr_new_task_f32(mode, xshape, yshape, zshape)
+    } else if TypeId::of::<T>() == TypeId::of::<f64>() {
+        corr_new_task_f64(mode, xshape, yshape, zshape)
+    } else {
+        Err(Error::backend(-1, "VS correlation task requires f32 or f64 precision"))
+    }
+}
+
+/// Execute a single-precision VS correlation task with stride 1.
+fn corr_exec_f32(task: VSLCorrTaskPtr, x: &[f32], y: &[f32], z: &mut [f32]) -> Result<()> {
+    // SAFETY: `task` is a live corr task; `x`/`y`/`z` are caller-owned buffers
+    // sized to the task's `xshape`/`yshape`/`zshape` (validated by the caller);
+    // the stride-1 access stays within each slice.
+    let status =
+        unsafe { sys::vslsCorrExec1D(task, x.as_ptr(), 1, y.as_ptr(), 1, z.as_mut_ptr(), 1) };
+    check_vsl(status, "vslsCorrExec1D failed")
+}
+
+/// Execute a double-precision VS correlation task with stride 1.
+fn corr_exec_f64(task: VSLCorrTaskPtr, x: &[f64], y: &[f64], z: &mut [f64]) -> Result<()> {
+    // SAFETY: `task` is a live corr task; `x`/`y`/`z` are caller-owned buffers
+    // sized to the task's `xshape`/`yshape`/`zshape` (validated by the caller);
+    // the stride-1 access stays within each slice.
+    let status =
+        unsafe { sys::vsldCorrExec1D(task, x.as_ptr(), 1, y.as_ptr(), 1, z.as_mut_ptr(), 1) };
+    check_vsl(status, "vsldCorrExec1D failed")
+}
+
+/// Execute a VS correlation task for precision `T`, dispatching on the concrete
+/// float width.
+///
+/// The buffers are reinterpreted to the concrete `f32`/`f64` slice the matching
+/// executor takes (a layout-identity transmute guarded by the same `TypeId`
+/// check the task constructor used).  `x`, `y`, and `z` must already match the
+/// task's `xshape`, `yshape`, and `zshape`.  A non-`f32`/`f64` `T` returns a
+/// backend error; it is unreachable in practice.
+pub fn corr_exec<T: DspFloat>(task: VSLCorrTaskPtr, x: &[T], y: &[T], z: &mut [T]) -> Result<()> {
+    if TypeId::of::<T>() == TypeId::of::<f32>() {
+        corr_exec_f32(task, as_f32_slice(x), as_f32_slice(y), as_f32_slice_mut(z))
+    } else if TypeId::of::<T>() == TypeId::of::<f64>() {
+        corr_exec_f64(task, as_f64_slice(x), as_f64_slice(y), as_f64_slice_mut(z))
+    } else {
+        Err(Error::backend(-1, "VS correlation exec requires f32 or f64 precision"))
+    }
+}
+
+/// Destroy a VS correlation task and free its resources.
+///
+/// Called from the plan's `Drop`; the status is checked but a failed free is
+/// non-recoverable at drop time, so the returned status is discarded.
+pub fn corr_delete_task(mut task: VSLCorrTaskPtr) {
+    // SAFETY: `task` was produced by `corr_new_task*` and is freed exactly once
+    // (from the owning plan's `Drop`).  `vslCorrDeleteTask` takes the task by
+    // out-pointer.
+    let _status = unsafe { sys::vslCorrDeleteTask(&raw mut task) };
+}
+
 // ─── Thread-safety markers ───────────────────────────────────────────
 //
 // A committed DFTI descriptor is thread-safe for concurrent out-of-place
@@ -537,3 +857,27 @@ unsafe impl<T> Sync for OneMklDftR2cPlan<T> {}
 unsafe impl<T> Send for OneMklDftC2rPlan<T> {}
 // SAFETY: see above.
 unsafe impl<T> Sync for OneMklDftC2rPlan<T> {}
+
+// ─── VS plan thread-safety markers ───────────────────────────────────
+//
+// A VS conv/corr task carries mutable internal state across its `…Exec1D` calls
+// (it caches FFT plans / scratch), so it is *not* concurrency-safe the way a
+// committed DFTI descriptor is.  Both VS plans therefore keep the raw task
+// pointer (`VSLConvTaskPtr` / `VSLCorrTaskPtr`) behind a `Mutex` and touch it
+// only while that lock is held: `execute` locks, runs exactly one stride-1 exec,
+// and unlocks; `Drop` frees the task with no live borrows.  Serializing every
+// task access behind the plan's own `Mutex` makes sharing `&plan` across threads
+// sound, so the marker traits are asserted here (the raw pointer alone is
+// neither `Send` nor `Sync`).
+
+// SAFETY: the raw task pointer is only dereferenced behind the plan's `Mutex`
+// (see the module note above), so it never crosses a thread boundary unguarded.
+unsafe impl<T> Send for OneMklConvPlan<T> {}
+// SAFETY: see above — all task access is serialized behind the plan's `Mutex`.
+unsafe impl<T> Sync for OneMklConvPlan<T> {}
+
+// SAFETY: see above — the cross-correlation plan likewise guards its native VS
+// correlation task behind a `Mutex`.
+unsafe impl<T> Send for OneMklCrossCorrPlan<T> {}
+// SAFETY: see above.
+unsafe impl<T> Sync for OneMklCrossCorrPlan<T> {}
