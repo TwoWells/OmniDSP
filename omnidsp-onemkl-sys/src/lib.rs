@@ -189,6 +189,28 @@ unsafe extern "C" {
 }
 
 // ---------------------------------------------------------------------------
+// VM computation mode (mkl_vml_defines.h / mkl_vml_functions.h, oneMKL 2024.x)
+//
+// Accuracy modes for the VM (vector math) functions. Multiply/add/conjugate are
+// exact, so these do not change their *result* — they are a tuning knob: a
+// lower-accuracy / looser mode can shed per-call frontend overhead.
+// ---------------------------------------------------------------------------
+
+/// VM high-accuracy mode (the oneMKL default).
+pub const VML_HA: u32 = 0x0000_0001;
+/// VM low-accuracy mode.
+pub const VML_LA: u32 = 0x0000_0002;
+/// VM enhanced-performance (lowest-accuracy) mode.
+pub const VML_EP: u32 = 0x0000_0003;
+
+unsafe extern "C" {
+    /// Set the VM computation mode, returning the previous mode.
+    pub fn vmlSetMode(mode: u32) -> u32;
+    /// Return the current VM computation mode.
+    pub fn vmlGetMode() -> u32;
+}
+
+// ---------------------------------------------------------------------------
 // BLAS Level-1 functions (6)
 // ---------------------------------------------------------------------------
 
