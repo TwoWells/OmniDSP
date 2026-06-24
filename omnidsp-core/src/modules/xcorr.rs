@@ -134,8 +134,9 @@ impl CrossCorrSpec {
         self.b_len
     }
 
-    /// Preferred implementation method.  [`CorrMethod::Auto`] is resolved
-    /// at plan creation time; the plan itself always uses a concrete method.
+    /// The user's preferred implementation method.  [`CorrMethod::Auto`] leaves
+    /// the direct-vs-FFT choice to the backend; how and when it resolves is a
+    /// backend detail.
     #[must_use]
     pub const fn method(&self) -> CorrMethod {
         self.method
