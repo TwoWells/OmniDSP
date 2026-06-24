@@ -25,22 +25,16 @@
 //!
 //! # Lag / order convention
 //!
-//! VS correlation of `x[0..a_len-1]`, `y[0..b_len-1]` yields `a_len + b_len - 1`
-//! values for lags `[-(b_len-1), a_len-1]`.  The intended convention here is the
-//! one the rustfft/realfft floor uses (and the shared conformance suite pins to
-//! `scipy.signal.correlate`): the full linear cross-correlation
-//! `output[k] = Σ_i a[i] · b[i - k + (b_len - 1)]`, with lag 0 landing at index
-//! `b_len - 1` and the ordering running from the most-negative lag to the
-//! most-positive.  This plan uses `x = a`, `y = b`, `zshape = a_len + b_len - 1`
-//! and the **default** task `start` / `decimation`, which is expected to match
-//! the floor's lag-0 position and output order.
-//!
-//! That lag/order convention is the one thing this code cannot validate without
-//! Intel MKL — it is verified in CI by the oracle test comparing this plan to
-//! the floor for every `CorrMethod`.  **If CI reveals the VS output reversed or
-//! offset from the floor, the fix lever is the VS task `start` / `decimation`
-//! parameters** (set them explicitly on the task at construction); the FFI
-//! surface and this plan's structure stay the same.
+//! MKL's VS correlation emits the full linear correlation (`a_len + b_len - 1`
+//! values) in the **opposite lag order** from the floor convention: its lag 0
+//! lands at the high end of the buffer.  The floor (and the shared conformance
+//! suite, pinned to `scipy.signal.correlate`) uses
+//! `output[k] = Σ_i a[i] · b[i - k + (b_len - 1)]` — lag 0 at index `b_len - 1`,
+//! running from the most-negative to the most-positive lag.  So this plan builds
+//! the task with `x = a`, `y = b`, `zshape = a_len + b_len - 1`, runs
+//! `vslCorrExec1D`, then **reverses the output in place** so the result matches
+//! the floor.  The oracle test and conformance suite pin that equivalence
+//! (verified in CI, where MKL is linked).
 
 use std::marker::PhantomData;
 use std::sync::Mutex;
@@ -133,7 +127,12 @@ impl<T: DspFloat> CrossCorrPlan<T> for OneMklCrossCorrPlan<T> {
             .task
             .lock()
             .map_err(|e| Error::Internal(format!("VS corr task lock poisoned: {e}")))?;
-        ffi::corr_exec::<T>(*task, a, b, output)
+        ffi::corr_exec::<T>(*task, a, b, output)?;
+        // MKL's VS correlation emits the full correlation in the opposite lag
+        // order from the floor (its lag 0 lands at the high end), so reverse the
+        // result in place to match output[k] = sum_i a[i] * b[i - k + (b_len - 1)].
+        output.reverse();
+        Ok(())
     }
 }
 
