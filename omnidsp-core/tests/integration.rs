@@ -27,9 +27,9 @@ use omnidsp_core::error::Result;
 use omnidsp_core::modules::cqt::{OmniCqt, OmniCqtPlan};
 use omnidsp_core::modules::fir::OmniFir;
 use omnidsp_core::modules::resample::{OmniResample, OmniResampleProcessor};
-use omnidsp_core::modules::xcorr::{CrossCorrSpec, OmniCrossCorr};
+use omnidsp_core::modules::xcorr::{CorrMethod, CrossCorrSpec, OmniCrossCorr};
 use omnidsp_core::scalar::{ScalarIir, ScalarVecOps};
-use omnidsp_core::traits::dft::{DftC2c, DftC2cPlan, DftC2cSpec, DftNorm, DftR2c};
+use omnidsp_core::traits::dft::{DftC2c, DftC2cPlan, DftC2cSpec, DftC2r, DftNorm, DftR2c};
 use omnidsp_core::traits::fir::{FirProcessor, FirSpec, FirStrategy};
 use omnidsp_core::traits::iir::{Iir, IirProcessor};
 use omnidsp_core::traits::vecops::VecOps;
@@ -1042,8 +1042,8 @@ mod xcorr_integration {
     #[test]
     fn scipy_short_asymmetric() {
         let factory = make_factory();
-        let spec =
-            CrossCorrSpec::new(XCORR_SHORT_A.len(), XCORR_SHORT_B.len()).expect("valid xcorr spec");
+        let spec = CrossCorrSpec::new(XCORR_SHORT_A.len(), XCORR_SHORT_B.len(), CorrMethod::Fft)
+            .expect("valid xcorr spec");
         let plan = factory.create_plan(&spec).expect("plan creation");
 
         let mut output = vec![0.0; spec.output_len()];
@@ -1062,8 +1062,8 @@ mod xcorr_integration {
     #[test]
     fn scipy_equal_length() {
         let factory = make_factory();
-        let spec =
-            CrossCorrSpec::new(XCORR_EQUAL_A.len(), XCORR_EQUAL_B.len()).expect("valid xcorr spec");
+        let spec = CrossCorrSpec::new(XCORR_EQUAL_A.len(), XCORR_EQUAL_B.len(), CorrMethod::Fft)
+            .expect("valid xcorr spec");
         let plan = factory.create_plan(&spec).expect("plan creation");
 
         let mut output = vec![0.0; spec.output_len()];
@@ -1082,8 +1082,8 @@ mod xcorr_integration {
     #[test]
     fn scipy_delay_sinusoids() {
         let factory = make_factory();
-        let spec =
-            CrossCorrSpec::new(XCORR_DELAY_A.len(), XCORR_DELAY_B.len()).expect("valid xcorr spec");
+        let spec = CrossCorrSpec::new(XCORR_DELAY_A.len(), XCORR_DELAY_B.len(), CorrMethod::Fft)
+            .expect("valid xcorr spec");
         let plan = factory.create_plan(&spec).expect("plan creation");
 
         let mut output = vec![0.0; spec.output_len()];
@@ -1096,5 +1096,92 @@ mod xcorr_integration {
             1e-8,
             "delay xcorr vs scipy.signal.correlate",
         );
+    }
+
+    /// Deterministic, sign-varying signal of length `n` in float width `T`.
+    ///
+    /// Two incommensurate sinusoids give an aperiodic sequence without pulling
+    /// in an RNG dependency; values stay in roughly `[-1.5, 1.5]`.
+    fn deterministic_signal<T: DspFloat>(n: usize, phase: f64) -> Vec<T> {
+        let mut out = Vec::with_capacity(n);
+        let mut t = phase;
+        for _ in 0..n {
+            let v = 0.5f64.mul_add((0.7f64.mul_add(t, phase)).cos(), (1.3 * t).sin());
+            out.push(T::from_f64(v).expect("sample value representable in T"));
+            t += 0.37;
+        }
+        out
+    }
+
+    /// Oracle the direct method against the FFT method over the real backend
+    /// for one float width `T`.
+    ///
+    /// The two paths must agree in convention bit-for-bit: same output length,
+    /// same lag-0 placement, same ordering.  Run over small, medium, and large
+    /// sizes (including asymmetric and unit-template edges); `tol` is relative.
+    fn oracle_direct_vs_fft<T>(tol: T, label: &str)
+    where
+        T: DspFloat + std::fmt::Display,
+        RustDftR2c: DftR2c<T>,
+        RustDftC2r: DftC2r<T> + Clone,
+        ScalarVecOps: VecOps<T>,
+    {
+        let factory = make_factory();
+        let sizes: &[(usize, usize)] = &[
+            (1, 1),
+            (3, 2),
+            (5, 5),
+            (9, 4),
+            (16, 16),
+            (37, 21),
+            (64, 64),
+            (200, 13),
+            (256, 192),
+            (512, 333),
+        ];
+
+        for &(a_len, b_len) in sizes {
+            let a = deterministic_signal::<T>(a_len, 0.11);
+            let b = deterministic_signal::<T>(b_len, 2.4);
+
+            let plan_d = factory
+                .create_plan::<T>(
+                    &CrossCorrSpec::new(a_len, b_len, CorrMethod::Direct)
+                        .expect("valid xcorr spec"),
+                )
+                .expect("direct plan creation");
+            let plan_f = factory
+                .create_plan::<T>(
+                    &CrossCorrSpec::new(a_len, b_len, CorrMethod::Fft).expect("valid xcorr spec"),
+                )
+                .expect("fft plan creation");
+
+            let out_len = a_len + b_len - 1;
+            let mut out_d = vec![T::zero(); out_len];
+            let mut out_f = vec![T::zero(); out_len];
+            plan_d.execute(&a, &b, &mut out_d).expect("direct execute");
+            plan_f.execute(&a, &b, &mut out_f).expect("fft execute");
+
+            for (i, (&d, &f)) in out_d.iter().zip(out_f.iter()).enumerate() {
+                let scale = f.abs().max(T::one());
+                assert!(
+                    (d - f).abs() <= tol * scale,
+                    "{label} direct vs fft mismatch at ({a_len},{b_len}) index {i}: \
+                     direct {d}, fft {f}"
+                );
+            }
+        }
+    }
+
+    /// The direct method matches the FFT method for `f64`.
+    #[test]
+    fn direct_matches_fft_f64() {
+        oracle_direct_vs_fft::<f64>(1e-9, "f64");
+    }
+
+    /// The direct method matches the FFT method for `f32`.
+    #[test]
+    fn direct_matches_fft_f32() {
+        oracle_direct_vs_fft::<f32>(1e-3, "f32");
     }
 }
