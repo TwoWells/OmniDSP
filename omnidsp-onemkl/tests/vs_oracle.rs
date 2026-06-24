@@ -35,12 +35,19 @@
     clippy::suboptimal_flops,
     reason = "test-signal formulas favor readability over fused multiply-add"
 )]
+#![allow(
+    clippy::use_self,
+    reason = "OracleFloat::TOL is f64 in every impl (fixed by the trait), not the impl's Self type"
+)]
 
 use omnidsp_core::create::CreatePlan;
+use omnidsp_core::dispatch::Backend;
 use omnidsp_core::modules::conv::OmniConv;
 use omnidsp_core::modules::xcorr::{CorrMethod, CrossCorrPlan, CrossCorrSpec, OmniCrossCorr};
 use omnidsp_core::scalar::ScalarVecOps;
 use omnidsp_core::traits::conv::{ConvMethod, ConvPlan, ConvSpec};
+use omnidsp_core::traits::dft::{DftC2r, DftR2c};
+use omnidsp_core::traits::vecops::VecOps;
 use omnidsp_core::types::DspFloat;
 use omnidsp_onemkl::OneMklBackend;
 use omnidsp_rustfft::{RustDftC2r, RustDftR2c};
@@ -97,7 +104,13 @@ fn assert_close<T: DspFloat>(got: &[T], want: &[T], tol: f64, context: &str) {
 }
 
 /// Compute the floor convolution reference for `a` ∗ `b` with `method`.
-fn floor_conv<T: DspFloat>(method: ConvMethod, a: &[T], b: &[T]) -> Vec<T> {
+fn floor_conv<T>(method: ConvMethod, a: &[T], b: &[T]) -> Vec<T>
+where
+    T: DspFloat,
+    RustDftR2c: DftR2c<T>,
+    RustDftC2r: DftC2r<T>,
+    ScalarVecOps: VecOps<T>,
+{
     let spec = ConvSpec::new(a.len(), b.len(), method).expect("valid floor conv spec");
     let plan = OmniConv::new(RustDftR2c, RustDftC2r, ScalarVecOps)
         .create_plan::<T>(&spec)
@@ -108,7 +121,13 @@ fn floor_conv<T: DspFloat>(method: ConvMethod, a: &[T], b: &[T]) -> Vec<T> {
 }
 
 /// Compute the floor cross-correlation reference for `a`, `b` with `method`.
-fn floor_xcorr<T: DspFloat>(method: CorrMethod, a: &[T], b: &[T]) -> Vec<T> {
+fn floor_xcorr<T>(method: CorrMethod, a: &[T], b: &[T]) -> Vec<T>
+where
+    T: DspFloat,
+    RustDftR2c: DftR2c<T>,
+    RustDftC2r: DftC2r<T>,
+    ScalarVecOps: VecOps<T>,
+{
     let spec = CrossCorrSpec::new(a.len(), b.len(), method).expect("valid floor xcorr spec");
     let plan = OmniCrossCorr::new(RustDftR2c, RustDftC2r, ScalarVecOps)
         .create_plan::<T>(&spec)
@@ -119,7 +138,14 @@ fn floor_xcorr<T: DspFloat>(method: CorrMethod, a: &[T], b: &[T]) -> Vec<T> {
 }
 
 /// Native VS convolution matches the floor for every method and size.
-fn check_conv<T: OracleFloat>() {
+fn check_conv<T>()
+where
+    T: OracleFloat,
+    RustDftR2c: DftR2c<T>,
+    RustDftC2r: DftC2r<T>,
+    ScalarVecOps: VecOps<T>,
+    OneMklBackend: Backend<T>,
+{
     let mkl = OneMklBackend::new();
     for &method in &[ConvMethod::Auto, ConvMethod::Fft, ConvMethod::Direct] {
         for &(a_len, b_len) in SIZES {
@@ -127,8 +153,8 @@ fn check_conv<T: OracleFloat>() {
             let b = signal::<T>(b_len, 1.3);
 
             let spec = ConvSpec::new(a_len, b_len, method).expect("valid mkl conv spec");
-            let plan = CreatePlan::<ConvSpec>::create_plan::<T>(&mkl, &spec)
-                .expect("mkl conv plan");
+            let plan =
+                CreatePlan::<ConvSpec>::create_plan::<T>(&mkl, &spec).expect("mkl conv plan");
             let mut got = vec![T::zero(); a_len + b_len - 1];
             ConvPlan::execute(&plan, &a, &b, &mut got).expect("mkl conv execute");
 
@@ -144,17 +170,23 @@ fn check_conv<T: OracleFloat>() {
 }
 
 /// Native VS cross-correlation matches the floor for every method and size.
-fn check_xcorr<T: OracleFloat>() {
+fn check_xcorr<T>()
+where
+    T: OracleFloat,
+    RustDftR2c: DftR2c<T>,
+    RustDftC2r: DftC2r<T>,
+    ScalarVecOps: VecOps<T>,
+    OneMklBackend: Backend<T>,
+{
     let mkl = OneMklBackend::new();
     for &method in &[CorrMethod::Auto, CorrMethod::Fft, CorrMethod::Direct] {
         for &(a_len, b_len) in SIZES {
             let a = signal::<T>(a_len, 0.5);
             let b = signal::<T>(b_len, 2.1);
 
-            let spec =
-                CrossCorrSpec::new(a_len, b_len, method).expect("valid mkl xcorr spec");
-            let plan = CreatePlan::<CrossCorrSpec>::create_plan::<T>(&mkl, &spec)
-                .expect("mkl xcorr plan");
+            let spec = CrossCorrSpec::new(a_len, b_len, method).expect("valid mkl xcorr spec");
+            let plan =
+                CreatePlan::<CrossCorrSpec>::create_plan::<T>(&mkl, &spec).expect("mkl xcorr plan");
             let mut got = vec![T::zero(); spec.output_len()];
             CrossCorrPlan::execute(&plan, &a, &b, &mut got).expect("mkl xcorr execute");
 

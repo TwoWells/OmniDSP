@@ -4,7 +4,7 @@
 //! Native oneMKL VS cross-correlation override.
 //!
 //! [`OneMklBackend`](crate::OneMklBackend) lists `xcorr` in its `skip` set and
-//! hand-writes [`CreatePlan`](omnidsp_core::create::CreatePlan)`<CrossCorrSpec>`
+//! hand-writes [`CreatePlan`](omnidsp_core::create::CreatePlan) for `CrossCorrSpec`
 //! here so a user's [`CorrMethod`](omnidsp_core::modules::xcorr::CorrMethod)
 //! drives oneMKL's native VS correlation kernel directly.  The method maps onto
 //! the VS correlation mode:
@@ -55,8 +55,8 @@ use omnidsp_core::error::{Error, Result};
 use omnidsp_core::modules::xcorr::{CorrMethod, CrossCorrPlan, CrossCorrSpec};
 use omnidsp_core::types::DspFloat;
 
-use crate::ffi;
 use crate::OneMklBackend;
+use crate::ffi;
 
 /// Translate a [`CorrMethod`] onto the VS correlation mode constant.
 const fn vsl_corr_mode(method: CorrMethod) -> i32 {

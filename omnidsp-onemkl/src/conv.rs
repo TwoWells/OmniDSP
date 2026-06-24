@@ -4,7 +4,7 @@
 //! Native oneMKL VS convolution override.
 //!
 //! [`OneMklBackend`](crate::OneMklBackend) lists `conv` in its `skip` set and
-//! hand-writes [`CreatePlan`](omnidsp_core::create::CreatePlan)`<ConvSpec>` here
+//! hand-writes [`CreatePlan`](omnidsp_core::create::CreatePlan) for `ConvSpec` here
 //! so a user's [`ConvMethod`](omnidsp_core::traits::conv::ConvMethod) drives
 //! MKL's native VS convolution kernel directly.  The method maps onto the VS
 //! convolution mode:
@@ -34,8 +34,8 @@ use omnidsp_core::error::{Error, Result};
 use omnidsp_core::traits::conv::{ConvMethod, ConvPlan, ConvSpec};
 use omnidsp_core::types::DspFloat;
 
-use crate::ffi;
 use crate::OneMklBackend;
+use crate::ffi;
 
 /// Translate a [`ConvMethod`] onto the VS convolution mode constant.
 const fn vsl_conv_mode(method: ConvMethod) -> i32 {

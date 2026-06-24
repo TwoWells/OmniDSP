@@ -609,7 +609,10 @@ pub fn conv_new_task<T: DspFloat>(
     } else if TypeId::of::<T>() == TypeId::of::<f64>() {
         conv_new_task_f64(mode, xshape, yshape, zshape)
     } else {
-        Err(Error::backend(-1, "VS convolution task requires f32 or f64 precision"))
+        Err(Error::backend(
+            -1,
+            "VS convolution task requires f32 or f64 precision",
+        ))
     }
 }
 
@@ -618,7 +621,7 @@ pub fn conv_new_task<T: DspFloat>(
 /// SAFETY contract is the caller's: this is only reached after a
 /// `TypeId::of::<T>() == TypeId::of::<f32>()` guard, so `T` and `f32` are the
 /// same type and the reinterpretation is a layout identity.
-fn as_f32_slice<T: DspFloat>(slice: &[T]) -> &[f32] {
+const fn as_f32_slice<T: DspFloat>(slice: &[T]) -> &[f32] {
     // SAFETY: reached only when `T` is `f32` (caller checks `TypeId`), so `T`
     // and `f32` have identical layout; the element count is preserved, so the
     // resulting slice has the same length.  `DspFloat: 'static` makes the
@@ -627,7 +630,7 @@ fn as_f32_slice<T: DspFloat>(slice: &[T]) -> &[f32] {
 }
 
 /// Reinterpret a `&mut [T]` as `&mut [f32]` once `T` is known to be `f32`.
-fn as_f32_slice_mut<T: DspFloat>(slice: &mut [T]) -> &mut [f32] {
+const fn as_f32_slice_mut<T: DspFloat>(slice: &mut [T]) -> &mut [f32] {
     let len = slice.len();
     // SAFETY: reached only when `T` is `f32` (caller checks `TypeId`), so `T`
     // and `f32` have identical layout and the element count is preserved.
@@ -635,14 +638,14 @@ fn as_f32_slice_mut<T: DspFloat>(slice: &mut [T]) -> &mut [f32] {
 }
 
 /// Reinterpret a `&[T]` as `&[f64]` once `T` is known to be `f64`.
-fn as_f64_slice<T: DspFloat>(slice: &[T]) -> &[f64] {
+const fn as_f64_slice<T: DspFloat>(slice: &[T]) -> &[f64] {
     // SAFETY: reached only when `T` is `f64` (caller checks `TypeId`), so `T`
     // and `f64` have identical layout and the element count is preserved.
     unsafe { std::slice::from_raw_parts(slice.as_ptr().cast::<f64>(), slice.len()) }
 }
 
 /// Reinterpret a `&mut [T]` as `&mut [f64]` once `T` is known to be `f64`.
-fn as_f64_slice_mut<T: DspFloat>(slice: &mut [T]) -> &mut [f64] {
+const fn as_f64_slice_mut<T: DspFloat>(slice: &mut [T]) -> &mut [f64] {
     let len = slice.len();
     // SAFETY: reached only when `T` is `f64` (caller checks `TypeId`), so `T`
     // and `f64` have identical layout and the element count is preserved.
@@ -677,18 +680,16 @@ fn conv_exec_f64(task: VSLConvTaskPtr, x: &[f64], y: &[f64], z: &mut [f64]) -> R
 /// check the task constructor used).  `x`, `y`, and `z` must already match the
 /// task's `xshape`, `yshape`, and `zshape`.  A non-`f32`/`f64` `T` returns a
 /// backend error; it is unreachable in practice.
-pub fn conv_exec<T: DspFloat>(
-    task: VSLConvTaskPtr,
-    x: &[T],
-    y: &[T],
-    z: &mut [T],
-) -> Result<()> {
+pub fn conv_exec<T: DspFloat>(task: VSLConvTaskPtr, x: &[T], y: &[T], z: &mut [T]) -> Result<()> {
     if TypeId::of::<T>() == TypeId::of::<f32>() {
         conv_exec_f32(task, as_f32_slice(x), as_f32_slice(y), as_f32_slice_mut(z))
     } else if TypeId::of::<T>() == TypeId::of::<f64>() {
         conv_exec_f64(task, as_f64_slice(x), as_f64_slice(y), as_f64_slice_mut(z))
     } else {
-        Err(Error::backend(-1, "VS convolution exec requires f32 or f64 precision"))
+        Err(Error::backend(
+            -1,
+            "VS convolution exec requires f32 or f64 precision",
+        ))
     }
 }
 
@@ -779,7 +780,10 @@ pub fn corr_new_task<T: DspFloat>(
     } else if TypeId::of::<T>() == TypeId::of::<f64>() {
         corr_new_task_f64(mode, xshape, yshape, zshape)
     } else {
-        Err(Error::backend(-1, "VS correlation task requires f32 or f64 precision"))
+        Err(Error::backend(
+            -1,
+            "VS correlation task requires f32 or f64 precision",
+        ))
     }
 }
 
@@ -817,7 +821,10 @@ pub fn corr_exec<T: DspFloat>(task: VSLCorrTaskPtr, x: &[T], y: &[T], z: &mut [T
     } else if TypeId::of::<T>() == TypeId::of::<f64>() {
         corr_exec_f64(task, as_f64_slice(x), as_f64_slice(y), as_f64_slice_mut(z))
     } else {
-        Err(Error::backend(-1, "VS correlation exec requires f32 or f64 precision"))
+        Err(Error::backend(
+            -1,
+            "VS correlation exec requires f32 or f64 precision",
+        ))
     }
 }
 
