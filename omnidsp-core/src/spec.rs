@@ -235,7 +235,7 @@
 pub use crate::design::cqt::CqtSpec;
 pub use crate::design::resample::ResampleSpec;
 pub use crate::modules::hilbert::HilbertSpec;
-pub use crate::modules::xcorr::{CrossCorrNorm, CrossCorrSpec};
+pub use crate::modules::xcorr::{CorrMethod, CrossCorrNorm, CrossCorrSpec};
 pub use crate::traits::conv::ConvSpec;
 pub use crate::traits::dct::DctSpec;
 pub use crate::traits::dft::{DftC2cSpec, DftC2rSpec, DftR2cSpec};

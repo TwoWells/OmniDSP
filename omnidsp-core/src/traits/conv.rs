@@ -17,9 +17,11 @@ use crate::error::{Error, Result};
 /// Convolution implementation method.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConvMethod {
-    /// Backend decides based on input sizes.
+    /// Backend decides direct vs. FFT.
     ///
-    /// Resolved at plan creation time — the plan always uses a concrete method.
+    /// How and when `Auto` resolves is a backend detail: the pure-Rust floor
+    /// resolves it at plan creation from operation counts (`recommend_method`);
+    /// a vendor backend may defer to its own internal auto-select mode.
     Auto,
     /// Frequency-domain (FFT-based) convolution — `O(N log N)`.
     Fft,

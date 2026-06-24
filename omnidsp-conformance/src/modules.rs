@@ -19,7 +19,7 @@ use omnidsp_core::error::{Error, Result};
 use omnidsp_core::modules::cqt::{CqtPlan, CqtProcessor, OmniCqt};
 use omnidsp_core::modules::hilbert::{HilbertPlan, HilbertSpec};
 use omnidsp_core::modules::resample::ResampleProcessor;
-use omnidsp_core::modules::xcorr::{CrossCorrPlan, CrossCorrSpec};
+use omnidsp_core::modules::xcorr::{CorrMethod, CrossCorrPlan, CrossCorrSpec};
 use omnidsp_core::scalar::ScalarVecOps;
 use omnidsp_core::traits::conv::{ConvMethod, ConvPlan, ConvSpec};
 use omnidsp_core::traits::dct::{DctNorm, DctPlan, DctSpec, DctType};
@@ -430,8 +430,10 @@ where
 /// ([`OmniCrossCorr`](omnidsp_core::modules::xcorr::OmniCrossCorr)).
 ///
 /// Compares against `scipy.signal.correlate` golden vectors (asymmetric, equal,
-/// and sinusoidal-delay cases).  Only [`CrossCorrNorm::None`] exists today
-/// (the reserved field), so the default-constructed spec covers it.
+/// and sinusoidal-delay cases) across every [`CorrMethod`], so the direct and
+/// FFT paths are both pinned to the same reference.  Only
+/// [`CrossCorrNorm::None`] exists today (the reserved field), so the
+/// default-`norm` spec covers it.
 ///
 /// [`CrossCorrNorm::None`]: omnidsp_core::modules::xcorr::CrossCorrNorm::None
 ///
@@ -465,16 +467,24 @@ where
             xc::XCORR_DELAY_RESULT,
         ),
     ];
-    for &(label, a_ref, b_ref, expected) in cases {
-        let spec = CrossCorrSpec::new(a_ref.len(), b_ref.len()).expect("valid xcorr spec");
-        let plan = b.create_plan::<T>(&spec).expect("xcorr plan");
-        let mut out = vec![T::zero(); spec.output_len()];
-        plan.execute(&to_vec::<T>(a_ref), &to_vec::<T>(b_ref), &mut out)
-            .expect("xcorr execute");
-        assert_real(&out, expected, T::XCORR_TOL, &format!("xcorr {label}"));
+    for &method in &[CorrMethod::Auto, CorrMethod::Direct, CorrMethod::Fft] {
+        for &(label, a_ref, b_ref, expected) in cases {
+            let spec =
+                CrossCorrSpec::new(a_ref.len(), b_ref.len(), method).expect("valid xcorr spec");
+            let plan = b.create_plan::<T>(&spec).expect("xcorr plan");
+            let mut out = vec![T::zero(); spec.output_len()];
+            plan.execute(&to_vec::<T>(a_ref), &to_vec::<T>(b_ref), &mut out)
+                .expect("xcorr execute");
+            assert_real(
+                &out,
+                expected,
+                T::XCORR_TOL,
+                &format!("xcorr {label} {method:?}"),
+            );
+        }
     }
 
-    let spec = CrossCorrSpec::new(4, 2).expect("valid xcorr spec");
+    let spec = CrossCorrSpec::new(4, 2, CorrMethod::Direct).expect("valid xcorr spec");
     let plan = b.create_plan::<T>(&spec).expect("xcorr plan");
     let a = to_vec::<T>(&[1.0, 2.0, 3.0, 4.0]);
     let bv = to_vec::<T>(&[1.0, 1.0]);

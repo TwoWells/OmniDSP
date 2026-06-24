@@ -107,12 +107,43 @@ pub trait VecOps<T: DspFloat>: Send + Sync + Clone {
     ///
     /// Both slices must have the same length.
     ///
+    /// Uses four independent partial accumulators advanced in lockstep, with a
+    /// scalar tail for the remainder, so the body is a set of parallel
+    /// fused-multiply-add chains rather than one serial dependency chain — this
+    /// lets the auto-vectorizer pack lanes and keeps the FMA pipeline full.
+    /// Because the partials are summed in a different order than a single
+    /// running accumulator, the result may differ from a naive left fold in the
+    /// last unit(s) in the last place; this is expected and acceptable for a
+    /// dot product.
+    ///
     /// # Errors
     ///
     /// Returns an error if the slice lengths do not match.
     fn dot(&self, a: &[T], b: &[T]) -> Result<T> {
+        const LANES: usize = 4;
+
         check_lengths_2(a.len(), b.len())?;
-        Ok(a.iter().zip(b).fold(T::zero(), |acc, (&x, &y)| acc + x * y))
+
+        let mut partials = [T::zero(); LANES];
+
+        let mut a_chunks = a.chunks_exact(LANES);
+        let mut b_chunks = b.chunks_exact(LANES);
+        for (ac, bc) in a_chunks.by_ref().zip(b_chunks.by_ref()) {
+            for lane in 0..LANES {
+                partials[lane] = ac[lane].mul_add(bc[lane], partials[lane]);
+            }
+        }
+
+        // Scalar remainder tail (fewer than LANES elements left).
+        let mut tail = T::zero();
+        for (&x, &y) in a_chunks.remainder().iter().zip(b_chunks.remainder()) {
+            tail = x.mul_add(y, tail);
+        }
+
+        // Combine the partials pairwise, then fold in the tail.
+        let lo = partials[0] + partials[1];
+        let hi = partials[2] + partials[3];
+        Ok(lo + hi + tail)
     }
 
     /// Element-wise complex multiply: `out[i] = a[i] * b[i]`.
@@ -134,16 +165,54 @@ pub trait VecOps<T: DspFloat>: Send + Sync + Clone {
     ///
     /// Both slices must have the same length.
     ///
+    /// Mirrors [`dot`](Self::dot): four independent partials (carried as
+    /// separate real and imaginary running sums so each is its own fused
+    /// multiply-add chain) advanced in lockstep, plus a scalar tail, combined
+    /// at the end.  Breaking the single serial accumulator lets the
+    /// auto-vectorizer pack lanes and keep the FMA pipeline full.  The reordered
+    /// summation may differ from a naive left fold in the last unit(s) in the
+    /// last place, which is expected and acceptable for a dot product.
+    ///
     /// # Errors
     ///
     /// Returns an error if the slice lengths do not match.
     fn cdot(&self, a: &[Complex<T>], b: &[Complex<T>]) -> Result<Complex<T>> {
+        const LANES: usize = 4;
+
         check_lengths_2(a.len(), b.len())?;
-        Ok(a.iter()
-            .zip(b)
-            .fold(Complex::new(T::zero(), T::zero()), |acc, (&x, &y)| {
-                acc + x * y
-            }))
+
+        let mut re = [T::zero(); LANES];
+        let mut im = [T::zero(); LANES];
+
+        let mut a_chunks = a.chunks_exact(LANES);
+        let mut b_chunks = b.chunks_exact(LANES);
+        for (ac, bc) in a_chunks.by_ref().zip(b_chunks.by_ref()) {
+            for lane in 0..LANES {
+                let (x, y) = (ac[lane], bc[lane]);
+                // (x.re + i·x.im)·(y.re + i·y.im)
+                //   re = x.re·y.re − x.im·y.im
+                //   im = x.re·y.im + x.im·y.re
+                re[lane] = x.re.mul_add(y.re, re[lane]);
+                re[lane] = (-x.im).mul_add(y.im, re[lane]);
+                im[lane] = x.re.mul_add(y.im, im[lane]);
+                im[lane] = x.im.mul_add(y.re, im[lane]);
+            }
+        }
+
+        // Scalar remainder tail (fewer than LANES elements left).
+        let mut re_tail = T::zero();
+        let mut im_tail = T::zero();
+        for (&x, &y) in a_chunks.remainder().iter().zip(b_chunks.remainder()) {
+            re_tail = x.re.mul_add(y.re, re_tail);
+            re_tail = (-x.im).mul_add(y.im, re_tail);
+            im_tail = x.re.mul_add(y.im, im_tail);
+            im_tail = x.im.mul_add(y.re, im_tail);
+        }
+
+        // Combine the partials pairwise, then fold in the tail.
+        let re_sum = (re[0] + re[1]) + (re[2] + re[3]) + re_tail;
+        let im_sum = (im[0] + im[1]) + (im[2] + im[3]) + im_tail;
+        Ok(Complex::new(re_sum, im_sum))
     }
 
     /// In-place element-wise multiply: `data[i] *= other[i]`.
