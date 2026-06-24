@@ -8,10 +8,6 @@
 name: bench-onemkl
 
 on:
-  # TEMPORARY branch-scoped push trigger so the bench runs while we iterate on it
-  # (workflow_dispatch only works once this file is on the default branch).
-  push:
-    branches: [feat/onemkl]
   workflow_dispatch:
 
 jobs:
