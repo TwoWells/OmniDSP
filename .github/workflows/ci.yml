@@ -7,7 +7,7 @@
 #                 (same pattern as Lattice), so hosted needs no provisioning;
 #                 `ubuntu-latest` supports container jobs.
 #   vendor-intel  the Intel oneMKL + IPP backends — stay on the self-hosted ARC
-#                 pool `homeserver-pool` in the INTERNAL
+#                 pool (org var `CI_RUNNER_LINUX`) in the INTERNAL
 #                 `ghcr.io/twowells/omnidsp-ci` image (rust-ci + Intel oneMKL +
 #                 IPP devel). That image bundles Intel libraries and CANNOT be
 #                 published publicly, so this job cannot move to a hosted runner.
@@ -81,7 +81,7 @@ jobs:
   # the vendor cannot silently drift. This is the CI-driven validation loop:
   # these crates cannot be built on a dev box without Intel oneMKL installed.
   vendor-intel:
-    runs-on: homeserver-pool
+    runs-on: ${{ vars.CI_RUNNER_LINUX }}
     container: ghcr.io/twowells/omnidsp-ci:latest
     defaults:
       run:
