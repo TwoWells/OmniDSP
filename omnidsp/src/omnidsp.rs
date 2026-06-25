@@ -347,6 +347,20 @@ impl OmniDSP<crate::OneMklBackend> {
     }
 }
 
+#[cfg(feature = "ipp")]
+impl OmniDSP<crate::IppBackend> {
+    /// Create an engine using the Intel IPP backend.
+    ///
+    /// Uses IPP's `ipps` FFT/DFT with accelerated vector ops; convolution, FIR,
+    /// cross-correlation, and the CQT compose for free over the accelerated DFT +
+    /// vector ops.  Requires Intel IPP 2021.1+ to be installed and linked (the
+    /// `ipp` Cargo feature).
+    #[must_use]
+    pub const fn ipp() -> Self {
+        Self::new(crate::IppBackend::new())
+    }
+}
+
 impl crate::Auto {
     /// Create an engine using the best compiled-in backend.
     #[must_use]

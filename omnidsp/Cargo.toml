@@ -16,12 +16,19 @@ workspace = true
 # the `Best`/`Auto` alias to `OneMklBackend`. Off by default so the floor build
 # needs no Intel MKL; enabled only in the `omnidsp-ci` image.
 onemkl = ["dep:omnidsp-onemkl"]
+# Opt-in Intel IPP backend. Pulls the workspace-excluded `omnidsp-ipp` crate
+# (which links `ipps`/`ippvm`/`ippcore`) as an optional path dependency, and
+# switches the `Best`/`Auto` alias to `IppBackend` (IPP outranks oneMKL when both
+# are enabled). Off by default so the floor build needs no Intel IPP; enabled
+# only in the `omnidsp-ci` image.
+ipp = ["dep:omnidsp-ipp"]
 
 [dependencies]
 omnidsp-core = { path = "../omnidsp-core" }
 omnidsp-macros = { path = "../omnidsp-macros" }
 omnidsp-rustfft = { path = "../omnidsp-rustfft" }
 omnidsp-onemkl = { path = "../omnidsp-onemkl", optional = true }
+omnidsp-ipp = { path = "../omnidsp-ipp", optional = true }
 
 [dev-dependencies]
 num-complex = "0.4"

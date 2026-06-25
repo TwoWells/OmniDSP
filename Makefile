@@ -139,9 +139,10 @@ onemkl-bench:
 # installed — the floor `make check` deliberately excludes these crates (it
 # cannot link IPP). The crates are workspace-excluded, so they build by manifest
 # path, not `-p` (mirrors the oneMKL gate). The `-sys` smoke test links `ipps`
-# and calls `ippsGetLibVersion`, so a green run proves the dynamic link resolves.
-# The wrapper crate + conformance one-liner are added here when `omnidsp-ipp`
-# lands.
+# and calls `ippsGetLibVersion`, so a green run proves the dynamic link resolves;
+# the `omnidsp-ipp` wrapper is then held to the shared conformance golden vectors
+# (the `run_all` one-liner in `omnidsp-ipp/tests/`), so the vendor cannot silently
+# drift from the floor.
 ipp-check:
 	@cargo fmt --manifest-path omnidsp-ipp-sys/Cargo.toml -- --check
 	@cargo fmt --manifest-path omnidsp-ipp/Cargo.toml -- --check

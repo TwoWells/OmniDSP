@@ -29,17 +29,28 @@ pub use omnidsp::{OmniDSP, RustBackend};
 #[cfg(feature = "onemkl")]
 pub use omnidsp_onemkl::OneMklBackend;
 
+/// The Intel IPP backend, re-exported when the `ipp` feature is enabled.
+#[cfg(feature = "ipp")]
+pub use omnidsp_ipp::IppBackend;
+
 /// The best available backend, selected at compile time.
 ///
-/// Defaults to [`RustBackend`] (pure Rust fallback).  With the `onemkl` feature
-/// enabled it resolves to [`OneMklBackend`].  As more vendor features land (IPP,
-/// Accelerate) this becomes a `cfg` priority ladder.
-#[cfg(feature = "onemkl")]
+/// With the `ipp` feature enabled it resolves to [`IppBackend`].  IPP outranks
+/// oneMKL: when both vendor features are on, IPP wins.
+#[cfg(feature = "ipp")]
+pub type Best = IppBackend;
+
+/// The best available backend, selected at compile time.
+///
+/// With the `onemkl` feature enabled (and `ipp` off) it resolves to
+/// [`OneMklBackend`].  As more vendor features land (Accelerate) this `cfg`
+/// priority ladder grows.
+#[cfg(all(feature = "onemkl", not(feature = "ipp")))]
 pub type Best = OneMklBackend;
 
 /// The best available backend, selected at compile time (pure-Rust floor when no
 /// vendor feature is enabled).
-#[cfg(not(feature = "onemkl"))]
+#[cfg(all(not(feature = "ipp"), not(feature = "onemkl")))]
 pub type Best = RustBackend;
 
 /// Convenience alias: [`OmniDSP`] with the best compiled-in backend.

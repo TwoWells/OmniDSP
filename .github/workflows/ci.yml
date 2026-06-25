@@ -121,6 +121,7 @@ jobs:
             omnidsp-onemkl-sys
             omnidsp-onemkl
             omnidsp-ipp-sys
+            omnidsp-ipp
 
       - name: Install cargo tools
         uses: taiki-e/install-action@v2
@@ -132,9 +133,12 @@ jobs:
       - name: make onemkl-check
         run: make onemkl-check
 
-      # Build + lint + smoke-test the IPP vendor `-sys` crate by manifest path
-      # (workspace-excluded). Links ipps/ippvm/ippcore from the image; the smoke
-      # test calls ippsGetLibVersion so a green run proves the link resolves.
+      # Build + lint the IPP vendor crates by manifest path (workspace-excluded).
+      # Links ipps/ippvm/ippcore from the image; the `-sys` smoke test calls
+      # ippsGetLibVersion so a green run proves the link resolves, and the
+      # `omnidsp-ipp` wrapper is held to the shared golden-vector conformance suite
+      # (f32 + f64) — the same vectors the floor passes, so the vendor cannot
+      # silently drift.
       - name: make ipp-check
         run: make ipp-check
 
@@ -146,3 +150,12 @@ jobs:
         run: |
           cargo clippy -p omnidsp --features onemkl --all-targets -- -D warnings
           cargo nextest run -p omnidsp --features onemkl --no-fail-fast --no-tests=pass
+
+      # The `omnidsp` integration for IPP: the `ipp` feature wires IppBackend as
+      # the Best/Auto alias plus the `OmniDSP::ipp()` constructor (IPP outranks
+      # oneMKL when both are on). Same as the onemkl step — the floor `check` job
+      # runs the feature OFF, so this cfg-gated vendor path is only exercised here.
+      - name: omnidsp --features ipp
+        run: |
+          cargo clippy -p omnidsp --features ipp --all-targets -- -D warnings
+          cargo nextest run -p omnidsp --features ipp --no-fail-fast --no-tests=pass
