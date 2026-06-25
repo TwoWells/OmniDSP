@@ -1,0 +1,33 @@
+[package]
+name = "omnidsp-ipp-sys"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Raw FFI declarations for Intel IPP (ipps: FFT/DFT, VecOps, IIR) used by omnidsp-ipp."
+repository = "https://github.com/TwoWells/OmniDSP"
+links = "ipps"
+
+[lints.rust]
+unsafe_code = "allow"
+missing_docs = "warn"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+dbg_macro = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+wildcard_imports = "deny"
+missing_assert_message = "deny"
+allow_attributes_without_reason = "deny"
+multiple_crate_versions = "allow"
+cargo_common_metadata = "allow"
+
+[build-dependencies]
+pkg-config = "0.3"

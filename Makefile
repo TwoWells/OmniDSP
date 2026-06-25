@@ -7,7 +7,7 @@
 #   make release-major   # 0.1.0 -> 1.0.0
 #   make release V=0.2.0 # explicit version
 
-.PHONY: bench build-release wasm-check wasm-pack demo check deny doc onemkl-check gen-cqt-reference gen-cqt-process-reference gen-cqt-librosa-reference gen-fir-reference gen-fir-lfilter-reference gen-remez-reference gen-hilbert-reference gen-iir-reference gen-iir-sosfilt-reference gen-resample-reference gen-resample-poly-reference gen-xcorr-reference machete mutants setup setup-hooks setup-tools test release release-patch release-minor release-major publish tag-current
+.PHONY: bench build-release wasm-check wasm-pack demo check deny doc onemkl-check ipp-check gen-cqt-reference gen-cqt-process-reference gen-cqt-librosa-reference gen-fir-reference gen-fir-lfilter-reference gen-remez-reference gen-hilbert-reference gen-iir-reference gen-iir-sosfilt-reference gen-resample-reference gen-resample-poly-reference gen-xcorr-reference machete mutants setup setup-hooks setup-tools test release release-patch release-minor release-major publish tag-current
 
 # Get current version from Cargo.toml
 CURRENT_VERSION := $(shell grep '^version = ' omnidsp-core/Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
@@ -130,6 +130,23 @@ onemkl-check:
 # the same-machine same-run ratio is the figure of merit.
 onemkl-bench:
 	@RUSTFLAGS="-C target-cpu=native" cargo bench --manifest-path omnidsp-onemkl/Cargo.toml
+
+# --- Intel IPP vendor gate ---
+
+# Build, lint, and test the Intel IPP vendor crates. Requires Intel IPP
+# (ipps/ippvm/ippcore) at link time, so it runs ONLY in the
+# `ghcr.io/twowells/omnidsp-ci` image (IPPROOT preset) or on a host with IPP
+# installed — the floor `make check` deliberately excludes these crates (it
+# cannot link IPP). The crates are workspace-excluded, so they build by manifest
+# path, not `-p` (mirrors the oneMKL gate). The `-sys` smoke test links `ipps`
+# and calls `ippsGetLibVersion`, so a green run proves the dynamic link resolves.
+# The wrapper crate + conformance one-liner are added here when `omnidsp-ipp`
+# lands.
+ipp-check:
+	@cargo fmt --manifest-path omnidsp-ipp-sys/Cargo.toml -- --check
+	@cargo clippy --manifest-path omnidsp-ipp-sys/Cargo.toml --all-targets -- -D warnings
+	@cargo nextest run --manifest-path omnidsp-ipp-sys/Cargo.toml --no-fail-fast --no-tests=pass
+	@echo "ipp-check: IPP vendor -sys crate builds, lints, and links (smoke)"
 
 # --- WASM floor (demo prerequisite) ---
 

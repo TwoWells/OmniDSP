@@ -1,21 +1,26 @@
 # CI — lint, build, and test OmniDSP on every push.
 #
-# Runs on the self-hosted ARC pool `homeserver-pool` (ephemeral Linux pods,
-# minRunners: 0 — a fresh container is spun up per job and torn down after).
-# Mirrors the Lattice `rust-ci` pattern: the toolchain travels with the job via
-# the `ghcr.io/twowells/rust-ci` image rather than being baked into the runner.
+# Split by toolchain need:
+#   check         the pure-Rust floor — runs on GitHub-hosted `ubuntu-latest`,
+#                 free + fork-safe on this public repo. The toolchain travels
+#                 with the job via the public `ghcr.io/twowells/rust-ci` image
+#                 (same pattern as Lattice), so hosted needs no provisioning;
+#                 `ubuntu-latest` supports container jobs.
+#   vendor-intel  the Intel oneMKL + IPP backends — stay on the self-hosted ARC
+#                 pool `homeserver-pool` in the INTERNAL
+#                 `ghcr.io/twowells/omnidsp-ci` image (rust-ci + Intel oneMKL +
+#                 IPP devel). That image bundles Intel libraries and CANNOT be
+#                 published publicly, so this job cannot move to a hosted runner.
 #
-# There is intentionally NO `pull_request` trigger. Fork PRs fire only
-# pull_request events (their push happened in the fork), so with
-# push/workflow_dispatch-only triggers a fork PR can never schedule a job onto
-# the self-hosted runners. For outside-contributor PR CI, add a SEPARATE
-# workflow with `on: pull_request` pinned to `runs-on: ubuntu-latest`
-# (GitHub-hosted, free on public repos, fork-safe).
+# There is intentionally NO `pull_request` trigger. A fork PR fires only a
+# pull_request event, so push/workflow_dispatch-only triggers keep a fork PR
+# from ever scheduling onto the self-hosted `vendor-intel` job (the floor
+# `check` is hosted and would be fork-safe on its own, but the guard still
+# protects the Intel pool). For outside-contributor floor CI, add a SEPARATE
+# `on: pull_request` workflow pinned to `runs-on: ubuntu-latest`.
 #
-# The Intel vendor backends (oneMKL today, IPP later) build on this same pool
-# but in the `ghcr.io/twowells/omnidsp-ci` image (rust-ci + oneMKL + IPP devel) —
-# see the `vendor-intel` job below. Apple Accelerate builds on the macOS runner
-# and lands as its own job when that crate exists.
+# Apple Accelerate builds on a macOS runner and lands as its own job when that
+# crate exists.
 name: CI
 
 on:
@@ -29,9 +34,10 @@ concurrency:
 
 jobs:
   check:
-    runs-on: homeserver-pool
-    # The ARC pod is a bare runner with no Rust. This image bakes in rustup + the
-    # pinned toolchain + cc/make/git, so the job doesn't reprovision every run.
+    runs-on: ubuntu-latest
+    # GitHub-hosted runner. The toolchain travels with the job via this public
+    # image (rustup + pinned toolchain + cc/make/git), so hosted needs no
+    # provisioning; `ubuntu-latest` supports container jobs.
     container: ghcr.io/twowells/rust-ci:latest
     # Inside a container job GitHub's default shell is sh (dash); force bash so
     # run steps don't silently break on a bashism.
@@ -67,8 +73,8 @@ jobs:
         run: make check
 
   # Intel oneMKL vendor backend. The floor `check` job above cannot link MKL, so
-  # the oneMKL crates are workspace-excluded and gated HERE instead: same
-  # self-hosted pool, but in the `omnidsp-ci` image that bakes in oneMKL + IPP
+  # the oneMKL crates are workspace-excluded and gated HERE instead: on the
+  # self-hosted ARC pool, in the `omnidsp-ci` image that bakes in oneMKL + IPP
   # devel (MKLROOT / IPPROOT / MKL_THREADING_LAYER=SEQUENTIAL / LD_LIBRARY_PATH
   # all preset). `make onemkl-check` builds, lints, and holds OneMklBackend to
   # the shared conformance golden vectors — the same suite the floor passes — so
@@ -98,6 +104,15 @@ jobs:
             || ls "$MKLROOT/lib/libmkl_rt.so" 2>/dev/null \
             || { echo "libmkl_rt.so not found under MKLROOT"; exit 1; }
 
+      # Confirm the image's IPP is link-ready (same image bundles ipps + oneMKL).
+      - name: Verify IPP environment
+        run: |
+          echo "IPPROOT=$IPPROOT"
+          test -n "$IPPROOT" || { echo "IPPROOT unset — wrong image?"; exit 1; }
+          ls "$IPPROOT/lib/intel64/libipps.so" 2>/dev/null \
+            || ls "$IPPROOT/lib/libipps.so" 2>/dev/null \
+            || { echo "libipps.so not found under IPPROOT"; exit 1; }
+
       - uses: Swatinem/rust-cache@v2
         with:
           # The excluded vendor crates carry their own Cargo.lock; key the cache
@@ -105,6 +120,7 @@ jobs:
           workspaces: |
             omnidsp-onemkl-sys
             omnidsp-onemkl
+            omnidsp-ipp-sys
 
       - name: Install cargo tools
         uses: taiki-e/install-action@v2
@@ -115,6 +131,12 @@ jobs:
       # (they are workspace-excluded). Links libmkl_rt from the image.
       - name: make onemkl-check
         run: make onemkl-check
+
+      # Build + lint + smoke-test the IPP vendor `-sys` crate by manifest path
+      # (workspace-excluded). Links ipps/ippvm/ippcore from the image; the smoke
+      # test calls ippsGetLibVersion so a green run proves the link resolves.
+      - name: make ipp-check
+        run: make ipp-check
 
       # The `omnidsp` integration: the `onemkl` feature wires OneMklBackend as the
       # Best/Auto alias plus the `OmniDSP::onemkl()` constructor. The floor `check`
