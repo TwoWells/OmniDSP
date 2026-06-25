@@ -129,33 +129,21 @@ jobs:
           tool: cargo-nextest
 
       # Build + lint + conformance-test the oneMKL vendor crates by manifest path
-      # (they are workspace-excluded). Links libmkl_rt from the image.
+      # (they are workspace-excluded), then the `omnidsp --features onemkl`
+      # dispatch path — both fold into `make onemkl-check` now (the `omnidsp`
+      # integration: the `onemkl` feature wires OneMklBackend as the Best/Auto
+      # alias plus the `OmniDSP::onemkl()` constructor; the floor `check` job runs
+      # the feature OFF, so this cfg-gated vendor path is exercised only here).
+      # Links libmkl_rt from the image.
       - name: make onemkl-check
         run: make onemkl-check
 
-      # Build + lint the IPP vendor crates by manifest path (workspace-excluded).
-      # Links ipps/ippvm/ippcore from the image; the `-sys` smoke test calls
-      # ippsGetLibVersion so a green run proves the link resolves, and the
-      # `omnidsp-ipp` wrapper is held to the shared golden-vector conformance suite
-      # (f32 + f64) — the same vectors the floor passes, so the vendor cannot
-      # silently drift.
+      # Same for IPP: the vendor crates plus the `omnidsp --features ipp` dispatch
+      # path fold into `make ipp-check`. Links ipps/ippvm/ippcore from the image;
+      # the `-sys` smoke test calls ippsGetLibVersion so a green run proves the
+      # link resolves, and the `omnidsp-ipp` wrapper + the `OmniDSP::ipp()`
+      # constructor (IPP outranks oneMKL when both are on) are held to the shared
+      # golden-vector conformance suite (f32 + f64) — the same vectors the floor
+      # passes, so the vendor cannot silently drift.
       - name: make ipp-check
         run: make ipp-check
-
-      # The `omnidsp` integration: the `onemkl` feature wires OneMklBackend as the
-      # Best/Auto alias plus the `OmniDSP::onemkl()` constructor. The floor `check`
-      # job lints and tests `omnidsp` with the feature OFF, so this cfg-gated
-      # vendor path is only exercised here.
-      - name: omnidsp --features onemkl
-        run: |
-          cargo clippy -p omnidsp --features onemkl --all-targets -- -D warnings
-          cargo nextest run -p omnidsp --features onemkl --no-fail-fast --no-tests=pass
-
-      # The `omnidsp` integration for IPP: the `ipp` feature wires IppBackend as
-      # the Best/Auto alias plus the `OmniDSP::ipp()` constructor (IPP outranks
-      # oneMKL when both are on). Same as the onemkl step — the floor `check` job
-      # runs the feature OFF, so this cfg-gated vendor path is only exercised here.
-      - name: omnidsp --features ipp
-        run: |
-          cargo clippy -p omnidsp --features ipp --all-targets -- -D warnings
-          cargo nextest run -p omnidsp --features ipp --no-fail-fast --no-tests=pass

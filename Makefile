@@ -1,13 +1,15 @@
 # OmniDSP Makefile
 # Usage:
 #   make setup           # configure hooks + check tools (first time)
-#   make check           # fmt, lint, deny, machete, test
+#   make check           # fmt, lint, deny, machete, test (pure-Rust floor)
+#   make ipp             # floor check + IPP dimension (local-safe: fmt/clippy)
+#   make mkl             # floor check + oneMKL dimension (local-safe: fmt/clippy)
 #   make release-patch   # 0.1.0 -> 0.1.1
 #   make release-minor   # 0.1.0 -> 0.2.0
 #   make release-major   # 0.1.0 -> 1.0.0
 #   make release V=0.2.0 # explicit version
 
-.PHONY: bench build-release wasm-check wasm-pack demo check deny doc onemkl-check ipp-check gen-cqt-reference gen-cqt-process-reference gen-cqt-librosa-reference gen-fir-reference gen-fir-lfilter-reference gen-remez-reference gen-hilbert-reference gen-iir-reference gen-iir-sosfilt-reference gen-resample-reference gen-resample-poly-reference gen-xcorr-reference machete mutants setup setup-hooks setup-tools test release release-patch release-minor release-major publish tag-current
+.PHONY: bench build-release wasm-check wasm-pack demo check deny doc mkl onemkl-lint onemkl-check ipp ipp-lint ipp-check accelerate gen-cqt-reference gen-cqt-process-reference gen-cqt-librosa-reference gen-fir-reference gen-fir-lfilter-reference gen-remez-reference gen-hilbert-reference gen-iir-reference gen-iir-sosfilt-reference gen-resample-reference gen-resample-poly-reference gen-xcorr-reference machete mutants setup setup-hooks setup-tools test release release-patch release-minor release-major publish tag-current
 
 # Get current version from Cargo.toml
 CURRENT_VERSION := $(shell grep '^version = ' omnidsp-core/Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
@@ -103,24 +105,44 @@ doc:
 	@cargo doc --no-deps --document-private-items
 
 # --- Intel oneMKL vendor gate ---
+#
+# Two layers, so one of them runs anywhere:
+#   onemkl-lint   fmt + clippy only — clippy is check-only and NEVER links
+#                 libmkl_rt, so this passes on any host, no Intel oneMKL needed.
+#   onemkl-check  the full gate (lint + the link/conformance tests + docs).
+#                 Requires Intel oneMKL at link time, so it runs ONLY in the
+#                 `ghcr.io/twowells/omnidsp-ci` image (MKLROOT preset) or a host
+#                 with oneMKL installed.
+# `make mkl` is the developer entry point: the floor `make check` plus the
+# local-safe oneMKL lint. The vendor crates are workspace-excluded, so they build
+# by manifest path, not `-p` (mirrors the wasm targets); the `omnidsp` dispatch
+# path is reached with `-p omnidsp --features onemkl`.
 
-# Build, lint, and test the Intel oneMKL vendor crates. Requires Intel oneMKL
-# (libmkl_rt) at link time, so it runs ONLY in the `ghcr.io/twowells/omnidsp-ci`
-# image (MKLROOT preset) or on a host with oneMKL installed — the floor
-# `make check` deliberately excludes these crates (it cannot link MKL). The
-# crates are workspace-excluded, so they build by manifest path, not `-p`
-# (mirrors the wasm targets). The conformance one-liner inside
-# `omnidsp-onemkl/tests/` holds the backend to the same golden vectors as the
-# floor, so a vendor cannot silently drift.
-onemkl-check:
+# Developer-local oneMKL gate: the pure-Rust floor plus the oneMKL dimension that
+# needs no Intel oneMKL at link time (fmt + clippy + compile). Runs anywhere.
+mkl: check onemkl-lint
+
+# fmt + clippy for the oneMKL vendor crates and the `omnidsp` onemkl dispatch
+# path. clippy is check-only — it never links libmkl_rt — so this passes locally
+# without Intel oneMKL. Shared by `make mkl` (local) and `make onemkl-check` (CI).
+onemkl-lint:
 	@cargo fmt --manifest-path omnidsp-onemkl-sys/Cargo.toml -- --check
 	@cargo fmt --manifest-path omnidsp-onemkl/Cargo.toml -- --check
 	@cargo clippy --manifest-path omnidsp-onemkl-sys/Cargo.toml --all-targets -- -D warnings
 	@cargo clippy --manifest-path omnidsp-onemkl/Cargo.toml --all-targets -- -D warnings
+	@cargo clippy -p omnidsp --features onemkl --all-targets -- -D warnings
+
+# Full oneMKL gate (CI; needs Intel oneMKL at link time). The lint pass plus the
+# link/conformance tests — the vendor crates and the `omnidsp --features onemkl`
+# dispatch path — and docs. The conformance one-liner inside
+# `omnidsp-onemkl/tests/` holds the backend to the same golden vectors as the
+# floor, so a vendor cannot silently drift.
+onemkl-check: onemkl-lint
 	@cargo nextest run --manifest-path omnidsp-onemkl-sys/Cargo.toml --no-fail-fast --no-tests=pass
 	@cargo nextest run --manifest-path omnidsp-onemkl/Cargo.toml --no-fail-fast --no-tests=pass
 	@cargo test --manifest-path omnidsp-onemkl/Cargo.toml --doc
-	@echo "onemkl-check: oneMKL vendor crates build, lint, and pass conformance"
+	@cargo nextest run -p omnidsp --features onemkl --no-fail-fast --no-tests=pass
+	@echo "onemkl-check: oneMKL vendor crates + omnidsp(onemkl) build, lint, and pass conformance"
 
 # Throughput head-to-head vs the rustfft/realfft + scalar floor: DFT (c2c/r2c)
 # and VecOps (mul/cmul/dot). Built with target-cpu=native so the Rust floor gets
@@ -132,26 +154,57 @@ onemkl-bench:
 	@RUSTFLAGS="-C target-cpu=native" cargo bench --manifest-path omnidsp-onemkl/Cargo.toml
 
 # --- Intel IPP vendor gate ---
+#
+# Same two-layer split as the oneMKL gate:
+#   ipp-lint   fmt + clippy only — clippy is check-only and NEVER links
+#              ipps/ippvm/ippcore, so this passes on any host, no Intel IPP
+#              needed (locally the link step would otherwise fail with
+#              `mold: library not found: ipps`).
+#   ipp-check  the full gate (lint + the link/conformance tests + docs).
+#              Requires Intel IPP at link time, so it runs ONLY in the
+#              `ghcr.io/twowells/omnidsp-ci` image (IPPROOT preset) or a host with
+#              IPP installed.
+# `make ipp` is the developer entry point: the floor `make check` plus the
+# local-safe IPP lint. The vendor crates are workspace-excluded, so they build by
+# manifest path, not `-p` (mirrors the oneMKL gate); the `omnidsp` dispatch path
+# is reached with `-p omnidsp --features ipp`.
 
-# Build, lint, and test the Intel IPP vendor crates. Requires Intel IPP
-# (ipps/ippvm/ippcore) at link time, so it runs ONLY in the
-# `ghcr.io/twowells/omnidsp-ci` image (IPPROOT preset) or on a host with IPP
-# installed — the floor `make check` deliberately excludes these crates (it
-# cannot link IPP). The crates are workspace-excluded, so they build by manifest
-# path, not `-p` (mirrors the oneMKL gate). The `-sys` smoke test links `ipps`
-# and calls `ippsGetLibVersion`, so a green run proves the dynamic link resolves;
-# the `omnidsp-ipp` wrapper is then held to the shared conformance golden vectors
-# (the `run_all` one-liner in `omnidsp-ipp/tests/`), so the vendor cannot silently
-# drift from the floor.
-ipp-check:
+# Developer-local IPP gate: the pure-Rust floor plus the IPP dimension that needs
+# no Intel IPP at link time (fmt + clippy + compile). Runs anywhere.
+ipp: check ipp-lint
+
+# fmt + clippy for the IPP vendor crates and the `omnidsp` ipp dispatch path.
+# clippy is check-only — it never links ipps — so this passes locally without
+# Intel IPP. Shared by `make ipp` (local) and `make ipp-check` (CI).
+ipp-lint:
 	@cargo fmt --manifest-path omnidsp-ipp-sys/Cargo.toml -- --check
 	@cargo fmt --manifest-path omnidsp-ipp/Cargo.toml -- --check
 	@cargo clippy --manifest-path omnidsp-ipp-sys/Cargo.toml --all-targets -- -D warnings
 	@cargo clippy --manifest-path omnidsp-ipp/Cargo.toml --all-targets -- -D warnings
+	@cargo clippy -p omnidsp --features ipp --all-targets -- -D warnings
+
+# Full IPP gate (CI; needs Intel IPP at link time). The lint pass plus the
+# link/conformance tests and docs. The `-sys` smoke test links `ipps` and calls
+# `ippsGetLibVersion`, so a green run proves the dynamic link resolves; the
+# `omnidsp-ipp` wrapper and the `omnidsp --features ipp` dispatch path are then
+# held to the shared conformance golden vectors (the `run_all` one-liner in
+# `omnidsp-ipp/tests/`), so the vendor cannot silently drift from the floor.
+ipp-check: ipp-lint
 	@cargo nextest run --manifest-path omnidsp-ipp-sys/Cargo.toml --no-fail-fast --no-tests=pass
 	@cargo nextest run --manifest-path omnidsp-ipp/Cargo.toml --no-fail-fast --no-tests=pass
 	@cargo test --manifest-path omnidsp-ipp/Cargo.toml --doc
-	@echo "ipp-check: IPP vendor crates build, lint, and pass conformance"
+	@cargo nextest run -p omnidsp --features ipp --no-fail-fast --no-tests=pass
+	@echo "ipp-check: IPP vendor crates + omnidsp(ipp) build, lint, and pass conformance"
+
+# --- Apple Accelerate vendor gate (workstream 7b — not started) ---
+#
+# Placeholder so the `make accelerate` name and the three-target pattern are in
+# place. When the `omnidsp-accelerate` crate lands it mirrors `ipp` / `mkl`:
+#   accelerate:        check accelerate-lint
+#   accelerate-lint:   fmt + clippy (vendor crates + `omnidsp --features accelerate`)
+#   accelerate-check:  accelerate-lint + nextest + docs (CI, on a macOS runner)
+accelerate:
+	@echo "accelerate: omnidsp-accelerate not started yet (workstream 7b)"
 
 # --- WASM floor (demo prerequisite) ---
 
