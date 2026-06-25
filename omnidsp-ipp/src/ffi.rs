@@ -610,6 +610,169 @@ impl Dft {
     }
 }
 
+// ─── IIR biquad-cascade engine ───────────────────────────────────────
+
+/// A built IPP biquad-cascade IIR filter state, for one precision.
+///
+/// Owns the IPP state buffer; the cascade coefficients and the running delay
+/// line both live inside it. IPP advances that delay line on every [`apply`]
+/// call, so the owning processor takes `&mut self` for execution (there is no
+/// `Mutex`, unlike the read-only DFT plans).
+///
+/// The struct does not encode the precision `T` — the owning processor is
+/// monomorphic in `T` and always calls `build::<T>` / `apply::<T>` / … with the
+/// same `T`, so a state built for one width is only ever driven at that width.
+///
+/// [`apply`]: Iir::apply
+pub struct Iir {
+    /// The state allocation; IPP's biquad state (coefficients + delay line) lives
+    /// in this buffer.  It owns the memory `state_ptr` references — kept alive
+    /// (and freed on `Drop`) for the processor's lifetime — and is re-initialized
+    /// in place by [`re_init`](Iir::re_init) when retuning or resetting.
+    state: Vec<u8>,
+    /// The initialized state pointer `Init` returned (an offset within `state`).
+    /// Stays valid because `state` is kept alive and a `Vec`'s heap allocation is
+    /// stable across moves of the `Vec` header.
+    state_ptr: *mut c_void,
+    /// Number of biquad sections — the delay line is `2 * num_sections` values.
+    num_sections: usize,
+}
+
+impl Iir {
+    /// Initialize (or re-initialize) a biquad-cascade state into `state` from the
+    /// flat `taps` (`{b0, b1, b2, a0, a1, a2}` per section, `a0 = 1`) and an
+    /// optional delay line (`2 * num_sections` values; `None` ⇒ a zeroed delay
+    /// line). Returns the state pointer IPP produced (an offset within `state`).
+    fn init<T: DspFloat>(
+        state: &mut [u8],
+        taps: &[T],
+        num_sections: usize,
+        dly_line: Option<&[T]>,
+    ) -> Result<*mut c_void> {
+        let num_bq = to_ipp_int(num_sections, "IIR section count exceeds IPP c_int range")?;
+        let mut state_ptr: *mut c_void = ptr::null_mut();
+
+        // SAFETY: `state` is sized per `GetStateSize` for `num_bq` sections; `taps`
+        // holds `6 * num_sections` values and `dly_line` (when `Some`) holds
+        // `2 * num_sections`, matching what IPP reads. The `Init` double-pointer
+        // form writes the state pointer into `state_ptr`. The width branch picks
+        // the matching-width entry point.
+        let status = unsafe {
+            if is_f32::<T>() {
+                let taps_ptr = taps.as_ptr().cast::<f32>();
+                let dly_ptr = dly_line.map_or(ptr::null(), |d| d.as_ptr().cast::<f32>());
+                sys::iir::ippsIIRInit_BiQuad_32f(
+                    &raw mut state_ptr,
+                    taps_ptr,
+                    num_bq,
+                    dly_ptr,
+                    state.as_mut_ptr(),
+                )
+            } else if is_f64::<T>() {
+                let taps_ptr = taps.as_ptr().cast::<f64>();
+                let dly_ptr = dly_line.map_or(ptr::null(), |d| d.as_ptr().cast::<f64>());
+                sys::iir::ippsIIRInit_BiQuad_64f(
+                    &raw mut state_ptr,
+                    taps_ptr,
+                    num_bq,
+                    dly_ptr,
+                    state.as_mut_ptr(),
+                )
+            } else {
+                return Err(unsupported_width());
+            }
+        };
+        check_ipp(status, "IPP IIR Init")?;
+        Ok(state_ptr)
+    }
+
+    /// Build a biquad cascade of `num_sections` sections from the flat `taps`
+    /// (`6 * num_sections` values), with a zeroed delay line, at width `T`.
+    pub fn build<T: DspFloat>(taps: &[T], num_sections: usize) -> Result<Self> {
+        let num_bq = to_ipp_int(num_sections, "IIR section count exceeds IPP c_int range")?;
+
+        let mut state_size: c_int = 0;
+        // SAFETY: the size out-pointer is valid; `num_bq` is the section count.
+        let status = unsafe {
+            if is_f32::<T>() {
+                sys::iir::ippsIIRGetStateSize_BiQuad_32f(num_bq, &raw mut state_size)
+            } else if is_f64::<T>() {
+                sys::iir::ippsIIRGetStateSize_BiQuad_64f(num_bq, &raw mut state_size)
+            } else {
+                return Err(unsupported_width());
+            }
+        };
+        check_ipp(status, "IPP IIR GetStateSize")?;
+
+        let mut state = vec![0u8; usize::try_from(state_size).unwrap_or(0)];
+        let state_ptr = Self::init::<T>(&mut state, taps, num_sections, None)?;
+        Ok(Self {
+            state,
+            state_ptr,
+            num_sections,
+        })
+    }
+
+    /// Number of biquad sections this state was built for.
+    pub const fn num_sections(&self) -> usize {
+        self.num_sections
+    }
+
+    /// Apply the cascade to a block, advancing the internal delay line so
+    /// successive calls stream continuously.
+    pub fn apply<T: DspFloat>(&mut self, input: &[T], output: &mut [T]) -> Result<()> {
+        let len = to_ipp_int(input.len(), "IIR length exceeds IPP c_int range")?;
+
+        // SAFETY: `input`/`output` have `len` elements (validated by the caller);
+        // `state_ptr` belongs to this `Iir` and is valid for the call. The width
+        // branch picks the entry point matching how the state was built.
+        let status = unsafe {
+            if is_f32::<T>() {
+                let src = input.as_ptr().cast::<f32>();
+                let dst = output.as_mut_ptr().cast::<f32>();
+                sys::iir::ippsIIR_32f(src, dst, len, self.state_ptr)
+            } else if is_f64::<T>() {
+                let src = input.as_ptr().cast::<f64>();
+                let dst = output.as_mut_ptr().cast::<f64>();
+                sys::iir::ippsIIR_64f(src, dst, len, self.state_ptr)
+            } else {
+                return Err(unsupported_width());
+            }
+        };
+        check_ipp(status, "IPP IIR exec")
+    }
+
+    /// Read the running delay line (`2 * num_sections` values) into `dly`.
+    pub fn get_dly_line<T: DspFloat>(&self, dly: &mut [T]) -> Result<()> {
+        // SAFETY: `dly` holds `2 * num_sections` elements (the caller sizes it);
+        // `state_ptr` is this `Iir`'s state, read (not mutated) here. Width branch.
+        let status = unsafe {
+            if is_f32::<T>() {
+                sys::iir::ippsIIRGetDlyLine_32f(
+                    self.state_ptr.cast_const(),
+                    dly.as_mut_ptr().cast::<f32>(),
+                )
+            } else if is_f64::<T>() {
+                sys::iir::ippsIIRGetDlyLine_64f(
+                    self.state_ptr.cast_const(),
+                    dly.as_mut_ptr().cast::<f64>(),
+                )
+            } else {
+                return Err(unsupported_width());
+            }
+        };
+        check_ipp(status, "IPP IIR GetDlyLine")
+    }
+
+    /// Re-initialize the cascade in place with new `taps`, optionally carrying an
+    /// existing delay line over (`Some`) or zeroing it (`None`). The section
+    /// count is unchanged, so the existing state buffer is reused.
+    pub fn re_init<T: DspFloat>(&mut self, taps: &[T], dly_line: Option<&[T]>) -> Result<()> {
+        self.state_ptr = Self::init::<T>(&mut self.state, taps, self.num_sections, dly_line)?;
+        Ok(())
+    }
+}
+
 // ─── Plan thread-safety markers ──────────────────────────────────────
 //
 // An IPP transform writes scratch into its work buffer on every compute call,
@@ -646,3 +809,18 @@ unsafe impl<T> Sync for IppDftR2cPlan<T> {}
 unsafe impl<T> Send for IppDftC2rPlan<T> {}
 // SAFETY: see above.
 unsafe impl<T> Sync for IppDftC2rPlan<T> {}
+
+// The IIR engine owns its state buffer; the raw `state_ptr` is an interior
+// reference into that buffer and moves with the `Iir`, so the whole `Iir` may
+// cross a thread boundary (like `Dft`). It carries no `Mutex` because the
+// processor drives it through `&mut self`; the marker traits flow up to the
+// owning `IppIirProcessor` by auto-derivation.
+
+// SAFETY: `state_ptr` references `Iir`'s own `state` allocation and moves with
+// it; no other thread observes the `Iir` except through the owning processor.
+unsafe impl Send for Iir {}
+
+// SAFETY: the only `&self` method (`get_dly_line`) reads the IPP state without
+// mutating it; every mutation (`apply`, `re_init`) takes `&mut self`, so a shared
+// `&Iir` cannot race. Sharing `&Iir` across threads is therefore sound.
+unsafe impl Sync for Iir {}

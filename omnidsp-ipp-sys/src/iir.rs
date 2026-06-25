@@ -13,6 +13,11 @@
 //!    the initial delay line (two values per section) or null for zeros.
 //! 3. `IIR` / `IIR_I` apply the cascade to a block, advancing the delay line in
 //!    the state so successive blocks stream continuously.
+//! 4. `GetDlyLine` reads the cascade's current delay line out of the state
+//!    (`2 * num_bq` values), so a caller can preserve the running state across a
+//!    re-`Init` with new coefficients (live retuning). It operates on the opaque
+//!    state, so — like the `IIR` apply entry points — it carries no `_BiQuad`
+//!    suffix.
 //!
 //! The opaque `IppsIIRState_{32f,64f}` is modeled as `c_void`.
 
@@ -62,4 +67,11 @@ unsafe extern "C" {
     pub fn ippsIIR_32f_I(p_src_dst: *mut Ipp32f, len: c_int, p_state: *mut c_void) -> IppStatus;
     /// Apply the biquad cascade in place: `src_dst = H(src_dst)` (f64).
     pub fn ippsIIR_64f_I(p_src_dst: *mut Ipp64f, len: c_int, p_state: *mut c_void) -> IppStatus;
+
+    /// Read the cascade's current delay line (`2 * num_bq` values) into
+    /// `p_dly_line` (f32). The state is read-only here (`const`).
+    pub fn ippsIIRGetDlyLine_32f(p_state: *const c_void, p_dly_line: *mut Ipp32f) -> IppStatus;
+    /// Read the cascade's current delay line (`2 * num_bq` values) into
+    /// `p_dly_line` (f64). The state is read-only here (`const`).
+    pub fn ippsIIRGetDlyLine_64f(p_state: *const c_void, p_dly_line: *mut Ipp64f) -> IppStatus;
 }

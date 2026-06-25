@@ -13,18 +13,21 @@
 //!
 //! Each DFT plan selects IPP's power-of-two FFT engine when the length allows
 //! and the arbitrary-length DFT otherwise — the FFT is materially faster, and
-//! the choice is internal to the plan.  This is a **primitives-first** landing:
-//! there are no native module overrides yet (`skip` is empty), so convolution,
-//! FIR, and the rest compose over the accelerated DFT + vector ops.  IPP's
-//! native time-domain kernels (IIR, FIR, resampler, conv) land as overrides in
-//! later workstream tickets.
+//! the choice is internal to the plan.  The **IIR** primitive is a native IPP
+//! override (`skip: [iir]` plus a hand-written
+//! [`CreateProc<IirSpec>`](omnidsp_core::create::CreateProc) — see [`iir`]),
+//! because the biquad recurrence is a per-sample feedback loop that no DFT /
+//! vector op accelerates.  Convolution, FIR, and the rest still compose over the
+//! accelerated DFT + vector ops; IPP's remaining native time-domain kernels
+//! (FIR, resampler, conv) land as overrides in later workstream tickets.
 //!
 //! # Safety isolation
 //!
 //! The crate is `deny(unsafe_code)`.  Every `unsafe` operation — FFI calls,
-//! pointer casts, and the `unsafe impl Send`/`Sync` for the DFT plans — is
-//! confined to the [`ffi`] module, which alone carries `#![allow(unsafe_code)]`.
-//! The DFT and vector-ops modules are entirely unsafe-free.
+//! pointer casts, and the `unsafe impl Send`/`Sync` for the DFT plans and the
+//! IIR state — is confined to the [`ffi`] module, which alone carries
+//! `#![allow(unsafe_code)]`.  The DFT, vector-ops, and IIR modules are entirely
+//! unsafe-free.
 //!
 //! # Linking
 //!
@@ -34,9 +37,11 @@
 
 mod dft;
 mod ffi;
+mod iir;
 mod vecops;
 
 pub use dft::{IppDftC2c, IppDftC2cPlan, IppDftC2r, IppDftC2rPlan, IppDftR2c, IppDftR2cPlan};
+pub use iir::IppIirProcessor;
 
 /// Intel IPP backend.
 ///
@@ -73,4 +78,5 @@ omnidsp_macros::impl_generic_backend! {
     dftc2c: IppDftC2c,
     dftr2c: IppDftR2c,
     dftc2r: IppDftC2r,
+    skip: [iir],
 }
