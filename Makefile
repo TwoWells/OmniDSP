@@ -23,6 +23,14 @@ CARGO_TOOLS := cargo-deny cargo-machete cargo-nextest cargo-mutants
 # or MEMLIMIT_KB=unlimited to disable.
 MEMLIMIT_KB ?= 8388608
 
+# Intel MKL threading layer for the oneMKL vendor gate. SEQUENTIAL (the value the
+# omnidsp-ci image presets) keeps MKL deterministic and reproducible. This is a
+# behavior flag, not a machine path, so it's a portable repo default — `?=` lets
+# the environment override it, and `export` makes the vendor crates' test
+# processes inherit it (so `make onemkl-check` needs no MKL env locally). Inert
+# for every non-MKL target.
+export MKL_THREADING_LAYER ?= SEQUENTIAL
+
 # --- Setup ---
 
 # One-time setup: configure hooks and check tools
