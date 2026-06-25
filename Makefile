@@ -144,9 +144,13 @@ onemkl-bench:
 # lands.
 ipp-check:
 	@cargo fmt --manifest-path omnidsp-ipp-sys/Cargo.toml -- --check
+	@cargo fmt --manifest-path omnidsp-ipp/Cargo.toml -- --check
 	@cargo clippy --manifest-path omnidsp-ipp-sys/Cargo.toml --all-targets -- -D warnings
+	@cargo clippy --manifest-path omnidsp-ipp/Cargo.toml --all-targets -- -D warnings
 	@cargo nextest run --manifest-path omnidsp-ipp-sys/Cargo.toml --no-fail-fast --no-tests=pass
-	@echo "ipp-check: IPP vendor -sys crate builds, lints, and links (smoke)"
+	@cargo nextest run --manifest-path omnidsp-ipp/Cargo.toml --no-fail-fast --no-tests=pass
+	@cargo test --manifest-path omnidsp-ipp/Cargo.toml --doc
+	@echo "ipp-check: IPP vendor crates build, lint, and pass conformance"
 
 # --- WASM floor (demo prerequisite) ---
 

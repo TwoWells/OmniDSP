@@ -27,6 +27,7 @@ exclude = [
     "omnidsp-onemkl-sys",
     "omnidsp-onemkl",
     "omnidsp-ipp-sys",
+    "omnidsp-ipp",
 ]
 
 [workspace.lints.rust]
