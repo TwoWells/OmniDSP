@@ -24,3 +24,6 @@ GEMINI.md
 # Agent / planning tooling
 .claude/
 .plans/
+
+# Local dev env (direnv) — Intel oneAPI paths; per-machine, needs `direnv allow`
+.envrc
