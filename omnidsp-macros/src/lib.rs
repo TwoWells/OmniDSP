@@ -311,9 +311,7 @@ fn gen_dft_primitives(input: &BackendInput) -> TokenStream2 {
             ) -> ::omnidsp_core::error::Result<Self::Plan<T>>
             where
                 Self: ::omnidsp_core::dispatch::Backend<T>,
-                T: ::omnidsp_core::types::DspFloat
-                    + ::core::ops::AddAssign
-                    + ::core::ops::MulAssign,
+                T: ::omnidsp_core::types::DspFloat,
             {
                 ::omnidsp_core::traits::dft::DftC2c::<T>::create_plan(
                     &::omnidsp_core::dispatch::RawDft::<T>::raw_dftc2c(self),
@@ -338,9 +336,7 @@ fn gen_dft_primitives(input: &BackendInput) -> TokenStream2 {
             ) -> ::omnidsp_core::error::Result<Self::Plan<T>>
             where
                 Self: ::omnidsp_core::dispatch::Backend<T>,
-                T: ::omnidsp_core::types::DspFloat
-                    + ::core::ops::AddAssign
-                    + ::core::ops::MulAssign,
+                T: ::omnidsp_core::types::DspFloat,
             {
                 ::omnidsp_core::traits::dft::DftR2c::<T>::create_plan(
                     &::omnidsp_core::hermitian::HermitianR2c::new(
@@ -367,9 +363,7 @@ fn gen_dft_primitives(input: &BackendInput) -> TokenStream2 {
             ) -> ::omnidsp_core::error::Result<Self::Plan<T>>
             where
                 Self: ::omnidsp_core::dispatch::Backend<T>,
-                T: ::omnidsp_core::types::DspFloat
-                    + ::core::ops::AddAssign
-                    + ::core::ops::MulAssign,
+                T: ::omnidsp_core::types::DspFloat,
             {
                 ::omnidsp_core::traits::dft::DftC2r::<T>::create_plan(
                     &::omnidsp_core::hermitian::HermitianC2r::new(
@@ -415,9 +409,7 @@ fn gen_conv(input: &BackendInput) -> TokenStream2 {
             ) -> ::omnidsp_core::error::Result<Self::Plan<T>>
             where
                 Self: ::omnidsp_core::dispatch::Backend<T>,
-                T: ::omnidsp_core::types::DspFloat
-                    + ::core::ops::AddAssign
-                    + ::core::ops::MulAssign,
+                T: ::omnidsp_core::types::DspFloat,
             {
                 let factory = ::omnidsp_core::modules::conv::OmniConv::new(
                     ::omnidsp_core::dispatch::RawDft::<T>::raw_dftr2c(self),
@@ -456,9 +448,7 @@ fn gen_fir(input: &BackendInput) -> TokenStream2 {
             ) -> ::omnidsp_core::error::Result<Self::Proc<T>>
             where
                 Self: ::omnidsp_core::dispatch::Backend<T>,
-                T: ::omnidsp_core::types::DspFloat
-                    + ::core::ops::AddAssign
-                    + ::core::ops::MulAssign,
+                T: ::omnidsp_core::types::DspFloat,
             {
                 let factory = ::omnidsp_core::modules::fir::OmniFir::new(
                     ::omnidsp_core::dispatch::RawDft::<T>::raw_dftr2c(self),
@@ -490,9 +480,7 @@ fn gen_resampler(input: &BackendInput) -> TokenStream2 {
             ) -> ::omnidsp_core::error::Result<Self::Proc<T>>
             where
                 Self: ::omnidsp_core::dispatch::Backend<T>,
-                T: ::omnidsp_core::types::DspFloat
-                    + ::core::ops::AddAssign
-                    + ::core::ops::MulAssign,
+                T: ::omnidsp_core::types::DspFloat,
             {
                 // The polyphase resampler is a concrete scalar module (its hot
                 // path is a per-output-sample dot), so it carries no `VecOps`
@@ -564,9 +552,7 @@ fn gen_cqt(input: &BackendInput) -> TokenStream2 {
                     + ::omnidsp_core::create::RoutesSubProc<
                         ::omnidsp_core::design::resample::ResampleSpec,
                     >,
-                T: ::omnidsp_core::types::DspFloat
-                    + ::core::ops::AddAssign
-                    + ::core::ops::MulAssign,
+                T: ::omnidsp_core::types::DspFloat,
                 <Self as ::omnidsp_core::create::CreateProc<
                     ::omnidsp_core::design::resample::ResampleSpec,
                 >>::Proc<T>: ::omnidsp_core::modules::resample::ResampleProcessor<T>,
@@ -612,9 +598,7 @@ fn gen_cqt(input: &BackendInput) -> TokenStream2 {
                     + ::omnidsp_core::create::RoutesSubProc<
                         ::omnidsp_core::design::resample::ResampleSpec,
                     >,
-                T: ::omnidsp_core::types::DspFloat
-                    + ::core::ops::AddAssign
-                    + ::core::ops::MulAssign,
+                T: ::omnidsp_core::types::DspFloat,
                 <Self as ::omnidsp_core::create::CreateProc<
                     ::omnidsp_core::design::resample::ResampleSpec,
                 >>::Proc<T>: ::omnidsp_core::modules::resample::ResampleProcessor<T>,
@@ -653,9 +637,7 @@ fn gen_iir(input: &BackendInput) -> TokenStream2 {
             ) -> ::omnidsp_core::error::Result<Self::Proc<T>>
             where
                 Self: ::omnidsp_core::dispatch::Backend<T>,
-                T: ::omnidsp_core::types::DspFloat
-                    + ::core::ops::AddAssign
-                    + ::core::ops::MulAssign,
+                T: ::omnidsp_core::types::DspFloat,
             {
                 ::omnidsp_core::traits::iir::Iir::<T>::create_proc(
                     &::omnidsp_core::scalar::ScalarIir,
@@ -692,9 +674,7 @@ fn gen_hilbert(input: &BackendInput) -> TokenStream2 {
             ) -> ::omnidsp_core::error::Result<Self::Plan<T>>
             where
                 Self: ::omnidsp_core::dispatch::Backend<T>,
-                T: ::omnidsp_core::types::DspFloat
-                    + ::core::ops::AddAssign
-                    + ::core::ops::MulAssign,
+                T: ::omnidsp_core::types::DspFloat,
             {
                 let factory = ::omnidsp_core::modules::hilbert::OmniHilbert::new(
                     ::omnidsp_core::dispatch::RawDft::<T>::raw_dftr2c(self),
@@ -733,9 +713,7 @@ fn gen_dct(input: &BackendInput) -> TokenStream2 {
             ) -> ::omnidsp_core::error::Result<Self::Plan<T>>
             where
                 Self: ::omnidsp_core::dispatch::Backend<T>,
-                T: ::omnidsp_core::types::DspFloat
-                    + ::core::ops::AddAssign
-                    + ::core::ops::MulAssign,
+                T: ::omnidsp_core::types::DspFloat,
             {
                 let factory = ::omnidsp_core::modules::dct::OmniDct::new(
                     ::omnidsp_core::dispatch::RawDft::<T>::raw_dftr2c(self),
@@ -775,9 +753,7 @@ fn gen_xcorr(input: &BackendInput) -> TokenStream2 {
             ) -> ::omnidsp_core::error::Result<Self::Plan<T>>
             where
                 Self: ::omnidsp_core::dispatch::Backend<T>,
-                T: ::omnidsp_core::types::DspFloat
-                    + ::core::ops::AddAssign
-                    + ::core::ops::MulAssign,
+                T: ::omnidsp_core::types::DspFloat,
             {
                 let factory = ::omnidsp_core::modules::xcorr::OmniCrossCorr::new(
                     ::omnidsp_core::dispatch::RawDft::<T>::raw_dftr2c(self),
