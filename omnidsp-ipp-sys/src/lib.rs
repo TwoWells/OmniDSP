@@ -11,6 +11,7 @@
 //! - [`vecops`] — elementwise vector arithmetic and complex utilities backing
 //!   the `VecOps` trait surface.
 //! - [`iir`] — biquad-cascade IIR (state allocation, init, apply).
+//! - [`conv`] — full linear convolution (`ippsConvolve`, buffer-size + exec).
 //!
 //! Linking is **dynamic**, against `ipps` + `ippvm` + `ippcore` (see
 //! `build.rs`). IPP performs automatic runtime CPU dispatch (SSE4.2 / AVX2 /
@@ -28,6 +29,7 @@
 
 use std::os::raw::{c_char, c_int};
 
+pub mod conv;
 pub mod fft;
 pub mod iir;
 pub mod vecops;
@@ -93,9 +95,8 @@ pub const IPP_ALG_HINT_NONE: IppHintAlgorithm = 0;
 // ---------------------------------------------------------------------------
 // Convolution / correlation algorithm selector (`IppEnum algType`)
 //
-// Passed to `ippsConvolve` / `ippsCrossCorrNorm` (native module overrides land
-// in later tickets); declared here so the constants live with the other IPP
-// enums. The low bits select the method.
+// Passed to `ippsConvolve` (the native convolution override) and
+// `ippsCrossCorrNorm` (a later ticket). The low bits select the method.
 // ---------------------------------------------------------------------------
 
 /// Let IPP choose direct vs. FFT (`ippAlgAuto`).
@@ -104,6 +105,24 @@ pub const IPP_ALG_AUTO: c_int = 0;
 pub const IPP_ALG_DIRECT: c_int = 1;
 /// Force the FFT-based algorithm (`ippAlgFFT`).
 pub const IPP_ALG_FFT: c_int = 2;
+
+// ---------------------------------------------------------------------------
+// Data-type selector (`IppDataType`)
+//
+// Passed to `*GetBufferSize` entry points (e.g. `ippsConvolveGetBufferSize`) to
+// size a work buffer for a given element width. Values are from the
+// `IppDataType` enum in `ippbase.h` — note they are *not* small ordinals
+// (`ipp32f` is 13, `ipp64f` is 19), so they must be taken from the header, not
+// assumed.
+// ---------------------------------------------------------------------------
+
+/// IPP element-type selector (`IppDataType`).
+pub type IppDataType = c_int;
+
+/// Single-precision real data (`ipp32f`).
+pub const IPP_32F: IppDataType = 13;
+/// Double-precision real data (`ipp64f`).
+pub const IPP_64F: IppDataType = 19;
 
 // ---------------------------------------------------------------------------
 // Library version query

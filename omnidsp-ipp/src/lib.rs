@@ -13,21 +13,24 @@
 //!
 //! Each DFT plan selects IPP's power-of-two FFT engine when the length allows
 //! and the arbitrary-length DFT otherwise — the FFT is materially faster, and
-//! the choice is internal to the plan.  The **IIR** primitive is a native IPP
-//! override (`skip: [iir]` plus a hand-written
+//! the choice is internal to the plan.  Two primitives are native IPP overrides:
+//! the **IIR** filter (`skip: [iir]` plus a hand-written
 //! [`CreateProc<IirSpec>`](omnidsp_core::create::CreateProc) — see [`iir`]),
 //! because the biquad recurrence is a per-sample feedback loop that no DFT /
-//! vector op accelerates.  Convolution, FIR, and the rest still compose over the
-//! accelerated DFT + vector ops; IPP's remaining native time-domain kernels
-//! (FIR, resampler, conv) land as overrides in later workstream tickets.
+//! vector op accelerates; and **convolution** (`skip: [conv]` plus a
+//! [`CreatePlan<ConvSpec>`](omnidsp_core::create::CreatePlan) over `ippsConvolve`
+//! — see [`conv`]), a single optimized call in place of the generic
+//! FFT → multiply → inverse-FFT composition.  FIR and the rest still compose over
+//! the accelerated DFT + vector ops; IPP's remaining native time-domain kernels
+//! (FIR, resampler) land as overrides in later workstream tickets.
 //!
 //! # Safety isolation
 //!
 //! The crate is `deny(unsafe_code)`.  Every `unsafe` operation — FFI calls,
 //! pointer casts, and the `unsafe impl Send`/`Sync` for the DFT plans and the
 //! IIR state — is confined to the [`ffi`] module, which alone carries
-//! `#![allow(unsafe_code)]`.  The DFT, vector-ops, and IIR modules are entirely
-//! unsafe-free.
+//! `#![allow(unsafe_code)]`.  The DFT, vector-ops, IIR, and convolution modules
+//! are entirely unsafe-free.
 //!
 //! # Linking
 //!
@@ -35,11 +38,13 @@
 //! `omnidsp-ipp-sys`.  If the crate is compiled, IPP must be available at link
 //! and run time.
 
+mod conv;
 mod dft;
 mod ffi;
 mod iir;
 mod vecops;
 
+pub use conv::IppConvPlan;
 pub use dft::{IppDftC2c, IppDftC2cPlan, IppDftC2r, IppDftC2rPlan, IppDftR2c, IppDftR2cPlan};
 pub use iir::IppIirProcessor;
 
@@ -78,5 +83,5 @@ omnidsp_macros::impl_generic_backend! {
     dftc2c: IppDftC2c,
     dftr2c: IppDftR2c,
     dftc2r: IppDftC2r,
-    skip: [iir],
+    skip: [iir, conv],
 }

@@ -773,6 +773,100 @@ impl Iir {
     }
 }
 
+// ─── Convolution engine ──────────────────────────────────────────────
+
+/// A built IPP linear-convolution engine, for one precision and algorithm.
+///
+/// Owns the external work buffer IPP needs for its internal calculations (sized
+/// by `ippsConvolveGetBufferSize`). IPP writes scratch into that buffer on every
+/// [`exec`](Conv::exec) call, so the owning plan holds the whole `Conv` behind a
+/// `Mutex` (like the [`Dft`] engine) and `exec` takes `&mut self`.
+///
+/// The struct holds no raw pointers — only owned `Vec<u8>` scratch and `c_int`
+/// state — so it is `Send + Sync` by auto-derivation, and the convolution plan
+/// needs no hand-written marker impls.
+///
+/// The struct does not encode the precision `T` — the owning plan is monomorphic
+/// in `T` and always calls `build::<T>` / `exec::<T>` with the same `T`, so a
+/// buffer sized for one width is only ever driven at that width.
+pub struct Conv {
+    /// Reusable work scratch passed to every `ippsConvolve` call (may be empty
+    /// when the chosen algorithm needs none — e.g. the direct method).
+    work: Vec<u8>,
+    /// The IPP algorithm selector (`ippAlg{Auto,Direct,FFT}`).
+    alg: c_int,
+}
+
+impl Conv {
+    /// Size the work buffer for a convolution of `a_len`-by-`b_len` inputs with
+    /// algorithm `alg` at width `T`, and build the engine.
+    pub fn build<T: DspFloat>(a_len: usize, b_len: usize, alg: c_int) -> Result<Self> {
+        let src1 = to_ipp_int(a_len, "conv a_len exceeds IPP c_int range")?;
+        let src2 = to_ipp_int(b_len, "conv b_len exceeds IPP c_int range")?;
+        let data_type = if is_f32::<T>() {
+            sys::IPP_32F
+        } else if is_f64::<T>() {
+            sys::IPP_64F
+        } else {
+            return Err(unsupported_width());
+        };
+
+        let mut buf_size: c_int = 0;
+        // SAFETY: the size out-pointer is valid; `data_type` and `alg` are valid
+        // IPP enum values; the lengths are positive as `c_int`.
+        let status = unsafe {
+            sys::conv::ippsConvolveGetBufferSize(src1, src2, data_type, alg, &raw mut buf_size)
+        };
+        check_ipp(status, "IPP ConvolveGetBufferSize")?;
+
+        let work = vec![0u8; usize::try_from(buf_size).unwrap_or(0)];
+        Ok(Self { work, alg })
+    }
+
+    /// Run the full linear convolution `out = a ∗ b`.
+    ///
+    /// `a` / `b` must have the lengths the engine was built for and `out` must
+    /// hold `a.len() + b.len() - 1` samples (validated by the caller).
+    pub fn exec<T: DspFloat>(&mut self, a: &[T], b: &[T], out: &mut [T]) -> Result<()> {
+        let src1 = to_ipp_int(a.len(), "conv a_len exceeds IPP c_int range")?;
+        let src2 = to_ipp_int(b.len(), "conv b_len exceeds IPP c_int range")?;
+        let alg = self.alg;
+        let buf = buf_ptr(&mut self.work);
+
+        // SAFETY: `a`/`b` have `src1`/`src2` elements and `out` has
+        // `src1 + src2 - 1` (validated by the caller); `work` was sized by
+        // `ippsConvolveGetBufferSize` for these lengths and `alg`; the width
+        // branch picks the matching-width entry point. `buf` is null only when
+        // the sized buffer is empty, which IPP tolerates.
+        let status = unsafe {
+            if is_f32::<T>() {
+                sys::conv::ippsConvolve_32f(
+                    a.as_ptr().cast::<f32>(),
+                    src1,
+                    b.as_ptr().cast::<f32>(),
+                    src2,
+                    out.as_mut_ptr().cast::<f32>(),
+                    alg,
+                    buf,
+                )
+            } else if is_f64::<T>() {
+                sys::conv::ippsConvolve_64f(
+                    a.as_ptr().cast::<f64>(),
+                    src1,
+                    b.as_ptr().cast::<f64>(),
+                    src2,
+                    out.as_mut_ptr().cast::<f64>(),
+                    alg,
+                    buf,
+                )
+            } else {
+                return Err(unsupported_width());
+            }
+        };
+        check_ipp(status, "IPP Convolve exec")
+    }
+}
+
 // ─── Plan thread-safety markers ──────────────────────────────────────
 //
 // An IPP transform writes scratch into its work buffer on every compute call,
