@@ -15,11 +15,16 @@ CURRENT_VERSION := $(shell grep '^version = ' omnidsp-core/Cargo.toml | head -1 
 # Required cargo tools
 CARGO_TOOLS := cargo-deny cargo-machete cargo-nextest cargo-mutants
 
-# Hard per-process address-space cap (KiB) applied to test runs, so a runaway
-# allocation (e.g. an unbounded loop in a test) aborts that single process at
-# the limit instead of exhausting system RAM. Override with MEMLIMIT_KB=<kib>,
-# or MEMLIMIT_KB=unlimited to disable.
-MEMLIMIT_KB ?= 8388608
+# Memory ceiling for `make mutants`, the one target that builds and runs
+# arbitrary mutated code and so can plausibly allocate without bound.
+#
+# Enforced as a cgroup limit on memory actually used, not as `ulimit -v`: an
+# address-space cap counts what a process *reserves*, so an 8 GiB one killed
+# mold -- which reserves 8 GiB up front -- rather than any misbehaving test,
+# and `ulimit -v` is not meaningfully enforced on macOS anyway. Needs
+# systemd-run; without it the target still runs, just uncapped. Set
+# MUTANTS_MEMORY_MAX=unlimited to opt out.
+MUTANTS_MEMORY_MAX ?= 16G
 
 # --- Setup ---
 
@@ -92,8 +97,7 @@ check: setup-tools
 	 done
 	@cargo machete --skip-target-dir
 	@cargo doc --no-deps --document-private-items --quiet
-	@if [ "$(MEMLIMIT_KB)" != unlimited ]; then ulimit -v $(MEMLIMIT_KB); fi; \
-	 cargo nextest run --workspace --no-fail-fast --no-tests=pass --status-level fail --final-status-level fail --cargo-quiet --show-progress only
+	@cargo nextest run --workspace --no-fail-fast --no-tests=pass --status-level fail --final-status-level fail --cargo-quiet --show-progress only
 	@cargo test --workspace --doc --quiet
 
 deny:
@@ -237,13 +241,21 @@ machete:
 # --- Test ---
 
 mutants:
-	@cargo mutants --timeout 60
+	@if [ "$(MUTANTS_MEMORY_MAX)" != unlimited ] && command -v systemd-run >/dev/null 2>&1; then \
+	   systemd-run --user --scope --quiet \
+	     -p MemoryMax=$(MUTANTS_MEMORY_MAX) -p MemorySwapMax=0 \
+	     cargo mutants --timeout 60; \
+	 else \
+	   if [ "$(MUTANTS_MEMORY_MAX)" != unlimited ]; then \
+	     echo "note: systemd-run unavailable, running cargo mutants without a memory cap"; \
+	   fi; \
+	   cargo mutants --timeout 60; \
+	 fi
 
 # Run tests. Pass T= to filter, N= to repeat.
 CLEAN_T = $(subst \,,$(subst !,,$(T)))
 test:
-	@if [ "$(MEMLIMIT_KB)" != unlimited ]; then ulimit -v $(MEMLIMIT_KB); fi; \
-	 cargo nextest run --workspace --status-level fail --final-status-level slow --cargo-quiet $(if $(N),--stress-count $(N),) $(if $(T),$(if $(findstring !,$(T)),-E 'not test($(CLEAN_T))',-E 'test($(T))'),)
+	@cargo nextest run --workspace --status-level fail --final-status-level slow --cargo-quiet $(if $(N),--stress-count $(N),) $(if $(T),$(if $(findstring !,$(T)),-E 'not test($(CLEAN_T))',-E 'test($(T))'),)
 
 # --- Release ---
 
