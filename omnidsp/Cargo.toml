@@ -10,18 +10,23 @@ repository = "https://github.com/TwoWells/OmniDSP"
 [lints]
 workspace = true
 
+# The `-sys` crates are used by build.rs alone (their `links` metadata), not
+# from Rust code, which is all cargo-machete looks at.
+[package.metadata.cargo-machete]
+ignored = ["omnidsp-onemkl-sys", "omnidsp-ipp-sys"]
+
 [features]
 # Opt-in Intel oneMKL backend. Pulls the workspace-excluded `omnidsp-onemkl`
 # crate (which links `libmkl_rt`) as an optional path dependency, and switches
 # the `Best`/`Auto` alias to `OneMklBackend`. Off by default so the floor build
 # needs no Intel MKL; enabled only in the `omnidsp-ci` image.
-onemkl = ["dep:omnidsp-onemkl"]
+onemkl = ["dep:omnidsp-onemkl", "dep:omnidsp-onemkl-sys"]
 # Opt-in Intel IPP backend. Pulls the workspace-excluded `omnidsp-ipp` crate
 # (which links `ipps`/`ippvm`/`ippcore`) as an optional path dependency, and
 # switches the `Best`/`Auto` alias to `IppBackend` (IPP outranks oneMKL when both
 # are enabled). Off by default so the floor build needs no Intel IPP; enabled
 # only in the `omnidsp-ci` image.
-ipp = ["dep:omnidsp-ipp"]
+ipp = ["dep:omnidsp-ipp", "dep:omnidsp-ipp-sys"]
 
 [dependencies]
 omnidsp-core = { path = "../omnidsp-core" }
@@ -29,6 +34,11 @@ omnidsp-macros = { path = "../omnidsp-macros" }
 omnidsp-rustfft = { path = "../omnidsp-rustfft" }
 omnidsp-onemkl = { path = "../omnidsp-onemkl", optional = true }
 omnidsp-ipp = { path = "../omnidsp-ipp", optional = true }
+# Direct only so build.rs receives their `links` metadata (the Intel library
+# directories) and bakes it into this crate's test binaries as a run-time
+# search path: Cargo hands that metadata to direct dependents alone.
+omnidsp-onemkl-sys = { path = "../omnidsp-onemkl-sys", optional = true }
+omnidsp-ipp-sys = { path = "../omnidsp-ipp-sys", optional = true }
 
 [dev-dependencies]
 num-complex = "0.4"

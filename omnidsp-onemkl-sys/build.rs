@@ -15,13 +15,18 @@
 //!   4. Fallback — link `mkl_rt` dynamically and let the linker search its
 //!      default paths.
 //!
-//! Note: detection here is **link-time** only (emitting `-L` so the linker
-//! resolves `mkl_rt`). Loading `libmkl_rt.so` at **run time** is a separate
-//! concern — the lib dir must be on the loader path via `LD_LIBRARY_PATH`, an
-//! rpath, or `ldconfig`.
+//! Run time: whichever directory linked `mkl_rt` is also baked into this
+//! crate's own test binaries as a run-time search path (`RUNPATH`), so they
+//! load `libmkl_rt.so` with no `LD_LIBRARY_PATH` or `ldconfig` entry; a set
+//! `LD_LIBRARY_PATH` still takes precedence. Cargo does not pass link arguments
+//! on to dependents, so the directories are also published as `links` metadata
+//! (`DEP_MKL_LIB_DIRS`, a platform path list) for a direct dependent's build
+//! script to bake into its own binaries. Applications further downstream
+//! arrange their own run-time path. The fallback (linker default paths) and
+//! Windows (DLLs resolve from `PATH`) emit none.
 
 use std::env;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 fn main() {
     // Rebuild if the operator points us at a different MKL install.
@@ -50,7 +55,7 @@ fn try_mklroot() -> bool {
         return false;
     }
 
-    emit_search_paths(Path::new(&mklroot));
+    emit_runtime_paths(&emit_search_paths(Path::new(&mklroot)));
     emit_link_lib();
     // Even if none of the expected subdirectories exist, MKLROOT was set
     // explicitly: link `mkl_rt` and trust the operator's environment. Returning
@@ -61,9 +66,11 @@ fn try_mklroot() -> bool {
 
 /// Step 2: probe `pkg-config` for the sequential LP64 dynamic MKL package.
 fn try_pkg_config() -> bool {
-    pkg_config::Config::new()
-        .probe("mkl-dynamic-lp64-seq")
-        .is_ok()
+    let Ok(lib) = pkg_config::Config::new().probe("mkl-dynamic-lp64-seq") else {
+        return false;
+    };
+    emit_runtime_paths(&lib.link_paths);
+    true
 }
 
 /// Step 3: probe the well-known oneAPI install path.
@@ -76,14 +83,14 @@ fn try_well_known() -> bool {
     if !root.is_dir() {
         return false;
     }
-    emit_search_paths(root);
+    emit_runtime_paths(&emit_search_paths(root));
     emit_link_lib();
     true
 }
 
 /// Emit `rustc-link-search` directives for each MKL library subdirectory of
-/// `root` that exists (`lib/intel64` then `lib`).
-fn emit_search_paths(root: &Path) {
+/// `root` that exists (`lib/intel64` then `lib`), and return those directories.
+fn emit_search_paths(root: &Path) -> Vec<PathBuf> {
     // `CARGO_CFG_TARGET_OS` is the target we are building for, which is the
     // platform whose library layout we must match.
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
@@ -95,11 +102,29 @@ fn emit_search_paths(root: &Path) {
         &["lib/intel64", "lib"]
     };
 
+    let mut found = Vec::new();
     for sub in candidates {
         let dir = root.join(sub);
         if dir.is_dir() {
             println!("cargo:rustc-link-search=native={}", dir.display());
+            found.push(dir);
         }
+    }
+    found
+}
+
+/// Bake `dirs` into this crate's binaries as a run-time search path, and
+/// publish them as `DEP_MKL_LIB_DIRS` for direct dependents (see the module
+/// docs). Windows resolves DLLs from `PATH` and has no `RUNPATH`.
+fn emit_runtime_paths(dirs: &[PathBuf]) {
+    if dirs.is_empty() || env::var("CARGO_CFG_TARGET_OS").is_ok_and(|os| os == "windows") {
+        return;
+    }
+    for dir in dirs {
+        println!("cargo:rustc-link-arg=-Wl,-rpath,{}", dir.display());
+    }
+    if let Ok(joined) = env::join_paths(dirs) {
+        println!("cargo:lib_dirs={}", joined.to_string_lossy());
     }
 }
 
