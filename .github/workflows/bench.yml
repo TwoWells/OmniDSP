@@ -3,7 +3,8 @@
 #
 # Manual only (workflow_dispatch) — a benchmark is slow and the numbers drift on
 # a shared ephemeral runner, so it is NOT a per-push gate (that is `ci.yml`).
-# Runs on the self-hosted `homeserver-pool` in the `omnidsp-ci` image, the only
+# Runs on the self-hosted pool (org var `CI_RUNNER_LINUX`) in the `omnidsp-ci`
+# image, the only
 # place `libmkl_rt` links. Read the table from the `make onemkl-bench` step log.
 name: bench-onemkl
 
@@ -12,7 +13,7 @@ on:
 
 jobs:
   bench:
-    runs-on: homeserver-pool
+    runs-on: ${{ vars.CI_RUNNER_LINUX }}
     container: ghcr.io/twowells/omnidsp-ci:latest
     defaults:
       run:
